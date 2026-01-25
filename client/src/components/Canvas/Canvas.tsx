@@ -594,7 +594,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
       return null;
     }
 
-    return referenceImage.pixels[refY]?.[refX] ?? null;
+    return referenceImage.pixels[refY]?.[refX] ?? 0;
   }, [referenceImage, referenceOverlayOffset]);
 
   // Get pixel coords from reference canvas
@@ -704,7 +704,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
     if (currentTool === 'pixel') {
       setPixel(coords.x, coords.y, currentColor);
     } else if (currentTool === 'eraser') {
-      setPixel(coords.x, coords.y, null);
+      setPixel(coords.x, coords.y, 0);
     } else if (currentTool === 'flood-fill') {
       const pixels = floodFill(layer.pixels, coords.x, coords.y, gridWidth, gridHeight, currentColor);
       setPixels(pixels);
@@ -786,7 +786,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
         setPixel(coords.x, coords.y, currentColor);
         break;
       case 'eraser':
-        setPixel(coords.x, coords.y, null);
+        setPixel(coords.x, coords.y, 0);
         break;
       case 'fill-square':
         setPixels(getSquarePixels(coords, brushSize, currentColor));
@@ -881,7 +881,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
     if (currentTool === 'pixel') {
       setPixel(coords.x, coords.y, currentColor);
     } else if (currentTool === 'eraser') {
-      setPixel(coords.x, coords.y, null);
+      setPixel(coords.x, coords.y, 0);
     } else if (currentTool === 'flood-fill') {
       const pixels = floodFill(layer.pixels, coords.x, coords.y, gridWidth, gridHeight, currentColor);
       setPixels(pixels);
@@ -927,7 +927,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
     if (currentTool === 'pixel') {
       setPixel(coords.x, coords.y, currentColor);
     } else if (currentTool === 'eraser') {
-      setPixel(coords.x, coords.y, null);
+      setPixel(coords.x, coords.y, 0);
     } else if (currentTool === 'fill-square') {
       setPixels(getSquarePixels(coords, brushSize, currentColor));
     }

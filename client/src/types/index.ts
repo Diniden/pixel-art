@@ -8,7 +8,7 @@ export interface Pixel {
 export interface Layer {
   id: string;
   name: string;
-  pixels: (Pixel | null)[][]; // 2D array [y][x], null means transparent
+  pixels: (Pixel | 0)[][]; // 2D array [y][x], 0 means transparent/empty
   visible: boolean;
 }
 
@@ -95,9 +95,9 @@ export const DEFAULT_UI_STATE: UIState = {
   moveAllLayers: false
 };
 
-export function createEmptyPixelGrid(width: number, height: number): (Pixel | null)[][] {
+export function createEmptyPixelGrid(width: number, height: number): (Pixel | 0)[][] {
   return Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => null)
+    Array.from({ length: width }, () => 0)
   );
 }
 
@@ -285,7 +285,7 @@ export function hexToRgba(hex: number): Pixel {
 export interface CompactLayer {
   id: string;
   name: string;
-  pixels: (number | null)[][]; // hex numbers instead of Pixel objects
+  pixels: number[][]; // hex numbers instead of Pixel objects, 0 means transparent/empty
   visible: boolean;
 }
 
@@ -344,7 +344,7 @@ export function projectToCompact(project: Project): CompactProject {
           name: layer.name,
           visible: layer.visible,
           pixels: layer.pixels.map(row =>
-            row.map(pixel => pixel === null ? null : rgbaToHex(pixel))
+            row.map(pixel => pixel === 0 ? 0 : rgbaToHex(pixel))
           )
         }))
       }))
@@ -376,7 +376,7 @@ export function compactToProject(compact: CompactProject): Project {
           name: layer.name,
           visible: layer.visible,
           pixels: layer.pixels.map(row =>
-            row.map(pixel => pixel === null ? null : hexToRgba(pixel))
+            row.map(pixel => pixel === 0 ? 0 : hexToRgba(pixel))
           )
         }))
       }))

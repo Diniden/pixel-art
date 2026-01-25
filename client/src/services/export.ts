@@ -15,8 +15,8 @@ interface ExportMetadata {
   frames: ExportedFrame[];
 }
 
-function colorToRGBA(color: Color | null): [number, number, number, number] {
-  if (!color) return [0, 0, 0, 0];
+function colorToRGBA(color: Color | 0): [number, number, number, number] {
+  if (color === 0) return [0, 0, 0, 0];
   return [color.r, color.g, color.b, color.a];
 }
 

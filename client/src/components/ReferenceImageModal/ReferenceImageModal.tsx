@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import './ReferenceImageModal.css';
 
 export interface ReferenceImageData {
-  pixels: Array<Array<{ r: number; g: number; b: number; a: number } | null>>;
+  pixels: Array<Array<{ r: number; g: number; b: number; a: number } | 0>>;
   width: number;
   height: number;
 }
@@ -425,14 +425,14 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
     const pixels: ReferenceImageData['pixels'] = [];
 
     for (let py = 0; py < h; py++) {
-      const row: Array<{ r: number; g: number; b: number; a: number } | null> = [];
+      const row: Array<{ r: number; g: number; b: number; a: number } | 0> = [];
       for (let px = 0; px < w; px++) {
         const idx = (py * w + px) * 4;
         const r = imageData.data[idx];
         const g = imageData.data[idx + 1];
         const b = imageData.data[idx + 2];
         const a = imageData.data[idx + 3];
-        row.push(a > 0 ? { r, g, b, a } : null);
+        row.push(a > 0 ? { r, g, b, a } : 0);
       }
       pixels.push(row);
     }

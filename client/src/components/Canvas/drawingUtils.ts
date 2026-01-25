@@ -260,7 +260,7 @@ export function getEllipsePixels(center: Point, edge: Point, mode: 'outline' | '
 
 // Flood fill using BFS
 export function floodFill(
-  pixels: (Pixel | null)[][],
+  pixels: (Pixel | 0)[][],
   startX: number,
   startY: number,
   width: number,
@@ -282,9 +282,9 @@ export function floodFill(
   const visited = new Set<string>();
   const queue: Point[] = [{ x: startX, y: startY }];
 
-  const isSameColor = (p: Pixel | null): boolean => {
-    if (targetPixel === null && p === null) return true;
-    if (targetPixel === null || p === null) return false;
+  const isSameColor = (p: Pixel | 0): boolean => {
+    if (targetPixel === 0 && p === 0) return true;
+    if (targetPixel === 0 || p === 0) return false;
     return p.r === targetPixel.r &&
            p.g === targetPixel.g &&
            p.b === targetPixel.b &&

@@ -99,8 +99,8 @@ interface EditorState {
   moveLayerPixels: (dx: number, dy: number) => void;
 
   // Drawing actions
-  setPixel: (x: number, y: number, color: Color | null) => void;
-  setPixels: (pixels: { x: number; y: number; color: Color | null }[]) => void;
+  setPixel: (x: number, y: number, color: Color | 0) => void;
+  setPixels: (pixels: { x: number; y: number; color: Color | 0 }[]) => void;
   startDrawing: (point: Point) => void;
   updateDrawing: (point: Point) => void;
   endDrawing: () => void;
@@ -298,7 +298,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
                 // Copy existing pixels
                 for (let y = 0; y < Math.min(oldHeight, height); y++) {
                   for (let x = 0; x < Math.min(oldWidth, width); x++) {
-                    newPixels[y][x] = layer.pixels[y]?.[x] ?? null;
+                    newPixels[y][x] = layer.pixels[y]?.[x] ?? 0;
                   }
                 }
                 return { ...layer, pixels: newPixels };
@@ -773,7 +773,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
       // Skip if pixel is already the same
       const currentPixel = layer.pixels[y]?.[x];
-      if (color === null && currentPixel === null) return;
+      if (color === 0 && currentPixel === 0) return;
       if (color && currentPixel &&
           color.r === currentPixel.r &&
           color.g === currentPixel.g &&
@@ -795,7 +795,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
                           // Only copy the affected row, not the entire grid
                           const newPixels = [...l.pixels];
                           newPixels[y] = [...l.pixels[y]];
-                          newPixels[y][x] = color as Pixel | null;
+                          newPixels[y][x] = color as Pixel | 0;
                           return { ...l, pixels: newPixels };
                         })
                       }
@@ -833,7 +833,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
                           }
                           for (const { x, y, color } of pixels) {
                             if (x >= 0 && x < obj.gridSize.width && y >= 0 && y < obj.gridSize.height) {
-                              newPixels[y][x] = color as Pixel | null;
+                              newPixels[y][x] = color as Pixel | 0;
                             }
                           }
                           return { ...l, pixels: newPixels };
@@ -1112,7 +1112,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
                           for (let sy = selection.y; sy < selection.y + selection.height; sy++) {
                             for (let sx = selection.x; sx < selection.x + selection.width; sx++) {
                               if (sx >= 0 && sx < width && sy >= 0 && sy < height) {
-                                newPixels[sy][sx] = null;
+                                newPixels[sy][sx] = 0;
                               }
                             }
                           }
@@ -1272,7 +1272,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
                           newPixels[rowY] = [...l.pixels[rowY]];
                         }
                         for (const { x, y } of layerPixels) {
-                          newPixels[y][x] = newColor as Pixel | null;
+                          newPixels[y][x] = newColor as Pixel | 0;
                         }
                         return { ...l, pixels: newPixels };
                       })
@@ -1304,7 +1304,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
                               newPixels[rowY] = [...l.pixels[rowY]];
                             }
                             for (const { x, y } of colorAdjustment.affectedPixels) {
-                              newPixels[y][x] = newColor as Pixel | null;
+                              newPixels[y][x] = newColor as Pixel | 0;
                             }
                             return { ...l, pixels: newPixels };
                           })
