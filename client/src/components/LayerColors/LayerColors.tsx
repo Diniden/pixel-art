@@ -13,6 +13,9 @@ export function LayerColors() {
     project,
     getCurrentLayer,
     getCurrentObject,
+    getCurrentVariant,
+    getSelectedVariantLayer,
+    isEditingVariant,
     colorAdjustment,
     startColorAdjustment,
     clearColorAdjustment
@@ -23,47 +26,96 @@ export function LayerColors() {
   const layer = getCurrentLayer();
   const obj = getCurrentObject();
   const currentPickerColor = project?.uiState.selectedColor;
+  const editingVariant = isEditingVariant();
+  const variantData = editingVariant ? getCurrentVariant() : null;
+  const variantLayer = editingVariant ? getSelectedVariantLayer() : null;
 
   // Extract unique colors from the current layer (or all frames if toggle is on)
   const uniqueColors = useMemo(() => {
     if (!layer || !obj) return [];
 
     const colorMap = new Map<string, Color>();
-    const { width, height } = obj.gridSize;
 
-    if (allFramesMode) {
-      // Get colors from all frames with matching layer names
-      for (const frame of obj.frames) {
-        const matchingLayers = frame.layers.filter(l => l.name === layer.name);
-        for (const matchingLayer of matchingLayers) {
-          for (let y = 0; y < height; y++) {
-            const row = matchingLayer.pixels[y];
-            if (!row) continue;
+    // Handle variant editing mode
+    if (editingVariant && variantData && variantLayer) {
+      const { variant } = variantData;
+      const { width, height } = variant.gridSize;
 
-            for (let x = 0; x < width; x++) {
-              const pixel = row[x];
-              if (pixel && pixel.a > 0) {
-                const key = colorKey(pixel);
-                if (!colorMap.has(key)) {
-                  colorMap.set(key, pixel);
+      if (allFramesMode) {
+        // Get colors from all variant frames
+        for (const variantFrame of variant.frames) {
+          for (const vLayer of variantFrame.layers) {
+            for (let y = 0; y < height; y++) {
+              const row = vLayer.pixels[y];
+              if (!row) continue;
+
+              for (let x = 0; x < width; x++) {
+                const pixel = row[x];
+                if (pixel && pixel.a > 0) {
+                  const key = colorKey(pixel);
+                  if (!colorMap.has(key)) {
+                    colorMap.set(key, pixel);
+                  }
                 }
+              }
+            }
+          }
+        }
+      } else {
+        // Get colors only from current variant frame's layer
+        for (let y = 0; y < height; y++) {
+          const row = variantLayer.pixels[y];
+          if (!row) continue;
+
+          for (let x = 0; x < width; x++) {
+            const pixel = row[x];
+            if (pixel && pixel.a > 0) {
+              const key = colorKey(pixel);
+              if (!colorMap.has(key)) {
+                colorMap.set(key, pixel);
               }
             }
           }
         }
       }
     } else {
-      // Get colors only from current layer
-      for (let y = 0; y < height; y++) {
-        const row = layer.pixels[y];
-        if (!row) continue;
+      // Regular layer editing mode
+      const { width, height } = obj.gridSize;
 
-        for (let x = 0; x < width; x++) {
-          const pixel = row[x];
-          if (pixel && pixel.a > 0) {
-            const key = colorKey(pixel);
-            if (!colorMap.has(key)) {
-              colorMap.set(key, pixel);
+      if (allFramesMode) {
+        // Get colors from all frames with matching layer names
+        for (const frame of obj.frames) {
+          const matchingLayers = frame.layers.filter(l => l.name === layer.name);
+          for (const matchingLayer of matchingLayers) {
+            for (let y = 0; y < height; y++) {
+              const row = matchingLayer.pixels[y];
+              if (!row) continue;
+
+              for (let x = 0; x < width; x++) {
+                const pixel = row[x];
+                if (pixel && pixel.a > 0) {
+                  const key = colorKey(pixel);
+                  if (!colorMap.has(key)) {
+                    colorMap.set(key, pixel);
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        // Get colors only from current layer
+        for (let y = 0; y < height; y++) {
+          const row = layer.pixels[y];
+          if (!row) continue;
+
+          for (let x = 0; x < width; x++) {
+            const pixel = row[x];
+            if (pixel && pixel.a > 0) {
+              const key = colorKey(pixel);
+              if (!colorMap.has(key)) {
+                colorMap.set(key, pixel);
+              }
             }
           }
         }
@@ -76,13 +128,18 @@ export function LayerColors() {
       const lumB = 0.299 * b.r + 0.587 * b.g + 0.114 * b.b;
       return lumA - lumB;
     });
-  }, [layer, obj, allFramesMode]);
+  }, [layer, obj, allFramesMode, editingVariant, variantData, variantLayer]);
 
   if (!layer) {
     return (
       <div className="layer-colors">
-        <div className="layer-colors-label">Layer Colors</div>
-        <div className="layer-colors-empty">No layer selected</div>
+        <div className="layer-colors-left">
+          <div className="layer-colors-label">Layer Colors</div>
+        </div>
+        <div className="layer-colors-center">
+          <div className="layer-colors-empty">No layer selected</div>
+        </div>
+        <div className="layer-colors-right"></div>
       </div>
     );
   }
@@ -90,17 +147,22 @@ export function LayerColors() {
   if (uniqueColors.length === 0) {
     return (
       <div className="layer-colors">
-        <div className="layer-colors-label">Layer Colors</div>
-        <div className="layer-colors-toggle" onClick={() => setAllFramesMode(!allFramesMode)}>
-          <input
-            type="checkbox"
-            checked={allFramesMode}
-            onChange={() => {}}
-            className="layer-colors-checkbox"
-          />
-          <span className="layer-colors-toggle-label">All Frames</span>
+        <div className="layer-colors-left">
+          <div className="layer-colors-label">Layer Colors</div>
+          <div className="layer-colors-toggle" onClick={() => setAllFramesMode(!allFramesMode)}>
+            <input
+              type="checkbox"
+              checked={allFramesMode}
+              onChange={() => {}}
+              className="layer-colors-checkbox"
+            />
+            <span className="layer-colors-toggle-label">All Frames</span>
+          </div>
         </div>
-        <div className="layer-colors-empty">No colors in this layer</div>
+        <div className="layer-colors-center">
+          <div className="layer-colors-empty">No colors in this layer</div>
+        </div>
+        <div className="layer-colors-right"></div>
       </div>
     );
   }
@@ -136,40 +198,46 @@ export function LayerColors() {
 
   return (
     <div className="layer-colors">
-      <div className="layer-colors-label">Layer Colors</div>
-      <div className="layer-colors-toggle" onClick={handleToggleChange}>
-        <input
-          type="checkbox"
-          checked={allFramesMode}
-          onChange={() => {}}
-          className="layer-colors-checkbox"
-        />
-        <span className="layer-colors-toggle-label">All Frames</span>
-      </div>
-      <div className="layer-colors-swatches">
-        {uniqueColors.map((color, index) => {
-          const key = colorKey(color);
-          // A swatch is selected if we're in adjustment mode AND the current picker color matches this swatch
-          const isSelected = colorAdjustment && selectedIndex === index;
-
-          return (
-            <button
-              key={key}
-              className={`layer-color-swatch ${isSelected ? 'selected' : ''}`}
-              style={{
-                backgroundColor: `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`
-              }}
-              onClick={() => handleColorClick(color)}
-              title={`#${color.r.toString(16).padStart(2, '0')}${color.g.toString(16).padStart(2, '0')}${color.b.toString(16).padStart(2, '0')} (${isSelected ? 'Click to deselect' : 'Click to adjust'})`}
-            />
-          );
-        })}
-      </div>
-      {colorAdjustment && (
-        <div className="layer-colors-hint">
-          {colorAdjustment.allFrames ? 'Adjusting all frames' : 'Adjusting color'} • Press ESC or click swatch to stop
+      <div className="layer-colors-left">
+        <div className="layer-colors-label">Layer Colors</div>
+        <div className="layer-colors-toggle" onClick={handleToggleChange}>
+          <input
+            type="checkbox"
+            checked={allFramesMode}
+            onChange={() => {}}
+            className="layer-colors-checkbox"
+          />
+          <span className="layer-colors-toggle-label">All Frames</span>
         </div>
-      )}
+      </div>
+      <div className="layer-colors-center">
+        <div className="layer-colors-swatches">
+          {uniqueColors.map((color, index) => {
+            const key = colorKey(color);
+            // A swatch is selected if we're in adjustment mode AND the current picker color matches this swatch
+            const isSelected = colorAdjustment && selectedIndex === index;
+
+            return (
+              <button
+                key={key}
+                className={`layer-color-swatch ${isSelected ? 'selected' : ''}`}
+                style={{
+                  backgroundColor: `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`
+                }}
+                onClick={() => handleColorClick(color)}
+                title={`#${color.r.toString(16).padStart(2, '0')}${color.g.toString(16).padStart(2, '0')}${color.b.toString(16).padStart(2, '0')} (${isSelected ? 'Click to deselect' : 'Click to adjust'})`}
+              />
+            );
+          })}
+        </div>
+      </div>
+      <div className="layer-colors-right">
+        {colorAdjustment && (
+          <div className="layer-colors-hint">
+            {colorAdjustment.allFrames ? 'Adjusting all frames' : 'Adjusting color'} • Press ESC or click swatch to stop
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -86,7 +86,7 @@ interface EditorState {
   deleteFrame: (id: string) => void;
   deleteSelectedFrame: () => void;
   renameFrame: (id: string, name: string) => void;
-  selectFrame: (id: string) => void;
+  selectFrame: (id: string, syncVariants?: boolean) => void;
   duplicateFrame: (id: string) => void;
   moveFrame: (id: string, direction: 'left' | 'right') => void;
 
@@ -144,7 +144,7 @@ interface EditorState {
   // Color adjustment actions
   startColorAdjustment: (color: Color, allFrames: boolean) => void;
   clearColorAdjustment: () => void;
-  adjustColor: (newColor: Color) => void;
+  adjustColor: (newColor: Color, trackHistory?: boolean) => void;
 
   // Variant actions
   makeVariant: (layerId: string) => void;
@@ -156,12 +156,16 @@ interface EditorState {
   setVariantOffset: (dx: number, dy: number) => void;
   selectVariantFrame: (variantGroupId: string, frameIndex: number) => void;
   advanceVariantFrames: (delta: number) => void;
+  duplicateVariantFrame: (variantGroupId: string, variantId: string, frameId: string) => void;
+  deleteVariantFrame: (variantGroupId: string, variantId: string, frameId: string) => void;
+  addVariantFrame: (variantGroupId: string, variantId: string, copyPrevious?: boolean) => void;
+  moveVariantFrame: (variantGroupId: string, variantId: string, frameId: string, direction: 'left' | 'right') => void;
 
   // Helpers
   getCurrentObject: () => PixelObject | null;
   getCurrentFrame: () => Frame | null;
   getCurrentLayer: () => Layer | null;
-  getCurrentVariant: () => { variantGroup: VariantGroup; variant: Variant; variantFrame: VariantFrame } | null;
+  getCurrentVariant: () => { variantGroup: VariantGroup; variant: Variant; variantFrame: VariantFrame; baseFrameIndex: number; offset: { x: number; y: number } } | null;
   getSelectedVariantLayer: () => Layer | null;
   isEditingVariant: () => boolean;
 }
@@ -207,6 +211,22 @@ export const useEditorStore = create<EditorState>((set, get) => {
     }
 
     scheduleAutoSave(newProject);
+  };
+
+  // Save current project state to history without making changes
+  const saveCurrentStateToHistory = () => {
+    const { project, projectHistory, historyIndex } = get();
+    if (!project) return;
+
+    const newHistory = [...projectHistory.slice(0, historyIndex + 1), project];
+    // Limit history size
+    if (newHistory.length > MAX_HISTORY) {
+      newHistory.shift();
+    }
+    set({
+      projectHistory: newHistory,
+      historyIndex: newHistory.length - 1
+    });
   };
 
   return {
@@ -437,7 +457,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
       }), true);
     },
 
-    selectFrame: (id) => {
+    selectFrame: (id, syncVariants = true) => {
       const obj = get().getCurrentObject();
       const { project } = get();
       if (!obj) return;
@@ -447,7 +467,6 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
       // Find the base frame index
       const baseFrameIndex = obj.frames.findIndex(f => f.id === id);
-      const baseFrameCount = obj.frames.length;
 
       // If currently editing a variant, keep the same variant layer selected
       const isEditingVariant = currentLayer?.isVariant === true;
@@ -473,9 +492,9 @@ export const useEditorStore = create<EditorState>((set, get) => {
         newLayerId = frame.layers[0].id;
       }
 
-      // Sync variant frame indices with base frame index
+      // Sync variant frame indices with base frame index (only if syncVariants is true)
       const newVariantFrameIndices: { [key: string]: number } = {};
-      if (obj.variantGroups && baseFrameIndex >= 0) {
+      if (syncVariants && obj.variantGroups && baseFrameIndex >= 0) {
         for (const vg of obj.variantGroups) {
           // Get the number of frames for this variant group (from first variant)
           const variantFrameCount = vg.variants[0]?.frames.length ?? 1;
@@ -493,10 +512,9 @@ export const useEditorStore = create<EditorState>((set, get) => {
           ...project.uiState,
           selectedFrameId: id,
           selectedLayerId: newLayerId ?? project.uiState.selectedLayerId,
-          variantFrameIndices: {
-            ...project.uiState.variantFrameIndices,
-            ...newVariantFrameIndices
-          }
+          variantFrameIndices: syncVariants
+            ? { ...project.uiState.variantFrameIndices, ...newVariantFrameIndices }
+            : project.uiState.variantFrameIndices
         }
       }), false); // Don't track selection changes in history
     },
@@ -778,6 +796,63 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const { project } = get();
       if (!obj || !frame || !layer || !project) return;
 
+      // Check if we're editing a variant
+      if (layer.isVariant && layer.variantGroupId && layer.selectedVariantId) {
+        const variantData = get().getCurrentVariant();
+        if (!variantData) return;
+
+        const { variant } = variantData;
+        const { width, height } = variant.gridSize;
+        const variantGroupId = layer.variantGroupId;
+        const variantId = layer.selectedVariantId;
+        const frameIndex = project.uiState.variantFrameIndices?.[variantGroupId] ?? 0;
+
+        updateProjectAndSave((proj) => ({
+          ...proj,
+          objects: proj.objects.map((o) =>
+            o.id === obj.id
+              ? {
+                  ...o,
+                  variantGroups: o.variantGroups?.map(vg => {
+                    if (vg.id !== variantGroupId) return vg;
+                    return {
+                      ...vg,
+                      variants: vg.variants.map(v => {
+                        if (v.id !== variantId) return v;
+                        return {
+                          ...v,
+                          frames: v.frames.map((f, idx) => {
+                            if (idx !== frameIndex % v.frames.length) return f;
+                            return {
+                              ...f,
+                              layers: f.layers.map((l) => {
+                                // Create new pixel grid shifted by dx, dy
+                                const newPixels = createEmptyPixelGrid(width, height);
+                                for (let y = 0; y < height; y++) {
+                                  for (let x = 0; x < width; x++) {
+                                    const srcX = x - dx;
+                                    const srcY = y - dy;
+                                    if (srcX >= 0 && srcX < width && srcY >= 0 && srcY < height) {
+                                      newPixels[y][x] = l.pixels[srcY][srcX];
+                                    }
+                                  }
+                                }
+                                return { ...l, pixels: newPixels };
+                              })
+                            };
+                          })
+                        };
+                      })
+                    };
+                  })
+                }
+              : o
+          )
+        }), true);
+        return;
+      }
+
+      // Regular layer editing
       const { width, height } = obj.gridSize;
       const moveAll = project.uiState.moveAllLayers;
 
@@ -1259,9 +1334,100 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const obj = get().getCurrentObject();
       const frame = get().getCurrentFrame();
       const layer = get().getCurrentLayer();
-      const { selection } = get();
-      if (!obj || !frame || !layer || !selection) return;
+      const { selection, project } = get();
+      if (!obj || !frame || !layer || !selection || !project) return;
 
+      // Check if we're editing a variant
+      if (layer.isVariant && layer.variantGroupId && layer.selectedVariantId) {
+        const variantData = get().getCurrentVariant();
+        if (!variantData) return;
+
+        const { variant } = variantData;
+        const { width, height } = variant.gridSize;
+        const variantGroupId = layer.variantGroupId;
+        const variantId = layer.selectedVariantId;
+        const frameIndex = project.uiState.variantFrameIndices?.[variantGroupId] ?? 0;
+
+        updateProjectAndSave((proj) => ({
+          ...proj,
+          objects: proj.objects.map((o) =>
+            o.id === obj.id
+              ? {
+                  ...o,
+                  variantGroups: o.variantGroups?.map(vg => {
+                    if (vg.id !== variantGroupId) return vg;
+                    return {
+                      ...vg,
+                      variants: vg.variants.map(v => {
+                        if (v.id !== variantId) return v;
+                        return {
+                          ...v,
+                          frames: v.frames.map((f, idx) => {
+                            if (idx !== frameIndex % v.frames.length) return f;
+                            return {
+                              ...f,
+                              layers: f.layers.map((l) => {
+                                // Create new pixel grid
+                                const newPixels = createEmptyPixelGrid(width, height);
+
+                                // Copy all pixels first
+                                for (let y = 0; y < height; y++) {
+                                  for (let x = 0; x < width; x++) {
+                                    newPixels[y][x] = l.pixels[y][x];
+                                  }
+                                }
+
+                                // Clear pixels in the original selection area
+                                for (let sy = selection.y; sy < selection.y + selection.height; sy++) {
+                                  for (let sx = selection.x; sx < selection.x + selection.width; sx++) {
+                                    if (sx >= 0 && sx < width && sy >= 0 && sy < height) {
+                                      newPixels[sy][sx] = 0;
+                                    }
+                                  }
+                                }
+
+                                // Place the selected pixels at the new position
+                                for (let sy = 0; sy < selection.height; sy++) {
+                                  for (let sx = 0; sx < selection.width; sx++) {
+                                    const srcX = selection.x + sx;
+                                    const srcY = selection.y + sy;
+                                    const destX = srcX + dx;
+                                    const destY = srcY + dy;
+
+                                    if (srcX >= 0 && srcX < width && srcY >= 0 && srcY < height) {
+                                      const pixel = l.pixels[srcY][srcX];
+                                      if (destX >= 0 && destX < width && destY >= 0 && destY < height) {
+                                        newPixels[destY][destX] = pixel;
+                                      }
+                                    }
+                                  }
+                                }
+
+                                return { ...l, pixels: newPixels };
+                              })
+                            };
+                          })
+                        };
+                      })
+                    };
+                  })
+                }
+              : o
+          )
+        }), true);
+
+        // Move the selection box along with the pixels
+        set({
+          selection: {
+            ...selection,
+            x: selection.x + dx,
+            y: selection.y + dy
+          }
+        });
+        return;
+      }
+
+      // Regular layer editing
       const { width, height } = obj.gridSize;
 
       updateProjectAndSave((project) => ({
@@ -1339,73 +1505,152 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const obj = get().getCurrentObject();
       if (!layer || !obj) return;
 
-      const { width, height } = obj.gridSize;
+      // Check if we're editing a variant
+      const variantData = get().getCurrentVariant();
+      const variantLayer = get().getSelectedVariantLayer();
+      const isEditingVariant = layer.isVariant && variantData && variantLayer;
 
-      if (allFrames) {
-        // Find all pixels across all frames with matching layer names
-        const affectedPixelsByFrame = new Map<string, Map<string, { x: number; y: number }[]>>();
+      if (isEditingVariant) {
+        // Variant editing mode
+        const { variant } = variantData;
+        const { width, height } = variant.gridSize;
 
-        for (const frame of obj.frames) {
-          // Find layers with the same name as the current layer
-          const matchingLayers = frame.layers.filter(l => l.name === layer.name);
+        if (allFrames) {
+          // Find all pixels across all variant frames
+          const affectedPixelsByFrame = new Map<string, Map<string, { x: number; y: number }[]>>();
 
-          for (const matchingLayer of matchingLayers) {
-            const pixels: { x: number; y: number }[] = [];
+          for (let frameIdx = 0; frameIdx < variant.frames.length; frameIdx++) {
+            const variantFrame = variant.frames[frameIdx];
+            const frameKey = `variant-frame-${frameIdx}`;
 
-            for (let y = 0; y < height; y++) {
-              for (let x = 0; x < width; x++) {
-                const pixel = matchingLayer.pixels[y]?.[x];
-                if (pixel &&
-                    pixel.r === color.r &&
-                    pixel.g === color.g &&
-                    pixel.b === color.b &&
-                    pixel.a === color.a) {
-                  pixels.push({ x, y });
+            for (const vLayer of variantFrame.layers) {
+              const pixels: { x: number; y: number }[] = [];
+
+              for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                  const pixel = vLayer.pixels[y]?.[x];
+                  if (pixel &&
+                      pixel.r === color.r &&
+                      pixel.g === color.g &&
+                      pixel.b === color.b &&
+                      pixel.a === color.a) {
+                    pixels.push({ x, y });
+                  }
                 }
               }
-            }
 
-            if (pixels.length > 0) {
-              if (!affectedPixelsByFrame.has(frame.id)) {
-                affectedPixelsByFrame.set(frame.id, new Map());
+              if (pixels.length > 0) {
+                if (!affectedPixelsByFrame.has(frameKey)) {
+                  affectedPixelsByFrame.set(frameKey, new Map());
+                }
+                affectedPixelsByFrame.get(frameKey)!.set(vLayer.id, pixels);
               }
-              affectedPixelsByFrame.get(frame.id)!.set(matchingLayer.id, pixels);
             }
           }
-        }
 
-        set({
-          colorAdjustment: {
-            originalColor: color,
-            allFrames: true,
-            affectedPixels: [], // Not used in all-frames mode
-            affectedPixelsByFrame
+          set({
+            colorAdjustment: {
+              originalColor: color,
+              allFrames: true,
+              affectedPixels: [], // Not used in all-frames mode
+              affectedPixelsByFrame
+            }
+          });
+        } else {
+          // Single frame mode - find pixels only in current variant frame's layer
+          const affectedPixels: { x: number; y: number }[] = [];
+
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const pixel = variantLayer.pixels[y]?.[x];
+              if (pixel &&
+                  pixel.r === color.r &&
+                  pixel.g === color.g &&
+                  pixel.b === color.b &&
+                  pixel.a === color.a) {
+                affectedPixels.push({ x, y });
+              }
+            }
           }
-        });
+
+          set({
+            colorAdjustment: {
+              originalColor: color,
+              allFrames: false,
+              affectedPixels
+            }
+          });
+        }
       } else {
-        // Single frame mode - find pixels only in current layer
-        const affectedPixels: { x: number; y: number }[] = [];
+        // Regular layer editing mode
+        const { width, height } = obj.gridSize;
 
-        for (let y = 0; y < height; y++) {
-          for (let x = 0; x < width; x++) {
-            const pixel = layer.pixels[y]?.[x];
-            if (pixel &&
-                pixel.r === color.r &&
-                pixel.g === color.g &&
-                pixel.b === color.b &&
-                pixel.a === color.a) {
-              affectedPixels.push({ x, y });
+        if (allFrames) {
+          // Find all pixels across all frames with matching layer names
+          const affectedPixelsByFrame = new Map<string, Map<string, { x: number; y: number }[]>>();
+
+          for (const frame of obj.frames) {
+            // Find layers with the same name as the current layer
+            const matchingLayers = frame.layers.filter(l => l.name === layer.name);
+
+            for (const matchingLayer of matchingLayers) {
+              const pixels: { x: number; y: number }[] = [];
+
+              for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                  const pixel = matchingLayer.pixels[y]?.[x];
+                  if (pixel &&
+                      pixel.r === color.r &&
+                      pixel.g === color.g &&
+                      pixel.b === color.b &&
+                      pixel.a === color.a) {
+                    pixels.push({ x, y });
+                  }
+                }
+              }
+
+              if (pixels.length > 0) {
+                if (!affectedPixelsByFrame.has(frame.id)) {
+                  affectedPixelsByFrame.set(frame.id, new Map());
+                }
+                affectedPixelsByFrame.get(frame.id)!.set(matchingLayer.id, pixels);
+              }
             }
           }
-        }
 
-        set({
-          colorAdjustment: {
-            originalColor: color,
-            allFrames: false,
-            affectedPixels
+          set({
+            colorAdjustment: {
+              originalColor: color,
+              allFrames: true,
+              affectedPixels: [], // Not used in all-frames mode
+              affectedPixelsByFrame
+            }
+          });
+        } else {
+          // Single frame mode - find pixels only in current layer
+          const affectedPixels: { x: number; y: number }[] = [];
+
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const pixel = layer.pixels[y]?.[x];
+              if (pixel &&
+                  pixel.r === color.r &&
+                  pixel.g === color.g &&
+                  pixel.b === color.b &&
+                  pixel.a === color.a) {
+                affectedPixels.push({ x, y });
+              }
+            }
           }
-        });
+
+          set({
+            colorAdjustment: {
+              originalColor: color,
+              allFrames: false,
+              affectedPixels
+            }
+          });
+        }
       }
 
       // Also set the color picker to this color
@@ -1419,83 +1664,197 @@ export const useEditorStore = create<EditorState>((set, get) => {
       set({ colorAdjustment: null });
     },
 
-    adjustColor: (newColor: Color) => {
+    adjustColor: (newColor: Color, trackHistory: boolean = false) => {
       const { colorAdjustment } = get();
       const obj = get().getCurrentObject();
       const frame = get().getCurrentFrame();
       const layer = get().getCurrentLayer();
       if (!colorAdjustment || !obj || !frame || !layer) return;
 
-      if (colorAdjustment.allFrames && colorAdjustment.affectedPixelsByFrame) {
-        // All frames mode - update pixels across all frames
-        updateProjectAndSave((project) => ({
-          ...project,
-          objects: project.objects.map((o) =>
-            o.id === obj.id
-              ? {
-                  ...o,
-                  frames: o.frames.map((f) => {
-                    const framePixels = colorAdjustment.affectedPixelsByFrame!.get(f.id);
-                    if (!framePixels) return f;
+      // Check if we're editing a variant
+      const variantData = get().getCurrentVariant();
+      const variantLayer = get().getSelectedVariantLayer();
+      const isEditingVariant = layer.isVariant && variantData && variantLayer;
 
-                    return {
-                      ...f,
-                      layers: f.layers.map((l) => {
-                        const layerPixels = framePixels.get(l.id);
-                        if (!layerPixels || layerPixels.length === 0) return l;
+      if (isEditingVariant) {
+        // Variant editing mode
+        const { variant, variantGroup } = variantData;
+        const variantGroupId = layer.variantGroupId!;
+        const variantId = layer.selectedVariantId!;
 
-                        // Only copy affected rows
-                        const affectedRows = new Set(layerPixels.map(p => p.y));
-                        const newPixels = [...l.pixels];
-                        for (const rowY of affectedRows) {
-                          newPixels[rowY] = [...l.pixels[rowY]];
-                        }
-                        for (const { x, y } of layerPixels) {
-                          newPixels[y][x] = newColor as Pixel | 0;
-                        }
-                        return { ...l, pixels: newPixels };
-                      })
-                    };
-                  })
-                }
-              : o
-          ),
-          uiState: { ...project.uiState, selectedColor: newColor }
-        }), true);
+        if (colorAdjustment.allFrames && colorAdjustment.affectedPixelsByFrame) {
+          // All frames mode - update pixels across all variant frames
+          updateProjectAndSave((project) => ({
+            ...project,
+            objects: project.objects.map((o) =>
+              o.id === obj.id
+                ? {
+                    ...o,
+                    variantGroups: o.variantGroups?.map(vg => {
+                      if (vg.id !== variantGroupId) return vg;
+                      return {
+                        ...vg,
+                        variants: vg.variants.map(v => {
+                          if (v.id !== variantId) return v;
+                          return {
+                            ...v,
+                            frames: v.frames.map((vf, frameIdx) => {
+                              const frameKey = `variant-frame-${frameIdx}`;
+                              const framePixels = colorAdjustment.affectedPixelsByFrame!.get(frameKey);
+                              if (!framePixels) return vf;
+
+                              return {
+                                ...vf,
+                                layers: vf.layers.map((vl) => {
+                                  const layerPixels = framePixels.get(vl.id);
+                                  if (!layerPixels || layerPixels.length === 0) return vl;
+
+                                  // Only copy affected rows
+                                  const affectedRows = new Set(layerPixels.map(p => p.y));
+                                  const newPixels = [...vl.pixels];
+                                  for (const rowY of affectedRows) {
+                                    newPixels[rowY] = [...vl.pixels[rowY]];
+                                  }
+                                  for (const { x, y } of layerPixels) {
+                                    newPixels[y][x] = newColor as Pixel | 0;
+                                  }
+                                  return { ...vl, pixels: newPixels };
+                                })
+                              };
+                            })
+                          };
+                        })
+                      };
+                    })
+                  }
+                : o
+            ),
+            uiState: { ...project.uiState, selectedColor: newColor }
+          }), trackHistory);
+        } else {
+          // Single frame mode - update only current variant frame's layer
+          const { project } = get();
+          const frameIndex = project?.uiState.variantFrameIndices?.[variantGroupId] ?? 0;
+          updateProjectAndSave((project) => ({
+            ...project,
+            objects: project.objects.map((o) =>
+              o.id === obj.id
+                ? {
+                    ...o,
+                    variantGroups: o.variantGroups?.map(vg => {
+                      if (vg.id !== variantGroupId) return vg;
+                      return {
+                        ...vg,
+                        variants: vg.variants.map(v => {
+                          if (v.id !== variantId) return v;
+                          return {
+                            ...v,
+                            frames: v.frames.map((vf, idx) => {
+                              if (idx !== frameIndex % v.frames.length) return vf;
+                              return {
+                                ...vf,
+                                layers: vf.layers.map((vl) => {
+                                  if (vl.id !== variantLayer.id) return vl;
+                                  // Only copy affected rows
+                                  const affectedRows = new Set(colorAdjustment.affectedPixels.map(p => p.y));
+                                  const newPixels = [...vl.pixels];
+                                  for (const rowY of affectedRows) {
+                                    newPixels[rowY] = [...vl.pixels[rowY]];
+                                  }
+                                  for (const { x, y } of colorAdjustment.affectedPixels) {
+                                    newPixels[y][x] = newColor as Pixel | 0;
+                                  }
+                                  return { ...vl, pixels: newPixels };
+                                })
+                              };
+                            })
+                          };
+                        })
+                      };
+                    })
+                  }
+                : o
+            ),
+            uiState: { ...project.uiState, selectedColor: newColor }
+          }), trackHistory);
+        }
       } else {
-        // Single frame mode - update only current layer
-        updateProjectAndSave((project) => ({
-          ...project,
-          objects: project.objects.map((o) =>
-            o.id === obj.id
-              ? {
-                  ...o,
-                  frames: o.frames.map((f) =>
-                    f.id === frame.id
-                      ? {
-                          ...f,
-                          layers: f.layers.map((l) => {
-                            if (l.id !== layer.id) return l;
-                            // Only copy affected rows
-                            const affectedRows = new Set(colorAdjustment.affectedPixels.map(p => p.y));
-                            const newPixels = [...l.pixels];
-                            for (const rowY of affectedRows) {
-                              newPixels[rowY] = [...l.pixels[rowY]];
-                            }
-                            for (const { x, y } of colorAdjustment.affectedPixels) {
-                              newPixels[y][x] = newColor as Pixel | 0;
-                            }
-                            return { ...l, pixels: newPixels };
-                          })
-                        }
-                      : f
-                  )
-                }
-              : o
-          ),
-          uiState: { ...project.uiState, selectedColor: newColor }
-        }), true);
+        // Regular layer editing mode
+        if (colorAdjustment.allFrames && colorAdjustment.affectedPixelsByFrame) {
+          // All frames mode - update pixels across all frames
+          updateProjectAndSave((project) => ({
+            ...project,
+            objects: project.objects.map((o) =>
+              o.id === obj.id
+                ? {
+                    ...o,
+                    frames: o.frames.map((f) => {
+                      const framePixels = colorAdjustment.affectedPixelsByFrame!.get(f.id);
+                      if (!framePixels) return f;
+
+                      return {
+                        ...f,
+                        layers: f.layers.map((l) => {
+                          const layerPixels = framePixels.get(l.id);
+                          if (!layerPixels || layerPixels.length === 0) return l;
+
+                          // Only copy affected rows
+                          const affectedRows = new Set(layerPixels.map(p => p.y));
+                          const newPixels = [...l.pixels];
+                          for (const rowY of affectedRows) {
+                            newPixels[rowY] = [...l.pixels[rowY]];
+                          }
+                          for (const { x, y } of layerPixels) {
+                            newPixels[y][x] = newColor as Pixel | 0;
+                          }
+                          return { ...l, pixels: newPixels };
+                        })
+                      };
+                    })
+                  }
+                : o
+            ),
+            uiState: { ...project.uiState, selectedColor: newColor }
+          }), trackHistory);
+        } else {
+          // Single frame mode - update only current layer
+          updateProjectAndSave((project) => ({
+            ...project,
+            objects: project.objects.map((o) =>
+              o.id === obj.id
+                ? {
+                    ...o,
+                    frames: o.frames.map((f) =>
+                      f.id === frame.id
+                        ? {
+                            ...f,
+                            layers: f.layers.map((l) => {
+                              if (l.id !== layer.id) return l;
+                              // Only copy affected rows
+                              const affectedRows = new Set(colorAdjustment.affectedPixels.map(p => p.y));
+                              const newPixels = [...l.pixels];
+                              for (const rowY of affectedRows) {
+                                newPixels[rowY] = [...l.pixels[rowY]];
+                              }
+                              for (const { x, y } of colorAdjustment.affectedPixels) {
+                                newPixels[y][x] = newColor as Pixel | 0;
+                              }
+                              return { ...l, pixels: newPixels };
+                            })
+                          }
+                        : f
+                    )
+                  }
+                : o
+            ),
+            uiState: { ...project.uiState, selectedColor: newColor }
+          }), trackHistory);
+        }
       }
+    },
+
+    saveCurrentStateToHistory: () => {
+      saveCurrentStateToHistory();
     },
 
     // Variant actions
@@ -1589,17 +1948,18 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const variantWidth = maxFrameWidth;
       const variantHeight = maxFrameHeight;
 
-      // Create variant frames with per-frame offsets
+      // Create variant frames and base frame offsets
       const variantFrames: VariantFrame[] = [];
+      const baseFrameOffsets: { [baseFrameIndex: number]: { x: number; y: number } } = {};
+
       for (let i = 0; i < obj.frames.length; i++) {
         const frame = obj.frames[i];
         const frameData = framesPixelData.find(f => f.frameId === frame.id);
 
         if (!frameData) {
-          // Fallback: create empty frame
+          // Fallback: create empty frame with default offset
           variantFrames.push({
             id: generateId(),
-            offset: { x: globalMinX, y: globalMinY },
             layers: [{
               id: generateId(),
               name: 'Layer 1',
@@ -1607,6 +1967,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
               visible: true
             }]
           });
+          baseFrameOffsets[i] = { x: 0, y: 0 };
           continue;
         }
 
@@ -1615,6 +1976,9 @@ export const useEditorStore = create<EditorState>((set, get) => {
         const frameOffsetY = frameData.frameMinY;
         const frameWidth = frameData.frameMaxX - frameData.frameMinX + 1;
         const frameHeight = frameData.frameMaxY - frameData.frameMinY + 1;
+
+        // Store offset per base frame index (new system)
+        baseFrameOffsets[i] = { x: frameOffsetX, y: frameOffsetY };
 
         // Extract pixels for this frame, positioned within the variant grid
         // Pixels are positioned at the top-left of the variant grid, preserving their relative position
@@ -1641,7 +2005,6 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
         variantFrames.push({
           id: generateId(),
-          offset: { x: frameOffsetX, y: frameOffsetY }, // Per-frame offset preserves animation
           layers: [{
             id: generateId(),
             name: 'Layer 1',
@@ -1658,7 +2021,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
         id: variantId,
         name: layerName,
         gridSize: { width: variantWidth, height: variantHeight },
-        frames: variantFrames
+        frames: variantFrames,
+        baseFrameOffsets
       };
 
       const newVariantGroup: VariantGroup = {
@@ -1731,13 +2095,13 @@ export const useEditorStore = create<EditorState>((set, get) => {
           gridSize: { ...sourceVariant.gridSize },
           frames: sourceVariant.frames.map(f => ({
             id: generateId(),
-            offset: { ...f.offset },
             layers: f.layers.map(l => ({
               ...l,
               id: generateId(),
               pixels: l.pixels.map(row => [...row])
             }))
-          }))
+          })),
+          baseFrameOffsets: { ...sourceVariant.baseFrameOffsets }
         };
       } else {
         // Create empty variant
@@ -1748,14 +2112,14 @@ export const useEditorStore = create<EditorState>((set, get) => {
           gridSize: { ...templateVariant.gridSize },
           frames: templateVariant.frames.map(f => ({
             id: generateId(),
-            offset: { ...f.offset },
             layers: [{
               id: generateId(),
               name: 'Layer 1',
               pixels: createEmptyPixelGrid(templateVariant.gridSize.width, templateVariant.gridSize.height),
               visible: true
             }]
-          }))
+          })),
+          baseFrameOffsets: { ...templateVariant.baseFrameOffsets }
         };
       }
 
@@ -1817,8 +2181,16 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
     selectVariant: (layerId: string, variantId: string) => {
       const obj = get().getCurrentObject();
-      if (!obj) return;
+      const frame = get().getCurrentFrame();
+      if (!obj || !frame) return;
 
+      // Find the variant layer to get its variantGroupId
+      const variantLayer = frame.layers.find(l => l.id === layerId && l.isVariant);
+      if (!variantLayer || !variantLayer.variantGroupId) return;
+
+      const variantGroupId = variantLayer.variantGroupId;
+
+      // Update ALL variant layers across ALL frames that share this variantGroupId
       updateProjectAndSave((project) => ({
         ...project,
         objects: project.objects.map(o => {
@@ -1828,7 +2200,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
             frames: o.frames.map(f => ({
               ...f,
               layers: f.layers.map(l => {
-                if (l.id === layerId && l.isVariant) {
+                // Update all variant layers that belong to the same variant group
+                if (l.isVariant && l.variantGroupId === variantGroupId) {
                   return { ...l, selectedVariantId: variantId };
                 }
                 return l;
@@ -1916,7 +2289,10 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
       const variantGroupId = layer.variantGroupId;
       const variantId = layer.selectedVariantId;
-      const variantFrameIndex = project.uiState.variantFrameIndices?.[variantGroupId] ?? 0;
+      // Get the current base frame index (not variant frame index)
+      const currentFrameId = project.uiState.selectedFrameId;
+      const baseFrameIndex = obj.frames.findIndex(f => f.id === currentFrameId);
+      if (baseFrameIndex < 0) return;
 
       updateProjectAndSave((project) => ({
         ...project,
@@ -1930,18 +2306,17 @@ export const useEditorStore = create<EditorState>((set, get) => {
                 ...vg,
                 variants: vg.variants.map(v => {
                   if (v.id !== variantId) return v;
+                  // Update offset for the current base frame
+                  const currentOffset = v.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
                   return {
                     ...v,
-                    frames: v.frames.map((f, idx) => {
-                      if (idx !== variantFrameIndex) return f;
-                      return {
-                        ...f,
-                        offset: {
-                          x: f.offset.x + dx,
-                          y: f.offset.y + dy
-                        }
-                      };
-                    })
+                    baseFrameOffsets: {
+                      ...v.baseFrameOffsets,
+                      [baseFrameIndex]: {
+                        x: currentOffset.x + dx,
+                        y: currentOffset.y + dy
+                      }
+                    }
                   };
                 })
               };
@@ -2026,6 +2401,245 @@ export const useEditorStore = create<EditorState>((set, get) => {
       }), false);
     },
 
+    duplicateVariantFrame: (variantGroupId: string, variantId: string, frameId: string) => {
+      const obj = get().getCurrentObject();
+      const { project } = get();
+      if (!obj || !project) return;
+
+      const variantGroup = obj.variantGroups?.find(vg => vg.id === variantGroupId);
+      if (!variantGroup) return;
+
+      const variant = variantGroup.variants.find(v => v.id === variantId);
+      if (!variant) return;
+
+      const sourceFrame = variant.frames.find(f => f.id === frameId);
+      if (!sourceFrame) return;
+
+      updateProjectAndSave((project) => {
+        const newFrameId = generateId();
+        const newFrame: VariantFrame = {
+          id: newFrameId,
+          layers: sourceFrame.layers.map((l) => ({
+            ...l,
+            id: generateId(),
+            pixels: l.pixels.map((row) => [...row])
+          }))
+        };
+
+        const frameIndex = variant.frames.findIndex(f => f.id === frameId);
+        const newFrames = [...variant.frames];
+        newFrames.splice(frameIndex + 1, 0, newFrame);
+
+        return {
+          ...project,
+          objects: project.objects.map(o => {
+            if (o.id !== obj.id) return o;
+            return {
+              ...o,
+              variantGroups: o.variantGroups?.map(vg => {
+                if (vg.id !== variantGroupId) return vg;
+                return {
+                  ...vg,
+                  variants: vg.variants.map(v => {
+                    if (v.id !== variantId) return v;
+                    return {
+                      ...v,
+                      frames: newFrames
+                    };
+                  })
+                };
+              })
+            };
+          }),
+          uiState: {
+            ...project.uiState,
+            variantFrameIndices: {
+              ...project.uiState.variantFrameIndices,
+              [variantGroupId]: frameIndex + 1
+            }
+          }
+        };
+      }, true);
+    },
+
+    deleteVariantFrame: (variantGroupId: string, variantId: string, frameId: string) => {
+      const obj = get().getCurrentObject();
+      const { project } = get();
+      if (!obj || !project) return;
+
+      const variantGroup = obj.variantGroups?.find(vg => vg.id === variantGroupId);
+      if (!variantGroup) return;
+
+      const variant = variantGroup.variants.find(v => v.id === variantId);
+      if (!variant || variant.frames.length <= 1) return; // Can't delete last frame
+
+      updateProjectAndSave((project) => {
+        const frameIndex = variant.frames.findIndex(f => f.id === frameId);
+        const newFrames = variant.frames.filter(f => f.id !== frameId);
+
+        // Select the previous frame if possible, otherwise the first one
+        const newSelectedIndex = Math.max(0, frameIndex - 1);
+
+        return {
+          ...project,
+          objects: project.objects.map(o => {
+            if (o.id !== obj.id) return o;
+            return {
+              ...o,
+              variantGroups: o.variantGroups?.map(vg => {
+                if (vg.id !== variantGroupId) return vg;
+                return {
+                  ...vg,
+                  variants: vg.variants.map(v => {
+                    if (v.id !== variantId) return v;
+                    return {
+                      ...v,
+                      frames: newFrames
+                    };
+                  })
+                };
+              })
+            };
+          }),
+          uiState: {
+            ...project.uiState,
+            variantFrameIndices: {
+              ...project.uiState.variantFrameIndices,
+              [variantGroupId]: newSelectedIndex
+            }
+          }
+        };
+      }, true);
+    },
+
+    addVariantFrame: (variantGroupId: string, variantId: string, copyPrevious: boolean = true) => {
+      const obj = get().getCurrentObject();
+      const { project } = get();
+      if (!obj || !project) return;
+
+      const variantGroup = obj.variantGroups?.find(vg => vg.id === variantGroupId);
+      if (!variantGroup) return;
+
+      const variant = variantGroup.variants.find(v => v.id === variantId);
+      if (!variant) return;
+
+      updateProjectAndSave((project) => {
+        const currentFrameIndex = project.uiState.variantFrameIndices?.[variantGroupId] ?? 0;
+        const currentFrame = variant.frames[currentFrameIndex];
+
+        let newFrame: VariantFrame;
+        if (copyPrevious && currentFrame) {
+          // Copy from current frame
+          newFrame = {
+            id: generateId(),
+            layers: currentFrame.layers.map(l => ({
+              ...l,
+              id: generateId(),
+              pixels: l.pixels.map(row => [...row])
+            }))
+          };
+        } else {
+          // Create empty frame
+          newFrame = {
+            id: generateId(),
+            layers: [{
+              id: generateId(),
+              name: 'Layer 1',
+              pixels: createEmptyPixelGrid(variant.gridSize.width, variant.gridSize.height),
+              visible: true
+            }]
+          };
+        }
+
+        const newFrames = [...variant.frames];
+        newFrames.splice(currentFrameIndex + 1, 0, newFrame);
+
+        return {
+          ...project,
+          objects: project.objects.map(o => {
+            if (o.id !== obj.id) return o;
+            return {
+              ...o,
+              variantGroups: o.variantGroups?.map(vg => {
+                if (vg.id !== variantGroupId) return vg;
+                return {
+                  ...vg,
+                  variants: vg.variants.map(v => {
+                    if (v.id !== variantId) return v;
+                    return {
+                      ...v,
+                      frames: newFrames
+                    };
+                  })
+                };
+              })
+            };
+          }),
+          uiState: {
+            ...project.uiState,
+            variantFrameIndices: {
+              ...project.uiState.variantFrameIndices,
+              [variantGroupId]: currentFrameIndex + 1
+            }
+          }
+        };
+      }, true);
+    },
+
+    moveVariantFrame: (variantGroupId: string, variantId: string, frameId: string, direction: 'left' | 'right') => {
+      const obj = get().getCurrentObject();
+      const { project } = get();
+      if (!obj || !project) return;
+
+      const variantGroup = obj.variantGroups?.find(vg => vg.id === variantGroupId);
+      if (!variantGroup) return;
+
+      const variant = variantGroup.variants.find(v => v.id === variantId);
+      if (!variant) return;
+
+      const frameIndex = variant.frames.findIndex(f => f.id === frameId);
+      if (frameIndex === -1) return;
+
+      const newIndex = direction === 'left' ? frameIndex - 1 : frameIndex + 1;
+      if (newIndex < 0 || newIndex >= variant.frames.length) return;
+
+      updateProjectAndSave((project) => {
+        const newFrames = [...variant.frames];
+        const [movedFrame] = newFrames.splice(frameIndex, 1);
+        newFrames.splice(newIndex, 0, movedFrame);
+
+        return {
+          ...project,
+          objects: project.objects.map(o => {
+            if (o.id !== obj.id) return o;
+            return {
+              ...o,
+              variantGroups: o.variantGroups?.map(vg => {
+                if (vg.id !== variantGroupId) return vg;
+                return {
+                  ...vg,
+                  variants: vg.variants.map(v => {
+                    if (v.id !== variantId) return v;
+                    return {
+                      ...v,
+                      frames: newFrames
+                    };
+                  })
+                };
+              })
+            };
+          }),
+          uiState: {
+            ...project.uiState,
+            variantFrameIndices: {
+              ...project.uiState.variantFrameIndices,
+              [variantGroupId]: newIndex
+            }
+          }
+        };
+      }, true);
+    },
+
     // Helpers
     getCurrentObject: () => {
       const { project } = get();
@@ -2060,10 +2674,15 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const variant = variantGroup.variants.find(v => v.id === layer.selectedVariantId);
       if (!variant) return null;
 
-      const frameIndex = project.uiState.variantFrameIndices?.[variantGroup.id] ?? 0;
-      const variantFrame = variant.frames[frameIndex % variant.frames.length];
+      const variantFrameIndex = project.uiState.variantFrameIndices?.[variantGroup.id] ?? 0;
+      const variantFrame = variant.frames[variantFrameIndex % variant.frames.length];
 
-      return { variantGroup, variant, variantFrame };
+      // Get the current base frame index for the offset
+      const currentFrameId = project.uiState.selectedFrameId;
+      const baseFrameIndex = obj.frames.findIndex(f => f.id === currentFrameId);
+      const offset = variant.baseFrameOffsets?.[baseFrameIndex >= 0 ? baseFrameIndex : 0] ?? { x: 0, y: 0 };
+
+      return { variantGroup, variant, variantFrame, baseFrameIndex, offset };
     },
 
     getSelectedVariantLayer: () => {

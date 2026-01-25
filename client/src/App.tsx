@@ -16,7 +16,6 @@ function App() {
   const { project, isLoading, initProject, setTool, resetReferenceOverlay, colorAdjustment, clearColorAdjustment } = useEditorStore();
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
-  const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
   const [referenceImage, setReferenceImage] = useState<ReferenceImageData | null>(null);
 
   // Handle reference image change - reset overlay and switch tool if needed
@@ -114,15 +113,8 @@ function App() {
       </div>
 
       {/* Bottom Panel - Frame Timeline */}
-      <footer className={`bottom-panel ${bottomPanelOpen ? 'open' : 'collapsed'}`}>
-        <button
-          className="panel-toggle bottom-toggle"
-          onClick={() => setBottomPanelOpen(!bottomPanelOpen)}
-          title={bottomPanelOpen ? 'Collapse' : 'Expand'}
-        >
-          {bottomPanelOpen ? '▼' : '▲'}
-        </button>
-        {bottomPanelOpen && <FrameTimeline />}
+      <footer className="bottom-panel">
+        <FrameTimeline />
       </footer>
     </div>
   );

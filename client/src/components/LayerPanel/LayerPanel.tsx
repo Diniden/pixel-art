@@ -136,47 +136,49 @@ export function LayerPanel() {
                 onDragOver={(e) => handleDragOver(e, displayIndex)}
                 onDragEnd={handleDragEnd}
               >
-                <button
-                  className={`visibility-btn ${layer.visible ? 'visible' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleLayerVisibility(layer.id);
-                  }}
-                  title={layer.visible ? 'Hide layer' : 'Show layer'}
-                >
-                  {layer.visible ? '👁' : '○'}
-                </button>
-
-                {/* Variant icon for variant layers */}
-                {layer.isVariant && (
-                  <span className="variant-icon" title="Variant Layer">⬡</span>
-                )}
-
-                {editingId === layer.id ? (
-                  <input
-                    type="text"
-                    className="layer-name-input"
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    onBlur={() => handleFinishRename(layer.id)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(layer.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    autoFocus
-                  />
-                ) : (
-                  <span
-                    className="layer-name"
-                    onDoubleClick={(e) => {
+                <div className="layer-label-row">
+                  <button
+                    className={`visibility-btn ${layer.visible ? 'visible' : ''}`}
+                    onClick={(e) => {
                       e.stopPropagation();
-                      handleStartRename(layer.id, layer.name);
+                      toggleLayerVisibility(layer.id);
                     }}
+                    title={layer.visible ? 'Hide layer' : 'Show layer'}
                   >
-                    {layer.name}
-                    {layer.isVariant && selectedVariant && (
-                      <span className="variant-name-badge">{selectedVariant.name}</span>
-                    )}
-                  </span>
-                )}
+                    {layer.visible ? '👁' : '○'}
+                  </button>
+
+                  {/* Variant icon for variant layers */}
+                  {layer.isVariant && (
+                    <span className="variant-icon" title="Variant Layer">⬡</span>
+                  )}
+
+                  {editingId === layer.id ? (
+                    <input
+                      type="text"
+                      className="layer-name-input"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={() => handleFinishRename(layer.id)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(layer.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      className="layer-name"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleStartRename(layer.id, layer.name);
+                      }}
+                    >
+                      {layer.name}
+                      {layer.isVariant && selectedVariant && (
+                        <span className="variant-name-badge">{selectedVariant.name}</span>
+                      )}
+                    </span>
+                  )}
+                </div>
 
                 <div className="layer-actions">
                   {/* Variant-specific actions */}

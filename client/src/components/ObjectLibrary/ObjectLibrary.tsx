@@ -1,62 +1,127 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { useEditorStore } from '../../store';
 import { PixelObject } from '../../types';
+import { renderFramePreview } from '../../utils/previewRenderer';
 import './ObjectLibrary.css';
 
-function ObjectThumbnail({ obj }: { obj: PixelObject }) {
+const ObjectThumbnail = memo(function ObjectThumbnail({
+  obj,
+  project,
+  isSelected,
+  isFirstFrameSelected
+}: {
+  obj: PixelObject;
+  project?: {
+    uiState?: {
+      variantFrameIndices?: { [key: string]: number };
+      selectedObjectId?: string;
+      selectedFrameId?: string;
+    }
+  };
+  isSelected: boolean;
+  isFirstFrameSelected: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const thumbSize = 40;
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
+    const ctx = canvas?.getContext('2d', { willReadFrequently: false });
     if (!canvas || !ctx || obj.frames.length === 0) return;
 
-    const { width, height } = obj.gridSize;
-    const scale = Math.min(thumbSize / width, thumbSize / height);
     const frame = obj.frames[0];
 
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, thumbSize, thumbSize);
+    // Only use current variantFrameIndices if this object is selected AND the first frame is selected
+    // Otherwise, use static indices (frame index 0, so variant frame index 0)
+    let variantFrameIndices: { [key: string]: number } | undefined;
 
-    // Draw checkerboard
-    const checkSize = 4;
-    for (let y = 0; y < thumbSize; y += checkSize) {
-      for (let x = 0; x < thumbSize; x += checkSize) {
-        if (((x + y) / checkSize) % 2 === 0) {
-          ctx.fillStyle = '#2a2a3a';
-        } else {
-          ctx.fillStyle = '#222230';
-        }
-        ctx.fillRect(x, y, checkSize, checkSize);
+    if (isSelected && isFirstFrameSelected) {
+      // Use current indices when editing the first frame (allows live updates)
+      variantFrameIndices = project?.uiState?.variantFrameIndices;
+    } else if (obj.variantGroups) {
+      // Use static indices (all variant frames at index 0 for the thumbnail)
+      variantFrameIndices = {};
+      for (const vg of obj.variantGroups) {
+        variantFrameIndices[vg.id] = 0;
       }
     }
 
-    const offsetX = (thumbSize - width * scale) / 2;
-    const offsetY = (thumbSize - height * scale) / 2;
+    renderFramePreview(ctx, {
+      thumbSize,
+      gridWidth: obj.gridSize.width,
+      gridHeight: obj.gridSize.height,
+      frame,
+      variantGroups: obj.variantGroups,
+      variantFrameIndices
+    });
+  }, [obj, project, isSelected, isFirstFrameSelected]);
 
-    for (const layer of frame.layers) {
-      if (!layer.visible) continue;
+  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="obj-thumb-canvas" />;
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if object content actually changed
+  const prev = prevProps.obj;
+  const next = nextProps.obj;
 
-      for (let py = 0; py < height; py++) {
-        for (let px = 0; px < width; px++) {
-          const pixel = layer.pixels[py]?.[px];
-          if (pixel && pixel.a > 0) {
-            ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
-            ctx.fillRect(
-              offsetX + px * scale,
-              offsetY + py * scale,
-              Math.ceil(scale),
-              Math.ceil(scale)
-            );
+  if (prev === next) {
+    // Object is the same - only check variant frame indices if editing first frame
+    if (nextProps.isSelected && nextProps.isFirstFrameSelected) {
+      const prevIndices = prevProps.project?.uiState?.variantFrameIndices;
+      const nextIndices = nextProps.project?.uiState?.variantFrameIndices;
+      if (prevIndices !== nextIndices) {
+        // Check if any relevant variant frame indices changed
+        if (prev.variantGroups && next.variantGroups) {
+          for (const vg of prev.variantGroups) {
+            const prevIdx = prevIndices?.[vg.id] ?? 0;
+            const nextIdx = nextIndices?.[vg.id] ?? 0;
+            if (prevIdx !== nextIdx) return false;
           }
         }
       }
     }
-  }, [obj]);
+    // For non-selected objects or when not editing first frame, ignore variantFrameIndices changes
+    return true;
+  }
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="obj-thumb-canvas" />;
-}
+  if (prev.id !== next.id) return false;
+  if (prev.gridSize.width !== next.gridSize.width || prev.gridSize.height !== next.gridSize.height) return false;
+  if (prev.frames.length !== next.frames.length) return false;
+
+  // Check if first frame changed
+  if (prev.frames.length > 0 && next.frames.length > 0) {
+    const prevFrame = prev.frames[0];
+    const nextFrame = next.frames[0];
+
+    if (prevFrame.id !== nextFrame.id) return false;
+    if (prevFrame.layers.length !== nextFrame.layers.length) return false;
+
+    // Check if layer pixels changed
+    for (let i = 0; i < prevFrame.layers.length; i++) {
+      const prevLayer = prevFrame.layers[i];
+      const nextLayer = nextFrame.layers[i];
+
+      if (prevLayer.visible !== nextLayer.visible) return false;
+      if (prevLayer.pixels !== nextLayer.pixels) return false;
+    }
+  }
+
+  // Only check variant frame indices if editing first frame
+  if (nextProps.isSelected && nextProps.isFirstFrameSelected) {
+    const prevIndices = prevProps.project?.uiState?.variantFrameIndices;
+    const nextIndices = nextProps.project?.uiState?.variantFrameIndices;
+    if (prevIndices !== nextIndices) {
+      // Check if any relevant variant frame indices changed
+      if (prev.variantGroups && next.variantGroups) {
+        for (const vg of prev.variantGroups) {
+          const prevIdx = prevIndices?.[vg.id] ?? 0;
+          const nextIdx = nextIndices?.[vg.id] ?? 0;
+          if (prevIdx !== nextIdx) return false;
+        }
+      }
+    }
+  }
+
+  return true;
+});
 
 export function ObjectLibrary() {
   const {
@@ -172,14 +237,24 @@ export function ObjectLibrary() {
         )}
 
         <div className="object-list">
-          {objects.map((obj) => (
+          {objects.map((obj) => {
+            const isSelected = selectedObjectId === obj.id;
+            const firstFrame = obj.frames[0];
+            const isFirstFrameSelected = isSelected && firstFrame && project.uiState.selectedFrameId === firstFrame.id;
+
+            return (
             <div key={obj.id} className="object-wrapper">
               <div
-                className={`object-item ${selectedObjectId === obj.id ? 'selected' : ''}`}
+                className={`object-item ${isSelected ? 'selected' : ''}`}
                 onClick={() => selectObject(obj.id)}
               >
                 <div className="object-thumbnail">
-                  <ObjectThumbnail obj={obj} />
+                  <ObjectThumbnail
+                    obj={obj}
+                    project={project}
+                    isSelected={isSelected}
+                    isFirstFrameSelected={isFirstFrameSelected}
+                  />
                 </div>
 
                 <div className="object-info">
@@ -268,7 +343,8 @@ export function ObjectLibrary() {
                 </div>
               )}
             </div>
-          ))}
+          );
+          })}
         </div>
 
         {objects.length === 0 && (

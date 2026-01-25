@@ -67,7 +67,8 @@ export function Canvas({ referenceImage }: CanvasProps) {
     clearSelection,
     moveSelectedPixels,
     selectFrame,
-    setVariantOffset
+    setVariantOffset,
+    advanceVariantFrames
   } = useEditorStore();
 
   const obj = getCurrentObject();
@@ -96,10 +97,14 @@ export function Canvas({ referenceImage }: CanvasProps) {
   const shapeMode = project?.uiState.shapeMode ?? 'both';
   const borderRadius = project?.uiState.borderRadius ?? 0;
 
-  // Get variant offset if editing variant
+  // Get variant offset if editing variant (now from baseFrameOffsets)
   const variantOffset = editingVariant && variantData
-    ? variantData.variantFrame.offset
+    ? variantData.offset
     : { x: 0, y: 0 };
+
+  // Create a stable key for the offset to ensure useEffect triggers on offset changes
+  // (React's dependency comparison doesn't deep-compare objects)
+  const variantOffsetKey = `${variantOffset.x},${variantOffset.y}`;
 
   // Calculate canvas size - when editing variant, show both the variant grid and the object outline
   const canvasWidth = editingVariant ? objWidth * zoom : gridWidth * zoom;
@@ -126,7 +131,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
 
     if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return null;
     return { x, y };
-  }, [zoom, gridWidth, gridHeight, editingVariant, variantData, variantOffset]);
+  }, [zoom, gridWidth, gridHeight, editingVariant, variantData, variantOffsetKey]);
 
   // Create or update cached background canvas (checkerboard)
   const ensureBgCanvas = useCallback(() => {
@@ -241,11 +246,15 @@ export function Canvas({ referenceImage }: CanvasProps) {
         if (l.isVariant && l.variantGroupId) {
           const vg = obj.variantGroups?.find(vg => vg.id === l.variantGroupId);
           const variant = vg?.variants.find(v => v.id === l.selectedVariantId);
-          const frameIdx = project?.uiState.variantFrameIndices?.[l.variantGroupId] ?? 0;
-          const vFrame = variant?.frames[frameIdx % (variant?.frames.length || 1)];
+          const variantFrameIdx = project?.uiState.variantFrameIndices?.[l.variantGroupId] ?? 0;
+          const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
+
+          // Get the base frame index for offset lookup
+          const baseFrameIndex = obj.frames.findIndex(f => f.id === frame.id);
 
           if (variant && vFrame) {
-            const vOffset = vFrame.offset;
+            // Use baseFrameOffsets for position (key change)
+            const vOffset = variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
             const isCurrentLayer = l.id === layer?.id;
 
             for (const vl of vFrame.layers) {
@@ -342,11 +351,15 @@ export function Canvas({ referenceImage }: CanvasProps) {
         if (l.isVariant && l.variantGroupId) {
           const vg = obj.variantGroups?.find(vg => vg.id === l.variantGroupId);
           const variant = vg?.variants.find(v => v.id === l.selectedVariantId);
-          const frameIdx = project?.uiState.variantFrameIndices?.[l.variantGroupId] ?? 0;
-          const vFrame = variant?.frames[frameIdx % (variant?.frames.length || 1)];
+          const variantFrameIdx = project?.uiState.variantFrameIndices?.[l.variantGroupId] ?? 0;
+          const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
+
+          // Get the base frame index for offset lookup
+          const baseFrameIndex = obj.frames.findIndex(f => f.id === frame.id);
 
           if (variant && vFrame) {
-            const vOffset = vFrame.offset;
+            // Use baseFrameOffsets for position (key change)
+            const vOffset = variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
 
             for (const vl of vFrame.layers) {
               if (!vl.visible) continue;
@@ -432,7 +445,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
       ctx.setLineDash([]);
       ctx.lineDashOffset = 0;
     }
-  }, [frame, obj, layer, previewPixels, currentColor, zoom, gridWidth, gridHeight, objWidth, objHeight, canvasWidth, canvasHeight, ensureBgCanvas, ensureGridCanvas, selection, previewSelection, editingVariant, variantData, variantOffset, project?.uiState.variantFrameIndices]);
+  }, [frame, obj, layer, previewPixels, currentColor, zoom, gridWidth, gridHeight, objWidth, objHeight, canvasWidth, canvasHeight, ensureBgCanvas, ensureGridCanvas, selection, previewSelection, editingVariant, variantData, variantOffsetKey, project?.uiState.variantFrameIndices]);
 
   // Check if reference trace tool is active
   const isReferenceTraceActive = currentTool === 'reference-trace' && referenceImage != null;
@@ -625,7 +638,9 @@ export function Canvas({ referenceImage }: CanvasProps) {
         cancelAnimationFrame(renderRequestRef.current);
       }
     };
-  }, [frame, previewPixels, currentColor, zoom, gridWidth, gridHeight, canvasWidth, canvasHeight]);
+    // Note: project is included to ensure re-render on undo (which restores historical project reference)
+    // obj is included for variant group changes
+  }, [frame, previewPixels, currentColor, zoom, gridWidth, gridHeight, canvasWidth, canvasHeight, variantOffsetKey, project, obj]);
 
   // Keyboard event handler
   useEffect(() => {
@@ -750,22 +765,27 @@ export function Canvas({ referenceImage }: CanvasProps) {
         if (currentIndex === -1) return;
 
         let newIndex: number;
+        let delta: number;
         if (e.key === '.') {
           // Next frame (wrap around)
           newIndex = (currentIndex + 1) % currentObj.frames.length;
+          delta = 1;
         } else {
           // Previous frame (wrap around)
           newIndex = (currentIndex - 1 + currentObj.frames.length) % currentObj.frames.length;
+          delta = -1;
         }
 
-        selectFrame(currentObj.frames[newIndex].id);
+        // Don't sync variants to base frames - advance them independently (same as playback)
+        selectFrame(currentObj.frames[newIndex].id, false);
+        advanceVariantFrames(delta);
         return;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentTool, borderRadius, undo, deleteSelectedFrame, moveLayerPixels, setBorderRadius, isReferenceTraceActive, moveReferenceOverlay, setTool, selection, moveSelectedPixels, clearSelection, getCurrentObject, project?.uiState.selectedFrameId, selectFrame, editingVariant, setVariantOffset]);
+  }, [currentTool, borderRadius, undo, deleteSelectedFrame, moveLayerPixels, setBorderRadius, isReferenceTraceActive, moveReferenceOverlay, setTool, selection, moveSelectedPixels, clearSelection, getCurrentObject, project?.uiState.selectedFrameId, selectFrame, editingVariant, setVariantOffset, advanceVariantFrames]);
 
   // Get pixel color from reference image at a given canvas coordinate
   const getRefPixelAtCoord = useCallback((canvasX: number, canvasY: number) => {
@@ -836,8 +856,21 @@ export function Canvas({ referenceImage }: CanvasProps) {
 
     // Eyedropper tool: pick color from first visible layer with a color (top to bottom)
     if (currentTool === 'eyedropper') {
+      // When editing a variant, check the variant's pixel data
+      if (editingVariant && variantData) {
+        const variantLayer = variantData.variantFrame.layers[0];
+        if (variantLayer) {
+          const pixel = variantLayer.pixels[coords.y]?.[coords.x];
+          if (pixel && pixel.a > 0) {
+            setColorAndAddToHistory(pixel);
+            revertToPreviousTool();
+            return;
+          }
+        }
+      }
+
       // Iterate through visible layers from top to bottom (reverse order since layers render bottom-to-top)
-      if (frame) {
+      if (frame && !editingVariant) {
         for (let i = frame.layers.length - 1; i >= 0; i--) {
           const l = frame.layers[i];
           if (!l.visible) continue;
@@ -892,7 +925,11 @@ export function Canvas({ referenceImage }: CanvasProps) {
     } else if (currentTool === 'eraser') {
       setPixel(coords.x, coords.y, 0);
     } else if (currentTool === 'flood-fill') {
-      const pixels = floodFill(layer.pixels, coords.x, coords.y, gridWidth, gridHeight, currentColor);
+      // Get the correct pixel grid - variant frame's layer when editing variant
+      const pixelGrid = editingVariant && variantData
+        ? variantData.variantFrame.layers[0]?.pixels ?? layer.pixels
+        : layer.pixels;
+      const pixels = floodFill(pixelGrid, coords.x, coords.y, gridWidth, gridHeight, currentColor);
       setPixels(pixels);
       endDrawing();
     } else if (currentTool === 'fill-square') {
@@ -1069,7 +1106,11 @@ export function Canvas({ referenceImage }: CanvasProps) {
     } else if (currentTool === 'eraser') {
       setPixel(coords.x, coords.y, 0);
     } else if (currentTool === 'flood-fill') {
-      const pixels = floodFill(layer.pixels, coords.x, coords.y, gridWidth, gridHeight, currentColor);
+      // Get the correct pixel grid - variant frame's layer when editing variant
+      const pixelGrid = editingVariant && variantData
+        ? variantData.variantFrame.layers[0]?.pixels ?? layer.pixels
+        : layer.pixels;
+      const pixels = floodFill(pixelGrid, coords.x, coords.y, gridWidth, gridHeight, currentColor);
       setPixels(pixels);
       endDrawing();
     } else if (currentTool === 'fill-square') {
@@ -1144,55 +1185,57 @@ export function Canvas({ referenceImage }: CanvasProps) {
   };
 
   return (
-    <div className="canvas-container" ref={containerRef} tabIndex={0}>
-      <div
-        className="canvas-wrapper"
-        style={{
-          transform: `translate(${panOffset.x}px, ${panOffset.y}px)`
-        }}
-      >
-        {/* Reference Image Canvas */}
-        {referenceImage && (
-          <div className="reference-canvas-container">
-            <div className="reference-label">📷 Reference</div>
-            <canvas
-              ref={refCanvasRef}
-              width={referenceImage.width * zoom}
-              height={referenceImage.height * zoom}
-              className="reference-canvas"
-              style={{ cursor: currentTool === 'eyedropper' ? 'crosshair' : 'default' }}
-              onClick={handleRefCanvasClick}
-            />
-            <div className="reference-info">{referenceImage.width} × {referenceImage.height}</div>
-          </div>
-        )}
+    <div className="canvas-wrapper-outer">
+      <div className="canvas-container" ref={containerRef} tabIndex={0}>
+        <div
+          className="canvas-wrapper"
+          style={{
+            transform: `translate(${panOffset.x}px, ${panOffset.y}px)`
+          }}
+        >
+          {/* Reference Image Canvas */}
+          {referenceImage && (
+            <div className="reference-canvas-container">
+              <div className="reference-label">📷 Reference</div>
+              <canvas
+                ref={refCanvasRef}
+                width={referenceImage.width * zoom}
+                height={referenceImage.height * zoom}
+                className="reference-canvas"
+                style={{ cursor: currentTool === 'eyedropper' ? 'crosshair' : 'default' }}
+                onClick={handleRefCanvasClick}
+              />
+              <div className="reference-info">{referenceImage.width} × {referenceImage.height}</div>
+            </div>
+          )}
 
-        {/* Main Editing Canvas */}
-        <div className="main-canvas-container">
-          <canvas
-            ref={canvasRef}
-            width={canvasWidth}
-            height={canvasHeight}
-            className="pixel-canvas"
-            style={{ cursor: getCursorStyle() }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onWheel={handleWheel}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          />
-          {/* Reference Trace Overlay */}
-          {isReferenceTraceActive && (
+          {/* Main Editing Canvas */}
+          <div className="main-canvas-container">
             <canvas
-              ref={overlayCanvasRef}
+              ref={canvasRef}
               width={canvasWidth}
               height={canvasHeight}
-              className="reference-overlay-canvas"
+              className="pixel-canvas"
+              style={{ cursor: getCursorStyle() }}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onWheel={handleWheel}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             />
-          )}
+            {/* Reference Trace Overlay */}
+            {isReferenceTraceActive && (
+              <canvas
+                ref={overlayCanvasRef}
+                width={canvasWidth}
+                height={canvasHeight}
+                className="reference-overlay-canvas"
+              />
+            )}
+          </div>
         </div>
       </div>
 

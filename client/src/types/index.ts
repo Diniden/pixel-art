@@ -26,11 +26,13 @@ export interface Frame {
 // Variant types
 // ============================================
 
-// A single frame within a variant, with its own layers and offset
+// A single frame within a variant, with its own layers
 export interface VariantFrame {
   id: string;
   layers: Layer[]; // Regular layers (without variant fields)
-  offset: { x: number; y: number }; // Offset from parent object's top-left
+  // DEPRECATED: offset is now stored in Variant.baseFrameOffsets
+  // Kept for backwards compatibility during migration
+  offset?: { x: number; y: number };
 }
 
 // A single variant definition
@@ -39,6 +41,9 @@ export interface Variant {
   name: string;
   gridSize: { width: number; height: number };
   frames: VariantFrame[];
+  // Offset for this variant at each base frame index
+  // Key is base frame index (0, 1, 2, ...), value is the offset
+  baseFrameOffsets: { [baseFrameIndex: number]: { x: number; y: number } };
 }
 
 // A group of variants (all alternatives for a layer)
@@ -337,7 +342,8 @@ export interface CompactFrame {
 export interface CompactVariantFrame {
   id: string;
   layers: CompactLayer[];
-  offset: { x: number; y: number };
+  // DEPRECATED: offset is now stored in CompactVariant.baseFrameOffsets
+  offset?: { x: number; y: number };
 }
 
 export interface CompactVariant {
@@ -345,6 +351,8 @@ export interface CompactVariant {
   name: string;
   gridSize: { width: number; height: number };
   frames: CompactVariantFrame[];
+  // Offset for this variant at each base frame index
+  baseFrameOffsets: { [baseFrameIndex: number]: { x: number; y: number } };
 }
 
 export interface CompactVariantGroup {
@@ -420,9 +428,9 @@ function variantGroupsToCompact(groups: VariantGroup[] | undefined): CompactVari
       gridSize: variant.gridSize,
       frames: variant.frames.map(frame => ({
         id: frame.id,
-        offset: frame.offset,
         layers: frame.layers.map(layerToCompact)
-      }))
+      })),
+      baseFrameOffsets: variant.baseFrameOffsets
     }))
   }));
 }
@@ -478,16 +486,39 @@ function compactToVariantGroups(groups: CompactVariantGroup[] | undefined): Vari
   return groups.map(group => ({
     id: group.id,
     name: group.name,
-    variants: group.variants.map(variant => ({
-      id: variant.id,
-      name: variant.name,
-      gridSize: variant.gridSize,
-      frames: variant.frames.map(frame => ({
-        id: frame.id,
-        offset: frame.offset,
-        layers: frame.layers.map(compactToLayer)
-      }))
-    }))
+    variants: group.variants.map(variant => {
+      // Handle migration from old format (offset on frames) to new format (baseFrameOffsets)
+      let baseFrameOffsets = variant.baseFrameOffsets;
+      if (!baseFrameOffsets || Object.keys(baseFrameOffsets).length === 0) {
+        // Migrate from old format: use the offset from the first frame for all base frames
+        // This is a reasonable default since old format had offsets per variant frame
+        baseFrameOffsets = {};
+        // Check if frames have old-style offsets
+        const firstFrameWithOffset = variant.frames.find(f => f.offset);
+        if (firstFrameWithOffset?.offset) {
+          // Use the first frame's offset as default for base frame 0
+          // Other base frames will get this default offset too
+          for (let i = 0; i < Math.max(variant.frames.length, 10); i++) {
+            const frameOffset = variant.frames[i]?.offset;
+            baseFrameOffsets[i] = frameOffset || firstFrameWithOffset.offset;
+          }
+        } else {
+          // No offsets found, use default (0, 0)
+          baseFrameOffsets[0] = { x: 0, y: 0 };
+        }
+      }
+
+      return {
+        id: variant.id,
+        name: variant.name,
+        gridSize: variant.gridSize,
+        frames: variant.frames.map(frame => ({
+          id: frame.id,
+          layers: frame.layers.map(compactToLayer)
+        })),
+        baseFrameOffsets
+      };
+    })
   }));
 }
 

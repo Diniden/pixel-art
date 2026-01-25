@@ -74,12 +74,15 @@ function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: n
 }
 
 export function ColorPicker() {
-  const { project, setColor, colorHistory, colorAdjustment, adjustColor } = useEditorStore();
+  const { project, setColor, colorHistory, colorAdjustment, adjustColor, saveCurrentStateToHistory } = useEditorStore();
 
   const [localColor, setLocalColor] = useState<Color>({ r: 0, g: 0, b: 0, a: 255 });
   const [hsl, setHsl] = useState({ h: 0, s: 0, l: 0 });
   const [isDraggingSV, setIsDraggingSV] = useState(false);
   const [isDraggingHue, setIsDraggingHue] = useState(false);
+  const [isDraggingSlider, setIsDraggingSlider] = useState(false);
+  const historySaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasSavedInitialStateRef = useRef<boolean>(false);
 
   const svCanvasRef = useRef<HTMLCanvasElement>(null);
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -154,27 +157,101 @@ export function ColorPicker() {
   if (!project) return null;
 
   // Use adjustColor when in color adjustment mode, otherwise use setColor
-  const applyColor = (color: Color) => {
+  const applyColor = (color: Color, trackHistory: boolean = false) => {
     if (colorAdjustment) {
-      adjustColor(color);
+      adjustColor(color, trackHistory);
     } else {
       setColor(color);
     }
   };
+
+  // Save initial state to history when starting to drag
+  const saveInitialStateToHistory = useCallback(() => {
+    if (colorAdjustment && !hasSavedInitialStateRef.current) {
+      // Save current state to history before making any changes
+      saveCurrentStateToHistory();
+      hasSavedInitialStateRef.current = true;
+    }
+  }, [colorAdjustment, saveCurrentStateToHistory]);
+
+  // Debounced history save - saves final state to history after mouse release
+  const saveFinalStateToHistory = useCallback((color: Color) => {
+    if (historySaveTimeoutRef.current) {
+      clearTimeout(historySaveTimeoutRef.current);
+    }
+    historySaveTimeoutRef.current = setTimeout(() => {
+      if (colorAdjustment && hasSavedInitialStateRef.current) {
+        // Save the final state to history
+        // This ensures we can redo after undoing
+        saveCurrentStateToHistory();
+        hasSavedInitialStateRef.current = false;
+        historySaveTimeoutRef.current = null;
+      }
+    }, 300); // 300ms debounce
+  }, [colorAdjustment, saveCurrentStateToHistory]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (historySaveTimeoutRef.current) {
+        clearTimeout(historySaveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle global mouse up to save final state if dragging
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDraggingSlider && colorAdjustment && hasSavedInitialStateRef.current) {
+        setIsDraggingSlider(false);
+        saveFinalStateToHistory(localColor);
+      }
+    };
+
+    if (isDraggingSlider) {
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+      return () => {
+        window.removeEventListener('mouseup', handleGlobalMouseUp);
+      };
+    }
+  }, [isDraggingSlider, colorAdjustment, localColor, saveFinalStateToHistory]);
+
+  // Handle slider mouse down - start tracking drag
+  const handleSliderMouseDown = useCallback(() => {
+    setIsDraggingSlider(true);
+    hasSavedInitialStateRef.current = false;
+    if (historySaveTimeoutRef.current) {
+      clearTimeout(historySaveTimeoutRef.current);
+      historySaveTimeoutRef.current = null;
+    }
+    // Save initial state to history before making changes
+    saveInitialStateToHistory();
+  }, [saveInitialStateToHistory]);
+
+  // Handle slider mouse up - save final state with debounce
+  const handleSliderMouseUp = useCallback(() => {
+    setIsDraggingSlider(false);
+    if (colorAdjustment && hasSavedInitialStateRef.current) {
+      // Save final state to history with debounce
+      saveFinalStateToHistory(localColor);
+    }
+  }, [colorAdjustment, localColor, saveFinalStateToHistory]);
 
   const updateColorFromHSL = (newHsl: { h: number; s: number; l: number }) => {
     setHsl(newHsl);
     const rgb = hslToRgb(newHsl.h, newHsl.s, newHsl.l);
     const newColor = { ...rgb, a: localColor.a };
     setLocalColor(newColor);
-    applyColor(newColor);
+    // Only track history if not dragging a slider (for direct input changes)
+    applyColor(newColor, !isDraggingSlider);
   };
 
   const updateColorFromRGB = (channel: keyof Color, value: number) => {
     const clamped = Math.max(0, Math.min(255, Math.floor(value)));
     const newColor = { ...localColor, [channel]: clamped };
     setLocalColor(newColor);
-    applyColor(newColor);
+    // Only track history if not dragging a slider (for direct input changes)
+    applyColor(newColor, !isDraggingSlider);
     if (channel !== 'a') {
       setHsl(rgbToHsl(newColor.r, newColor.g, newColor.b));
     }
@@ -197,7 +274,13 @@ export function ColorPicker() {
     const l = (v / 100) * (1 - (s / 100) / 2);
     const sHSL = l === 0 || l === 1 ? 0 : ((v / 100) - l) / Math.min(l, 1 - l);
 
-    updateColorFromHSL({ h: hsl.h, s: Math.round(sHSL * 100), l: Math.round(l * 100) });
+    const newHsl = { h: hsl.h, s: Math.round(sHSL * 100), l: Math.round(l * 100) };
+    setHsl(newHsl);
+    const rgb = hslToRgb(newHsl.h, newHsl.s, newHsl.l);
+    const newColor = { ...rgb, a: localColor.a };
+    setLocalColor(newColor);
+    // Don't track history while dragging
+    applyColor(newColor, false);
   };
 
   const handleHueCanvasInteraction = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -208,7 +291,13 @@ export function ColorPicker() {
     const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const newHue = Math.round(x * 360);
 
-    updateColorFromHSL({ ...hsl, h: newHue });
+    const newHsl = { ...hsl, h: newHue };
+    setHsl(newHsl);
+    const rgb = hslToRgb(newHsl.h, newHsl.s, newHsl.l);
+    const newColor = { ...rgb, a: localColor.a };
+    setLocalColor(newColor);
+    // Don't track history while dragging
+    applyColor(newColor, false);
   };
 
   const handleHexChange = (hex: string) => {
@@ -288,11 +377,30 @@ export function ColorPicker() {
               className="sv-canvas"
               onMouseDown={(e) => {
                 setIsDraggingSV(true);
+                setIsDraggingSlider(true);
+                hasSavedInitialStateRef.current = false;
+                if (historySaveTimeoutRef.current) {
+                  clearTimeout(historySaveTimeoutRef.current);
+                  historySaveTimeoutRef.current = null;
+                }
+                saveInitialStateToHistory();
                 handleSVCanvasInteraction(e);
               }}
               onMouseMove={(e) => isDraggingSV && handleSVCanvasInteraction(e)}
-              onMouseUp={() => setIsDraggingSV(false)}
-              onMouseLeave={() => setIsDraggingSV(false)}
+              onMouseUp={() => {
+                setIsDraggingSV(false);
+                setIsDraggingSlider(false);
+                if (colorAdjustment && hasSavedInitialStateRef.current) {
+                  saveFinalStateToHistory(localColor);
+                }
+              }}
+              onMouseLeave={() => {
+                setIsDraggingSV(false);
+                setIsDraggingSlider(false);
+                if (colorAdjustment && hasSavedInitialStateRef.current) {
+                  saveFinalStateToHistory(localColor);
+                }
+              }}
             />
             <div
               className="sv-picker-handle"
@@ -308,11 +416,30 @@ export function ColorPicker() {
               className="hue-canvas"
               onMouseDown={(e) => {
                 setIsDraggingHue(true);
+                setIsDraggingSlider(true);
+                hasSavedInitialStateRef.current = false;
+                if (historySaveTimeoutRef.current) {
+                  clearTimeout(historySaveTimeoutRef.current);
+                  historySaveTimeoutRef.current = null;
+                }
+                saveInitialStateToHistory();
                 handleHueCanvasInteraction(e);
               }}
               onMouseMove={(e) => isDraggingHue && handleHueCanvasInteraction(e)}
-              onMouseUp={() => setIsDraggingHue(false)}
-              onMouseLeave={() => setIsDraggingHue(false)}
+              onMouseUp={() => {
+                setIsDraggingHue(false);
+                setIsDraggingSlider(false);
+                if (colorAdjustment && hasSavedInitialStateRef.current) {
+                  saveFinalStateToHistory(localColor);
+                }
+              }}
+              onMouseLeave={() => {
+                setIsDraggingHue(false);
+                setIsDraggingSlider(false);
+                if (colorAdjustment && hasSavedInitialStateRef.current) {
+                  saveFinalStateToHistory(localColor);
+                }
+              }}
             />
             <div
               className="hue-picker-handle"
@@ -349,6 +476,8 @@ export function ColorPicker() {
               min="0"
               max="360"
               value={hsl.h}
+              onMouseDown={handleSliderMouseDown}
+              onMouseUp={handleSliderMouseUp}
               onChange={(e) => updateColorFromHSL({ ...hsl, h: parseInt(e.target.value) })}
             />
             <input
@@ -368,6 +497,8 @@ export function ColorPicker() {
               min="0"
               max="100"
               value={hsl.s}
+              onMouseDown={handleSliderMouseDown}
+              onMouseUp={handleSliderMouseUp}
               onChange={(e) => updateColorFromHSL({ ...hsl, s: parseInt(e.target.value) })}
               style={{
                 background: `linear-gradient(to right,
@@ -392,6 +523,8 @@ export function ColorPicker() {
               min="0"
               max="100"
               value={hsl.l}
+              onMouseDown={handleSliderMouseDown}
+              onMouseUp={handleSliderMouseUp}
               onChange={(e) => updateColorFromHSL({ ...hsl, l: parseInt(e.target.value) })}
               style={{
                 background: `linear-gradient(to right,
@@ -425,6 +558,8 @@ export function ColorPicker() {
                 min="0"
                 max="255"
                 value={localColor[channel]}
+                onMouseDown={handleSliderMouseDown}
+                onMouseUp={handleSliderMouseUp}
                 onChange={(e) => updateColorFromRGB(channel, parseInt(e.target.value))}
               />
               <input
@@ -449,6 +584,8 @@ export function ColorPicker() {
               min="0"
               max="255"
               value={localColor.a}
+              onMouseDown={handleSliderMouseDown}
+              onMouseUp={handleSliderMouseUp}
               onChange={(e) => updateColorFromRGB('a', parseInt(e.target.value))}
               style={{
                 background: `linear-gradient(to right,

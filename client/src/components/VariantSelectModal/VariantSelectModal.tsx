@@ -1,38 +1,14 @@
 import { useState, useRef, useEffect, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { Layer, VariantGroup, Variant, VariantFrame } from '../../types';
+import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import './VariantSelectModal.css';
 
 interface VariantSelectModalProps {
   layer: Layer;
   variantGroup: VariantGroup;
   onClose: () => void;
-}
-
-// Cached checkerboard background (created once, reused)
-const CHECKERBOARD_CACHE = new Map<number, Uint8ClampedArray>();
-function getCheckerboard(size: number): Uint8ClampedArray {
-  if (!CHECKERBOARD_CACHE.has(size)) {
-    const data = new Uint8ClampedArray(size * size * 4);
-    const checkSize = 4;
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const idx = (y * size + x) * 4;
-        if (((Math.floor(x / checkSize) + Math.floor(y / checkSize)) % 2) === 0) {
-          data[idx] = 42;
-          data[idx + 1] = 42;
-          data[idx + 2] = 58;
-        } else {
-          data[idx] = 34;
-          data[idx + 1] = 34;
-          data[idx + 2] = 48;
-        }
-        data[idx + 3] = 255;
-      }
-    }
-    CHECKERBOARD_CACHE.set(size, data);
-  }
-  return CHECKERBOARD_CACHE.get(size)!;
 }
 
 // Optimized thumbnail component with memoization
@@ -45,98 +21,11 @@ const VariantThumbnail = memo(function VariantThumbnail({ variant }: { variant: 
     const ctx = canvas?.getContext('2d', { willReadFrequently: false });
     if (!canvas || !ctx) return;
 
-    ctx.imageSmoothingEnabled = false;
-
-    const { width, height } = variant.gridSize;
-    if (width === 0 || height === 0 || variant.frames.length === 0) {
-      // Empty variant - just draw checkerboard
-      const checkerboard = getCheckerboard(thumbSize);
-      const imageData = ctx.createImageData(thumbSize, thumbSize);
-      imageData.data.set(checkerboard);
-      ctx.putImageData(imageData, 0, 0);
-      return;
-    }
-
-    const scale = Math.min(thumbSize / width, thumbSize / height);
-    const offsetX = Math.floor((thumbSize - width * scale) / 2);
-    const offsetY = Math.floor((thumbSize - height * scale) / 2);
-
-    // Use first frame (much faster than searching)
+    // Use first frame for thumbnail
     const frameToRender = variant.frames[0];
-    if (!frameToRender || frameToRender.layers.length === 0) {
-      const checkerboard = getCheckerboard(thumbSize);
-      const imageData = ctx.createImageData(thumbSize, thumbSize);
-      imageData.data.set(checkerboard);
-      ctx.putImageData(imageData, 0, 0);
-      return;
-    }
+    if (!frameToRender) return;
 
-    // Create ImageData with cached checkerboard
-    const imageData = ctx.createImageData(thumbSize, thumbSize);
-    const data = imageData.data;
-    const checkerboard = getCheckerboard(thumbSize);
-    data.set(checkerboard);
-
-    // Pre-calculate scale factors for performance
-    const scaleX = scale;
-    const scaleY = scale;
-    const invScale = 1 / scale;
-
-    // Render layers (back to front for proper alpha blending)
-    for (let layerIdx = frameToRender.layers.length - 1; layerIdx >= 0; layerIdx--) {
-      const layer = frameToRender.layers[layerIdx];
-      if (!layer.visible) continue;
-
-      const pixels = layer.pixels;
-      if (!pixels) continue;
-
-      // Render pixels more efficiently
-      for (let py = 0; py < height; py++) {
-        const row = pixels[py];
-        if (!row) continue;
-
-        for (let px = 0; px < width; px++) {
-          const pixel = row[px];
-          if (!pixel || pixel.a === 0) continue;
-
-          // Calculate thumbnail pixel bounds
-          const thumbX = Math.floor(offsetX + px * scaleX);
-          const thumbY = Math.floor(offsetY + py * scaleY);
-          const thumbEndX = Math.min(thumbSize, Math.ceil(offsetX + (px + 1) * scaleX));
-          const thumbEndY = Math.min(thumbSize, Math.ceil(offsetY + (py + 1) * scaleY));
-
-          if (thumbX >= thumbSize || thumbY >= thumbSize || thumbEndX <= 0 || thumbEndY <= 0) continue;
-
-          // For thumbnails, use simpler rendering: just fill the pixel area
-          // This is much faster than per-pixel alpha blending for small thumbnails
-          const srcAlpha = pixel.a / 255;
-          const r = pixel.r;
-          const g = pixel.g;
-          const b = pixel.b;
-
-          for (let ty = Math.max(0, thumbY); ty < thumbEndY; ty++) {
-            for (let tx = Math.max(0, thumbX); tx < thumbEndX; tx++) {
-              const idx = (ty * thumbSize + tx) * 4;
-
-              // Simplified alpha blending for performance
-              const dstAlpha = data[idx + 3] / 255;
-              const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
-
-              if (outAlpha > 0.01) {
-                // Only blend if there's meaningful alpha
-                const invOutAlpha = 1 / outAlpha;
-                data[idx] = (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-                data[idx + 1] = (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-                data[idx + 2] = (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-                data[idx + 3] = outAlpha * 255;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    ctx.putImageData(imageData, 0, 0);
+    renderVariantFramePreview(ctx, thumbSize, variant, frameToRender);
   }, [variant]);
 
   return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="variant-thumb-canvas" />;
@@ -237,7 +126,7 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
     }
   };
 
-  return (
+  return createPortal(
     <div className="variant-modal-backdrop" onClick={handleBackdropClick}>
       <div className="variant-modal">
         <div className="variant-modal-header">
@@ -379,7 +268,8 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
