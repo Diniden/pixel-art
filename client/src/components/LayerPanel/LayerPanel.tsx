@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useEditorStore } from '../../store';
+import { VariantSelectModal } from '../VariantSelectModal/VariantSelectModal';
 import './LayerPanel.css';
 
 export function LayerPanel() {
   const {
     project,
+    getCurrentObject,
     getCurrentFrame,
     addLayer,
     duplicateLayer,
@@ -13,17 +15,20 @@ export function LayerPanel() {
     toggleLayerVisibility,
     toggleAllLayersVisibility,
     selectLayer,
-    moveLayer
+    moveLayer,
+    makeVariant
   } = useEditorStore();
 
   const [newLayerName, setNewLayerName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [variantModalLayerId, setVariantModalLayerId] = useState<string | null>(null);
 
+  const obj = getCurrentObject();
   const frame = getCurrentFrame();
 
-  if (!project || !frame) return null;
+  if (!project || !frame || !obj) return null;
 
   const { selectedLayerId } = project.uiState;
   const layers = [...frame.layers].reverse(); // Display top layer first
@@ -114,97 +119,141 @@ export function LayerPanel() {
         </div>
 
         <div className="layer-list">
-          {layers.map((layer, displayIndex) => (
-            <div
-              key={layer.id}
-              className={`layer-item ${selectedLayerId === layer.id ? 'selected' : ''} ${dragIndex === displayIndex ? 'dragging' : ''}`}
-              onClick={() => selectLayer(layer.id)}
-              draggable
-              onDragStart={() => handleDragStart(displayIndex)}
-              onDragOver={(e) => handleDragOver(e, displayIndex)}
-              onDragEnd={handleDragEnd}
-            >
-              <button
-                className={`visibility-btn ${layer.visible ? 'visible' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleLayerVisibility(layer.id);
-                }}
-                title={layer.visible ? 'Hide layer' : 'Show layer'}
+          {layers.map((layer, displayIndex) => {
+            // Get variant info if this is a variant layer
+            const variantGroup = layer.isVariant && layer.variantGroupId
+              ? obj.variantGroups?.find(vg => vg.id === layer.variantGroupId)
+              : null;
+            const selectedVariant = variantGroup?.variants.find(v => v.id === layer.selectedVariantId);
+
+            return (
+              <div
+                key={layer.id}
+                className={`layer-item ${selectedLayerId === layer.id ? 'selected' : ''} ${dragIndex === displayIndex ? 'dragging' : ''} ${layer.isVariant ? 'variant-layer' : ''}`}
+                onClick={() => selectLayer(layer.id)}
+                draggable
+                onDragStart={() => handleDragStart(displayIndex)}
+                onDragOver={(e) => handleDragOver(e, displayIndex)}
+                onDragEnd={handleDragEnd}
               >
-                {layer.visible ? '👁' : '○'}
-              </button>
+                <button
+                  className={`visibility-btn ${layer.visible ? 'visible' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleLayerVisibility(layer.id);
+                  }}
+                  title={layer.visible ? 'Hide layer' : 'Show layer'}
+                >
+                  {layer.visible ? '👁' : '○'}
+                </button>
 
-              {editingId === layer.id ? (
-                <input
-                  type="text"
-                  className="layer-name-input"
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  onBlur={() => handleFinishRename(layer.id)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(layer.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  autoFocus
-                />
-              ) : (
-                <span
-                  className="layer-name"
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    handleStartRename(layer.id, layer.name);
-                  }}
-                >
-                  {layer.name}
-                </span>
-              )}
+                {/* Variant icon for variant layers */}
+                {layer.isVariant && (
+                  <span className="variant-icon" title="Variant Layer">⬡</span>
+                )}
 
-              <div className="layer-actions">
-                <button
-                  className="layer-action-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMoveLayerUp(displayIndex);
-                  }}
-                  disabled={displayIndex === 0}
-                  title="Move layer up"
-                >
-                  ▲
-                </button>
-                <button
-                  className="layer-action-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMoveLayerDown(displayIndex);
-                  }}
-                  disabled={displayIndex === layers.length - 1}
-                  title="Move layer down"
-                >
-                  ▼
-                </button>
-                <button
-                  className="layer-action-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    duplicateLayer(layer.id);
-                  }}
-                  title="Duplicate layer"
-                >
-                  ⧉
-                </button>
-                <button
-                  className="layer-action-btn delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteLayer(layer.id);
-                  }}
-                  disabled={frame.layers.length <= 1}
-                  title="Delete layer"
-                >
-                  ×
-                </button>
+                {editingId === layer.id ? (
+                  <input
+                    type="text"
+                    className="layer-name-input"
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onBlur={() => handleFinishRename(layer.id)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(layer.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    autoFocus
+                  />
+                ) : (
+                  <span
+                    className="layer-name"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      handleStartRename(layer.id, layer.name);
+                    }}
+                  >
+                    {layer.name}
+                    {layer.isVariant && selectedVariant && (
+                      <span className="variant-name-badge">{selectedVariant.name}</span>
+                    )}
+                  </span>
+                )}
+
+                <div className="layer-actions">
+                  {/* Variant-specific actions */}
+                  {layer.isVariant ? (
+                    <button
+                      className="layer-action-btn variant-select-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setVariantModalLayerId(layer.id);
+                      }}
+                      title="Select variant"
+                    >
+                      ⬡
+                    </button>
+                  ) : (
+                    <button
+                      className="layer-action-btn make-variant-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        makeVariant(layer.id);
+                      }}
+                      title="Make variant"
+                    >
+                      ✦
+                    </button>
+                  )}
+                  <button
+                    className="layer-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMoveLayerUp(displayIndex);
+                    }}
+                    disabled={displayIndex === 0}
+                    title="Move layer up"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    className="layer-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMoveLayerDown(displayIndex);
+                    }}
+                    disabled={displayIndex === layers.length - 1}
+                    title="Move layer down"
+                  >
+                    ▼
+                  </button>
+                  {!layer.isVariant && (
+                    <>
+                      <button
+                        className="layer-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          duplicateLayer(layer.id);
+                        }}
+                        title="Duplicate layer"
+                      >
+                        ⧉
+                      </button>
+                      <button
+                        className="layer-action-btn delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteLayer(layer.id);
+                        }}
+                        disabled={frame.layers.length <= 1}
+                        title="Delete layer"
+                      >
+                        ×
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {layers.length === 0 && (
@@ -213,6 +262,24 @@ export function LayerPanel() {
           </div>
         )}
       </div>
+
+      {/* Variant Selection Modal */}
+      {variantModalLayerId && (() => {
+        const modalLayer = frame.layers.find(l => l.id === variantModalLayerId);
+        const modalVariantGroup = modalLayer?.variantGroupId
+          ? obj.variantGroups?.find(vg => vg.id === modalLayer.variantGroupId)
+          : null;
+
+        if (!modalLayer || !modalVariantGroup) return null;
+
+        return (
+          <VariantSelectModal
+            layer={modalLayer}
+            variantGroup={modalVariantGroup}
+            onClose={() => setVariantModalLayerId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -10,6 +10,10 @@ export interface Layer {
   name: string;
   pixels: (Pixel | 0)[][]; // 2D array [y][x], 0 means transparent/empty
   visible: boolean;
+  // Variant-specific fields (only present if this is a variant layer)
+  isVariant?: boolean;
+  variantGroupId?: string;
+  selectedVariantId?: string;
 }
 
 export interface Frame {
@@ -18,11 +22,38 @@ export interface Frame {
   layers: Layer[];
 }
 
+// ============================================
+// Variant types
+// ============================================
+
+// A single frame within a variant, with its own layers and offset
+export interface VariantFrame {
+  id: string;
+  layers: Layer[]; // Regular layers (without variant fields)
+  offset: { x: number; y: number }; // Offset from parent object's top-left
+}
+
+// A single variant definition
+export interface Variant {
+  id: string;
+  name: string;
+  gridSize: { width: number; height: number };
+  frames: VariantFrame[];
+}
+
+// A group of variants (all alternatives for a layer)
+export interface VariantGroup {
+  id: string;
+  name: string; // Display name (original layer name)
+  variants: Variant[];
+}
+
 export interface PixelObject {
   id: string;
   name: string;
   gridSize: { width: number; height: number };
   frames: Frame[];
+  variantGroups?: VariantGroup[];
 }
 
 export interface Color {
@@ -57,6 +88,8 @@ export interface UIState {
   zoom: number;
   panOffset: { x: number; y: number };
   moveAllLayers: boolean;
+  // Variant editing state
+  variantFrameIndices?: { [variantGroupId: string]: number }; // Track current frame index for each variant group
 }
 
 export type Tool = 'pixel' | 'fill-square' | 'flood-fill' | 'line' | 'rectangle' | 'ellipse' | 'eraser' | 'move' | 'reference-trace' | 'eyedropper' | 'selection';
@@ -92,7 +125,8 @@ export const DEFAULT_UI_STATE: UIState = {
   borderRadius: 0,
   zoom: 10,
   panOffset: { x: 0, y: 0 },
-  moveAllLayers: false
+  moveAllLayers: false,
+  variantFrameIndices: {}
 };
 
 export function createEmptyPixelGrid(width: number, height: number): (Pixel | 0)[][] {
@@ -287,6 +321,10 @@ export interface CompactLayer {
   name: string;
   pixels: number[][]; // hex numbers instead of Pixel objects, 0 means transparent/empty
   visible: boolean;
+  // Variant-specific fields (only present if this is a variant layer)
+  isVariant?: boolean;
+  variantGroupId?: string;
+  selectedVariantId?: string;
 }
 
 export interface CompactFrame {
@@ -295,11 +333,32 @@ export interface CompactFrame {
   layers: CompactLayer[];
 }
 
+// Compact variant types
+export interface CompactVariantFrame {
+  id: string;
+  layers: CompactLayer[];
+  offset: { x: number; y: number };
+}
+
+export interface CompactVariant {
+  id: string;
+  name: string;
+  gridSize: { width: number; height: number };
+  frames: CompactVariantFrame[];
+}
+
+export interface CompactVariantGroup {
+  id: string;
+  name: string;
+  variants: CompactVariant[];
+}
+
 export interface CompactPixelObject {
   id: string;
   name: string;
   gridSize: { width: number; height: number };
   frames: CompactFrame[];
+  variantGroups?: CompactVariantGroup[];
 }
 
 export interface CompactPalette {
@@ -321,12 +380,51 @@ export interface CompactUIState {
   zoom: number;
   panOffset: { x: number; y: number };
   moveAllLayers: boolean;
+  variantFrameIndices?: { [variantGroupId: string]: number };
 }
 
 export interface CompactProject {
   objects: CompactPixelObject[];
   palettes: CompactPalette[];
   uiState: CompactUIState;
+}
+
+// Helper to convert a layer to compact format
+function layerToCompact(layer: Layer): CompactLayer {
+  const compactLayer: CompactLayer = {
+    id: layer.id,
+    name: layer.name,
+    visible: layer.visible,
+    pixels: layer.pixels.map(row =>
+      row.map(pixel => pixel === 0 ? 0 : rgbaToHex(pixel))
+    )
+  };
+  // Include variant fields if present
+  if (layer.isVariant) {
+    compactLayer.isVariant = layer.isVariant;
+    compactLayer.variantGroupId = layer.variantGroupId;
+    compactLayer.selectedVariantId = layer.selectedVariantId;
+  }
+  return compactLayer;
+}
+
+// Helper to convert variant groups to compact format
+function variantGroupsToCompact(groups: VariantGroup[] | undefined): CompactVariantGroup[] | undefined {
+  if (!groups || groups.length === 0) return undefined;
+  return groups.map(group => ({
+    id: group.id,
+    name: group.name,
+    variants: group.variants.map(variant => ({
+      id: variant.id,
+      name: variant.name,
+      gridSize: variant.gridSize,
+      frames: variant.frames.map(frame => ({
+        id: frame.id,
+        offset: frame.offset,
+        layers: frame.layers.map(layerToCompact)
+      }))
+    }))
+  }));
 }
 
 // Convert runtime Project to compact format for saving
@@ -339,15 +437,9 @@ export function projectToCompact(project: Project): CompactProject {
       frames: obj.frames.map(frame => ({
         id: frame.id,
         name: frame.name,
-        layers: frame.layers.map(layer => ({
-          id: layer.id,
-          name: layer.name,
-          visible: layer.visible,
-          pixels: layer.pixels.map(row =>
-            row.map(pixel => pixel === 0 ? 0 : rgbaToHex(pixel))
-          )
-        }))
-      }))
+        layers: frame.layers.map(layerToCompact)
+      })),
+      variantGroups: variantGroupsToCompact(obj.variantGroups)
     })),
     palettes: project.palettes.map(palette => ({
       id: palette.id,
@@ -361,6 +453,44 @@ export function projectToCompact(project: Project): CompactProject {
   };
 }
 
+// Helper to convert compact layer back to runtime format
+function compactToLayer(layer: CompactLayer): Layer {
+  const runtimeLayer: Layer = {
+    id: layer.id,
+    name: layer.name,
+    visible: layer.visible,
+    pixels: layer.pixels.map(row =>
+      row.map(pixel => pixel === 0 ? 0 : hexToRgba(pixel))
+    )
+  };
+  // Include variant fields if present
+  if (layer.isVariant) {
+    runtimeLayer.isVariant = layer.isVariant;
+    runtimeLayer.variantGroupId = layer.variantGroupId;
+    runtimeLayer.selectedVariantId = layer.selectedVariantId;
+  }
+  return runtimeLayer;
+}
+
+// Helper to convert compact variant groups back to runtime format
+function compactToVariantGroups(groups: CompactVariantGroup[] | undefined): VariantGroup[] | undefined {
+  if (!groups || groups.length === 0) return undefined;
+  return groups.map(group => ({
+    id: group.id,
+    name: group.name,
+    variants: group.variants.map(variant => ({
+      id: variant.id,
+      name: variant.name,
+      gridSize: variant.gridSize,
+      frames: variant.frames.map(frame => ({
+        id: frame.id,
+        offset: frame.offset,
+        layers: frame.layers.map(compactToLayer)
+      }))
+    }))
+  }));
+}
+
 // Convert compact format back to runtime Project
 export function compactToProject(compact: CompactProject): Project {
   return {
@@ -371,15 +501,9 @@ export function compactToProject(compact: CompactProject): Project {
       frames: obj.frames.map(frame => ({
         id: frame.id,
         name: frame.name,
-        layers: frame.layers.map(layer => ({
-          id: layer.id,
-          name: layer.name,
-          visible: layer.visible,
-          pixels: layer.pixels.map(row =>
-            row.map(pixel => pixel === 0 ? 0 : hexToRgba(pixel))
-          )
-        }))
-      }))
+        layers: frame.layers.map(compactToLayer)
+      })),
+      variantGroups: compactToVariantGroups(obj.variantGroups)
     })),
     palettes: compact.palettes.map(palette => ({
       id: palette.id,

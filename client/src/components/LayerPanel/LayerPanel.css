@@ -144,3 +144,50 @@
   font-size: 0.875rem;
 }
 
+/* Variant layer styles */
+.layer-item.variant-layer {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(0, 217, 255, 0.05) 100%);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.layer-item.variant-layer.selected {
+  border-color: #8b5cf6;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(0, 217, 255, 0.1) 100%);
+}
+
+.variant-icon {
+  color: #8b5cf6;
+  font-size: 12px;
+  margin-right: 2px;
+}
+
+.variant-name-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 0.7rem;
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+  color: #c4b5fd;
+}
+
+.layer-action-btn.make-variant-btn {
+  color: #8b5cf6;
+}
+
+.layer-action-btn.make-variant-btn:hover:not(:disabled) {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.2);
+}
+
+.layer-action-btn.variant-select-btn {
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.layer-action-btn.variant-select-btn:hover {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.3);
+}
+

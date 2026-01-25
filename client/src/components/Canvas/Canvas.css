@@ -121,6 +121,11 @@
   font-weight: 500;
 }
 
+.canvas-info .variant-indicator {
+  color: #8b5cf6;
+  font-weight: 600;
+}
+
 /* Touch-friendly adjustments */
 @media (pointer: coarse) {
   .pixel-canvas {

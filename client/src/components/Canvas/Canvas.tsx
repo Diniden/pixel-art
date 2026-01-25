@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useEditorStore } from '../../store';
-import { Color, Point, SelectionBox } from '../../types';
+import { Color, Point, SelectionBox, Pixel } from '../../types';
 import { getLinePixels, getRectanglePixels, getEllipsePixels, floodFill, getSquarePixels } from './drawingUtils';
 import { ReferenceImageData } from '../ReferenceImageModal/ReferenceImageModal';
 import './Canvas.css';
@@ -43,6 +43,8 @@ export function Canvas({ referenceImage }: CanvasProps) {
     getCurrentObject,
     getCurrentFrame,
     getCurrentLayer,
+    getCurrentVariant,
+    isEditingVariant,
     setPixel,
     setPixels,
     startDrawing,
@@ -64,15 +66,28 @@ export function Canvas({ referenceImage }: CanvasProps) {
     setSelection,
     clearSelection,
     moveSelectedPixels,
-    selectFrame
+    selectFrame,
+    setVariantOffset
   } = useEditorStore();
 
   const obj = getCurrentObject();
   const frame = getCurrentFrame();
   const layer = getCurrentLayer();
+  const variantData = getCurrentVariant();
+  const editingVariant = isEditingVariant();
 
-  const gridWidth = obj?.gridSize.width ?? 32;
-  const gridHeight = obj?.gridSize.height ?? 32;
+  // Get grid dimensions - use variant size if editing a variant
+  const objWidth = obj?.gridSize.width ?? 32;
+  const objHeight = obj?.gridSize.height ?? 32;
+
+  // When editing variant, use variant's grid size for the editable area
+  const gridWidth = editingVariant && variantData
+    ? variantData.variant.gridSize.width
+    : objWidth;
+  const gridHeight = editingVariant && variantData
+    ? variantData.variant.gridSize.height
+    : objHeight;
+
   const zoom = project?.uiState.zoom ?? 10;
   const panOffset = project?.uiState.panOffset ?? { x: 0, y: 0 };
   const currentTool = project?.uiState.selectedTool ?? 'pixel';
@@ -81,25 +96,37 @@ export function Canvas({ referenceImage }: CanvasProps) {
   const shapeMode = project?.uiState.shapeMode ?? 'both';
   const borderRadius = project?.uiState.borderRadius ?? 0;
 
-  // Calculate canvas size
-  const canvasWidth = gridWidth * zoom;
-  const canvasHeight = gridHeight * zoom;
+  // Get variant offset if editing variant
+  const variantOffset = editingVariant && variantData
+    ? variantData.variantFrame.offset
+    : { x: 0, y: 0 };
+
+  // Calculate canvas size - when editing variant, show both the variant grid and the object outline
+  const canvasWidth = editingVariant ? objWidth * zoom : gridWidth * zoom;
+  const canvasHeight = editingVariant ? objHeight * zoom : gridHeight * zoom;
 
   // Cache key for background/grid (only recreate when size changes)
   const bgCacheKey = `${gridWidth}-${gridHeight}-${zoom}`;
 
   // Get pixel from canvas coordinates
+  // When editing variant, returns coords relative to the variant grid
   const getPixelCoords = useCallback((clientX: number, clientY: number): Point | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
 
     const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((clientX - rect.left) / zoom);
-    const y = Math.floor((clientY - rect.top) / zoom);
+    let x = Math.floor((clientX - rect.left) / zoom);
+    let y = Math.floor((clientY - rect.top) / zoom);
+
+    // When editing a variant, adjust coords to be relative to variant grid
+    if (editingVariant && variantData) {
+      x = x - variantOffset.x;
+      y = y - variantOffset.y;
+    }
 
     if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return null;
     return { x, y };
-  }, [zoom, gridWidth, gridHeight]);
+  }, [zoom, gridWidth, gridHeight, editingVariant, variantData, variantOffset]);
 
   // Create or update cached background canvas (checkerboard)
   const ensureBgCanvas = useCallback(() => {
@@ -191,7 +218,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx || !frame) return;
+    if (!canvas || !ctx || !frame || !obj) return;
 
     ctx.imageSmoothingEnabled = false;
 
@@ -199,47 +226,193 @@ export function Canvas({ referenceImage }: CanvasProps) {
     const bgCanvas = ensureBgCanvas();
     ctx.drawImage(bgCanvas, 0, 0);
 
-    // Render layers from bottom to top using fillRect (reliable and fast enough)
-    for (const l of frame.layers) {
-      if (!l.visible) continue;
+    // When editing a variant, we render differently:
+    // 1. Render all non-variant layers at their normal positions
+    // 2. Render variant layers at their variant offset positions
+    // 3. Draw outline around object bounds
+    // 4. Draw grid only for the variant editing area
 
-      for (let y = 0; y < gridHeight; y++) {
-        const row = l.pixels[y];
-        if (!row) continue;
+    if (editingVariant && variantData) {
+      // First, render all non-selected layers (including other variant layers at their positions)
+      for (const l of frame.layers) {
+        if (!l.visible) continue;
 
-        for (let x = 0; x < gridWidth; x++) {
-          const pixel = row[x];
-          if (pixel && pixel.a > 0) {
-            ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
+        // For variant layers, render the selected variant's pixels at the offset
+        if (l.isVariant && l.variantGroupId) {
+          const vg = obj.variantGroups?.find(vg => vg.id === l.variantGroupId);
+          const variant = vg?.variants.find(v => v.id === l.selectedVariantId);
+          const frameIdx = project?.uiState.variantFrameIndices?.[l.variantGroupId] ?? 0;
+          const vFrame = variant?.frames[frameIdx % (variant?.frames.length || 1)];
+
+          if (variant && vFrame) {
+            const vOffset = vFrame.offset;
+            const isCurrentLayer = l.id === layer?.id;
+
+            for (const vl of vFrame.layers) {
+              if (!vl.visible) continue;
+
+              for (let y = 0; y < variant.gridSize.height; y++) {
+                const row = vl.pixels[y];
+                if (!row) continue;
+
+                for (let x = 0; x < variant.gridSize.width; x++) {
+                  const pixel = row[x];
+                  if (pixel && pixel.a > 0) {
+                    const drawX = (x + vOffset.x) * zoom;
+                    const drawY = (y + vOffset.y) * zoom;
+                    if (drawX >= 0 && drawX < canvasWidth && drawY >= 0 && drawY < canvasHeight) {
+                      // Dim non-current variant layers slightly
+                      const alpha = isCurrentLayer ? pixel.a / 255 : pixel.a / 255 * 0.7;
+                      ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${alpha})`;
+                      ctx.fillRect(drawX, drawY, zoom, zoom);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // Regular layer - render dimmed
+          for (let y = 0; y < objHeight; y++) {
+            const row = l.pixels[y];
+            if (!row) continue;
+
+            for (let x = 0; x < objWidth; x++) {
+              const pixel = row[x];
+              if (pixel && pixel.a > 0) {
+                ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255 * 0.5})`;
+                ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
+              }
+            }
+          }
+        }
+      }
+
+      // Draw preview pixels at variant offset
+      if (previewPixels.length > 0) {
+        ctx.fillStyle = `rgba(${currentColor.r}, ${currentColor.g}, ${currentColor.b}, ${currentColor.a / 255 * 0.6})`;
+        for (const { x, y } of previewPixels) {
+          if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+            const drawX = (x + variantOffset.x) * zoom;
+            const drawY = (y + variantOffset.y) * zoom;
+            ctx.fillRect(drawX, drawY, zoom, zoom);
+          }
+        }
+      }
+
+      // Draw grid only over variant edit area
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = 0; x <= gridWidth; x++) {
+        const px = (variantOffset.x + x) * zoom + 0.5;
+        ctx.moveTo(px, variantOffset.y * zoom);
+        ctx.lineTo(px, (variantOffset.y + gridHeight) * zoom);
+      }
+      for (let y = 0; y <= gridHeight; y++) {
+        const py = (variantOffset.y + y) * zoom + 0.5;
+        ctx.moveTo(variantOffset.x * zoom, py);
+        ctx.lineTo((variantOffset.x + gridWidth) * zoom, py);
+      }
+      ctx.stroke();
+
+      // Draw outline around object bounds
+      ctx.strokeStyle = 'rgba(255, 171, 0, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(0, 0, objWidth * zoom, objHeight * zoom);
+      ctx.setLineDash([]);
+
+      // Draw outline around current variant editing area
+      ctx.strokeStyle = '#8b5cf6';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        variantOffset.x * zoom,
+        variantOffset.y * zoom,
+        gridWidth * zoom,
+        gridHeight * zoom
+      );
+
+    } else {
+      // Normal mode - render all layers
+      for (const l of frame.layers) {
+        if (!l.visible) continue;
+
+        // For variant layers, render the selected variant's pixels at the offset
+        if (l.isVariant && l.variantGroupId) {
+          const vg = obj.variantGroups?.find(vg => vg.id === l.variantGroupId);
+          const variant = vg?.variants.find(v => v.id === l.selectedVariantId);
+          const frameIdx = project?.uiState.variantFrameIndices?.[l.variantGroupId] ?? 0;
+          const vFrame = variant?.frames[frameIdx % (variant?.frames.length || 1)];
+
+          if (variant && vFrame) {
+            const vOffset = vFrame.offset;
+
+            for (const vl of vFrame.layers) {
+              if (!vl.visible) continue;
+
+              for (let y = 0; y < variant.gridSize.height; y++) {
+                const row = vl.pixels[y];
+                if (!row) continue;
+
+                for (let x = 0; x < variant.gridSize.width; x++) {
+                  const pixel = row[x];
+                  if (pixel && pixel.a > 0) {
+                    const drawX = (x + vOffset.x) * zoom;
+                    const drawY = (y + vOffset.y) * zoom;
+                    if (drawX >= 0 && drawX < canvasWidth && drawY >= 0 && drawY < canvasHeight) {
+                      ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
+                      ctx.fillRect(drawX, drawY, zoom, zoom);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // Regular layer
+          for (let y = 0; y < gridHeight; y++) {
+            const row = l.pixels[y];
+            if (!row) continue;
+
+            for (let x = 0; x < gridWidth; x++) {
+              const pixel = row[x];
+              if (pixel && pixel.a > 0) {
+                ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
+                ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
+              }
+            }
+          }
+        }
+      }
+
+      // Draw preview pixels
+      if (previewPixels.length > 0) {
+        ctx.fillStyle = `rgba(${currentColor.r}, ${currentColor.g}, ${currentColor.b}, ${currentColor.a / 255 * 0.6})`;
+        for (const { x, y } of previewPixels) {
+          if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
             ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
           }
         }
       }
-    }
 
-    // Draw preview pixels
-    if (previewPixels.length > 0) {
-      ctx.fillStyle = `rgba(${currentColor.r}, ${currentColor.g}, ${currentColor.b}, ${currentColor.a / 255 * 0.6})`;
-      for (const { x, y } of previewPixels) {
-        if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
-          ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
-        }
-      }
+      // Draw cached grid on top
+      const gridCanvas = ensureGridCanvas();
+      ctx.drawImage(gridCanvas, 0, 0);
     }
-
-    // Draw cached grid on top
-    const gridCanvas = ensureGridCanvas();
-    ctx.drawImage(gridCanvas, 0, 0);
 
     // Draw selection box (preview or finalized)
     const selBox = previewSelection || selection;
     if (selBox) {
+      const offsetX = editingVariant ? variantOffset.x : 0;
+      const offsetY = editingVariant ? variantOffset.y : 0;
+
       ctx.strokeStyle = '#00d9ff';
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
       ctx.strokeRect(
-        selBox.x * zoom,
-        selBox.y * zoom,
+        (selBox.x + offsetX) * zoom,
+        (selBox.y + offsetY) * zoom,
         selBox.width * zoom,
         selBox.height * zoom
       );
@@ -251,15 +424,15 @@ export function Canvas({ referenceImage }: CanvasProps) {
       ctx.setLineDash([4, 4]);
       ctx.lineDashOffset = 4;
       ctx.strokeRect(
-        selBox.x * zoom + 1,
-        selBox.y * zoom + 1,
+        (selBox.x + offsetX) * zoom + 1,
+        (selBox.y + offsetY) * zoom + 1,
         selBox.width * zoom - 2,
         selBox.height * zoom - 2
       );
       ctx.setLineDash([]);
       ctx.lineDashOffset = 0;
     }
-  }, [frame, previewPixels, currentColor, zoom, gridWidth, gridHeight, canvasWidth, canvasHeight, ensureBgCanvas, ensureGridCanvas, selection, previewSelection]);
+  }, [frame, obj, layer, previewPixels, currentColor, zoom, gridWidth, gridHeight, objWidth, objHeight, canvasWidth, canvasHeight, ensureBgCanvas, ensureGridCanvas, selection, previewSelection, editingVariant, variantData, variantOffset, project?.uiState.variantFrameIndices]);
 
   // Check if reference trace tool is active
   const isReferenceTraceActive = currentTool === 'reference-trace' && referenceImage != null;
@@ -503,6 +676,19 @@ export function Canvas({ referenceImage }: CanvasProps) {
         return;
       }
 
+      // WASD keys for variant offset adjustment when editing a variant
+      if (editingVariant && ['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
+        e.preventDefault();
+        const key = e.key.toLowerCase();
+        let dx = 0, dy = 0;
+        if (key === 'w') dy = -1;
+        if (key === 's') dy = 1;
+        if (key === 'a') dx = -1;
+        if (key === 'd') dx = 1;
+        setVariantOffset(dx, dy);
+        return;
+      }
+
       // WASD keys for reference trace tool - move reference overlay
       if (isReferenceTraceActive && ['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
         e.preventDefault();
@@ -579,7 +765,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentTool, borderRadius, undo, deleteSelectedFrame, moveLayerPixels, setBorderRadius, isReferenceTraceActive, moveReferenceOverlay, setTool, selection, moveSelectedPixels, clearSelection, getCurrentObject, project?.uiState.selectedFrameId, selectFrame]);
+  }, [currentTool, borderRadius, undo, deleteSelectedFrame, moveLayerPixels, setBorderRadius, isReferenceTraceActive, moveReferenceOverlay, setTool, selection, moveSelectedPixels, clearSelection, getCurrentObject, project?.uiState.selectedFrameId, selectFrame, editingVariant, setVariantOffset]);
 
   // Get pixel color from reference image at a given canvas coordinate
   const getRefPixelAtCoord = useCallback((canvasX: number, canvasY: number) => {
@@ -1011,7 +1197,21 @@ export function Canvas({ referenceImage }: CanvasProps) {
       </div>
 
       <div className="canvas-info">
-        <span>{gridWidth} × {gridHeight}</span>
+        {editingVariant && variantData ? (
+          <>
+            <span className="variant-indicator">⬡ Variant: {variantData.variant.name}</span>
+            <span className="separator">|</span>
+            <span>{gridWidth} × {gridHeight}</span>
+            <span className="separator">|</span>
+            <span>Offset: ({variantOffset.x}, {variantOffset.y})</span>
+            <span className="separator">|</span>
+            <span>WASD to adjust offset</span>
+          </>
+        ) : (
+          <>
+            <span>{gridWidth} × {gridHeight}</span>
+          </>
+        )}
         <span className="separator">|</span>
         <span>Zoom: {zoom}x</span>
         <span className="separator">|</span>
