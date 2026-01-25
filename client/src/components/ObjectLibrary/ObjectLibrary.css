@@ -1,0 +1,203 @@
+.object-library {
+  flex-shrink: 0;
+}
+
+.new-object-form {
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.new-object-form input[type="text"] {
+  width: 100%;
+}
+
+.size-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.size-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.size-field label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.size-field input {
+  width: 60px;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.size-separator {
+  color: var(--text-muted);
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cancel-btn {
+  background: transparent;
+}
+
+.create-btn, .apply-btn {
+  background: var(--accent-primary);
+  border: none;
+  color: #fff;
+}
+
+.object-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.object-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.object-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 2px solid transparent;
+}
+
+.object-item:hover {
+  background: var(--bg-hover);
+}
+
+.object-item.selected {
+  border-color: var(--accent-primary);
+  background: rgba(0, 217, 255, 0.1);
+}
+
+.object-thumbnail {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.obj-thumb-canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.object-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.object-name {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.object-name-input {
+  padding: 4px 8px;
+  font-size: 0.875rem;
+  width: 100%;
+}
+
+.object-details {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.object-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.object-action-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+
+.object-item:hover .object-action-btn {
+  opacity: 1;
+}
+
+.object-action-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.object-action-btn.delete:hover {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
+
+.resize-panel {
+  padding: 12px;
+  background: var(--bg-elevated);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  margin-top: -2px;
+  border: 1px solid var(--border-primary);
+  border-top: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: fadeIn 0.2s ease;
+}
+
+.resize-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.resize-actions button {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+

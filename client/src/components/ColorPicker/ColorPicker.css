@@ -1,0 +1,310 @@
+.color-picker {
+  flex-shrink: 0;
+}
+
+/* Color History */
+.color-history {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 10px;
+  padding: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.color-history-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border-primary);
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: transform 0.1s ease, border-color 0.1s ease;
+}
+
+.color-history-swatch:hover {
+  transform: scale(1.15);
+  border-color: var(--accent-primary);
+  z-index: 1;
+}
+
+/* Rainbow Picker Area */
+.color-picker-area {
+  margin-bottom: 12px;
+}
+
+.sv-picker-container {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.sv-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  display: block;
+}
+
+.sv-picker-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.hue-picker-container {
+  position: relative;
+  width: 100%;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.hue-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  display: block;
+}
+
+.hue-picker-handle {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 18px;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Color Preview */
+.color-preview-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.color-preview {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border-primary);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.transparency-grid {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(45deg, #333 25%, transparent 25%),
+    linear-gradient(-45deg, #333 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #333 75%),
+    linear-gradient(-45deg, transparent 75%, #333 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+}
+
+.hex-input {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 8px;
+}
+
+/* Slider Sections */
+.slider-section {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.slider-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.slider-section-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+/* Compact Slider Rows */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+}
+
+.slider-label {
+  width: 14px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Channel colors */
+.channel-r, .hsl-h { color: #ff6b6b; }
+.channel-g, .hsl-s { color: #69db7c; }
+.channel-b, .hsl-l { color: #74c0fc; }
+.channel-a { color: var(--text-secondary); }
+
+/* Compact Sliders */
+.compact-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.compact-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.compact-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Channel-specific slider backgrounds */
+.channel-slider.channel-r {
+  background: linear-gradient(to right,
+    rgb(0, var(--g, 0), var(--b, 0)),
+    rgb(255, var(--g, 0), var(--b, 0)));
+}
+
+.channel-slider.channel-g {
+  background: linear-gradient(to right,
+    rgb(var(--r, 0), 0, var(--b, 0)),
+    rgb(var(--r, 0), 255, var(--b, 0)));
+}
+
+.channel-slider.channel-b {
+  background: linear-gradient(to right,
+    rgb(var(--r, 0), var(--g, 0), 0),
+    rgb(var(--r, 0), var(--g, 0), 255));
+}
+
+/* Hue slider rainbow gradient */
+.hue-slider {
+  background: linear-gradient(to right,
+    hsl(0, 100%, 50%),
+    hsl(60, 100%, 50%),
+    hsl(120, 100%, 50%),
+    hsl(180, 100%, 50%),
+    hsl(240, 100%, 50%),
+    hsl(300, 100%, 50%),
+    hsl(360, 100%, 50%)) !important;
+}
+
+/* Channel slider thumbs */
+.channel-slider.channel-r::-webkit-slider-thumb {
+  background: #ff6b6b;
+}
+
+.channel-slider.channel-g::-webkit-slider-thumb {
+  background: #69db7c;
+}
+
+.channel-slider.channel-b::-webkit-slider-thumb {
+  background: #74c0fc;
+}
+
+.channel-slider.channel-r::-moz-range-thumb {
+  background: #ff6b6b;
+}
+
+.channel-slider.channel-g::-moz-range-thumb {
+  background: #69db7c;
+}
+
+.channel-slider.channel-b::-moz-range-thumb {
+  background: #74c0fc;
+}
+
+/* Slider input */
+.slider-input {
+  width: 42px;
+  padding: 2px 4px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-align: right;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.slider-input:focus {
+  border-color: var(--accent-primary);
+  outline: none;
+}
+
+/* Remove spinner buttons from number inputs */
+.slider-input::-webkit-outer-spin-button,
+.slider-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.slider-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+@media (max-width: 768px) {
+  .color-preview {
+    width: 32px;
+    height: 32px;
+  }
+
+  .slider-input {
+    width: 36px;
+  }
+
+  .sv-picker-container {
+    height: 100px;
+  }
+}

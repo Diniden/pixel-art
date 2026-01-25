@@ -1,0 +1,264 @@
+export interface Pixel {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+export interface Layer {
+  id: string;
+  name: string;
+  pixels: (Pixel | null)[][]; // 2D array [y][x], null means transparent
+  visible: boolean;
+}
+
+export interface Frame {
+  id: string;
+  name: string;
+  layers: Layer[];
+}
+
+export interface PixelObject {
+  id: string;
+  name: string;
+  gridSize: { width: number; height: number };
+  frames: Frame[];
+}
+
+export interface Color {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+export interface Palette {
+  id: string;
+  name: string;
+  colors: Color[];
+}
+
+export interface Project {
+  objects: PixelObject[];
+  palettes: Palette[];
+  uiState: UIState;
+}
+
+export interface UIState {
+  selectedObjectId: string | null;
+  selectedFrameId: string | null;
+  selectedLayerId: string | null;
+  selectedTool: Tool;
+  selectedColor: Color;
+  brushSize: number;
+  bitDepth: BitDepth;
+  shapeMode: ShapeMode;
+  borderRadius: number;
+  zoom: number;
+  panOffset: { x: number; y: number };
+  moveAllLayers: boolean;
+}
+
+export type Tool = 'pixel' | 'fill-square' | 'flood-fill' | 'line' | 'rectangle' | 'ellipse' | 'eraser' | 'move' | 'reference-trace' | 'eyedropper' | 'selection';
+
+export interface SelectionBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type BitDepth = 8 | 16 | 32;
+
+export type ShapeMode = 'outline' | 'fill' | 'both';
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+// Default values
+export const DEFAULT_COLOR: Color = { r: 0, g: 0, b: 0, a: 255 };
+
+export const DEFAULT_UI_STATE: UIState = {
+  selectedObjectId: null,
+  selectedFrameId: null,
+  selectedLayerId: null,
+  selectedTool: 'pixel',
+  selectedColor: DEFAULT_COLOR,
+  brushSize: 1,
+  bitDepth: 8,
+  shapeMode: 'both',
+  borderRadius: 0,
+  zoom: 10,
+  panOffset: { x: 0, y: 0 },
+  moveAllLayers: false
+};
+
+export function createEmptyPixelGrid(width: number, height: number): (Pixel | null)[][] {
+  return Array.from({ length: height }, () =>
+    Array.from({ length: width }, () => null)
+  );
+}
+
+export function createDefaultLayer(id: string, name: string, width: number, height: number): Layer {
+  return {
+    id,
+    name,
+    pixels: createEmptyPixelGrid(width, height),
+    visible: true
+  };
+}
+
+export function createDefaultFrame(id: string, name: string, width: number, height: number): Frame {
+  return {
+    id,
+    name,
+    layers: [createDefaultLayer(`${id}-layer-1`, 'Layer 1', width, height)]
+  };
+}
+
+export function createDefaultObject(id: string, name: string, width = 32, height = 32): PixelObject {
+  return {
+    id,
+    name,
+    gridSize: { width, height },
+    frames: [createDefaultFrame(`${id}-frame-1`, 'Frame 1', width, height)]
+  };
+}
+
+// Curated color palettes
+export const BASE_PALETTES: Palette[] = [
+  {
+    id: 'palette-default',
+    name: 'Default',
+    colors: [
+      { r: 0, g: 0, b: 0, a: 255 },
+      { r: 255, g: 255, b: 255, a: 255 },
+      { r: 255, g: 0, b: 0, a: 255 },
+      { r: 0, g: 255, b: 0, a: 255 },
+      { r: 0, g: 0, b: 255, a: 255 },
+      { r: 255, g: 255, b: 0, a: 255 },
+      { r: 255, g: 0, b: 255, a: 255 },
+      { r: 0, g: 255, b: 255, a: 255 },
+    ]
+  },
+  {
+    id: 'palette-skin-hair-eyes',
+    name: 'Skin, Hair & Eyes',
+    colors: [
+      // Skin tones (light to dark)
+      { r: 255, g: 224, b: 196, a: 255 }, // Fair
+      { r: 255, g: 205, b: 178, a: 255 }, // Light
+      { r: 234, g: 185, b: 157, a: 255 }, // Medium light
+      { r: 210, g: 153, b: 121, a: 255 }, // Medium
+      { r: 180, g: 120, b: 90, a: 255 },  // Tan
+      { r: 141, g: 85, b: 60, a: 255 },   // Brown
+      { r: 100, g: 60, b: 40, a: 255 },   // Dark brown
+      { r: 60, g: 35, b: 25, a: 255 },    // Deep
+      // Hair colors
+      { r: 20, g: 15, b: 10, a: 255 },    // Black
+      { r: 59, g: 48, b: 36, a: 255 },    // Dark brown
+      { r: 111, g: 78, b: 55, a: 255 },   // Brown
+      { r: 165, g: 107, b: 70, a: 255 },  // Auburn
+      { r: 185, g: 55, b: 30, a: 255 },   // Red
+      { r: 222, g: 188, b: 153, a: 255 }, // Blonde
+      { r: 245, g: 222, b: 179, a: 255 }, // Light blonde
+      { r: 192, g: 192, b: 192, a: 255 }, // Gray
+      // Eye colors
+      { r: 66, g: 41, b: 21, a: 255 },    // Dark brown
+      { r: 130, g: 90, b: 50, a: 255 },   // Amber
+      { r: 85, g: 107, b: 47, a: 255 },   // Hazel
+      { r: 34, g: 139, b: 34, a: 255 },   // Green
+      { r: 70, g: 130, b: 180, a: 255 },  // Blue
+      { r: 135, g: 206, b: 235, a: 255 }, // Light blue
+      { r: 105, g: 105, b: 105, a: 255 }, // Gray
+    ]
+  },
+  {
+    id: 'palette-earth-tones',
+    name: 'Earth Tones',
+    colors: [
+      // Browns
+      { r: 139, g: 90, b: 43, a: 255 },   // Saddle brown
+      { r: 160, g: 82, b: 45, a: 255 },   // Sienna
+      { r: 210, g: 180, b: 140, a: 255 }, // Tan
+      { r: 188, g: 143, b: 143, a: 255 }, // Rosy brown
+      { r: 101, g: 67, b: 33, a: 255 },   // Dark brown
+      { r: 205, g: 133, b: 63, a: 255 },  // Peru
+      // Reds/Oranges
+      { r: 178, g: 34, b: 34, a: 255 },   // Brick red
+      { r: 205, g: 92, b: 92, a: 255 },   // Indian red
+      { r: 210, g: 105, b: 30, a: 255 },  // Chocolate
+      { r: 184, g: 134, b: 11, a: 255 },  // Dark goldenrod
+      // Yellows/Creams
+      { r: 245, g: 245, b: 220, a: 255 }, // Beige
+      { r: 255, g: 248, b: 220, a: 255 }, // Cornsilk
+      { r: 189, g: 183, b: 107, a: 255 }, // Dark khaki
+      { r: 218, g: 165, b: 32, a: 255 },  // Goldenrod
+      // Grays/Stones
+      { r: 128, g: 128, b: 128, a: 255 }, // Gray
+      { r: 169, g: 169, b: 169, a: 255 }, // Dark gray
+      { r: 112, g: 128, b: 144, a: 255 }, // Slate gray
+      { r: 47, g: 79, b: 79, a: 255 },    // Dark slate gray
+      // Muted blues/greens
+      { r: 95, g: 158, b: 160, a: 255 },  // Cadet blue
+      { r: 85, g: 107, b: 47, a: 255 },   // Olive drab
+      { r: 128, g: 128, b: 0, a: 255 },   // Olive
+    ]
+  },
+  {
+    id: 'palette-plant-tones',
+    name: 'Plant Tones',
+    colors: [
+      // Greens (light to dark)
+      { r: 144, g: 238, b: 144, a: 255 }, // Light green
+      { r: 152, g: 251, b: 152, a: 255 }, // Pale green
+      { r: 124, g: 252, b: 0, a: 255 },   // Lawn green
+      { r: 50, g: 205, b: 50, a: 255 },   // Lime green
+      { r: 34, g: 139, b: 34, a: 255 },   // Forest green
+      { r: 60, g: 179, b: 113, a: 255 },  // Medium sea green
+      { r: 46, g: 139, b: 87, a: 255 },   // Sea green
+      { r: 0, g: 128, b: 0, a: 255 },     // Green
+      { r: 0, g: 100, b: 0, a: 255 },     // Dark green
+      { r: 25, g: 60, b: 25, a: 255 },    // Very dark green
+      // Olive/Yellow greens
+      { r: 154, g: 205, b: 50, a: 255 },  // Yellow green
+      { r: 173, g: 255, b: 47, a: 255 },  // Green yellow
+      { r: 107, g: 142, b: 35, a: 255 },  // Olive drab
+      { r: 85, g: 107, b: 47, a: 255 },   // Dark olive
+      // Teal/Cyan (water plants)
+      { r: 0, g: 139, b: 139, a: 255 },   // Dark cyan
+      { r: 32, g: 178, b: 170, a: 255 },  // Light sea green
+      { r: 102, g: 205, b: 170, a: 255 }, // Medium aquamarine
+      // Flowers/Fruits
+      { r: 255, g: 182, b: 193, a: 255 }, // Light pink
+      { r: 255, g: 105, b: 180, a: 255 }, // Hot pink
+      { r: 186, g: 85, b: 211, a: 255 },  // Medium orchid
+      { r: 255, g: 215, b: 0, a: 255 },   // Gold
+      { r: 255, g: 165, b: 0, a: 255 },   // Orange
+      // Bark/Wood
+      { r: 139, g: 90, b: 43, a: 255 },   // Saddle brown
+      { r: 101, g: 67, b: 33, a: 255 },   // Dark wood
+    ]
+  }
+];
+
+export function createDefaultProject(): Project {
+  const defaultObject = createDefaultObject('obj-1', 'Object 1');
+  return {
+    objects: [defaultObject],
+    palettes: [...BASE_PALETTES],
+    uiState: {
+      ...DEFAULT_UI_STATE,
+      selectedObjectId: defaultObject.id,
+      selectedFrameId: defaultObject.frames[0].id,
+      selectedLayerId: defaultObject.frames[0].layers[0].id
+    }
+  };
+}
+
+export function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
