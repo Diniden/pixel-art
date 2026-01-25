@@ -262,3 +262,156 @@ export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
+// ============================================
+// Compact format conversion utilities
+// ============================================
+
+// Convert RGBA to a single hex number (0xRRGGBBAA)
+export function rgbaToHex(pixel: Pixel | Color): number {
+  return ((pixel.r & 0xFF) << 24) | ((pixel.g & 0xFF) << 16) | ((pixel.b & 0xFF) << 8) | (pixel.a & 0xFF);
+}
+
+// Convert hex number back to RGBA object
+export function hexToRgba(hex: number): Pixel {
+  return {
+    r: (hex >>> 24) & 0xFF,
+    g: (hex >>> 16) & 0xFF,
+    b: (hex >>> 8) & 0xFF,
+    a: hex & 0xFF
+  };
+}
+
+// Compact types for storage (matching runtime types but with hex colors)
+export interface CompactLayer {
+  id: string;
+  name: string;
+  pixels: (number | null)[][]; // hex numbers instead of Pixel objects
+  visible: boolean;
+}
+
+export interface CompactFrame {
+  id: string;
+  name: string;
+  layers: CompactLayer[];
+}
+
+export interface CompactPixelObject {
+  id: string;
+  name: string;
+  gridSize: { width: number; height: number };
+  frames: CompactFrame[];
+}
+
+export interface CompactPalette {
+  id: string;
+  name: string;
+  colors: number[]; // hex numbers instead of Color objects
+}
+
+export interface CompactUIState {
+  selectedObjectId: string | null;
+  selectedFrameId: string | null;
+  selectedLayerId: string | null;
+  selectedTool: Tool;
+  selectedColor: number; // hex number
+  brushSize: number;
+  bitDepth: BitDepth;
+  shapeMode: ShapeMode;
+  borderRadius: number;
+  zoom: number;
+  panOffset: { x: number; y: number };
+  moveAllLayers: boolean;
+}
+
+export interface CompactProject {
+  objects: CompactPixelObject[];
+  palettes: CompactPalette[];
+  uiState: CompactUIState;
+}
+
+// Convert runtime Project to compact format for saving
+export function projectToCompact(project: Project): CompactProject {
+  return {
+    objects: project.objects.map(obj => ({
+      id: obj.id,
+      name: obj.name,
+      gridSize: obj.gridSize,
+      frames: obj.frames.map(frame => ({
+        id: frame.id,
+        name: frame.name,
+        layers: frame.layers.map(layer => ({
+          id: layer.id,
+          name: layer.name,
+          visible: layer.visible,
+          pixels: layer.pixels.map(row =>
+            row.map(pixel => pixel === null ? null : rgbaToHex(pixel))
+          )
+        }))
+      }))
+    })),
+    palettes: project.palettes.map(palette => ({
+      id: palette.id,
+      name: palette.name,
+      colors: palette.colors.map(color => rgbaToHex(color))
+    })),
+    uiState: {
+      ...project.uiState,
+      selectedColor: rgbaToHex(project.uiState.selectedColor)
+    }
+  };
+}
+
+// Convert compact format back to runtime Project
+export function compactToProject(compact: CompactProject): Project {
+  return {
+    objects: compact.objects.map(obj => ({
+      id: obj.id,
+      name: obj.name,
+      gridSize: obj.gridSize,
+      frames: obj.frames.map(frame => ({
+        id: frame.id,
+        name: frame.name,
+        layers: frame.layers.map(layer => ({
+          id: layer.id,
+          name: layer.name,
+          visible: layer.visible,
+          pixels: layer.pixels.map(row =>
+            row.map(pixel => pixel === null ? null : hexToRgba(pixel))
+          )
+        }))
+      }))
+    })),
+    palettes: compact.palettes.map(palette => ({
+      id: palette.id,
+      name: palette.name,
+      colors: palette.colors.map(hex => hexToRgba(hex))
+    })),
+    uiState: {
+      ...compact.uiState,
+      selectedColor: hexToRgba(compact.uiState.selectedColor)
+    }
+  };
+}
+
+// Check if a project is in compact format (colors are numbers, not objects)
+export function isCompactFormat(data: unknown): data is CompactProject {
+  if (!data || typeof data !== 'object') return false;
+  const project = data as Record<string, unknown>;
+
+  // Check if palettes exist and have numeric colors
+  if (Array.isArray(project.palettes) && project.palettes.length > 0) {
+    const palette = project.palettes[0] as Record<string, unknown>;
+    if (Array.isArray(palette.colors) && palette.colors.length > 0) {
+      return typeof palette.colors[0] === 'number';
+    }
+  }
+
+  // Check uiState.selectedColor
+  if (project.uiState && typeof project.uiState === 'object') {
+    const uiState = project.uiState as Record<string, unknown>;
+    return typeof uiState.selectedColor === 'number';
+  }
+
+  return false;
+}
+

@@ -48,7 +48,8 @@ projectRouter.post('/project', async (req: Request, res: Response) => {
       return;
     }
 
-    await writeFile(PROJECT_FILE, JSON.stringify(project, null, 2), 'utf-8');
+    // Save without pretty-printing to minimize file size
+    await writeFile(PROJECT_FILE, JSON.stringify(project), 'utf-8');
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving project:', error);
