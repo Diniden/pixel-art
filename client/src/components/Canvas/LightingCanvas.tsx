@@ -24,7 +24,8 @@ export function LightingCanvas() {
     getCurrentVariant,
     isEditingVariant,
     setNormalPixel,
-    setNormalPixels
+    setNormalPixels,
+    undo
   } = useEditorStore();
 
   const obj = getCurrentObject();
@@ -309,6 +310,26 @@ export function LightingCanvas() {
     renderNormal();
     renderHeight();
   }, [renderPreview, renderNormal, renderHeight, project]);
+
+  // Keyboard event handler for undo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // Cmd/Ctrl + Z for undo
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        e.preventDefault();
+        undo();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo]);
 
   // Render preview overlay when hover changes
   useEffect(() => {
