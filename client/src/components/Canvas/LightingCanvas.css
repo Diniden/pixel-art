@@ -1,0 +1,129 @@
+.lighting-canvas-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  background: var(--bg-primary);
+  padding: 16px;
+}
+
+.lighting-canvas-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.lighting-canvas-row {
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  overflow: auto;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 8px;
+}
+
+.lighting-canvas-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  overflow: hidden;
+}
+
+.lighting-canvas-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.lighting-canvas-label .label-icon {
+  font-size: 1rem;
+}
+
+.lighting-canvas-label .label-hint {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.lighting-canvas-wrapper {
+  position: relative;
+  padding: 12px;
+  background: var(--bg-primary);
+}
+
+.lighting-preview-canvas,
+.lighting-normal-canvas,
+.lighting-height-canvas {
+  display: block;
+  border-radius: var(--radius-sm);
+  box-shadow:
+    inset 0 0 0 1px var(--border-primary),
+    0 4px 12px rgba(0, 0, 0, 0.2);
+  /* Prevent CSS from resizing the canvas - maintain pixel-perfect rendering */
+  max-width: none;
+  max-height: none;
+  object-fit: none;
+}
+
+.lighting-normal-canvas {
+  cursor: crosshair;
+}
+
+.lighting-normal-canvas:active {
+  cursor: grabbing;
+}
+
+.lighting-preview-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.lighting-height-canvas {
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
+.lighting-canvas-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-primary);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.lighting-canvas-info .separator {
+  color: var(--border-primary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .lighting-canvas-row {
+    flex-wrap: wrap;
+  }
+
+  .lighting-canvas-panel {
+    flex: 1 1 300px;
+    min-width: 280px;
+  }
+}
+

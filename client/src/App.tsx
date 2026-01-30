@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useEditorStore } from './store';
 import { Canvas } from './components/Canvas/Canvas';
+import { LightingCanvas } from './components/Canvas/LightingCanvas';
 import { Toolbar } from './components/Toolbar/Toolbar';
-import { ColorPicker } from './components/ColorPicker/ColorPicker';
-import { PaletteManager } from './components/PaletteManager/PaletteManager';
+import { PixelStudioPanel } from './components/PixelStudioPanel/PixelStudioPanel';
+import { LightingStudioPanel } from './components/LightingStudioPanel/LightingStudioPanel';
 import { LayerPanel } from './components/LayerPanel/LayerPanel';
 import { LayerColors } from './components/LayerColors/LayerColors';
 import { FrameTimeline } from './components/FrameTimeline/FrameTimeline';
@@ -14,8 +15,6 @@ import './App.css';
 
 function App() {
   const { project, isLoading, initProject, setTool, resetReferenceOverlay, colorAdjustment, clearColorAdjustment } = useEditorStore();
-  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [referenceImage, setReferenceImage] = useState<ReferenceImageData | null>(null);
 
   // Handle reference image change - reset overlay and switch tool if needed
@@ -62,26 +61,19 @@ function App() {
     );
   }
 
+  const isLightingMode = project.uiState.studioMode === 'lighting';
+
   return (
     <div className="app">
       <Header />
 
       <div className="main-content">
         {/* Left Panel - Objects & Layers */}
-        <aside className={`side-panel left-panel ${leftPanelOpen ? 'open' : 'collapsed'}`}>
-          <button
-            className="panel-toggle left-toggle"
-            onClick={() => setLeftPanelOpen(!leftPanelOpen)}
-            title={leftPanelOpen ? 'Collapse' : 'Expand'}
-          >
-            {leftPanelOpen ? '◀' : '▶'}
-          </button>
-          {leftPanelOpen && (
-            <div className="panel-scroll">
-              <ObjectLibrary />
-              <LayerPanel />
-            </div>
-          )}
+        <aside className="side-panel left-panel open">
+          <div className="panel-scroll">
+            <ObjectLibrary />
+            <LayerPanel />
+          </div>
         </aside>
 
         {/* Center - Canvas & Toolbar */}
@@ -90,25 +82,23 @@ function App() {
             onReferenceImageChange={handleReferenceImageChange}
             hasReferenceImage={referenceImage !== null}
           />
-          <Canvas referenceImage={referenceImage} />
-          <LayerColors />
+          {isLightingMode ? (
+            <LightingCanvas />
+          ) : (
+            <Canvas referenceImage={referenceImage} onReferenceImageChange={handleReferenceImageChange} />
+          )}
+          {!isLightingMode && <LayerColors />}
         </main>
 
-        {/* Right Panel - Colors & Palettes */}
-        <aside className={`side-panel right-panel ${rightPanelOpen ? 'open' : 'collapsed'}`}>
-          <button
-            className="panel-toggle right-toggle"
-            onClick={() => setRightPanelOpen(!rightPanelOpen)}
-            title={rightPanelOpen ? 'Collapse' : 'Expand'}
-          >
-            {rightPanelOpen ? '▶' : '◀'}
-          </button>
-          {rightPanelOpen && (
-            <div className="panel-scroll">
-              <ColorPicker />
-              <PaletteManager />
-            </div>
-          )}
+        {/* Right Panel - Colors & Palettes (Pixel) or Normal/Light Controls (Lighting) */}
+        <aside className="side-panel right-panel open">
+          <div className="panel-scroll">
+            {isLightingMode ? (
+              <LightingStudioPanel />
+            ) : (
+              <PixelStudioPanel />
+            )}
+          </div>
         </aside>
       </div>
 

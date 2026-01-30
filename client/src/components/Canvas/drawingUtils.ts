@@ -1,4 +1,4 @@
-import { Point, Color, Pixel } from '../../types';
+import { Point, Color, Pixel, PixelData } from '../../types';
 
 // Bresenham's line algorithm
 export function getLinePixels(start: Point, end: Point): Point[] {
@@ -260,7 +260,7 @@ export function getEllipsePixels(center: Point, edge: Point, mode: 'outline' | '
 
 // Flood fill using BFS
 export function floodFill(
-  pixels: (Pixel | 0)[][],
+  pixels: PixelData[][],
   startX: number,
   startY: number,
   width: number,
@@ -268,27 +268,30 @@ export function floodFill(
   fillColor: Color
 ): { x: number; y: number; color: Color }[] {
   const result: { x: number; y: number; color: Color }[] = [];
-  const targetPixel = pixels[startY]?.[startX];
+  const targetPixelData = pixels[startY]?.[startX];
+  const targetColor = targetPixelData?.color;
 
   // Check if target color is same as fill color
-  if (targetPixel &&
-      targetPixel.r === fillColor.r &&
-      targetPixel.g === fillColor.g &&
-      targetPixel.b === fillColor.b &&
-      targetPixel.a === fillColor.a) {
+  if (targetColor && typeof targetColor === 'object' &&
+      targetColor.r === fillColor.r &&
+      targetColor.g === fillColor.g &&
+      targetColor.b === fillColor.b &&
+      targetColor.a === fillColor.a) {
     return result;
   }
 
   const visited = new Set<string>();
   const queue: Point[] = [{ x: startX, y: startY }];
 
-  const isSameColor = (p: Pixel | 0): boolean => {
-    if (targetPixel === 0 && p === 0) return true;
-    if (targetPixel === 0 || p === 0) return false;
-    return p.r === targetPixel.r &&
-           p.g === targetPixel.g &&
-           p.b === targetPixel.b &&
-           p.a === targetPixel.a;
+  const isSameColor = (pd: PixelData | undefined): boolean => {
+    const color = pd?.color;
+    if (targetColor === 0 && color === 0) return true;
+    if (targetColor === 0 || color === 0) return false;
+    if (!targetColor || !color) return false;
+    return color.r === (targetColor as Pixel).r &&
+           color.g === (targetColor as Pixel).g &&
+           color.b === (targetColor as Pixel).b &&
+           color.a === (targetColor as Pixel).a;
   };
 
   while (queue.length > 0) {
@@ -298,8 +301,8 @@ export function floodFill(
     if (visited.has(key)) continue;
     if (x < 0 || x >= width || y < 0 || y >= height) continue;
 
-    const currentPixel = pixels[y]?.[x];
-    if (!isSameColor(currentPixel)) continue;
+    const currentPixelData = pixels[y]?.[x];
+    if (!isSameColor(currentPixelData)) continue;
 
     visited.add(key);
     result.push({ x, y, color: fillColor });
@@ -330,6 +333,33 @@ export function getSquarePixels(
         y: center.y + dy,
         color
       });
+    }
+  }
+
+  return result;
+}
+
+// Fill circle brush
+export function getCirclePixels(
+  center: Point,
+  size: number,
+  color: Color
+): { x: number; y: number; color: Color }[] {
+  const result: { x: number; y: number; color: Color }[] = [];
+  const radius = size / 2;
+  const radiusSq = radius * radius;
+  const halfSize = Math.floor(size / 2);
+
+  for (let dy = -halfSize; dy <= halfSize; dy++) {
+    for (let dx = -halfSize; dx <= halfSize; dx++) {
+      const distSq = dx * dx + dy * dy;
+      if (distSq <= radiusSq) {
+        result.push({
+          x: center.x + dx,
+          y: center.y + dy,
+          color
+        });
+      }
     }
   }
 

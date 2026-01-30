@@ -5,10 +5,26 @@ export interface Pixel {
   a: number;
 }
 
+// Normal vector for lighting calculations
+// x, y are signed bytes (-128 to 127), z is unsigned byte (0 to 255, always positive toward screen)
+// All zeros (0, 0, 0) means no normal data
+export interface Normal {
+  x: number;  // Signed byte (-128 to 127)
+  y: number;  // Signed byte (-128 to 127)
+  z: number;  // Unsigned byte (0 to 255, always positive)
+}
+
+// Complete pixel data including color, normal, and height
+export interface PixelData {
+  color: Pixel | 0;       // RGBA color (0 = empty/transparent)
+  normal: Normal | 0;     // Normal map data (0 = no normal)
+  height: number;         // Height map (0 = no height data, 1-255 = height values)
+}
+
 export interface Layer {
   id: string;
   name: string;
-  pixels: (Pixel | 0)[][]; // 2D array [y][x], 0 means transparent/empty
+  pixels: PixelData[][]; // 2D array [y][x] with full pixel data
   visible: boolean;
   // Variant-specific fields (only present if this is a variant layer)
   isVariant?: boolean;
@@ -93,11 +109,23 @@ export interface UIState {
   zoom: number;
   panOffset: { x: number; y: number };
   moveAllLayers: boolean;
+  eraserShape: 'circle' | 'square';
   // Variant editing state
   variantFrameIndices?: { [variantGroupId: string]: number }; // Track current frame index for each variant group
+  layerSelectionCounter?: number; // Increments on every layer click (even re-selection) to detect layer clicks
+  // Lighting studio state
+  studioMode: StudioMode;
+  selectedNormal: Normal;
+  lightDirection: Normal;
+  lightColor: Color;
+  ambientColor: Color;
+  heightScale: number; // Height scale factor for shadow calculation (default: 100)
+  normalBrushShape: 'circle' | 'square'; // Shape for normal brush tool
 }
 
-export type Tool = 'pixel' | 'fill-square' | 'flood-fill' | 'line' | 'rectangle' | 'ellipse' | 'eraser' | 'move' | 'reference-trace' | 'eyedropper' | 'selection';
+export type Tool = 'pixel' | 'fill-square' | 'flood-fill' | 'line' | 'rectangle' | 'ellipse' | 'eraser' | 'move' | 'reference-trace' | 'eyedropper' | 'selection' | 'normal-pencil' | 'auto-normal' | 'height-map';
+
+export type StudioMode = 'pixel' | 'lighting';
 
 export interface SelectionBox {
   x: number;
@@ -118,6 +146,21 @@ export interface Point {
 // Default values
 export const DEFAULT_COLOR: Color = { r: 0, g: 0, b: 0, a: 255 };
 
+// Default normal pointing straight out of the screen (0, 0, 255)
+export const DEFAULT_NORMAL: Normal = { x: 0, y: 0, z: 255 };
+
+// Default light direction (coming from top-left-front)
+export const DEFAULT_LIGHT_DIRECTION: Normal = { x: -64, y: -64, z: 180 };
+
+// Default light color (warm white)
+export const DEFAULT_LIGHT_COLOR: Color = { r: 255, g: 250, b: 240, a: 255 };
+
+// Default ambient color (soft blue-gray)
+export const DEFAULT_AMBIENT_COLOR: Color = { r: 40, g: 45, b: 60, a: 255 };
+
+// Empty pixel data constant
+export const EMPTY_PIXEL_DATA: PixelData = { color: 0, normal: 0, height: 0 };
+
 export const DEFAULT_UI_STATE: UIState = {
   selectedObjectId: null,
   selectedFrameId: null,
@@ -131,12 +174,21 @@ export const DEFAULT_UI_STATE: UIState = {
   zoom: 10,
   panOffset: { x: 0, y: 0 },
   moveAllLayers: false,
-  variantFrameIndices: {}
+  eraserShape: 'circle',
+  variantFrameIndices: {},
+  // Lighting studio defaults
+  studioMode: 'pixel',
+  selectedNormal: DEFAULT_NORMAL,
+  normalBrushShape: 'circle',
+  lightDirection: DEFAULT_LIGHT_DIRECTION,
+  lightColor: DEFAULT_LIGHT_COLOR,
+  ambientColor: DEFAULT_AMBIENT_COLOR,
+  heightScale: 100 // Default height scale for shadow calculation
 };
 
-export function createEmptyPixelGrid(width: number, height: number): (Pixel | 0)[][] {
+export function createEmptyPixelGrid(width: number, height: number): PixelData[][] {
   return Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => 0)
+    Array.from({ length: width }, () => ({ color: 0, normal: 0, height: 0 }))
   );
 }
 
@@ -320,11 +372,53 @@ export function hexToRgba(hex: number): Pixel {
   };
 }
 
+// Pack a normal into a single number: (x+128) << 16 | (y+128) << 8 | z
+export function normalToPacked(normal: Normal): number {
+  return ((normal.x + 128) << 16) | ((normal.y + 128) << 8) | normal.z;
+}
+
+// Unpack a normal from a packed number
+export function packedToNormal(packed: number): Normal {
+  return {
+    x: ((packed >>> 16) & 0xFF) - 128,
+    y: ((packed >>> 8) & 0xFF) - 128,
+    z: packed & 0xFF
+  };
+}
+
+// Convert PixelData to compact format
+export function pixelDataToCompact(pd: PixelData): CompactPixelData {
+  if (pd.color === 0 && pd.normal === 0 && pd.height === 0) {
+    return 0;
+  }
+  const colorHex = pd.color === 0 ? 0 : rgbaToHex(pd.color);
+  const normalPacked = pd.normal === 0 ? 0 : normalToPacked(pd.normal);
+  return [colorHex, normalPacked, pd.height];
+}
+
+// Convert compact format back to PixelData
+export function compactToPixelData(compact: CompactPixelData): PixelData {
+  if (compact === 0) {
+    return { color: 0, normal: 0, height: 0 };
+  }
+  const [colorHex, normalPacked, height] = compact;
+  return {
+    color: colorHex === 0 ? 0 : hexToRgba(colorHex),
+    normal: normalPacked === 0 ? 0 : packedToNormal(normalPacked),
+    height
+  };
+}
+
+// Compact pixel data for storage
+// [colorHex, normalPacked, height] where normalPacked = (x+128) << 16 | (y+128) << 8 | z
+// If all are 0, represents empty pixel
+export type CompactPixelData = [number, number, number] | 0;
+
 // Compact types for storage (matching runtime types but with hex colors)
 export interface CompactLayer {
   id: string;
   name: string;
-  pixels: number[][]; // hex numbers instead of Pixel objects, 0 means transparent/empty
+  pixels: CompactPixelData[][]; // Compact pixel data or 0 for empty
   visible: boolean;
   // Variant-specific fields (only present if this is a variant layer)
   isVariant?: boolean;
@@ -388,7 +482,16 @@ export interface CompactUIState {
   zoom: number;
   panOffset: { x: number; y: number };
   moveAllLayers: boolean;
+  eraserShape?: 'circle' | 'square'; // Optional for backward compatibility
+  normalBrushShape?: 'circle' | 'square'; // Optional for backward compatibility
   variantFrameIndices?: { [variantGroupId: string]: number };
+  // Lighting studio state
+  studioMode: StudioMode;
+  selectedNormal: number; // packed normal
+  lightDirection: number; // packed normal
+  lightColor: number; // hex color
+  ambientColor: number; // hex color
+  heightScale?: number; // Height scale factor (optional for backward compatibility)
 }
 
 export interface CompactProject {
@@ -404,7 +507,7 @@ function layerToCompact(layer: Layer): CompactLayer {
     name: layer.name,
     visible: layer.visible,
     pixels: layer.pixels.map(row =>
-      row.map(pixel => pixel === 0 ? 0 : rgbaToHex(pixel))
+      row.map(pd => pixelDataToCompact(pd))
     )
   };
   // Include variant fields if present
@@ -456,7 +559,12 @@ export function projectToCompact(project: Project): CompactProject {
     })),
     uiState: {
       ...project.uiState,
-      selectedColor: rgbaToHex(project.uiState.selectedColor)
+      selectedColor: rgbaToHex(project.uiState.selectedColor),
+      selectedNormal: normalToPacked(project.uiState.selectedNormal),
+      lightDirection: normalToPacked(project.uiState.lightDirection),
+      lightColor: rgbaToHex(project.uiState.lightColor),
+      ambientColor: rgbaToHex(project.uiState.ambientColor),
+      heightScale: project.uiState.heightScale
     }
   };
 }
@@ -468,7 +576,7 @@ function compactToLayer(layer: CompactLayer): Layer {
     name: layer.name,
     visible: layer.visible,
     pixels: layer.pixels.map(row =>
-      row.map(pixel => pixel === 0 ? 0 : hexToRgba(pixel))
+      row.map(pd => compactToPixelData(pd))
     )
   };
   // Include variant fields if present
@@ -543,7 +651,27 @@ export function compactToProject(compact: CompactProject): Project {
     })),
     uiState: {
       ...compact.uiState,
-      selectedColor: hexToRgba(compact.uiState.selectedColor)
+      selectedColor: hexToRgba(compact.uiState.selectedColor),
+      // Handle migration from old format without lighting state
+      studioMode: compact.uiState.studioMode ?? 'pixel',
+      selectedNormal: compact.uiState.selectedNormal !== undefined
+        ? packedToNormal(compact.uiState.selectedNormal)
+        : DEFAULT_NORMAL,
+      lightDirection: compact.uiState.lightDirection !== undefined
+        ? packedToNormal(compact.uiState.lightDirection)
+        : DEFAULT_LIGHT_DIRECTION,
+      lightColor: compact.uiState.lightColor !== undefined
+        ? hexToRgba(compact.uiState.lightColor)
+        : DEFAULT_LIGHT_COLOR,
+      ambientColor: compact.uiState.ambientColor !== undefined
+        ? hexToRgba(compact.uiState.ambientColor)
+        : DEFAULT_AMBIENT_COLOR,
+      // Handle migration from old format without eraserShape
+      eraserShape: compact.uiState.eraserShape ?? 'circle',
+      // Handle migration from old format without normalBrushShape
+      normalBrushShape: compact.uiState.normalBrushShape ?? 'circle',
+      // Handle migration from old format without heightScale
+      heightScale: compact.uiState.heightScale ?? 100
     }
   };
 }
@@ -568,5 +696,48 @@ export function isCompactFormat(data: unknown): data is CompactProject {
   }
 
   return false;
+}
+
+// Check if compact data is in legacy format (before lighting studio)
+// Legacy format has pixels as simple numbers, new format has [color, normal, height] tuples
+export function isLegacyCompactFormat(data: CompactProject): boolean {
+  // Check the first non-empty pixel in the first layer of the first frame
+  if (data.objects.length > 0 && data.objects[0].frames.length > 0) {
+    const frame = data.objects[0].frames[0];
+    if (frame.layers.length > 0) {
+      const layer = frame.layers[0];
+      for (const row of layer.pixels) {
+        for (const pixel of row) {
+          if (pixel !== 0) {
+            // If pixel is a number (not an array), it's legacy format
+            return typeof pixel === 'number';
+          }
+        }
+      }
+    }
+  }
+  // Empty project or all-empty pixels - check uiState for lighting fields
+  return data.uiState.studioMode === undefined;
+}
+
+// Migrate legacy compact pixel data (just color hex) to new format
+export function migrateLegacyPixel(legacyPixel: number | 0): CompactPixelData {
+  if (legacyPixel === 0) {
+    return 0;
+  }
+  // Legacy format: just a color hex number
+  // New format: [colorHex, normalPacked, height]
+  // For migration: set default normal to 0 (no normal), height to 1 (base height) for non-empty pixels
+  return [legacyPixel, 0, 1];
+}
+
+// Migrate a legacy compact layer to new format
+export function migrateLegacyLayer(layer: { id: string; name: string; pixels: (number | 0)[][]; visible: boolean; isVariant?: boolean; variantGroupId?: string; selectedVariantId?: string }): CompactLayer {
+  return {
+    ...layer,
+    pixels: layer.pixels.map(row =>
+      row.map(pixel => migrateLegacyPixel(pixel))
+    )
+  };
 }
 

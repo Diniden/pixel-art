@@ -1,4 +1,10 @@
-import { Pixel, Layer, Frame, VariantGroup, VariantFrame } from '../types';
+import { Pixel, PixelData, Layer, Frame, VariantGroup, VariantFrame, Variant } from '../types';
+
+// Helper to extract color from PixelData
+function getPixelColor(pd: PixelData | undefined): Pixel | null {
+  if (!pd || pd.color === 0) return null;
+  return pd.color;
+}
 
 // Cached checkerboard backgrounds
 const CHECKERBOARD_CACHE = new Map<number, Uint8ClampedArray>();
@@ -138,7 +144,7 @@ function renderLayer(
     if (!row) continue;
 
     for (let px = 0; px < gridWidth; px++) {
-      const pixel = row[px];
+      const pixel = getPixelColor(row[px]);
       if (!pixel || pixel.a === 0) continue;
 
       const thumbX = Math.floor(offsetX + px * scale);
@@ -204,7 +210,7 @@ function renderVariantFrame(
       if (!row) continue;
 
       for (let vx = 0; vx < vWidth; vx++) {
-        const pixel = row[vx];
+        const pixel = getPixelColor(row[vx]);
         if (!pixel || pixel.a === 0) continue;
 
         // Calculate position in base object coordinates
@@ -290,7 +296,7 @@ export function renderVariantFramePreview(
       if (!row) continue;
 
       for (let px = 0; px < width; px++) {
-        const pixel = row[px];
+        const pixel = getPixelColor(row[px]);
         if (!pixel || pixel.a === 0) continue;
 
         const thumbX = Math.floor(offsetX + px * scale);
@@ -326,5 +332,65 @@ export function renderVariantFramePreview(
   }
 
   ctx.putImageData(imageData, 0, 0);
+}
+
+/**
+ * Renders a single layer preview (for copy-from modal thumbnails)
+ */
+export function renderLayerPreview(
+  ctx: CanvasRenderingContext2D,
+  thumbSize: number,
+  layer: Layer,
+  gridWidth: number,
+  gridHeight: number
+): void {
+  ctx.imageSmoothingEnabled = false;
+
+  if (gridWidth === 0 || gridHeight === 0) {
+    const checkerboard = getCheckerboard(thumbSize);
+    const imageData = ctx.createImageData(thumbSize, thumbSize);
+    imageData.data.set(checkerboard);
+    ctx.putImageData(imageData, 0, 0);
+    return;
+  }
+
+  const scale = Math.min(thumbSize / gridWidth, thumbSize / gridHeight);
+  const offsetX = Math.floor((thumbSize - gridWidth * scale) / 2);
+  const offsetY = Math.floor((thumbSize - gridHeight * scale) / 2);
+
+  const imageData = ctx.createImageData(thumbSize, thumbSize);
+  const data = imageData.data;
+  const checkerboard = getCheckerboard(thumbSize);
+  data.set(checkerboard);
+
+  // Render the single layer
+  renderLayer(data, thumbSize, layer, gridWidth, gridHeight, offsetX, offsetY, scale);
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+/**
+ * Renders a variant layer preview using the first frame of the selected variant
+ */
+export function renderVariantLayerPreview(
+  ctx: CanvasRenderingContext2D,
+  thumbSize: number,
+  variant: Variant
+): void {
+  ctx.imageSmoothingEnabled = false;
+
+  const { width, height } = variant.gridSize;
+  const firstFrame = variant.frames[0];
+
+  if (width === 0 || height === 0 || !firstFrame || firstFrame.layers.length === 0) {
+    const checkerboard = getCheckerboard(thumbSize);
+    const imageData = ctx.createImageData(thumbSize, thumbSize);
+    imageData.data.set(checkerboard);
+    ctx.putImageData(imageData, 0, 0);
+    return;
+  }
+
+  // Use renderVariantFramePreview which already handles this
+  renderVariantFramePreview(ctx, thumbSize, variant, firstFrame);
 }
 

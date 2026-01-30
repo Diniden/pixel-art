@@ -38,7 +38,8 @@ function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: n
 }
 
 // RGB to HSL conversion
-function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+// prevHsl is optional and used to preserve H and S when L is 0 or 100
+function rgbToHsl(r: number, g: number, b: number, prevHsl?: { h: number; s: number; l: number }): { h: number; s: number; l: number } {
   r /= 255;
   g /= 255;
   b /= 255;
@@ -66,10 +67,22 @@ function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: n
     }
   }
 
+  const lPercent = Math.round(l * 100);
+
+  // Preserve H and S when L is 0 or 100 (pure black or white)
+  // Use previous values if available, otherwise use calculated values
+  if ((lPercent === 0 || lPercent === 100) && prevHsl) {
+    return {
+      h: prevHsl.h,
+      s: prevHsl.s,
+      l: lPercent
+    };
+  }
+
   return {
     h: Math.round(h * 360),
     s: Math.round(s * 100),
-    l: Math.round(l * 100)
+    l: lPercent
   };
 }
 
@@ -83,6 +96,8 @@ export function ColorPicker() {
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const historySaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasSavedInitialStateRef = useRef<boolean>(false);
+  // Store last known H and S values to preserve them when L is 0 or 100
+  const lastValidHsRef = useRef<{ h: number; s: number } | null>(null);
 
   const svCanvasRef = useRef<HTMLCanvasElement>(null);
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -91,7 +106,12 @@ export function ColorPicker() {
     if (project?.uiState.selectedColor) {
       const c = project.uiState.selectedColor;
       setLocalColor(c);
-      setHsl(rgbToHsl(c.r, c.g, c.b));
+      const newHsl = rgbToHsl(c.r, c.g, c.b, hsl);
+      setHsl(newHsl);
+      // Update last valid H and S if L is not 0 or 100
+      if (newHsl.l > 0 && newHsl.l < 100) {
+        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
+      }
     }
   }, [project?.uiState.selectedColor]);
 
@@ -238,8 +258,23 @@ export function ColorPicker() {
   }, [colorAdjustment, localColor, saveFinalStateToHistory]);
 
   const updateColorFromHSL = (newHsl: { h: number; s: number; l: number }) => {
-    setHsl(newHsl);
-    const rgb = hslToRgb(newHsl.h, newHsl.s, newHsl.l);
+    // Preserve H and S when L is 0 or 100
+    let finalHsl = { ...newHsl };
+    if (newHsl.l === 0 || newHsl.l === 100) {
+      // Use last valid H and S if available, otherwise keep current values
+      if (lastValidHsRef.current) {
+        finalHsl = { ...lastValidHsRef.current, l: newHsl.l };
+      } else {
+        // If we don't have a last valid value, preserve current H and S
+        finalHsl = { h: hsl.h, s: hsl.s, l: newHsl.l };
+      }
+    } else {
+      // Update last valid H and S when L is not 0 or 100
+      lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
+    }
+
+    setHsl(finalHsl);
+    const rgb = hslToRgb(finalHsl.h, finalHsl.s, finalHsl.l);
     const newColor = { ...rgb, a: localColor.a };
     setLocalColor(newColor);
     // Only track history if not dragging a slider (for direct input changes)
@@ -253,7 +288,12 @@ export function ColorPicker() {
     // Only track history if not dragging a slider (for direct input changes)
     applyColor(newColor, !isDraggingSlider);
     if (channel !== 'a') {
-      setHsl(rgbToHsl(newColor.r, newColor.g, newColor.b));
+      const newHsl = rgbToHsl(newColor.r, newColor.g, newColor.b, hsl);
+      setHsl(newHsl);
+      // Update last valid H and S if L is not 0 or 100
+      if (newHsl.l > 0 && newHsl.l < 100) {
+        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
+      }
     }
   };
 
@@ -274,9 +314,23 @@ export function ColorPicker() {
     const l = (v / 100) * (1 - (s / 100) / 2);
     const sHSL = l === 0 || l === 1 ? 0 : ((v / 100) - l) / Math.min(l, 1 - l);
 
-    const newHsl = { h: hsl.h, s: Math.round(sHSL * 100), l: Math.round(l * 100) };
-    setHsl(newHsl);
-    const rgb = hslToRgb(newHsl.h, newHsl.s, newHsl.l);
+    const lPercent = Math.round(l * 100);
+    let finalHsl = { h: hsl.h, s: Math.round(sHSL * 100), l: lPercent };
+
+    // Preserve H and S when L is 0 or 100
+    if (lPercent === 0 || lPercent === 100) {
+      if (lastValidHsRef.current) {
+        finalHsl = { ...lastValidHsRef.current, l: lPercent };
+      } else {
+        finalHsl = { h: hsl.h, s: hsl.s, l: lPercent };
+      }
+    } else {
+      // Update last valid H and S when L is not 0 or 100
+      lastValidHsRef.current = { h: finalHsl.h, s: finalHsl.s };
+    }
+
+    setHsl(finalHsl);
+    const rgb = hslToRgb(finalHsl.h, finalHsl.s, finalHsl.l);
     const newColor = { ...rgb, a: localColor.a };
     setLocalColor(newColor);
     // Don't track history while dragging
@@ -310,7 +364,12 @@ export function ColorPicker() {
       const newColor = { r, g, b, a };
       setLocalColor(newColor);
       applyColor(newColor);
-      setHsl(rgbToHsl(r, g, b));
+      const newHsl = rgbToHsl(r, g, b, hsl);
+      setHsl(newHsl);
+      // Update last valid H and S if L is not 0 or 100
+      if (newHsl.l > 0 && newHsl.l < 100) {
+        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
+      }
     }
   };
 
@@ -343,7 +402,12 @@ export function ColorPicker() {
   const handleHistoryColorClick = (color: Color) => {
     setLocalColor(color);
     applyColor(color);
-    setHsl(rgbToHsl(color.r, color.g, color.b));
+    const newHsl = rgbToHsl(color.r, color.g, color.b, hsl);
+    setHsl(newHsl);
+    // Update last valid H and S if L is not 0 or 100
+    if (newHsl.l > 0 && newHsl.l < 100) {
+      lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
+    }
   };
 
   return (

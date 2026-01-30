@@ -1,11 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useEditorStore } from '../../store';
-import { Color } from '../../types';
+import { Color, Pixel, PixelData } from '../../types';
 import './LayerColors.css';
 
 // Helper to create a unique key for a color
 function colorKey(c: Color): string {
   return `${c.r}-${c.g}-${c.b}-${c.a}`;
+}
+
+// Helper to extract color from PixelData
+function getPixelColor(pd: PixelData | undefined): Pixel | null {
+  if (!pd || pd.color === 0) return null;
+  return pd.color;
 }
 
 export function LayerColors() {
@@ -50,7 +56,7 @@ export function LayerColors() {
               if (!row) continue;
 
               for (let x = 0; x < width; x++) {
-                const pixel = row[x];
+                const pixel = getPixelColor(row[x]);
                 if (pixel && pixel.a > 0) {
                   const key = colorKey(pixel);
                   if (!colorMap.has(key)) {
@@ -68,7 +74,7 @@ export function LayerColors() {
           if (!row) continue;
 
           for (let x = 0; x < width; x++) {
-            const pixel = row[x];
+            const pixel = getPixelColor(row[x]);
             if (pixel && pixel.a > 0) {
               const key = colorKey(pixel);
               if (!colorMap.has(key)) {
@@ -92,7 +98,7 @@ export function LayerColors() {
               if (!row) continue;
 
               for (let x = 0; x < width; x++) {
-                const pixel = row[x];
+                const pixel = getPixelColor(row[x]);
                 if (pixel && pixel.a > 0) {
                   const key = colorKey(pixel);
                   if (!colorMap.has(key)) {
@@ -110,7 +116,7 @@ export function LayerColors() {
           if (!row) continue;
 
           for (let x = 0; x < width; x++) {
-            const pixel = row[x];
+            const pixel = getPixelColor(row[x]);
             if (pixel && pixel.a > 0) {
               const key = colorKey(pixel);
               if (!colorMap.has(key)) {

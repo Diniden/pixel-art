@@ -14,15 +14,15 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
   project?: {
     uiState?: {
       variantFrameIndices?: { [key: string]: number };
-      selectedObjectId?: string;
-      selectedFrameId?: string;
+      selectedObjectId?: string | null;
+      selectedFrameId?: string | null;
     }
   };
   isSelected: boolean;
   isFirstFrameSelected: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const thumbSize = 40;
+  const thumbSize = 32;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -256,56 +256,62 @@ export function ObjectLibrary() {
                     isFirstFrameSelected={isFirstFrameSelected}
                   />
                 </div>
+                <div className="object-content">
+                  <div className="object-name-row">
+                    {editingId === obj.id ? (
+                      <input
+                        type="text"
+                        className="object-name-input"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={() => handleFinishRename(obj.id)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(obj.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                      />
+                    ) : (
+                      <span
+                        className="object-name"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          handleStartRename(obj.id, obj.name);
+                        }}
+                      >
+                        {obj.name}
+                      </span>
+                    )}
+                  </div>
 
-                <div className="object-info">
-                  {editingId === obj.id ? (
-                    <input
-                      type="text"
-                      className="object-name-input"
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onBlur={() => handleFinishRename(obj.id)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(obj.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      autoFocus
-                    />
-                  ) : (
-                    <span
-                      className="object-name"
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        handleStartRename(obj.id, obj.name);
-                      }}
-                    >
-                      {obj.name}
+                  <div className="object-metrics-row">
+                    <span className="object-details">
+                      {obj.gridSize.width}×{obj.gridSize.height} • {obj.frames.length} frame{obj.frames.length !== 1 ? 's' : ''}
                     </span>
-                  )}
-                  <span className="object-details">
-                    {obj.gridSize.width}×{obj.gridSize.height} • {obj.frames.length} frame{obj.frames.length !== 1 ? 's' : ''}
-                  </span>
-                </div>
+                  </div>
 
-                <div className="object-actions">
-                  <button
-                    className="object-action-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStartResize(obj);
-                    }}
-                    title="Resize"
-                  >
-                    ⤢
-                  </button>
-                  <button
-                    className="object-action-btn delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteObject(obj.id);
-                    }}
-                    title="Delete"
-                  >
-                    ×
-                  </button>
+                  <div className="object-actions-row">
+                    <div className="object-actions">
+                      <button
+                        className="object-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartResize(obj);
+                        }}
+                        title="Resize"
+                      >
+                        ⤢
+                      </button>
+                      <button
+                        className="object-action-btn delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteObject(obj.id);
+                        }}
+                        title="Delete"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

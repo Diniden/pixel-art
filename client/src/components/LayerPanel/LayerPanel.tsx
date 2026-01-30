@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { VariantSelectModal } from '../VariantSelectModal/VariantSelectModal';
+import { CopyFromModal } from '../CopyFromModal/CopyFromModal';
 import './LayerPanel.css';
 
 export function LayerPanel() {
@@ -16,7 +18,17 @@ export function LayerPanel() {
     toggleAllLayersVisibility,
     selectLayer,
     moveLayer,
-    makeVariant
+    moveLayerAcrossAllFrames,
+    deleteLayerAcrossAllFrames,
+    squashLayerDown,
+    squashLayerUp,
+    squashLayerDownAcrossAllFrames,
+    squashLayerUpAcrossAllFrames,
+    makeVariant,
+    copyLayerToClipboard,
+    pasteLayerFromClipboard,
+    layerClipboard,
+    deleteVariantGroup
   } = useEditorStore();
 
   const [newLayerName, setNewLayerName] = useState('');
@@ -24,9 +36,29 @@ export function LayerPanel() {
   const [editingName, setEditingName] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [variantModalLayerId, setVariantModalLayerId] = useState<string | null>(null);
+  const [showCopyFromModal, setShowCopyFromModal] = useState(false);
+  const [deleteConfirmLayer, setDeleteConfirmLayer] = useState<{ layerId: string; variantGroupId: string; name: string; variantCount: number } | null>(null);
 
   const obj = getCurrentObject();
   const frame = getCurrentFrame();
+
+  // Handle Cmd+V to paste layer (only to current frame)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && layerClipboard) {
+        // Only paste if not focused on an input
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+          return;
+        }
+        e.preventDefault();
+        pasteLayerFromClipboard(true); // Paste only to current frame
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [layerClipboard, pasteLayerFromClipboard]);
 
   if (!project || !frame || !obj) return null;
 
@@ -34,6 +66,21 @@ export function LayerPanel() {
   const layers = [...frame.layers].reverse(); // Display top layer first
   const allVisible = frame.layers.every((l) => l.visible);
   const allHidden = frame.layers.every((l) => !l.visible);
+
+  // Find selected layer index for header button enable/disable
+  const selectedLayerIndex = selectedLayerId
+    ? frame.layers.findIndex(l => l.id === selectedLayerId)
+    : -1;
+  const selectedLayer = selectedLayerId ? frame.layers.find(l => l.id === selectedLayerId) : null;
+  const canMoveUp = selectedLayerIndex >= 0 && selectedLayerIndex < frame.layers.length - 1;
+  const canMoveDown = selectedLayerIndex > 0;
+  const canSquashDown = selectedLayerIndex > 0 &&
+    !selectedLayer?.isVariant &&
+    !frame.layers[selectedLayerIndex - 1]?.isVariant;
+  const canSquashUp = selectedLayerIndex >= 0 &&
+    selectedLayerIndex < frame.layers.length - 1 &&
+    !selectedLayer?.isVariant &&
+    !frame.layers[selectedLayerIndex + 1]?.isVariant;
 
   const handleAddLayer = () => {
     const name = newLayerName.trim() || `Layer ${frame.layers.length + 1}`;
@@ -96,14 +143,88 @@ export function LayerPanel() {
         Layers
         <div className="header-actions">
           <button
+            className="header-btn move-all-frames-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (selectedLayerId) {
+                moveLayerAcrossAllFrames(selectedLayerId, 'up');
+              }
+            }}
+            disabled={!canMoveUp}
+            title="Move selected layer up across all frames"
+          >
+            ▲
+          </button>
+          <button
+            className="header-btn move-all-frames-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (selectedLayerId) {
+                moveLayerAcrossAllFrames(selectedLayerId, 'down');
+              }
+            }}
+            disabled={!canMoveDown}
+            title="Move selected layer down across all frames"
+          >
+            ▼
+          </button>
+          <button
+            className="header-btn squash-all-frames-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (selectedLayerId) {
+                squashLayerDownAcrossAllFrames(selectedLayerId);
+              }
+            }}
+            disabled={!canSquashDown}
+            title="Squash down across all frames (this layer squashes into layer below)"
+          >
+            ⬇
+          </button>
+          <button
+            className="header-btn squash-all-frames-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (selectedLayerId) {
+                squashLayerUpAcrossAllFrames(selectedLayerId);
+              }
+            }}
+            disabled={!canSquashUp}
+            title="Squash up across all frames (this layer squashes into layer above)"
+          >
+            ⬆
+          </button>
+          <button
             className={`header-btn visibility-toggle ${allVisible ? 'all-visible' : ''}`}
             onClick={() => toggleAllLayersVisibility(!allVisible)}
             title={allVisible ? 'Hide all layers' : 'Show all layers'}
           >
             {allVisible ? '👁' : allHidden ? '○' : '◐'}
           </button>
+          <button
+            className="header-btn copy-from-btn"
+            onClick={() => setShowCopyFromModal(true)}
+            title="Copy layer from another object"
+          >
+            📋
+          </button>
           <button className="header-btn" onClick={handleAddLayer} title="New Layer">
             +
+          </button>
+          <button
+            className="header-btn delete-all-frames-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (selectedLayerId && frame.layers.length > 1) {
+                if (confirm('Delete this layer across all frames?')) {
+                  deleteLayerAcrossAllFrames(selectedLayerId);
+                }
+              }
+            }}
+            disabled={!selectedLayerId || frame.layers.length <= 1}
+            title="Delete selected layer across all frames"
+          >
+            ×
           </button>
         </div>
       </div>
@@ -136,122 +257,197 @@ export function LayerPanel() {
                 onDragOver={(e) => handleDragOver(e, displayIndex)}
                 onDragEnd={handleDragEnd}
               >
-                <div className="layer-label-row">
-                  <button
-                    className={`visibility-btn ${layer.visible ? 'visible' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleLayerVisibility(layer.id);
-                    }}
-                    title={layer.visible ? 'Hide layer' : 'Show layer'}
-                  >
-                    {layer.visible ? '👁' : '○'}
-                  </button>
-
-                  {/* Variant icon for variant layers */}
-                  {layer.isVariant && (
-                    <span className="variant-icon" title="Variant Layer">⬡</span>
-                  )}
-
-                  {editingId === layer.id ? (
-                    <input
-                      type="text"
-                      className="layer-name-input"
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onBlur={() => handleFinishRename(layer.id)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(layer.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      autoFocus
-                    />
-                  ) : (
-                    <span
-                      className="layer-name"
-                      onDoubleClick={(e) => {
+                <div className="layer-content-row">
+                  <div className="layer-visibility-column">
+                    <button
+                      className={`visibility-btn ${layer.visible ? 'visible' : ''}`}
+                      onClick={(e) => {
                         e.stopPropagation();
-                        handleStartRename(layer.id, layer.name);
+                        toggleLayerVisibility(layer.id);
                       }}
+                      title={layer.visible ? 'Hide layer' : 'Show layer'}
                     >
-                      {layer.name}
-                      {layer.isVariant && selectedVariant && (
-                        <span className="variant-name-badge">{selectedVariant.name}</span>
+                      {layer.visible ? '👁' : '○'}
+                    </button>
+                    {/* Variant select button for variant layers - always visible */}
+                    {layer.isVariant && (
+                      <button
+                        className="layer-action-btn variant-select-btn variant-select-in-column"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setVariantModalLayerId(layer.id);
+                        }}
+                        title="Select variant"
+                      >
+                        ⬡
+                      </button>
+                    )}
+                  </div>
+                  <div className="layer-main-column">
+                    <div className="layer-label-row">
+                      {/* Variant icon for variant layers */}
+                      {layer.isVariant && (
+                        <span className="variant-icon" title="Variant Layer">⬡</span>
                       )}
-                    </span>
-                  )}
-                </div>
 
-                <div className="layer-actions">
-                  {/* Variant-specific actions */}
-                  {layer.isVariant ? (
-                    <button
-                      className="layer-action-btn variant-select-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setVariantModalLayerId(layer.id);
-                      }}
-                      title="Select variant"
-                    >
-                      ⬡
-                    </button>
-                  ) : (
-                    <button
-                      className="layer-action-btn make-variant-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        makeVariant(layer.id);
-                      }}
-                      title="Make variant"
-                    >
-                      ✦
-                    </button>
-                  )}
-                  <button
-                    className="layer-action-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleMoveLayerUp(displayIndex);
-                    }}
-                    disabled={displayIndex === 0}
-                    title="Move layer up"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    className="layer-action-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleMoveLayerDown(displayIndex);
-                    }}
-                    disabled={displayIndex === layers.length - 1}
-                    title="Move layer down"
-                  >
-                    ▼
-                  </button>
-                  {!layer.isVariant && (
-                    <>
+                      {editingId === layer.id ? (
+                        <input
+                          type="text"
+                          className="layer-name-input"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onBlur={() => handleFinishRename(layer.id)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(layer.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                        />
+                      ) : (
+                        <span
+                          className="layer-name"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleStartRename(layer.id, layer.name);
+                          }}
+                        >
+                          {layer.name}
+                          {layer.isVariant && selectedVariant && (
+                            <span className="variant-name-badge">{selectedVariant.name}</span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="layer-actions">
+                      {/* Copy layer button */}
+                      <button
+                        className="layer-action-btn copy-layer-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyLayerToClipboard(layer.id);
+                        }}
+                        title="Copy layer across all frames (Cmd+V pastes to current frame only)"
+                      >
+                        📋
+                      </button>
+                      {/* Variant-specific actions */}
+                      {!layer.isVariant && (
+                        <button
+                          className="layer-action-btn make-variant-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            makeVariant(layer.id);
+                          }}
+                          title="Make variant"
+                        >
+                          ✦
+                        </button>
+                      )}
                       <button
                         className="layer-action-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          duplicateLayer(layer.id);
+                          handleMoveLayerUp(displayIndex);
                         }}
-                        title="Duplicate layer"
+                        disabled={displayIndex === 0}
+                        title="Move layer up (current frame only)"
                       >
-                        ⧉
+                        ▲
                       </button>
                       <button
-                        className="layer-action-btn delete"
+                        className="layer-action-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteLayer(layer.id);
+                          handleMoveLayerDown(displayIndex);
                         }}
-                        disabled={frame.layers.length <= 1}
-                        title="Delete layer"
+                        disabled={displayIndex === layers.length - 1}
+                        title="Move layer down (current frame only)"
                       >
-                        ×
+                        ▼
                       </button>
-                    </>
-                  )}
+                      {!layer.isVariant && (
+                        <>
+                          {/* Squash buttons - only show for regular layers */}
+                          {/* Convert display index to actual index */}
+                          {(() => {
+                            const actualIndex = layers.length - 1 - displayIndex;
+                            const canSquashDownThis = actualIndex > 0 &&
+                              !frame.layers[actualIndex - 1]?.isVariant;
+                            const canSquashUpThis = actualIndex < frame.layers.length - 1 &&
+                              !frame.layers[actualIndex + 1]?.isVariant;
+
+                            return (
+                              <>
+                                <button
+                                  className="layer-action-btn squash-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    squashLayerDown(layer.id);
+                                  }}
+                                  disabled={!canSquashDownThis}
+                                  title="Squash down (this layer squashes into layer below)"
+                                >
+                                  ⬇
+                                </button>
+                                <button
+                                  className="layer-action-btn squash-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    squashLayerUp(layer.id);
+                                  }}
+                                  disabled={!canSquashUpThis}
+                                  title="Squash up (this layer squashes into layer above)"
+                                >
+                                  ⬆
+                                </button>
+                              </>
+                            );
+                          })()}
+                          <button
+                            className="layer-action-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              duplicateLayer(layer.id);
+                            }}
+                            title="Duplicate layer"
+                          >
+                            ⧉
+                          </button>
+                          <button
+                            className="layer-action-btn delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteLayer(layer.id);
+                            }}
+                            disabled={frame.layers.length <= 1}
+                            title="Delete layer"
+                          >
+                            ×
+                          </button>
+                        </>
+                      )}
+                      {/* Delete button for variant layers - comes last */}
+                      {layer.isVariant && (
+                        <button
+                          className="layer-action-btn delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const vg = obj.variantGroups?.find(vg => vg.id === layer.variantGroupId);
+                            if (vg) {
+                              setDeleteConfirmLayer({
+                                layerId: layer.id,
+                                variantGroupId: layer.variantGroupId!,
+                                name: layer.name,
+                                variantCount: vg.variants.length
+                              });
+                            }
+                          }}
+                          title="Delete variant layer and all variants"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             );
@@ -282,6 +478,48 @@ export function LayerPanel() {
           />
         );
       })()}
+
+      {/* Copy From Modal */}
+      {showCopyFromModal && (
+        <CopyFromModal onClose={() => setShowCopyFromModal(false)} />
+      )}
+
+      {/* Delete Variant Confirmation Modal */}
+      {deleteConfirmLayer && createPortal(
+        <div className="modal-backdrop" onClick={() => setDeleteConfirmLayer(null)}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-header">
+              <h3>⚠️ Delete Variant Layer</h3>
+            </div>
+            <div className="confirm-modal-content">
+              <p>
+                Are you sure you want to delete <strong>"{deleteConfirmLayer.name}"</strong>?
+              </p>
+              <p className="confirm-warning">
+                This will permanently delete all <strong>{deleteConfirmLayer.variantCount} variant{deleteConfirmLayer.variantCount !== 1 ? 's' : ''}</strong> and their pixel data.
+              </p>
+            </div>
+            <div className="confirm-modal-actions">
+              <button
+                className="confirm-btn cancel"
+                onClick={() => setDeleteConfirmLayer(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="confirm-btn delete"
+                onClick={() => {
+                  deleteVariantGroup(deleteConfirmLayer.variantGroupId);
+                  setDeleteConfirmLayer(null);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

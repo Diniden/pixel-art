@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { PixelObject, Frame, VariantGroup, Layer, Variant } from '../../types';
+import { PixelObject, Frame, VariantGroup, Layer, Variant, Pixel, PixelData } from '../../types';
 import './PreviewModal.css';
+
+// Helper to extract color from PixelData
+function getPixelColor(pd: PixelData | undefined): Pixel | null {
+  if (!pd || pd.color === 0) return null;
+  return pd.color;
+}
 
 interface PreviewModalProps {
   isOpen: boolean;
@@ -46,7 +52,7 @@ function rasterizeLayer(
     if (!row) continue;
 
     for (let x = 0; x < gridWidth; x++) {
-      const pixel = row[x];
+      const pixel = getPixelColor(row[x]);
       if (!pixel || pixel.a === 0) continue;
 
       const idx = (y * gridWidth + x) * 4;
@@ -74,7 +80,7 @@ function rasterizeVariantLayer(
     if (!row) continue;
 
     for (let x = 0; x < variantWidth; x++) {
-      const pixel = row[x];
+      const pixel = getPixelColor(row[x]);
       if (!pixel || pixel.a === 0) continue;
 
       const idx = (y * variantWidth + x) * 4;

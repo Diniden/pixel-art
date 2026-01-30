@@ -81,6 +81,48 @@
   color: var(--text-muted);
 }
 
+.reference-navigation {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  margin-top: 6px;
+  width: 100%;
+  max-width: 120px;
+  position: relative;
+  z-index: 101;
+}
+
+.reference-nav-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  position: relative;
+}
+
+.reference-nav-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  z-index: 1;
+}
+
+.reference-nav-btn:active {
+  background: var(--bg-active);
+  transform: scale(0.9);
+}
+
 .pixel-canvas {
   display: block;
   image-rendering: pixelated;
@@ -115,7 +157,59 @@
   color: var(--text-secondary);
   white-space: nowrap;
   z-index: 100;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.canvas-info-hide-btn {
+  margin-left: 8px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.canvas-info-hide-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.canvas-info-toggle-hidden {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: 50%;
+  color: var(--text-primary);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  z-index: 100;
+  box-shadow: var(--shadow-md);
+}
+
+.canvas-info-toggle-hidden:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  transform: scale(1.1);
 }
 
 .canvas-info .separator {

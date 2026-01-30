@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, '..', 'data');
 const PROJECT_FILE = join(DATA_DIR, 'project.json');
+const BACKUP_FILE = join(DATA_DIR, 'project.migration-backup.json');
 
 export const projectRouter = Router();
 
@@ -54,6 +55,33 @@ projectRouter.post('/project', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error saving project:', error);
     res.status(500).json({ error: 'Failed to save project' });
+  }
+});
+
+// POST /api/project/backup - Create a backup before migration
+projectRouter.post('/project/backup', async (req: Request, res: Response) => {
+  try {
+    await ensureDataDir();
+
+    const project = req.body;
+
+    if (!project || typeof project !== 'object') {
+      res.status(400).json({ error: 'Invalid project data' });
+      return;
+    }
+
+    // Only create backup if one doesn't already exist (don't overwrite previous backups)
+    if (!existsSync(BACKUP_FILE)) {
+      await writeFile(BACKUP_FILE, JSON.stringify(project), 'utf-8');
+      console.log('Created migration backup at:', BACKUP_FILE);
+      res.json({ success: true, message: 'Backup created' });
+    } else {
+      console.log('Migration backup already exists, skipping');
+      res.json({ success: true, message: 'Backup already exists' });
+    }
+  } catch (error) {
+    console.error('Error creating backup:', error);
+    res.status(500).json({ error: 'Failed to create backup' });
   }
 });
 

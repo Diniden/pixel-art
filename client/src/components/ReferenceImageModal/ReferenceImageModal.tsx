@@ -31,6 +31,89 @@ const persistentState = {
   panOffset: { x: 0, y: 0 },
 };
 
+// Extract pixels from selection (exported for use outside modal)
+export function extractPixelsFromSelection(image: HTMLImageElement | null, selection: SelectionBox | null): ReferenceImageData | null {
+  if (!image || !selection) return null;
+
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = image.width;
+  tempCanvas.height = image.height;
+  const ctx = tempCanvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.drawImage(image, 0, 0);
+
+  const x = Math.min(selection.startX, selection.endX);
+  const y = Math.min(selection.startY, selection.endY);
+  const w = Math.abs(selection.endX - selection.startX);
+  const h = Math.abs(selection.endY - selection.startY);
+
+  if (w === 0 || h === 0) return null;
+
+  const imageData = ctx.getImageData(x, y, w, h);
+  const pixels: ReferenceImageData['pixels'] = [];
+
+  for (let py = 0; py < h; py++) {
+    const row: Array<{ r: number; g: number; b: number; a: number } | 0> = [];
+    for (let px = 0; px < w; px++) {
+      const idx = (py * w + px) * 4;
+      const r = imageData.data[idx];
+      const g = imageData.data[idx + 1];
+      const b = imageData.data[idx + 2];
+      const a = imageData.data[idx + 3];
+      row.push(a > 0 ? { r, g, b, a } : 0);
+    }
+    pixels.push(row);
+  }
+
+  return { pixels, width: w, height: h };
+}
+
+// Shift the reference selection and return new reference image data
+export function shiftReferenceSelection(dx: number, dy: number): ReferenceImageData | null {
+  const { image, selection } = persistentState;
+  if (!image || !selection) return null;
+
+  const minX = Math.min(selection.startX, selection.endX);
+  const minY = Math.min(selection.startY, selection.endY);
+  const maxX = Math.max(selection.startX, selection.endX);
+  const maxY = Math.max(selection.startY, selection.endY);
+  const width = maxX - minX;
+  const height = maxY - minY;
+
+  // Calculate new position
+  let newMinX = minX + dx;
+  let newMinY = minY + dy;
+
+  // Clamp to image bounds
+  newMinX = Math.max(0, Math.min(newMinX, image.width - width));
+  newMinY = Math.max(0, Math.min(newMinY, image.height - height));
+
+  // Update selection
+  const newSelection: SelectionBox = {
+    startX: newMinX,
+    startY: newMinY,
+    endX: newMinX + width,
+    endY: newMinY + height
+  };
+
+  persistentState.selection = newSelection;
+
+  // Extract and return new pixels
+  return extractPixelsFromSelection(image, newSelection);
+}
+
+// Shift the reference selection by the width/height of the current reference image
+export function shiftReferenceSelectionBySize(dx: number, dy: number, currentRefWidth: number, currentRefHeight: number): ReferenceImageData | null {
+  const { image, selection } = persistentState;
+  if (!image || !selection) return null;
+
+  const shiftX = dx * currentRefWidth;
+  const shiftY = dy * currentRefHeight;
+
+  return shiftReferenceSelection(shiftX, shiftY);
+}
+
 export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceImageModalProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -402,42 +485,9 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
     setSelectionDragOffset(null);
   };
 
-  // Extract pixels from selection
+  // Extract pixels from selection (use exported function)
   const extractPixels = (): ReferenceImageData | null => {
-    if (!image || !selection) return null;
-
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = image.width;
-    tempCanvas.height = image.height;
-    const ctx = tempCanvas.getContext('2d');
-    if (!ctx) return null;
-
-    ctx.drawImage(image, 0, 0);
-
-    const x = Math.min(selection.startX, selection.endX);
-    const y = Math.min(selection.startY, selection.endY);
-    const w = Math.abs(selection.endX - selection.startX);
-    const h = Math.abs(selection.endY - selection.startY);
-
-    if (w === 0 || h === 0) return null;
-
-    const imageData = ctx.getImageData(x, y, w, h);
-    const pixels: ReferenceImageData['pixels'] = [];
-
-    for (let py = 0; py < h; py++) {
-      const row: Array<{ r: number; g: number; b: number; a: number } | 0> = [];
-      for (let px = 0; px < w; px++) {
-        const idx = (py * w + px) * 4;
-        const r = imageData.data[idx];
-        const g = imageData.data[idx + 1];
-        const b = imageData.data[idx + 2];
-        const a = imageData.data[idx + 3];
-        row.push(a > 0 ? { r, g, b, a } : 0);
-      }
-      pixels.push(row);
-    }
-
-    return { pixels, width: w, height: h };
+    return extractPixelsFromSelection(image, selection);
   };
 
   const handleConfirm = () => {

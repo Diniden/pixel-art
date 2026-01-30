@@ -1,15 +1,22 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useEditorStore } from '../../store';
-import { Color, Point, SelectionBox, Pixel } from '../../types';
-import { getLinePixels, getRectanglePixels, getEllipsePixels, floodFill, getSquarePixels } from './drawingUtils';
-import { ReferenceImageData } from '../ReferenceImageModal/ReferenceImageModal';
+import { Color, Point, SelectionBox, Pixel, PixelData } from '../../types';
+import { getLinePixels, getRectanglePixels, getEllipsePixels, floodFill, getSquarePixels, getCirclePixels } from './drawingUtils';
+import { ReferenceImageData, shiftReferenceSelection, shiftReferenceSelectionBySize } from '../ReferenceImageModal/ReferenceImageModal';
 import './Canvas.css';
+
+// Helper to extract color from PixelData
+function getPixelColor(pd: PixelData | undefined): Pixel | null {
+  if (!pd || pd.color === 0) return null;
+  return pd.color;
+}
 
 interface CanvasProps {
   referenceImage?: ReferenceImageData | null;
+  onReferenceImageChange?: (data: ReferenceImageData | null) => void;
 }
 
-export function Canvas({ referenceImage }: CanvasProps) {
+export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const refCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,6 +29,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
   const [isSelectingRegion, setIsSelectingRegion] = useState(false);
   const [selectionStart, setSelectionStart] = useState<Point | null>(null);
   const [previewSelection, setPreviewSelection] = useState<SelectionBox | null>(null);
+  const [isCanvasInfoHidden, setIsCanvasInfoHidden] = useState(false);
 
   // Offscreen canvas refs for caching static content
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -96,6 +104,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
   const brushSize = project?.uiState.brushSize ?? 1;
   const shapeMode = project?.uiState.shapeMode ?? 'both';
   const borderRadius = project?.uiState.borderRadius ?? 0;
+  const eraserShape = project?.uiState.eraserShape ?? 'circle';
 
   // Get variant offset if editing variant (now from baseFrameOffsets)
   const variantOffset = editingVariant && variantData
@@ -265,7 +274,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
                 if (!row) continue;
 
                 for (let x = 0; x < variant.gridSize.width; x++) {
-                  const pixel = row[x];
+                  const pixel = getPixelColor(row[x]);
                   if (pixel && pixel.a > 0) {
                     const drawX = (x + vOffset.x) * zoom;
                     const drawY = (y + vOffset.y) * zoom;
@@ -287,7 +296,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
             if (!row) continue;
 
             for (let x = 0; x < objWidth; x++) {
-              const pixel = row[x];
+              const pixel = getPixelColor(row[x]);
               if (pixel && pixel.a > 0) {
                 ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255 * 0.5})`;
                 ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
@@ -369,7 +378,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
                 if (!row) continue;
 
                 for (let x = 0; x < variant.gridSize.width; x++) {
-                  const pixel = row[x];
+                  const pixel = getPixelColor(row[x]);
                   if (pixel && pixel.a > 0) {
                     const drawX = (x + vOffset.x) * zoom;
                     const drawY = (y + vOffset.y) * zoom;
@@ -389,7 +398,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
             if (!row) continue;
 
             for (let x = 0; x < gridWidth; x++) {
-              const pixel = row[x];
+              const pixel = getPixelColor(row[x]);
               if (pixel && pixel.a > 0) {
                 ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
                 ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
@@ -860,7 +869,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
       if (editingVariant && variantData) {
         const variantLayer = variantData.variantFrame.layers[0];
         if (variantLayer) {
-          const pixel = variantLayer.pixels[coords.y]?.[coords.x];
+          const pixel = getPixelColor(variantLayer.pixels[coords.y]?.[coords.x]);
           if (pixel && pixel.a > 0) {
             setColorAndAddToHistory(pixel);
             revertToPreviousTool();
@@ -875,7 +884,7 @@ export function Canvas({ referenceImage }: CanvasProps) {
           const l = frame.layers[i];
           if (!l.visible) continue;
 
-          const pixel = l.pixels[coords.y]?.[coords.x];
+          const pixel = getPixelColor(l.pixels[coords.y]?.[coords.x]);
           if (pixel && pixel.a > 0) {
             setColorAndAddToHistory(pixel);
             revertToPreviousTool();
@@ -1009,7 +1018,14 @@ export function Canvas({ referenceImage }: CanvasProps) {
         setPixel(coords.x, coords.y, currentColor);
         break;
       case 'eraser':
-        setPixel(coords.x, coords.y, 0);
+        if (brushSize === 1) {
+          setPixel(coords.x, coords.y, 0);
+        } else {
+          const erasePixels = eraserShape === 'circle'
+            ? getCirclePixels(coords, brushSize, currentColor)
+            : getSquarePixels(coords, brushSize, currentColor);
+          setPixels(erasePixels.map(p => ({ x: p.x, y: p.y, color: 0 as const })));
+        }
         break;
       case 'fill-square':
         setPixels(getSquarePixels(coords, brushSize, currentColor));
@@ -1104,7 +1120,14 @@ export function Canvas({ referenceImage }: CanvasProps) {
     if (currentTool === 'pixel') {
       setPixel(coords.x, coords.y, currentColor);
     } else if (currentTool === 'eraser') {
-      setPixel(coords.x, coords.y, 0);
+      if (brushSize === 1) {
+        setPixel(coords.x, coords.y, 0);
+      } else {
+        const erasePixels = eraserShape === 'circle'
+          ? getCirclePixels(coords, brushSize, currentColor)
+          : getSquarePixels(coords, brushSize, currentColor);
+        setPixels(erasePixels.map(p => ({ x: p.x, y: p.y, color: 0 as const })));
+      }
     } else if (currentTool === 'flood-fill') {
       // Get the correct pixel grid - variant frame's layer when editing variant
       const pixelGrid = editingVariant && variantData
@@ -1154,7 +1177,14 @@ export function Canvas({ referenceImage }: CanvasProps) {
     if (currentTool === 'pixel') {
       setPixel(coords.x, coords.y, currentColor);
     } else if (currentTool === 'eraser') {
-      setPixel(coords.x, coords.y, 0);
+      if (brushSize === 1) {
+        setPixel(coords.x, coords.y, 0);
+      } else {
+        const erasePixels = eraserShape === 'circle'
+          ? getCirclePixels(coords, brushSize, currentColor)
+          : getSquarePixels(coords, brushSize, currentColor);
+        setPixels(erasePixels.map(p => ({ x: p.x, y: p.y, color: 0 as const })));
+      }
     } else if (currentTool === 'fill-square') {
       setPixels(getSquarePixels(coords, brushSize, currentColor));
     }
@@ -1206,6 +1236,91 @@ export function Canvas({ referenceImage }: CanvasProps) {
                 onClick={handleRefCanvasClick}
               />
               <div className="reference-info">{referenceImage.width} × {referenceImage.height}</div>
+              {/* Navigation buttons - only show when not in reference trace mode */}
+              {!isReferenceTraceActive && onReferenceImageChange && (
+                <div className="reference-navigation">
+                  <button
+                    className="reference-nav-btn"
+                    onClick={() => {
+                      const newData = shiftReferenceSelection(-1, 0);
+                      if (newData) onReferenceImageChange(newData);
+                    }}
+                    title="Left"
+                  >
+                    ←
+                  </button>
+                  <button
+                    className="reference-nav-btn"
+                    onClick={() => {
+                      const newData = shiftReferenceSelection(1, 0);
+                      if (newData) onReferenceImageChange(newData);
+                    }}
+                    title="Right"
+                  >
+                    →
+                  </button>
+                  <button
+                    className="reference-nav-btn"
+                    onClick={() => {
+                      const newData = shiftReferenceSelectionBySize(-1, 0, referenceImage.width, referenceImage.height);
+                      if (newData) onReferenceImageChange(newData);
+                    }}
+                    title="Next Left"
+                  >
+                    ⇇
+                  </button>
+                  <button
+                    className="reference-nav-btn"
+                    onClick={() => {
+                      const newData = shiftReferenceSelectionBySize(1, 0, referenceImage.width, referenceImage.height);
+                      if (newData) onReferenceImageChange(newData);
+                    }}
+                    title="Next Right"
+                  >
+                    ⇉
+                  </button>
+                  <button
+                    className="reference-nav-btn"
+                    onClick={() => {
+                      const newData = shiftReferenceSelection(0, -1);
+                      if (newData) onReferenceImageChange(newData);
+                    }}
+                    title="Up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="reference-nav-btn"
+                    onClick={() => {
+                      const newData = shiftReferenceSelection(0, 1);
+                      if (newData) onReferenceImageChange(newData);
+                    }}
+                    title="Down"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    className="reference-nav-btn"
+                    onClick={() => {
+                      const newData = shiftReferenceSelectionBySize(0, -1, referenceImage.width, referenceImage.height);
+                      if (newData) onReferenceImageChange(newData);
+                    }}
+                    title="Next Up"
+                  >
+                    ⇈
+                  </button>
+                  <button
+                    className="reference-nav-btn"
+                    onClick={() => {
+                      const newData = shiftReferenceSelectionBySize(0, 1, referenceImage.width, referenceImage.height);
+                      if (newData) onReferenceImageChange(newData);
+                    }}
+                    title="Next Down"
+                  >
+                    ⇊
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -1239,47 +1354,68 @@ export function Canvas({ referenceImage }: CanvasProps) {
         </div>
       </div>
 
-      <div className="canvas-info">
-        {editingVariant && variantData ? (
-          <>
-            <span className="variant-indicator">⬡ Variant: {variantData.variant.name}</span>
-            <span className="separator">|</span>
-            <span>{gridWidth} × {gridHeight}</span>
-            <span className="separator">|</span>
-            <span>Offset: ({variantOffset.x}, {variantOffset.y})</span>
-            <span className="separator">|</span>
-            <span>WASD to adjust offset</span>
-          </>
-        ) : (
-          <>
-            <span>{gridWidth} × {gridHeight}</span>
-          </>
-        )}
-        <span className="separator">|</span>
-        <span>Zoom: {zoom}x</span>
-        <span className="separator">|</span>
-        <span>↑↓←→ {selection ? 'move selection' : 'move pixels'}</span>
-        {currentTool === 'move' && <span className="separator">|</span>}
-        {currentTool === 'move' && <span>Drag to move</span>}
-        {currentTool === 'selection' && <span className="separator">|</span>}
-        {currentTool === 'selection' && <span>Drag to select • Esc to clear</span>}
-        {selection && <span className="separator">|</span>}
-        {selection && (
-          <span className="selection-info">
-            ⬚ Selection: {selection.width}×{selection.height} at ({selection.x}, {selection.y})
-          </span>
-        )}
-        {currentTool === 'rectangle' && <span className="separator">|</span>}
-        {currentTool === 'rectangle' && <span>Shift+↑↓ radius: {borderRadius}</span>}
-        {isReferenceTraceActive && <span className="separator">|</span>}
-        {isReferenceTraceActive && (
-          <span className="trace-info">
-            🎯 Offset: ({referenceOverlayOffset.x}, {referenceOverlayOffset.y})
-          </span>
-        )}
-        {referenceImage && !isReferenceTraceActive && <span className="separator">|</span>}
-        {referenceImage && !isReferenceTraceActive && <span>📷 Ref: {referenceImage.width}×{referenceImage.height}</span>}
-      </div>
+      {/* Canvas info toggle button (when hidden) */}
+      {isCanvasInfoHidden && (
+        <button
+          className="canvas-info-toggle-hidden"
+          onClick={() => setIsCanvasInfoHidden(false)}
+          title="Show canvas info"
+        >
+          ℹ️
+        </button>
+      )}
+
+      {/* Canvas info (when visible) */}
+      {!isCanvasInfoHidden && (
+        <div className="canvas-info">
+          {editingVariant && variantData ? (
+            <>
+              <span className="variant-indicator">⬡ Variant: {variantData.variant.name}</span>
+              <span className="separator">|</span>
+              <span>{gridWidth} × {gridHeight}</span>
+              <span className="separator">|</span>
+              <span>Offset: ({variantOffset.x}, {variantOffset.y})</span>
+              <span className="separator">|</span>
+              <span>WASD to adjust offset</span>
+            </>
+          ) : (
+            <>
+              <span>{gridWidth} × {gridHeight}</span>
+            </>
+          )}
+          <span className="separator">|</span>
+          <span>Zoom: {zoom}x</span>
+          <span className="separator">|</span>
+          <span>↑↓←→ {selection ? 'move selection' : 'move pixels'}</span>
+          {currentTool === 'move' && <span className="separator">|</span>}
+          {currentTool === 'move' && <span>Drag to move</span>}
+          {currentTool === 'selection' && <span className="separator">|</span>}
+          {currentTool === 'selection' && <span>Drag to select • Esc to clear</span>}
+          {selection && <span className="separator">|</span>}
+          {selection && (
+            <span className="selection-info">
+              ⬚ Selection: {selection.width}×{selection.height} at ({selection.x}, {selection.y})
+            </span>
+          )}
+          {currentTool === 'rectangle' && <span className="separator">|</span>}
+          {currentTool === 'rectangle' && <span>Shift+↑↓ radius: {borderRadius}</span>}
+          {isReferenceTraceActive && <span className="separator">|</span>}
+          {isReferenceTraceActive && (
+            <span className="trace-info">
+              🎯 Offset: ({referenceOverlayOffset.x}, {referenceOverlayOffset.y})
+            </span>
+          )}
+          {referenceImage && !isReferenceTraceActive && <span className="separator">|</span>}
+          {referenceImage && !isReferenceTraceActive && <span>📷 Ref: {referenceImage.width}×{referenceImage.height}</span>}
+          <button
+            className="canvas-info-hide-btn"
+            onClick={() => setIsCanvasInfoHidden(true)}
+            title="Hide canvas info"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

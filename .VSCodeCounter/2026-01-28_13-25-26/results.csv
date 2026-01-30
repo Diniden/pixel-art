@@ -1,0 +1,68 @@
+"filename", "language", "TypeScript", "CSS", "TypeScript JSX", "JSON", "JSON with Comments", "HTML", "comment", "blank", "total"
+"/Users/diniden/Desktop/self/pixel-art/client/index.html", "HTML", 0, 0, 0, 0, 0, 16, 0, 2, 18
+"/Users/diniden/Desktop/self/pixel-art/client/package.json", "JSON", 0, 0, 0, 30, 0, 0, 0, 2, 32
+"/Users/diniden/Desktop/self/pixel-art/client/public/favicon.svg", "HTML", 0, 0, 0, 0, 0, 13, 0, 2, 15
+"/Users/diniden/Desktop/self/pixel-art/client/src/App.css", "CSS", 0, 203, 0, 0, 0, 0, 7, 40, 250
+"/Users/diniden/Desktop/self/pixel-art/client/src/App.tsx", "TypeScript JSX", 0, 0, 90, 0, 0, 0, 8, 17, 115
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/Canvas.css", "CSS", 0, 219, 0, 0, 0, 0, 3, 27, 249
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/Canvas.tsx", "TypeScript JSX", 0, 0, 1118, 0, 0, 0, 123, 159, 1400
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/LightingCanvas.css", "CSS", 0, 99, 0, 0, 0, 0, 1, 17, 117
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/LightingCanvas.tsx", "TypeScript JSX", 0, 0, 288, 0, 0, 0, 28, 53, 369
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/drawingUtils.ts", "TypeScript", 265, 0, 0, 0, 0, 0, 27, 50, 342
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/ColorPicker/ColorPicker.css", "CSS", 0, 258, 0, 0, 0, 0, 12, 41, 311
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/ColorPicker/ColorPicker.tsx", "TypeScript JSX", 0, 0, 517, 0, 0, 0, 35, 58, 610
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/CopyFromModal/CopyFromModal.css", "CSS", 0, 165, 0, 0, 0, 0, 1, 23, 189
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/CopyFromModal/CopyFromModal.tsx", "TypeScript JSX", 0, 0, 189, 0, 0, 0, 6, 34, 229
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTimeline/FrameTimeline.css", "CSS", 0, 738, 0, 0, 0, 0, 16, 121, 875
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTimeline/FrameTimeline.tsx", "TypeScript JSX", 0, 0, 154, 0, 0, 0, 10, 24, 188
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTimeline/FramesView.tsx", "TypeScript JSX", 0, 0, 622, 0, 0, 0, 35, 56, 713
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTimeline/TimelineView.tsx", "TypeScript JSX", 0, 0, 525, 0, 0, 0, 76, 78, 679
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Header/Header.css", "CSS", 0, 122, 0, 0, 0, 0, 0, 24, 146
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Header/Header.tsx", "TypeScript JSX", 0, 0, 51, 0, 0, 0, 0, 9, 60
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LayerColors/LayerColors.css", "CSS", 0, 156, 0, 0, 0, 0, 0, 22, 178
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LayerColors/LayerColors.tsx", "TypeScript JSX", 0, 0, 212, 0, 0, 0, 15, 23, 250
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LayerPanel/LayerPanel.css", "CSS", 0, 345, 0, 0, 0, 0, 3, 67, 415
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LayerPanel/LayerPanel.tsx", "TypeScript JSX", 0, 0, 476, 0, 0, 0, 19, 32, 527
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/LightControl.css", "CSS", 0, 109, 0, 0, 0, 0, 2, 18, 129
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/LightControl.tsx", "TypeScript JSX", 0, 0, 187, 0, 0, 0, 2, 27, 216
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/LightingStudioPanel.css", "CSS", 0, 19, 0, 0, 0, 0, 0, 6, 25
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/LightingStudioPanel.tsx", "TypeScript JSX", 0, 0, 21, 0, 0, 0, 0, 4, 25
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/NormalPicker.css", "CSS", 0, 49, 0, 0, 0, 0, 0, 8, 57
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/NormalPicker.tsx", "TypeScript JSX", 0, 0, 174, 0, 0, 0, 24, 44, 242
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/ObjectLibrary/ObjectLibrary.css", "CSS", 0, 188, 0, 0, 0, 0, 0, 35, 223
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/ObjectLibrary/ObjectLibrary.tsx", "TypeScript JSX", 0, 0, 321, 0, 0, 0, 12, 33, 366
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/PaletteManager/PaletteManager.css", "CSS", 0, 171, 0, 0, 0, 0, 0, 27, 198
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/PaletteManager/PaletteManager.tsx", "TypeScript JSX", 0, 0, 150, 0, 0, 0, 0, 16, 166
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/PixelStudioPanel/PixelStudioPanel.css", "CSS", 0, 5, 0, 0, 0, 0, 0, 2, 7
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/PixelStudioPanel/PixelStudioPanel.tsx", "TypeScript JSX", 0, 0, 11, 0, 0, 0, 0, 3, 14
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/PreviewModal/PreviewModal.css", "CSS", 0, 232, 0, 0, 0, 0, 1, 34, 267
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/PreviewModal/PreviewModal.tsx", "TypeScript JSX", 0, 0, 365, 0, 0, 0, 37, 67, 469
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/ReferenceImageModal/ReferenceImageModal.css", "CSS", 0, 311, 0, 0, 0, 0, 4, 49, 364
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/ReferenceImageModal/ReferenceImageModal.tsx", "TypeScript JSX", 0, 0, 535, 0, 0, 0, 51, 96, 682
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Toolbar/LightingStudioTools.tsx", "TypeScript JSX", 0, 0, 32, 0, 0, 0, 0, 8, 40
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Toolbar/PixelStudioTools.tsx", "TypeScript JSX", 0, 0, 159, 0, 0, 0, 0, 20, 179
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Toolbar/Toolbar.css", "CSS", 0, 322, 0, 0, 0, 0, 3, 59, 384
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/Toolbar/Toolbar.tsx", "TypeScript JSX", 0, 0, 68, 0, 0, 0, 3, 10, 81
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/VariantSelectModal/VariantSelectModal.css", "CSS", 0, 296, 0, 0, 0, 0, 1, 47, 344
+"/Users/diniden/Desktop/self/pixel-art/client/src/components/VariantSelectModal/VariantSelectModal.tsx", "TypeScript JSX", 0, 0, 237, 0, 0, 0, 7, 32, 276
+"/Users/diniden/Desktop/self/pixel-art/client/src/index.css", "CSS", 0, 182, 0, 0, 0, 0, 6, 41, 229
+"/Users/diniden/Desktop/self/pixel-art/client/src/main.tsx", "TypeScript JSX", 0, 0, 9, 0, 0, 0, 0, 3, 12
+"/Users/diniden/Desktop/self/pixel-art/client/src/services/api.ts", "TypeScript", 102, 0, 0, 0, 0, 0, 11, 14, 127
+"/Users/diniden/Desktop/self/pixel-art/client/src/services/autoSave.ts", "TypeScript", 47, 0, 0, 0, 0, 0, 2, 13, 62
+"/Users/diniden/Desktop/self/pixel-art/client/src/services/export.ts", "TypeScript", 147, 0, 0, 0, 0, 0, 13, 36, 196
+"/Users/diniden/Desktop/self/pixel-art/client/src/store/index.ts", "TypeScript", 3642, 0, 0, 0, 0, 0, 269, 481, 4392
+"/Users/diniden/Desktop/self/pixel-art/client/src/types/index.ts", "TypeScript", 576, 0, 0, 0, 0, 0, 85, 66, 727
+"/Users/diniden/Desktop/self/pixel-art/client/src/utils/alphaBlend.ts", "TypeScript", 40, 0, 0, 0, 0, 0, 24, 14, 78
+"/Users/diniden/Desktop/self/pixel-art/client/src/utils/lightingRenderer.ts", "TypeScript", 303, 0, 0, 0, 0, 0, 62, 76, 441
+"/Users/diniden/Desktop/self/pixel-art/client/src/utils/previewRenderer.ts", "TypeScript", 298, 0, 0, 0, 0, 0, 36, 63, 397
+"/Users/diniden/Desktop/self/pixel-art/client/tsconfig.json", "JSON with Comments", 0, 0, 0, 0, 21, 0, 0, 2, 23
+"/Users/diniden/Desktop/self/pixel-art/client/vite.config.ts", "TypeScript", 14, 0, 0, 0, 0, 0, 0, 3, 17
+"/Users/diniden/Desktop/self/pixel-art/package.json", "JSON", 0, 0, 0, 15, 0, 0, 0, 2, 17
+"/Users/diniden/Desktop/self/pixel-art/server/package.json", "JSON", 0, 0, 0, 22, 0, 0, 0, 2, 24
+"/Users/diniden/Desktop/self/pixel-art/server/src/data/project.backup.json", "JSON", 0, 0, 0, 72493, 0, 0, 0, 0, 72493
+"/Users/diniden/Desktop/self/pixel-art/server/src/data/project.json", "JSON", 0, 0, 0, 1, 0, 0, 0, 0, 1
+"/Users/diniden/Desktop/self/pixel-art/server/src/data/project.migration-backup.json", "JSON", 0, 0, 0, 1, 0, 0, 0, 0, 1
+"/Users/diniden/Desktop/self/pixel-art/server/src/index.ts", "TypeScript", 14, 0, 0, 0, 0, 0, 3, 7, 24
+"/Users/diniden/Desktop/self/pixel-art/server/src/routes/project.ts", "TypeScript", 66, 0, 0, 0, 0, 0, 6, 16, 88
+"/Users/diniden/Desktop/self/pixel-art/server/tsconfig.json", "JSON with Comments", 0, 0, 0, 0, 13, 0, 0, 2, 15
+"Total", "-", 5514, 4189, 6511, 72562, 34, 29, 1089, 2467, 92395

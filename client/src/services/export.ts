@@ -1,4 +1,4 @@
-import { Project, PixelObject, Frame, Layer, Color } from '../types';
+import { Project, PixelObject, Frame, Layer, Color, Pixel, PixelData } from '../types';
 
 interface ExportedFrame {
   objectName: string;
@@ -20,6 +20,12 @@ function colorToRGBA(color: Color | 0): [number, number, number, number] {
   return [color.r, color.g, color.b, color.a];
 }
 
+// Helper to extract color from PixelData
+function getPixelColor(pd: PixelData | undefined): Pixel | null {
+  if (!pd || pd.color === 0) return null;
+  return pd.color;
+}
+
 function flattenLayers(layers: Layer[], width: number, height: number): ImageData {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -35,7 +41,7 @@ function flattenLayers(layers: Layer[], width: number, height: number): ImageDat
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const pixel = layer.pixels[y]?.[x];
+        const pixel = getPixelColor(layer.pixels[y]?.[x]);
         if (!pixel || pixel.a === 0) continue;
 
         const idx = (y * width + x) * 4;

@@ -65,7 +65,7 @@
 .object-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .object-wrapper {
@@ -75,9 +75,10 @@
 
 .object-item {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 4px 8px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -95,25 +96,30 @@
 }
 
 .object-thumbnail {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--border-primary);
   flex-shrink: 0;
 }
 
+.object-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.object-name-row {
+  display: flex;
+  align-items: center;
+}
+
 .obj-thumb-canvas {
   display: block;
   image-rendering: pixelated;
-}
-
-.object-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .object-name {
@@ -122,12 +128,20 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .object-name-input {
-  padding: 4px 8px;
+  padding: 2px 6px;
   font-size: 0.875rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+}
+
+.object-metrics-row {
+  display: flex;
+  align-items: center;
 }
 
 .object-details {
@@ -136,16 +150,21 @@
   font-family: var(--font-mono);
 }
 
+.object-actions-row {
+  display: flex;
+  align-items: center;
+}
+
 .object-actions {
   display: flex;
   gap: 4px;
 }
 
 .object-action-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  font-size: 14px;
+  font-size: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -171,7 +190,7 @@
 }
 
 .resize-panel {
-  padding: 12px;
+  padding: 8px;
   background: var(--bg-elevated);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
   margin-top: -2px;
@@ -179,7 +198,7 @@
   border-top: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   animation: fadeIn 0.2s ease;
 }
 

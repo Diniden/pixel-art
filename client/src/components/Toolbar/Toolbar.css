@@ -290,6 +290,61 @@
   color: var(--accent-primary);
 }
 
+/* Studio Mode Toggle */
+.studio-mode-section {
+  flex-shrink: 0;
+}
+
+.studio-mode-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+}
+
+.studio-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--text-secondary);
+}
+
+.studio-mode-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.studio-mode-btn.active {
+  background: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(0, 217, 255, 0.3);
+}
+
+.studio-mode-btn .tool-icon {
+  font-size: 16px;
+}
+
+.studio-mode-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Lighting mode indicator */
+.studio-mode-btn[title*="Lighting"].active {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+}
+
 @media (max-width: 768px) {
   .toolbar {
     padding: 8px 12px;
@@ -318,6 +373,10 @@
   }
 
   .toggle-label {
+    display: none;
+  }
+
+  .studio-mode-label {
     display: none;
   }
 }

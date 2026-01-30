@@ -1,0 +1,7 @@
+.pixel-studio-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+
