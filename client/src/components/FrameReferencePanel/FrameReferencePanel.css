@@ -1,0 +1,300 @@
+.frame-reference-panel {
+  position: absolute;
+  background: linear-gradient(135deg, #2a2a3a 0%, #1a1a25 100%);
+  border: 2px solid #3a3a4a;
+  border-radius: 12px;
+  padding: 12px;
+  z-index: 900;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  max-width: 300px;
+  transition: box-shadow 0.2s ease;
+  user-select: none;
+}
+
+.frame-reference-panel.dragging {
+  transition: none;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  cursor: grabbing;
+}
+
+.frame-reference-panel.minimized {
+  padding: 8px 12px;
+}
+
+.frame-reference-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+  user-select: none;
+  padding: 4px;
+  margin: -4px -4px 8px -4px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.frame-reference-header:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.frame-reference-panel.minimized .frame-reference-header {
+  margin-bottom: 0;
+}
+
+.frame-reference-title {
+  font-weight: 600;
+  color: #e0e0ff;
+  font-size: 14px;
+  white-space: nowrap;
+  flex: 1;
+  user-select: none;
+}
+
+.frame-reference-object-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a0a0b0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.frame-reference-object-btn:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #10b981;
+}
+
+.frame-reference-panel.different-object .frame-reference-object-btn {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #10b981;
+}
+
+.frame-reference-minimize {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a0a0b0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.frame-reference-minimize:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0ff;
+}
+
+.frame-reference-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Different object indicator */
+.frame-reference-panel.different-object {
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.frame-reference-object-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.frame-reference-object-label {
+  color: #6a8a7a;
+}
+
+.frame-reference-object-name {
+  color: #10b981;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.frame-reference-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.frame-reference-btn {
+  background: linear-gradient(135deg, #4a4a5a 0%, #3a3a4a 100%);
+  border: 1px solid #5a5a6a;
+  color: #e0e0ff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.frame-reference-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5a5a6a 0%, #4a4a5a 100%);
+  border-color: #6a6a7a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.frame-reference-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.frame-reference-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.frame-reference-number {
+  font-weight: 700;
+  color: #e0e0ff;
+  font-size: 16px;
+  white-space: nowrap;
+  margin-bottom: 2px;
+}
+
+.frame-reference-name {
+  font-weight: 400;
+  color: #8a8a9a;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin-bottom: 2px;
+}
+
+.frame-reference-index {
+  font-size: 10px;
+  color: #6a6a7a;
+  white-space: nowrap;
+}
+
+.frame-reference-invalid {
+  color: #8a8a9a;
+  font-size: 13px;
+}
+
+.frame-reference-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #0a0a15;
+  border: 2px solid #2a2a3a;
+  border-radius: 8px;
+  padding: 8px;
+  overflow: hidden;
+  min-height: 200px;
+}
+
+.frame-reference-preview canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 4px;
+  width: 100%;
+  height: auto;
+  max-width: 200px;
+  max-height: 200px;
+}
+
+.frame-reference-overlay-btn {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border: 2px solid #9d6cfd;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.frame-reference-overlay-btn:hover {
+  background: linear-gradient(135deg, #9d6cfd 0%, #8b5cf6 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+}
+
+.frame-reference-overlay-btn.active {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-color: #34d399;
+}
+
+.frame-reference-overlay-btn.active:hover {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.frame-reference-trace-btn {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border: 2px solid #9d6cfd;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.frame-reference-trace-btn:hover {
+  background: linear-gradient(135deg, #9d6cfd 0%, #8b5cf6 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+}
+
+.frame-reference-trace-btn.active {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border-color: #fbbf24;
+}
+
+.frame-reference-trace-btn.active:hover {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .frame-reference-panel {
+    max-width: 250px;
+  }
+}
+
+@media (max-width: 768px) {
+  .frame-reference-panel {
+    max-width: calc(100vw - 40px);
+  }
+
+  .frame-reference-panel.minimized {
+    max-width: 200px;
+  }
+}
+

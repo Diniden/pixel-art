@@ -9,7 +9,7 @@ export const FrameThumbnail = memo(function FrameThumbnail({
   frame,
   width,
   height,
-  obj,
+  variants,
   project,
   frameIndex,
   isSelected
@@ -17,7 +17,7 @@ export const FrameThumbnail = memo(function FrameThumbnail({
   frame: Frame;
   width: number;
   height: number;
-  obj?: { variantGroups?: import('../../types').VariantGroup[] };
+  variants?: import('../../types').VariantGroup[];  // Project-level variants
   project?: { uiState?: { variantFrameIndices?: { [key: string]: number } } };
   frameIndex: number;
   isSelected: boolean;
@@ -38,10 +38,10 @@ export const FrameThumbnail = memo(function FrameThumbnail({
     if (isSelected) {
       // Use current indices for the selected frame (allows live updates while editing)
       variantFrameIndices = project?.uiState?.variantFrameIndices;
-    } else if (obj?.variantGroups) {
+    } else if (variants) {
       // Calculate static indices based on frame position
       variantFrameIndices = {};
-      for (const vg of obj.variantGroups) {
+      for (const vg of variants) {
         const variant = vg.variants[0]; // All variants should have same frame count
         if (variant && variant.frames.length > 0) {
           // Use frame index modulo variant frame count to determine which variant frame to show
@@ -56,10 +56,10 @@ export const FrameThumbnail = memo(function FrameThumbnail({
       gridHeight: height,
       frame,
       frameIndex, // Pass base frame index for offset lookup
-      variantGroups: obj?.variantGroups,
+      variants,
       variantFrameIndices
     });
-  }, [frame, width, height, obj, project, frameIndex, isSelected]);
+  }, [frame, width, height, variants, project, frameIndex, isSelected]);
 
   return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="frame-thumb-canvas" />;
 }, (prevProps, nextProps) => {
@@ -73,27 +73,7 @@ export const FrameThumbnail = memo(function FrameThumbnail({
     if (!nextProps.isSelected) return false;
   }
 
-  // Check if baseFrameOffsets changed for this frame index
-  if (prevProps.obj?.variantGroups && nextProps.obj?.variantGroups) {
-    for (let i = 0; i < prevProps.obj.variantGroups.length; i++) {
-      const prevVg = prevProps.obj.variantGroups[i];
-      const nextVg = nextProps.obj.variantGroups[i];
-      if (!nextVg) return false;
-
-      for (let j = 0; j < prevVg.variants.length; j++) {
-        const prevVariant = prevVg.variants[j];
-        const nextVariant = nextVg.variants[j];
-        if (!nextVariant) return false;
-
-        const prevOffset = prevVariant.baseFrameOffsets?.[nextProps.frameIndex];
-        const nextOffset = nextVariant.baseFrameOffsets?.[nextProps.frameIndex];
-        if (prevOffset?.x !== nextOffset?.x || prevOffset?.y !== nextOffset?.y) {
-          return false; // Offset changed, re-render
-        }
-      }
-    }
-  }
-
+  // Check if variant offsets changed for this frame (now stored on layers)
   const prevFrame = prevProps.frame;
   const nextFrame = nextProps.frame;
 
@@ -107,16 +87,21 @@ export const FrameThumbnail = memo(function FrameThumbnail({
         if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
           return false; // Variant selection changed, re-render
         }
+        // Check if variantOffset changed
+        if (prevLayer.variantOffset?.x !== nextLayer.variantOffset?.x ||
+            prevLayer.variantOffset?.y !== nextLayer.variantOffset?.y) {
+          return false;
+        }
       }
     }
 
     // Only check variant frame indices if this is the selected frame
-    if (nextProps.isSelected && prevProps.obj?.variantGroups && nextProps.obj?.variantGroups) {
+    if (nextProps.isSelected && prevProps.variants) {
       const prevIndices = prevProps.project?.uiState?.variantFrameIndices;
       const nextIndices = nextProps.project?.uiState?.variantFrameIndices;
       if (prevIndices !== nextIndices) {
         // Check if any relevant variant frame indices changed
-        for (const vg of prevProps.obj.variantGroups) {
+        for (const vg of prevProps.variants) {
           const prevIdx = prevIndices?.[vg.id] ?? 0;
           const nextIdx = nextIndices?.[vg.id] ?? 0;
           if (prevIdx !== nextIdx) return false;
@@ -138,21 +123,25 @@ export const FrameThumbnail = memo(function FrameThumbnail({
     if (prevLayer.visible !== nextLayer.visible) return false;
     if (prevLayer.pixels !== nextLayer.pixels) return false;
 
-    // Check if variant layer's selectedVariantId changed (important for variant switching)
+    // Check if variant layer's selectedVariantId or offset changed
     if (prevLayer.isVariant && nextLayer.isVariant) {
       if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
         return false; // Variant selection changed, re-render
+      }
+      if (prevLayer.variantOffset?.x !== nextLayer.variantOffset?.x ||
+          prevLayer.variantOffset?.y !== nextLayer.variantOffset?.y) {
+        return false;
       }
     }
   }
 
   // Only check variant frame indices if this is the selected frame
-  if (nextProps.isSelected && prevProps.obj?.variantGroups && nextProps.obj?.variantGroups) {
+  if (nextProps.isSelected && prevProps.variants) {
     const prevIndices = prevProps.project?.uiState?.variantFrameIndices;
     const nextIndices = nextProps.project?.uiState?.variantFrameIndices;
     if (prevIndices !== nextIndices) {
       // Check if any relevant variant frame indices changed
-      for (const vg of prevProps.obj.variantGroups) {
+      for (const vg of prevProps.variants) {
         const prevIdx = prevIndices?.[vg.id] ?? 0;
         const nextIdx = nextIndices?.[vg.id] ?? 0;
         if (prevIdx !== nextIdx) return false;
@@ -179,7 +168,7 @@ const FrameItem = memo(function FrameItem({
   editingName,
   onEditingNameChange,
   onFinishRename,
-  obj,
+  variants,
   project
 }: {
   frame: Frame;
@@ -196,7 +185,7 @@ const FrameItem = memo(function FrameItem({
   editingName: string;
   onEditingNameChange: (name: string) => void;
   onFinishRename: (id: string) => void;
-  obj?: { variantGroups?: import('../../types').VariantGroup[] };
+  variants?: import('../../types').VariantGroup[];  // Project-level variants
   project?: { uiState?: { variantFrameIndices?: { [key: string]: number } } };
 }) {
   return (
@@ -209,7 +198,7 @@ const FrameItem = memo(function FrameItem({
           frame={frame}
           width={gridWidth}
           height={gridHeight}
-          obj={obj}
+          variants={variants}
           project={project}
           frameIndex={index}
           isSelected={isSelected}
@@ -296,6 +285,11 @@ export function FramesView({
     duplicateFrame,
     moveFrame
   } = useEditorStore();
+
+  // Wrapper to ensure variant timelines always sync when clicking frames
+  const handleFrameSelect = useCallback((frameId: string) => {
+    selectFrame(frameId, true); // Always sync variant timelines
+  }, [selectFrame]);
 
   const [newFrameName, setNewFrameName] = useState('');
   const [copyPrevious, setCopyPrevious] = useState(true);
@@ -415,7 +409,7 @@ export function FramesView({
               gridWidth={obj.gridSize.width}
               gridHeight={obj.gridSize.height}
               framesCount={frames.length}
-              onSelect={selectFrame}
+              onSelect={handleFrameSelect}
               onDuplicate={duplicateFrame}
               onDelete={deleteFrame}
               onStartRename={handleStartRename}
@@ -423,7 +417,7 @@ export function FramesView({
               editingName={editingName}
               onEditingNameChange={handleEditingNameChange}
               onFinishRename={handleFinishRename}
-              obj={obj}
+              variants={project.variants}
               project={project}
             />
           ))}
@@ -436,7 +430,7 @@ export function FramesView({
         onClose={() => setShowPreview(false)}
         object={obj}
         frames={frames}
-        variantGroups={obj.variantGroups}
+        variants={project.variants}
         zoom={project.uiState.zoom}
       />
     </>

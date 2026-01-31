@@ -28,8 +28,10 @@ export interface Layer {
   visible: boolean;
   // Variant-specific fields (only present if this is a variant layer)
   isVariant?: boolean;
-  variantGroupId?: string;
-  selectedVariantId?: string;
+  variantGroupId?: string;  // Reference to project-level VariantGroup
+  selectedVariantId?: string;  // Reference to which Variant (variant type) is selected
+  // Per-layer offset for positioning variant within the frame (new in version 1.1.0)
+  variantOffset?: { x: number; y: number };
 }
 
 export interface Frame {
@@ -74,6 +76,8 @@ export interface PixelObject {
   name: string;
   gridSize: { width: number; height: number };
   frames: Frame[];
+  // DEPRECATED: variantGroups now live at project level
+  // Kept for backwards compatibility during migration
   variantGroups?: VariantGroup[];
 }
 
@@ -91,9 +95,23 @@ export interface Palette {
 }
 
 export interface Project {
+  version?: string;  // Matches package.json version
   objects: PixelObject[];
   palettes: Palette[];
   uiState: UIState;
+  // Project-level variants (new in version 1.1.0)
+  // Variants are shared across all objects - editing affects all objects using them
+  variants?: VariantGroup[];
+  // Reference image data (base64 encoded image and selection box)
+  referenceImage?: {
+    imageBase64: string;  // Base64 encoded image data
+    selectionBox: {
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+    };
+  };
 }
 
 export interface UIState {
@@ -121,6 +139,14 @@ export interface UIState {
   ambientColor: Color;
   heightScale: number; // Height scale factor for shadow calculation (default: 100)
   normalBrushShape: 'circle' | 'square'; // Shape for normal brush tool
+  // Frame reference panel state (position stored as percentage of canvas area)
+  frameReferencePanelPosition?: { topPercent: number; leftPercent: number };
+  frameReferencePanelMinimized?: boolean;
+  // Reference image panel state (position stored as percentage of canvas area)
+  referenceImagePanelPosition?: { topPercent: number; leftPercent: number };
+  referenceImagePanelMinimized?: boolean;
+  // Canvas info panel state
+  canvasInfoHidden?: boolean;
 }
 
 export type Tool = 'pixel' | 'fill-square' | 'flood-fill' | 'line' | 'rectangle' | 'ellipse' | 'eraser' | 'move' | 'reference-trace' | 'eyedropper' | 'selection' | 'normal-pencil' | 'auto-normal' | 'height-map';
@@ -338,6 +364,7 @@ export const BASE_PALETTES: Palette[] = [
 export function createDefaultProject(): Project {
   const defaultObject = createDefaultObject('obj-1', 'Object 1');
   return {
+    version: '1.1.0',
     objects: [defaultObject],
     palettes: [...BASE_PALETTES],
     uiState: {
@@ -345,7 +372,8 @@ export function createDefaultProject(): Project {
       selectedObjectId: defaultObject.id,
       selectedFrameId: defaultObject.frames[0].id,
       selectedLayerId: defaultObject.frames[0].layers[0].id
-    }
+    },
+    variants: []
   };
 }
 
@@ -424,6 +452,8 @@ export interface CompactLayer {
   isVariant?: boolean;
   variantGroupId?: string;
   selectedVariantId?: string;
+  // Per-layer offset for positioning variant within the frame (new in version 1.1.0)
+  variantOffset?: { x: number; y: number };
 }
 
 export interface CompactFrame {
@@ -460,6 +490,8 @@ export interface CompactPixelObject {
   name: string;
   gridSize: { width: number; height: number };
   frames: CompactFrame[];
+  // DEPRECATED: variantGroups now live at project level
+  // Kept for backwards compatibility during migration
   variantGroups?: CompactVariantGroup[];
 }
 
@@ -492,12 +524,28 @@ export interface CompactUIState {
   lightColor: number; // hex color
   ambientColor: number; // hex color
   heightScale?: number; // Height scale factor (optional for backward compatibility)
+  frameReferencePanelPosition?: { topPercent: number; leftPercent: number };
+  frameReferencePanelMinimized?: boolean;
+  canvasInfoHidden?: boolean;
 }
 
 export interface CompactProject {
+  version?: string;  // Matches package.json version
   objects: CompactPixelObject[];
   palettes: CompactPalette[];
   uiState: CompactUIState;
+  // Project-level variants (new in version 1.1.0)
+  variants?: CompactVariantGroup[];
+  // Reference image data (base64 encoded image and selection box)
+  referenceImage?: {
+    imageBase64: string;  // Base64 encoded image data
+    selectionBox: {
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+    };
+  };
 }
 
 // Helper to convert a layer to compact format
@@ -515,6 +563,9 @@ function layerToCompact(layer: Layer): CompactLayer {
     compactLayer.isVariant = layer.isVariant;
     compactLayer.variantGroupId = layer.variantGroupId;
     compactLayer.selectedVariantId = layer.selectedVariantId;
+    if (layer.variantOffset) {
+      compactLayer.variantOffset = layer.variantOffset;
+    }
   }
   return compactLayer;
 }
@@ -541,6 +592,7 @@ function variantGroupsToCompact(groups: VariantGroup[] | undefined): CompactVari
 // Convert runtime Project to compact format for saving
 export function projectToCompact(project: Project): CompactProject {
   return {
+    version: project.version ?? '1.1.0',  // Default to current version
     objects: project.objects.map(obj => ({
       id: obj.id,
       name: obj.name,
@@ -549,8 +601,8 @@ export function projectToCompact(project: Project): CompactProject {
         id: frame.id,
         name: frame.name,
         layers: frame.layers.map(layerToCompact)
-      })),
-      variantGroups: variantGroupsToCompact(obj.variantGroups)
+      }))
+      // Note: object-level variantGroups are no longer saved - they live at project level now
     })),
     palettes: project.palettes.map(palette => ({
       id: palette.id,
@@ -565,7 +617,11 @@ export function projectToCompact(project: Project): CompactProject {
       lightColor: rgbaToHex(project.uiState.lightColor),
       ambientColor: rgbaToHex(project.uiState.ambientColor),
       heightScale: project.uiState.heightScale
-    }
+    },
+    // Project-level variants
+    variants: variantGroupsToCompact(project.variants),
+    // Reference image (same format in compact)
+    referenceImage: project.referenceImage
   };
 }
 
@@ -584,6 +640,9 @@ function compactToLayer(layer: CompactLayer): Layer {
     runtimeLayer.isVariant = layer.isVariant;
     runtimeLayer.variantGroupId = layer.variantGroupId;
     runtimeLayer.selectedVariantId = layer.selectedVariantId;
+    if (layer.variantOffset) {
+      runtimeLayer.variantOffset = layer.variantOffset;
+    }
   }
   return runtimeLayer;
 }
@@ -632,8 +691,63 @@ function compactToVariantGroups(groups: CompactVariantGroup[] | undefined): Vari
 
 // Convert compact format back to runtime Project
 export function compactToProject(compact: CompactProject): Project {
+  // Check if we need to migrate object-level variants to project-level
+  const needsMigration = !compact.variants && compact.objects.some(obj => obj.variantGroups && obj.variantGroups.length > 0);
+
+  // Collect all variant groups - either from project level or migrate from objects
+  let projectVariants: VariantGroup[] | undefined;
+  let migratedObjects = compact.objects;
+
+  if (compact.variants) {
+    // Already has project-level variants
+    projectVariants = compactToVariantGroups(compact.variants);
+  } else if (needsMigration) {
+    // Migrate from object-level variants
+    console.log('Migrating object-level variants to project level...');
+    projectVariants = [];
+
+    // For each object, migrate its variant groups
+    migratedObjects = compact.objects.map((obj, objIndex) => {
+      if (!obj.variantGroups || obj.variantGroups.length === 0) {
+        return obj;
+      }
+
+      const migratedVariantGroups = compactToVariantGroups(obj.variantGroups);
+      if (migratedVariantGroups) {
+        projectVariants!.push(...migratedVariantGroups);
+      }
+
+      // Update variant layers to use per-layer offsets instead of variant-level baseFrameOffsets
+      const newFrames = obj.frames.map((frame, frameIndex) => ({
+        ...frame,
+        layers: frame.layers.map(layer => {
+          if (!layer.isVariant || !layer.variantGroupId || !layer.selectedVariantId) {
+            return layer;
+          }
+
+          // Find the variant group and variant to get the offset
+          const variantGroup = obj.variantGroups?.find(vg => vg.id === layer.variantGroupId);
+          const variant = variantGroup?.variants.find(v => v.id === layer.selectedVariantId);
+          const offset = variant?.baseFrameOffsets?.[frameIndex] ?? { x: 0, y: 0 };
+
+          return {
+            ...layer,
+            variantOffset: offset
+          };
+        })
+      }));
+
+      // Return object without variantGroups (they're now at project level)
+      return {
+        ...obj,
+        frames: newFrames
+      };
+    });
+  }
+
   return {
-    objects: compact.objects.map(obj => ({
+    version: compact.version ?? '1.1.0',
+    objects: migratedObjects.map(obj => ({
       id: obj.id,
       name: obj.name,
       gridSize: obj.gridSize,
@@ -641,8 +755,8 @@ export function compactToProject(compact: CompactProject): Project {
         id: frame.id,
         name: frame.name,
         layers: frame.layers.map(compactToLayer)
-      })),
-      variantGroups: compactToVariantGroups(obj.variantGroups)
+      }))
+      // Note: variantGroups no longer stored on objects
     })),
     palettes: compact.palettes.map(palette => ({
       id: palette.id,
@@ -672,7 +786,10 @@ export function compactToProject(compact: CompactProject): Project {
       normalBrushShape: compact.uiState.normalBrushShape ?? 'circle',
       // Handle migration from old format without heightScale
       heightScale: compact.uiState.heightScale ?? 100
-    }
+    },
+    variants: projectVariants,
+    // Reference image (same format in compact)
+    referenceImage: compact.referenceImage
   };
 }
 

@@ -21,8 +21,6 @@ const tools: { id: Tool; icon: string; label: string; hotkey: string }[] = [
   { id: 'selection', icon: '⬚', label: 'Selection (arrows to move)', hotkey: '0' },
 ];
 
-const referenceTraceTool = { id: 'reference-trace' as Tool, icon: '🎯', label: 'Trace Reference (WASD to align, click to copy)' };
-
 const shapeModes: { id: ShapeMode; label: string }[] = [
   { id: 'outline', label: 'Outline' },
   { id: 'fill', label: 'Fill' },
@@ -30,14 +28,13 @@ const shapeModes: { id: ShapeMode; label: string }[] = [
 ];
 
 export function PixelStudioTools({ onReferenceImageChange, hasReferenceImage }: PixelStudioToolsProps) {
-  const { project, setTool, setBrushSize, setEraserShape, setShapeMode, setBorderRadius, setMoveAllLayers } = useEditorStore();
+  const { project, setTool, setBrushSize, setShapeMode, setBorderRadius, setMoveAllLayers, flipHorizontal, flipVertical } = useEditorStore();
   const [isRefModalOpen, setIsRefModalOpen] = useState(false);
 
   if (!project) return null;
 
-  const { selectedTool, brushSize, eraserShape, shapeMode, borderRadius, moveAllLayers } = project.uiState;
-  const showBrushSize = selectedTool === 'fill-square' || selectedTool === 'eraser';
-  const showEraserShape = selectedTool === 'eraser';
+  const { selectedTool, brushSize, shapeMode, borderRadius, moveAllLayers } = project.uiState;
+  const showBrushSize = selectedTool === 'fill-square';
   const showShapeMode = ['rectangle', 'ellipse'].includes(selectedTool);
   const showBorderRadius = selectedTool === 'rectangle';
   const showMoveAllLayers = selectedTool === 'move';
@@ -70,6 +67,25 @@ export function PixelStudioTools({ onReferenceImageChange, hasReferenceImage }: 
 
         <div className="toolbar-divider" />
 
+        <div className="toolbar-group">
+          <button
+            className="tool-btn"
+            onClick={() => flipHorizontal()}
+            title="Flip Horizontal"
+          >
+            <span className="tool-icon">↔️</span>
+          </button>
+          <button
+            className="tool-btn"
+            onClick={() => flipVertical()}
+            title="Flip Vertical"
+          >
+            <span className="tool-icon">↕️</span>
+          </button>
+        </div>
+
+        <div className="toolbar-divider" />
+
         <div className="toolbar-group reference-group">
           <button
             className={`tool-btn reference-btn ${hasReferenceImage ? 'has-reference' : ''}`}
@@ -79,27 +95,18 @@ export function PixelStudioTools({ onReferenceImageChange, hasReferenceImage }: 
             <span className="tool-icon">📷</span>
           </button>
           {hasReferenceImage && (
-            <>
-              <button
-                className={`tool-btn trace-btn ${selectedTool === 'reference-trace' ? 'active' : ''}`}
-                onClick={() => setTool('reference-trace')}
-                title={referenceTraceTool.label}
-              >
-                <span className="tool-icon">{referenceTraceTool.icon}</span>
-              </button>
-              <button
-                className="tool-btn clear-reference-btn"
-                onClick={handleClearReference}
-                title="Clear Reference Image"
-              >
-                <span className="tool-icon">✕</span>
-              </button>
-            </>
+            <button
+              className="tool-btn clear-reference-btn"
+              onClick={handleClearReference}
+              title="Clear Reference Image"
+            >
+              <span className="tool-icon">✕</span>
+            </button>
           )}
         </div>
       </div>
 
-      {showBrushSize && (
+      {showBrushSize && selectedTool !== 'eraser' && (
         <div className="toolbar-section">
           <label className="toolbar-label">Size</label>
           <div className="brush-size-control">
@@ -111,26 +118,6 @@ export function PixelStudioTools({ onReferenceImageChange, hasReferenceImage }: 
               onChange={(e) => setBrushSize(parseInt(e.target.value))}
             />
             <span className="brush-size-value">{brushSize}</span>
-          </div>
-        </div>
-      )}
-
-      {showEraserShape && (
-        <div className="toolbar-section">
-          <label className="toolbar-label">Shape</label>
-          <div className="shape-mode-group">
-            <button
-              className={`mode-btn ${eraserShape === 'circle' ? 'active' : ''}`}
-              onClick={() => setEraserShape('circle')}
-            >
-              Circle
-            </button>
-            <button
-              className={`mode-btn ${eraserShape === 'square' ? 'active' : ''}`}
-              onClick={() => setEraserShape('square')}
-            >
-              Square
-            </button>
           </div>
         </div>
       )}

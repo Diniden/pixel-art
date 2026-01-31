@@ -88,16 +88,17 @@ function Tooltip({ text, x, y, visible }: { text: string; x: number; y: number; 
 interface LayerCellProps {
   obj: PixelObject;
   layer: Layer;
+  variants?: import('../../types').VariantGroup[];  // Project-level variants
   onCopy: () => void;
 }
 
-function LayerCell({ obj, layer, onCopy }: LayerCellProps) {
+function LayerCell({ obj, layer, variants, onCopy }: LayerCellProps) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
-  // Get variant info if this is a variant layer
+  // Get variant info if this is a variant layer (now from project.variants)
   const variantGroup = layer.isVariant && layer.variantGroupId
-    ? obj.variantGroups?.find(vg => vg.id === layer.variantGroupId)
+    ? variants?.find(vg => vg.id === layer.variantGroupId)
     : null;
   const selectedVariant = variantGroup?.variants.find(v => v.id === layer.selectedVariantId);
 
@@ -208,6 +209,7 @@ export function CopyFromModal({ onClose }: CopyFromModalProps) {
                         key={layer.id}
                         obj={obj}
                         layer={layer}
+                        variants={project.variants}
                         onCopy={() => handleCopyLayer(obj, layer)}
                       />
                     ))}

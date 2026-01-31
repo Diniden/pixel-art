@@ -301,7 +301,7 @@ export function TimelineView({
   const handleCellClick = useCallback((cell: CellData) => {
     setSelectedCell({ frameId: cell.frameId, layerId: cell.layerId });
     setEmptyCellSelection(null); // Clear empty cell selection when clicking a filled cell
-    selectFrame(cell.frameId);
+    selectFrame(cell.frameId, true); // Always sync variant timelines
     selectLayer(cell.layerId);
   }, [selectFrame, selectLayer]);
 
@@ -317,7 +317,7 @@ export function TimelineView({
       const layer = frame.layers.find(l => l.name === layerName);
       if (layer) {
         setSelectedCell({ frameId: frame.id, layerId: layer.id });
-        selectFrame(frame.id);
+        selectFrame(frame.id, true); // Always sync variant timelines
         selectLayer(layer.id);
         break;
       }
@@ -403,13 +403,21 @@ export function TimelineView({
                 pasteTimelineCell(emptyCellSelection.frameId, existingLayer.id);
               } else {
                 // Create new layer only in this frame at the target row position
+                // Pass variant information if the clipboard contains it
+                const variantInfo = timelineCellClipboard.isVariant ? {
+                  isVariant: timelineCellClipboard.isVariant,
+                  variantGroupId: timelineCellClipboard.variantGroupId,
+                  selectedVariantId: timelineCellClipboard.selectedVariantId,
+                  variantOffset: timelineCellClipboard.variantOffset
+                } : undefined;
                 const newLayerId = addLayerToFrameAtPosition(
                   emptyCellSelection.frameId,
                   timelineCellClipboard.layerName,
-                  emptyCellSelection.rowIndex
+                  emptyCellSelection.rowIndex,
+                  variantInfo
                 );
                 if (newLayerId) {
-                  // Now paste to it
+                  // Now paste to it (pixels will be pasted, variant info already set)
                   pasteTimelineCell(emptyCellSelection.frameId, newLayerId);
                 }
               }
@@ -669,7 +677,7 @@ export function TimelineView({
         onClose={() => setShowPreview(false)}
         object={obj}
         frames={obj.frames}
-        variantGroups={obj.variantGroups}
+        variants={project.variants}
         zoom={project.uiState.zoom}
       />
     </div>

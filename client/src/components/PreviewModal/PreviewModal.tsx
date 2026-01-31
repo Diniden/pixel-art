@@ -14,7 +14,7 @@ interface PreviewModalProps {
   onClose: () => void;
   object: PixelObject;
   frames: Frame[];
-  variantGroups?: VariantGroup[];
+  variants?: VariantGroup[];  // Project-level variants
   zoom: number;
 }
 
@@ -99,19 +99,19 @@ async function preRenderAllLayers(
   frames: Frame[],
   gridWidth: number,
   gridHeight: number,
-  variantGroups?: VariantGroup[]
+  variants?: VariantGroup[]  // Project-level variants
 ): Promise<PreRenderedData> {
   const baseFrameLayers = new Map<number, Map<number, ImageBitmap>>();
   const variantFrames = new Map<string, Map<string, Map<number, Map<number, ImageBitmap>>>>();
   const variantLayerInfoPerFrame = new Map<number, VariantLayerInfo[]>();
-  const variants = new Map<string, Variant>();
+  const variantsLookup = new Map<string, Variant>();
 
   // Build variant lookup and pre-render variant frames
-  if (variantGroups) {
-    for (const vg of variantGroups) {
+  if (variants) {
+    for (const vg of variants) {
       for (const variant of vg.variants) {
         // Use composite key to store each variant
-        variants.set(`${vg.id}:${variant.id}`, variant);
+        variantsLookup.set(`${vg.id}:${variant.id}`, variant);
 
         if (!variantFrames.has(vg.id)) {
           variantFrames.set(vg.id, new Map());
@@ -130,7 +130,7 @@ async function preRenderAllLayers(
 
           for (let layerIdx = 0; layerIdx < vFrame.layers.length; layerIdx++) {
             const layer = vFrame.layers[layerIdx];
-            if (!layer.visible) continue;
+            // Layer visibility is ignored in optimized playback
 
             const imageData = rasterizeVariantLayer(
               layer,
@@ -155,7 +155,7 @@ async function preRenderAllLayers(
 
     for (let layerIdx = 0; layerIdx < frame.layers.length; layerIdx++) {
       const layer = frame.layers[layerIdx];
-      if (!layer.visible) continue;
+      // Layer visibility is ignored in optimized playback
 
       if (layer.isVariant && layer.variantGroupId && layer.selectedVariantId) {
         // Record variant layer info for compositing
@@ -180,11 +180,11 @@ async function preRenderAllLayers(
     baseFrameLayers,
     variantFrames,
     variantLayerInfoPerFrame,
-    variants
+    variants: variantsLookup
   };
 }
 
-export function PreviewModal({ isOpen, onClose, object, frames, variantGroups, zoom }: PreviewModalProps) {
+export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }: PreviewModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [preRendered, setPreRendered] = useState<PreRenderedData | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -200,15 +200,15 @@ export function PreviewModal({ isOpen, onClose, object, frames, variantGroups, z
   // Get variant frame counts for initializing playheads
   const getVariantFrameCounts = useCallback(() => {
     const counts = new Map<string, number>();
-    if (variantGroups) {
-      for (const vg of variantGroups) {
+    if (variants) {
+      for (const vg of variants) {
         for (const variant of vg.variants) {
           counts.set(`${vg.id}:${variant.id}`, variant.frames.length);
         }
       }
     }
     return counts;
-  }, [variantGroups]);
+  }, [variants]);
 
   // Pre-render layers when modal opens
   useEffect(() => {
@@ -240,20 +240,20 @@ export function PreviewModal({ isOpen, onClose, object, frames, variantGroups, z
 
     // Pre-render all layers
     setIsLoading(true);
-    preRenderAllLayers(frames, gridWidth, gridHeight, variantGroups)
+    preRenderAllLayers(frames, gridWidth, gridHeight, variants)
       .then(data => {
         setPreRendered(data);
         // Initialize variant playheads to 0
         const initialPlayheads = new Map<string, number>();
-        if (variantGroups) {
-          for (const vg of variantGroups) {
+        if (variants) {
+          for (const vg of variants) {
             initialPlayheads.set(vg.id, 0);
           }
         }
         setVariantPlayheads(initialPlayheads);
         setIsLoading(false);
       });
-  }, [isOpen, frames, gridWidth, gridHeight, variantGroups]);
+  }, [isOpen, frames, gridWidth, gridHeight, variants]);
 
   // Animation loop using requestAnimationFrame
   const animate = useCallback((timestamp: number) => {
@@ -338,7 +338,7 @@ export function PreviewModal({ isOpen, onClose, object, frames, variantGroups, z
 
     for (let layerIdx = 0; layerIdx < currentFrameData.layers.length; layerIdx++) {
       const layer = currentFrameData.layers[layerIdx];
-      if (!layer.visible) continue;
+      // Layer visibility is ignored in optimized playback
 
       const variantInfo = variantInfos.find(v => v.layerIndex === layerIdx);
       if (variantInfo) {
@@ -367,7 +367,10 @@ export function PreviewModal({ isOpen, onClose, object, frames, variantGroups, z
         if (frameLayerMap) {
           // Get offset for this variant at the current base frame
           const variant = preRendered.variants.get(`${variantGroupId}:${selectedVariantId}`);
-          const offset = variant?.baseFrameOffsets?.[currentFrame] ?? { x: 0, y: 0 };
+          // Get the layer to check for layer.variantOffset (new system)
+          const layer = currentFrameData.layers[item.info.layerIndex];
+          // Use layer's variantOffset, falling back to variant.baseFrameOffsets for backward compatibility
+          const offset = layer?.variantOffset ?? variant?.baseFrameOffsets?.[currentFrame] ?? { x: 0, y: 0 };
 
           // Render all layers of this variant frame
           frameLayerMap.forEach((bitmap) => {

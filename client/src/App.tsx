@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useEditorStore } from './store';
 import { Canvas } from './components/Canvas/Canvas';
 import { LightingCanvas } from './components/Canvas/LightingCanvas';
@@ -10,12 +10,16 @@ import { LayerColors } from './components/LayerColors/LayerColors';
 import { FrameTimeline } from './components/FrameTimeline/FrameTimeline';
 import { ObjectLibrary } from './components/ObjectLibrary/ObjectLibrary';
 import { Header } from './components/Header/Header';
-import { ReferenceImageData } from './components/ReferenceImageModal/ReferenceImageModal';
+import { ReferenceImageData, restoreReferenceImageFromProject, getCurrentReferenceImageData, saveReferenceImageToProject } from './components/ReferenceImageModal/ReferenceImageModal';
+import { FrameReferencePanel } from './components/FrameReferencePanel/FrameReferencePanel';
+import { ReferenceImagePanel } from './components/ReferenceImagePanel/ReferenceImagePanel';
 import './App.css';
 
 function App() {
   const { project, isLoading, initProject, setTool, resetReferenceOverlay, colorAdjustment, clearColorAdjustment } = useEditorStore();
   const [referenceImage, setReferenceImage] = useState<ReferenceImageData | null>(null);
+  const [overlayFrameIndex, setOverlayFrameIndex] = useState<number | null>(null);
+  const hasRestoredReferenceRef = useRef(false);
 
   // Handle reference image change - reset overlay and switch tool if needed
   const handleReferenceImageChange = useCallback((data: ReferenceImageData | null) => {
@@ -29,12 +33,34 @@ function App() {
       if (project?.uiState.selectedTool === 'reference-trace') {
         setTool('pixel');
       }
+
+      // Clear from project
+      saveReferenceImageToProject(null, null);
     }
   }, [project?.uiState.selectedTool, setTool, resetReferenceOverlay]);
 
   useEffect(() => {
     initProject();
   }, [initProject]);
+
+  // Restore reference image from project when project first loads
+  useEffect(() => {
+    // Only restore once on initial load
+    if (hasRestoredReferenceRef.current || !project) return;
+    hasRestoredReferenceRef.current = true;
+
+    if (project.referenceImage) {
+      restoreReferenceImageFromProject().then(() => {
+        // Extract the reference image data from the restored persistent state
+        const refData = getCurrentReferenceImageData();
+        if (refData) {
+          setReferenceImage(refData);
+        }
+      }).catch((error) => {
+        console.error('Failed to restore reference image:', error);
+      });
+    }
+  }, [project]);
 
   // Handle ESC key to clear color adjustment
   useEffect(() => {
@@ -85,7 +111,23 @@ function App() {
           {isLightingMode ? (
             <LightingCanvas />
           ) : (
-            <Canvas referenceImage={referenceImage} onReferenceImageChange={handleReferenceImageChange} />
+            <>
+              <Canvas
+                referenceImage={referenceImage}
+                onReferenceImageChange={handleReferenceImageChange}
+                overlayFrameIndex={overlayFrameIndex}
+              />
+              <FrameReferencePanel
+                onOverlayChange={setOverlayFrameIndex}
+                overlayFrameIndex={overlayFrameIndex}
+              />
+              <ReferenceImagePanel
+                referenceImage={referenceImage}
+                onReferenceImageChange={handleReferenceImageChange}
+                isReferenceTraceActive={project.uiState.selectedTool === 'reference-trace'}
+                zoom={project.uiState.zoom ?? 10}
+              />
+            </>
           )}
           {!isLightingMode && <LayerColors />}
         </main>

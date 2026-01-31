@@ -38,8 +38,8 @@ interface RenderPreviewOptions {
   gridWidth: number;
   gridHeight: number;
   frame: Frame;
-  frameIndex?: number; // Base frame index for offset lookup
-  variantGroups?: VariantGroup[];
+  frameIndex?: number; // Base frame index for fallback offset lookup
+  variants?: VariantGroup[];  // Project-level variants (renamed from variantGroups)
   variantFrameIndices?: { [variantGroupId: string]: number };
 }
 
@@ -52,7 +52,7 @@ export function renderFramePreview(
   ctx: CanvasRenderingContext2D,
   options: RenderPreviewOptions
 ): void {
-  const { thumbSize, gridWidth, gridHeight, frame, frameIndex = 0, variantGroups, variantFrameIndices } = options;
+  const { thumbSize, gridWidth, gridHeight, frame, frameIndex = 0, variants, variantFrameIndices } = options;
 
   ctx.imageSmoothingEnabled = false;
 
@@ -82,15 +82,15 @@ export function renderFramePreview(
     if (!layer.visible) continue;
 
     // Handle variant layers
-    if (layer.isVariant && layer.variantGroupId && variantGroups && variantFrameIndices) {
-      const vg = variantGroups.find(vg => vg.id === layer.variantGroupId);
+    if (layer.isVariant && layer.variantGroupId && variants && variantFrameIndices) {
+      const vg = variants.find(vg => vg.id === layer.variantGroupId);
       const variant = vg?.variants.find(v => v.id === layer.selectedVariantId);
       const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
       const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
 
       if (variant && vFrame) {
-        // Get offset from baseFrameOffsets using the base frame index
-        const variantOffset = variant.baseFrameOffsets?.[frameIndex] ?? { x: 0, y: 0 };
+        // Use layer's variantOffset, falling back to variant.baseFrameOffsets for backward compatibility
+        const variantOffset = layer.variantOffset ?? variant.baseFrameOffsets?.[frameIndex] ?? { x: 0, y: 0 };
 
         renderVariantFrame(
           data,

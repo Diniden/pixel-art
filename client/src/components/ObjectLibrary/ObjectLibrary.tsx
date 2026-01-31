@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
@@ -12,6 +13,7 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
 }: {
   obj: PixelObject;
   project?: {
+    variants?: import('../../types').VariantGroup[];
     uiState?: {
       variantFrameIndices?: { [key: string]: number };
       selectedObjectId?: string | null;
@@ -30,6 +32,7 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
     if (!canvas || !ctx || obj.frames.length === 0) return;
 
     const frame = obj.frames[0];
+    const variants = project?.variants;
 
     // Only use current variantFrameIndices if this object is selected AND the first frame is selected
     // Otherwise, use static indices (frame index 0, so variant frame index 0)
@@ -38,10 +41,10 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
     if (isSelected && isFirstFrameSelected) {
       // Use current indices when editing the first frame (allows live updates)
       variantFrameIndices = project?.uiState?.variantFrameIndices;
-    } else if (obj.variantGroups) {
+    } else if (variants) {
       // Use static indices (all variant frames at index 0 for the thumbnail)
       variantFrameIndices = {};
-      for (const vg of obj.variantGroups) {
+      for (const vg of variants) {
         variantFrameIndices[vg.id] = 0;
       }
     }
@@ -51,7 +54,7 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
       gridWidth: obj.gridSize.width,
       gridHeight: obj.gridSize.height,
       frame,
-      variantGroups: obj.variantGroups,
+      variants,
       variantFrameIndices
     });
   }, [obj, project, isSelected, isFirstFrameSelected]);
@@ -69,8 +72,9 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
       const nextIndices = nextProps.project?.uiState?.variantFrameIndices;
       if (prevIndices !== nextIndices) {
         // Check if any relevant variant frame indices changed
-        if (prev.variantGroups && next.variantGroups) {
-          for (const vg of prev.variantGroups) {
+        const variants = prevProps.project?.variants;
+        if (variants) {
+          for (const vg of variants) {
             const prevIdx = prevIndices?.[vg.id] ?? 0;
             const nextIdx = nextIndices?.[vg.id] ?? 0;
             if (prevIdx !== nextIdx) return false;
@@ -101,6 +105,17 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
 
       if (prevLayer.visible !== nextLayer.visible) return false;
       if (prevLayer.pixels !== nextLayer.pixels) return false;
+
+      // Check if variant layer's selectedVariantId or offset changed
+      if (prevLayer.isVariant && nextLayer.isVariant) {
+        if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
+          return false; // Variant selection changed, re-render
+        }
+        if (prevLayer.variantOffset?.x !== nextLayer.variantOffset?.x ||
+            prevLayer.variantOffset?.y !== nextLayer.variantOffset?.y) {
+          return false; // Variant offset changed, re-render
+        }
+      }
     }
   }
 
@@ -142,6 +157,7 @@ export function ObjectLibrary() {
   const [showResizeFor, setShowResizeFor] = useState<string | null>(null);
   const [resizeWidth, setResizeWidth] = useState(32);
   const [resizeHeight, setResizeHeight] = useState(32);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
 
   if (!project) return null;
 
@@ -179,6 +195,13 @@ export function ObjectLibrary() {
   const handleApplyResize = (id: string) => {
     resizeObject(id, resizeWidth, resizeHeight);
     setShowResizeFor(null);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm) {
+      deleteObject(deleteConfirm.id);
+      setDeleteConfirm(null);
+    }
   };
 
   return (
@@ -304,7 +327,7 @@ export function ObjectLibrary() {
                         className="object-action-btn delete"
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteObject(obj.id);
+                          setDeleteConfirm({ id: obj.id, name: obj.name });
                         }}
                         title="Delete"
                       >
@@ -359,6 +382,43 @@ export function ObjectLibrary() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && createPortal(
+        <div className="delete-confirm-backdrop" onClick={() => setDeleteConfirm(null)}>
+          <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="delete-confirm-header">
+              <h4>⚠️ Delete Object</h4>
+            </div>
+            <div className="delete-confirm-content">
+              <p>
+                Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>?
+              </p>
+              <p className="delete-confirm-warning">
+                This will permanently delete the object and all its frames and layers.
+              </p>
+              <p className="delete-confirm-undo">
+                You can undo this action with Cmd+Z.
+              </p>
+            </div>
+            <div className="delete-confirm-actions">
+              <button
+                className="cancel-btn"
+                onClick={() => setDeleteConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="delete-btn"
+                onClick={handleDeleteConfirm}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

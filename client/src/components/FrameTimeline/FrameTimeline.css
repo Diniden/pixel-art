@@ -459,7 +459,8 @@
   transition: all var(--transition-fast);
 }
 
-.variant-frame-item:hover .variant-frame-action-btn {
+.variant-frame-item:hover .variant-frame-action-btn,
+.variant-frame-actions:hover .variant-frame-action-btn {
   opacity: 1;
 }
 

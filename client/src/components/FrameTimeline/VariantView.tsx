@@ -157,7 +157,7 @@ export function VariantView({
                 <div
                   key={frame.id}
                   className={`base-frame-item ${isCurrentBaseFrame ? 'active' : ''}`}
-                  onClick={() => selectFrame(frame.id)}
+                  onClick={() => selectFrame(frame.id, true)} // Always sync variant timelines
                   title={`${frame.name} - Click to edit offset for this base frame`}
                 >
                   <div className="base-frame-thumbnail">
@@ -165,7 +165,7 @@ export function VariantView({
                       frame={frame}
                       width={obj.gridSize.width}
                       height={obj.gridSize.height}
-                      obj={obj}
+                      variants={project.variants}
                       project={project}
                       frameIndex={index}
                       isSelected={isCurrentBaseFrame}
@@ -290,7 +290,7 @@ export function VariantView({
         onClose={() => setShowPreview(false)}
         object={obj}
         frames={frames}
-        variantGroups={obj.variantGroups}
+        variants={project.variants}
         zoom={project.uiState.zoom}
       />
     </div>

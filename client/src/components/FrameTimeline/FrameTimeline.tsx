@@ -108,7 +108,8 @@ export function FrameTimeline() {
   }, []);
 
   // Auto-switch to variant mode when clicking a variant layer
-  // - Clicking ANY variant layer (even the same one) activates variant mode
+  // - Clicking a variant layer in the layer panel (when in frames mode) activates variant mode
+  // - Clicking a variant cell in the timeline (when in timeline mode) does NOT activate variant mode
   // - Switching frames (doesn't change selection counter) does NOT activate variant mode
   useEffect(() => {
     const currentIsVariant = layer?.isVariant === true;
@@ -118,7 +119,8 @@ export function FrameTimeline() {
     // 1. A layer was actually clicked (selection counter changed)
     // 2. The current layer is a variant
     // 3. We're not already in variant mode
-    if (selectionCounterChanged && currentIsVariant && viewMode !== 'variant') {
+    // 4. We're NOT in timeline mode (only switch when clicking from layer panel in frames mode)
+    if (selectionCounterChanged && currentIsVariant && viewMode !== 'variant' && viewMode !== 'timeline') {
       setViewMode('variant');
     }
 

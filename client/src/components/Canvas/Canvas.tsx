@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { useEditorStore } from '../../store';
 import { Color, Point, SelectionBox, Pixel, PixelData } from '../../types';
 import { getLinePixels, getRectanglePixels, getEllipsePixels, floodFill, getSquarePixels, getCirclePixels } from './drawingUtils';
-import { ReferenceImageData, shiftReferenceSelection, shiftReferenceSelectionBySize } from '../ReferenceImageModal/ReferenceImageModal';
+import { ReferenceImageData } from '../ReferenceImageModal/ReferenceImageModal';
 import './Canvas.css';
 
 // Helper to extract color from PixelData
@@ -14,12 +14,14 @@ function getPixelColor(pd: PixelData | undefined): Pixel | null {
 interface CanvasProps {
   referenceImage?: ReferenceImageData | null;
   onReferenceImageChange?: (data: ReferenceImageData | null) => void;
+  overlayFrameIndex?: number | null;
 }
 
-export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) {
+export function Canvas({ referenceImage, onReferenceImageChange, overlayFrameIndex }: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const refCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const frameOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPoint, setLastPanPoint] = useState<Point | null>(null);
@@ -29,16 +31,12 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
   const [isSelectingRegion, setIsSelectingRegion] = useState(false);
   const [selectionStart, setSelectionStart] = useState<Point | null>(null);
   const [previewSelection, setPreviewSelection] = useState<SelectionBox | null>(null);
-  const [isCanvasInfoHidden, setIsCanvasInfoHidden] = useState(false);
 
   // Offscreen canvas refs for caching static content
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const gridCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const refBgCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const refGridCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgCacheKeyRef = useRef<string>('');
   const gridCacheKeyRef = useRef<string>('');
-  const refCacheKeyRef = useRef<string>('');
   const renderRequestRef = useRef<number | null>(null);
 
   const {
@@ -67,6 +65,12 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
     undo,
     moveReferenceOverlay,
     resetReferenceOverlay,
+    frameTraceActive,
+    frameTraceFrameIndex,
+    frameOverlayOffset,
+    moveFrameOverlay,
+    setFrameTraceActive,
+    getFrameReferenceObject,
     setColorAndAddToHistory,
     addToColorHistory,
     revertToPreviousTool,
@@ -76,7 +80,8 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
     moveSelectedPixels,
     selectFrame,
     setVariantOffset,
-    advanceVariantFrames
+    advanceVariantFrames,
+    setCanvasInfoHidden
   } = useEditorStore();
 
   const obj = getCurrentObject();
@@ -99,6 +104,7 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
 
   const zoom = project?.uiState.zoom ?? 10;
   const panOffset = project?.uiState.panOffset ?? { x: 0, y: 0 };
+  const isCanvasInfoHidden = project?.uiState.canvasInfoHidden ?? false;
   const currentTool = project?.uiState.selectedTool ?? 'pixel';
   const currentColor = project?.uiState.selectedColor ?? { r: 0, g: 0, b: 0, a: 255 };
   const brushSize = project?.uiState.brushSize ?? 1;
@@ -253,17 +259,18 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
 
         // For variant layers, render the selected variant's pixels at the offset
         if (l.isVariant && l.variantGroupId) {
-          const vg = obj.variantGroups?.find(vg => vg.id === l.variantGroupId);
+          // Look up variant from project.variants (not obj.variantGroups)
+          const vg = project?.variants?.find(vg => vg.id === l.variantGroupId);
           const variant = vg?.variants.find(v => v.id === l.selectedVariantId);
           const variantFrameIdx = project?.uiState.variantFrameIndices?.[l.variantGroupId] ?? 0;
           const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
 
-          // Get the base frame index for offset lookup
+          // Get base frame index for fallback offset lookup
           const baseFrameIndex = obj.frames.findIndex(f => f.id === frame.id);
 
           if (variant && vFrame) {
-            // Use baseFrameOffsets for position (key change)
-            const vOffset = variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
+            // Use layer's variantOffset, falling back to variant.baseFrameOffsets for backward compatibility
+            const vOffset = l.variantOffset ?? variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
             const isCurrentLayer = l.id === layer?.id;
 
             for (const vl of vFrame.layers) {
@@ -353,22 +360,23 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
 
     } else {
       // Normal mode - render all layers
+      // Get base frame index for fallback offset lookup
+      const baseFrameIndex = obj.frames.findIndex(f => f.id === frame.id);
+
       for (const l of frame.layers) {
         if (!l.visible) continue;
 
         // For variant layers, render the selected variant's pixels at the offset
         if (l.isVariant && l.variantGroupId) {
-          const vg = obj.variantGroups?.find(vg => vg.id === l.variantGroupId);
+          // Look up variant from project.variants (not obj.variantGroups)
+          const vg = project?.variants?.find(vg => vg.id === l.variantGroupId);
           const variant = vg?.variants.find(v => v.id === l.selectedVariantId);
           const variantFrameIdx = project?.uiState.variantFrameIndices?.[l.variantGroupId] ?? 0;
           const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
 
-          // Get the base frame index for offset lookup
-          const baseFrameIndex = obj.frames.findIndex(f => f.id === frame.id);
-
           if (variant && vFrame) {
-            // Use baseFrameOffsets for position (key change)
-            const vOffset = variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
+            // Use layer's variantOffset, falling back to variant.baseFrameOffsets for backward compatibility
+            const vOffset = l.variantOffset ?? variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
 
             for (const vl of vFrame.layers) {
               if (!vl.visible) continue;
@@ -459,6 +467,19 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
   // Check if reference trace tool is active
   const isReferenceTraceActive = currentTool === 'reference-trace' && referenceImage != null;
 
+  // Get the frame reference object (may be different from current object)
+  const frameRefObj = getFrameReferenceObject();
+
+  // Get overlay frame if specified (from frame reference object)
+  const overlayFrame = overlayFrameIndex !== null && overlayFrameIndex !== undefined && frameRefObj
+    ? frameRefObj.frames[overlayFrameIndex]
+    : null;
+
+  // Get frame trace frame if trace mode is active (from frame reference object)
+  const frameTraceFrame = frameTraceActive && frameTraceFrameIndex !== null && frameRefObj
+    ? frameRefObj.frames[frameTraceFrameIndex]
+    : null;
+
   // Render reference overlay (transparent overlay on top of main canvas)
   const renderOverlay = useCallback(() => {
     const canvas = overlayCanvasRef.current;
@@ -511,6 +532,206 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
     ctx.strokeRect(overlayX, overlayY, overlayW, overlayH);
     ctx.setLineDash([]);
   }, [referenceImage, isReferenceTraceActive, canvasWidth, canvasHeight, zoom, referenceOverlayOffset]);
+
+  // Render frame overlay (transparent overlay on top of main canvas)
+  // Uses the same rendering strategy as thumbnails for consistency
+  const renderFrameOverlay = useCallback(() => {
+    const canvas = frameOverlayCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !overlayFrame || !frameRefObj) {
+      // Clear canvas if not active
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      return;
+    }
+
+    // Use the frame reference object's dimensions
+    const refObjWidth = frameRefObj.gridSize.width;
+    const refObjHeight = frameRefObj.gridSize.height;
+
+    // Size the overlay to match the main canvas
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    // Create an offscreen canvas to render the frame at full size
+    // We'll use renderFramePreview but at full canvas size
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvasWidth;
+    tempCanvas.height = canvasHeight;
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) return;
+
+    // Calculate variant frame indices for the overlay frame
+    const overlayFrameIndex = frameRefObj.frames.findIndex(f => f.id === overlayFrame.id);
+    const variants = project?.variants;
+    let variantFrameIndices: { [key: string]: number } | undefined;
+
+    if (variants) {
+      // Calculate static indices based on frame position
+      variantFrameIndices = {};
+      for (const vg of variants) {
+        const variant = vg.variants[0]; // All variants should have same frame count
+        if (variant && variant.frames.length > 0) {
+          // Use frame index modulo variant frame count to determine which variant frame to show
+          variantFrameIndices[vg.id] = overlayFrameIndex % variant.frames.length;
+        }
+      }
+    }
+
+    // Render the frame at full size using the same logic as thumbnails
+    // We need to render it pixel-perfect at zoom level
+    // Create ImageData for the full canvas size
+    const imageData = tempCtx.createImageData(canvasWidth, canvasHeight);
+    const data = imageData.data;
+
+    // Fill with transparent background
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 0;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
+      data[i + 3] = 0;
+    }
+
+    // Render layers front to back (same as thumbnails)
+    for (let layerIdx = 0; layerIdx < overlayFrame.layers.length; layerIdx++) {
+      const layer = overlayFrame.layers[layerIdx];
+      if (!layer.visible) continue;
+
+      // Handle variant layers
+      if (layer.isVariant && layer.variantGroupId && variants && variantFrameIndices) {
+        const vg = variants.find(vg => vg.id === layer.variantGroupId);
+        const variant = vg?.variants.find(v => v.id === layer.selectedVariantId);
+        const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
+        const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
+
+        if (variant && vFrame) {
+          // Use layer's variantOffset, falling back to variant.baseFrameOffsets for backward compatibility
+          const variantOffset = layer.variantOffset ?? variant.baseFrameOffsets?.[overlayFrameIndex] ?? { x: 0, y: 0 };
+
+          // Render variant frame pixels
+          const vHeight = variant.gridSize.height;
+          const vWidth = variant.gridSize.width;
+
+          for (let vlIdx = 0; vlIdx < vFrame.layers.length; vlIdx++) {
+            const vl = vFrame.layers[vlIdx];
+            if (!vl.visible) continue;
+
+            const pixels = vl.pixels;
+            if (!pixels) continue;
+
+            for (let vy = 0; vy < vHeight; vy++) {
+              const row = pixels[vy];
+              if (!row) continue;
+
+              for (let vx = 0; vx < vWidth; vx++) {
+                const pixel = getPixelColor(row[vx]);
+                if (!pixel || pixel.a === 0) continue;
+
+                // Calculate position in base object coordinates
+                const baseX = variantOffset.x + vx;
+                const baseY = variantOffset.y + vy;
+
+                // Skip if outside base object bounds
+                if (baseX < 0 || baseX >= refObjWidth || baseY < 0 || baseY >= refObjHeight) continue;
+
+                // Draw at zoom level
+                const drawX = baseX * zoom;
+                const drawY = baseY * zoom;
+                const drawEndX = Math.min(canvasWidth, (baseX + 1) * zoom);
+                const drawEndY = Math.min(canvasHeight, (baseY + 1) * zoom);
+
+                if (drawX >= canvasWidth || drawY >= canvasHeight || drawEndX <= 0 || drawEndY <= 0) continue;
+
+                const srcAlpha = pixel.a / 255;
+                const r = pixel.r;
+                const g = pixel.g;
+                const b = pixel.b;
+
+                for (let dy = Math.max(0, drawY); dy < drawEndY; dy++) {
+                  for (let dx = Math.max(0, drawX); dx < drawEndX; dx++) {
+                    const idx = (dy * canvasWidth + dx) * 4;
+
+                    const dstAlpha = data[idx + 3] / 255;
+                    const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
+
+                    if (outAlpha > 0.01) {
+                      const invOutAlpha = 1 / outAlpha;
+                      data[idx] = (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+                      data[idx + 1] = (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+                      data[idx + 2] = (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+                      data[idx + 3] = outAlpha * 255;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else if (!layer.isVariant) {
+        // Regular layer
+        const pixels = layer.pixels;
+        if (!pixels) continue;
+
+        for (let py = 0; py < refObjHeight; py++) {
+          const row = pixels[py];
+          if (!row) continue;
+
+          for (let px = 0; px < refObjWidth; px++) {
+            const pixel = getPixelColor(row[px]);
+            if (!pixel || pixel.a === 0) continue;
+
+            // Draw at zoom level
+            const drawX = px * zoom;
+            const drawY = py * zoom;
+            const drawEndX = Math.min(canvasWidth, (px + 1) * zoom);
+            const drawEndY = Math.min(canvasHeight, (py + 1) * zoom);
+
+            if (drawX >= canvasWidth || drawY >= canvasHeight || drawEndX <= 0 || drawEndY <= 0) continue;
+
+            const srcAlpha = pixel.a / 255;
+            const r = pixel.r;
+            const g = pixel.g;
+            const b = pixel.b;
+
+            for (let dy = Math.max(0, drawY); dy < drawEndY; dy++) {
+              for (let dx = Math.max(0, drawX); dx < drawEndX; dx++) {
+                const idx = (dy * canvasWidth + dx) * 4;
+
+                const dstAlpha = data[idx + 3] / 255;
+                const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
+
+                if (outAlpha > 0.01) {
+                  const invOutAlpha = 1 / outAlpha;
+                  data[idx] = (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+                  data[idx + 1] = (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+                  data[idx + 2] = (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+                  data[idx + 3] = outAlpha * 255;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Put the rendered frame onto the temp canvas
+    tempCtx.putImageData(imageData, 0, 0);
+
+    // Draw with transparency (40% opacity)
+    ctx.globalAlpha = 0.4;
+    ctx.drawImage(tempCanvas, 0, 0);
+    ctx.globalAlpha = 1;
+
+    // Draw a subtle border around the overlay
+    ctx.strokeStyle = 'rgba(139, 92, 246, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.strokeRect(0, 0, refObjWidth * zoom, refObjHeight * zoom);
+    ctx.setLineDash([]);
+  }, [overlayFrame, canvasWidth, canvasHeight, zoom, frameRefObj, project?.variants]);
 
   // Render reference image
   const renderReference = useCallback(() => {
@@ -618,17 +839,179 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
   const renderRef = useRef(render);
   renderRef.current = render;
 
-  // Render reference when it changes
-  useEffect(() => {
-    if (referenceImage) {
-      renderReference();
+  // Render frame trace overlay (transparent overlay on top of main canvas, similar to reference trace)
+  const renderFrameTraceOverlay = useCallback(() => {
+    const canvas = frameTraceOverlayCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !frameTraceFrame || !frameRefObj || !frameTraceActive) {
+      // Clear canvas if not active
+      if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      return;
     }
-  }, [referenceImage, zoom, renderReference]);
+
+    // Use the frame reference object's dimensions
+    const refObjWidth = frameRefObj.gridSize.width;
+    const refObjHeight = frameRefObj.gridSize.height;
+
+    // Size the overlay to match the main canvas
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    // Create an offscreen canvas to render the frame at full size
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvasWidth;
+    tempCanvas.height = canvasHeight;
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) return;
+
+    // Calculate variant frame indices for the trace frame
+    const traceFrameIndex = frameRefObj.frames.findIndex(f => f.id === frameTraceFrame.id);
+    const variants = project?.variants;
+    let variantFrameIndices: { [key: string]: number } | undefined;
+
+    if (variants) {
+      variantFrameIndices = {};
+      for (const vg of variants) {
+        const variant = vg.variants[0];
+        if (variant && variant.frames.length > 0) {
+          variantFrameIndices[vg.id] = traceFrameIndex % variant.frames.length;
+        }
+      }
+    }
+
+    // Render the frame at full size using the same logic as frame overlay
+    const imageData = tempCtx.createImageData(canvasWidth, canvasHeight);
+    const data = imageData.data;
+
+    // Fill with transparent background
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 0;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
+      data[i + 3] = 0;
+    }
+
+    // Render layers front to back
+    for (let layerIdx = 0; layerIdx < frameTraceFrame.layers.length; layerIdx++) {
+      const layer = frameTraceFrame.layers[layerIdx];
+      if (!layer.visible) continue;
+
+      // Handle variant layers
+      if (layer.isVariant && layer.variantGroupId && variants && variantFrameIndices) {
+        const vg = variants.find(vg => vg.id === layer.variantGroupId);
+        const variant = vg?.variants.find(v => v.id === layer.selectedVariantId);
+        const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
+        const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
+
+        if (variant && vFrame) {
+          const variantOffset = layer.variantOffset ?? variant.baseFrameOffsets?.[traceFrameIndex] ?? { x: 0, y: 0 };
+          const vHeight = variant.gridSize.height;
+          const vWidth = variant.gridSize.width;
+
+          for (let vlIdx = 0; vlIdx < vFrame.layers.length; vlIdx++) {
+            const vl = vFrame.layers[vlIdx];
+            if (!vl.visible) continue;
+
+            const pixels = vl.pixels;
+            if (!pixels) continue;
+
+            for (let vy = 0; vy < vHeight; vy++) {
+              const row = pixels[vy];
+              if (!row) continue;
+
+              for (let vx = 0; vx < vWidth; vx++) {
+                const pixel = getPixelColor(row[vx]);
+                if (!pixel || pixel.a === 0) continue;
+
+                const canvasX = (vx + variantOffset.x) * zoom;
+                const canvasY = (vy + variantOffset.y) * zoom;
+
+                if (canvasX >= 0 && canvasX < canvasWidth && canvasY >= 0 && canvasY < canvasHeight) {
+                  for (let dy = 0; dy < zoom; dy++) {
+                    for (let dx = 0; dx < zoom; dx++) {
+                      const idx = ((canvasY + dy) * canvasWidth + (canvasX + dx)) * 4;
+                      data[idx] = pixel.r;
+                      data[idx + 1] = pixel.g;
+                      data[idx + 2] = pixel.b;
+                      data[idx + 3] = pixel.a;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        // Regular layer
+        const pixels = layer.pixels;
+        if (!pixels) continue;
+
+        for (let py = 0; py < refObjHeight; py++) {
+          const row = pixels[py];
+          if (!row) continue;
+
+          for (let px = 0; px < refObjWidth; px++) {
+            const pixel = getPixelColor(row[px]);
+            if (!pixel || pixel.a === 0) continue;
+
+            const canvasX = px * zoom;
+            const canvasY = py * zoom;
+
+            if (canvasX >= 0 && canvasX < canvasWidth && canvasY >= 0 && canvasY < canvasHeight) {
+              for (let dy = 0; dy < zoom; dy++) {
+                for (let dx = 0; dx < zoom; dx++) {
+                  const idx = ((canvasY + dy) * canvasWidth + (canvasX + dx)) * 4;
+                  data[idx] = pixel.r;
+                  data[idx + 1] = pixel.g;
+                  data[idx + 2] = pixel.b;
+                  data[idx + 3] = pixel.a;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    tempCtx.putImageData(imageData, 0, 0);
+
+    // Draw with transparency (50% opacity, like reference trace)
+    ctx.globalAlpha = 0.5;
+
+    // Apply offset
+    const overlayX = frameOverlayOffset.x * zoom;
+    const overlayY = frameOverlayOffset.y * zoom;
+
+    ctx.drawImage(tempCanvas, overlayX, overlayY);
+    ctx.globalAlpha = 1;
+
+    // Draw a subtle border around the overlay
+    ctx.strokeStyle = 'rgba(255, 171, 0, 0.6)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(overlayX, overlayY, refObjWidth * zoom, refObjHeight * zoom);
+    ctx.setLineDash([]);
+  }, [frameTraceFrame, frameTraceActive, canvasWidth, canvasHeight, zoom, frameRefObj, project?.variants, frameOverlayOffset]);
+
 
   // Render overlay when trace tool state changes
   useEffect(() => {
     renderOverlay();
   }, [renderOverlay, referenceOverlayOffset, isReferenceTraceActive]);
+
+  // Render frame trace overlay when it changes
+  useEffect(() => {
+    renderFrameTraceOverlay();
+  }, [renderFrameTraceOverlay]);
+
+  // Render frame overlay when it changes
+  useEffect(() => {
+    renderFrameOverlay();
+  }, [renderFrameOverlay, overlayFrameIndex]);
 
   // Schedule render using requestAnimationFrame
   useEffect(() => {
@@ -700,20 +1083,7 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
         return;
       }
 
-      // WASD keys for variant offset adjustment when editing a variant
-      if (editingVariant && ['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
-        e.preventDefault();
-        const key = e.key.toLowerCase();
-        let dx = 0, dy = 0;
-        if (key === 'w') dy = -1;
-        if (key === 's') dy = 1;
-        if (key === 'a') dx = -1;
-        if (key === 'd') dx = 1;
-        setVariantOffset(dx, dy);
-        return;
-      }
-
-      // WASD keys for reference trace tool - move reference overlay
+      // WASD keys for reference trace tool - move reference overlay (priority over frame trace and variant offset)
       if (isReferenceTraceActive && ['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
         e.preventDefault();
         const key = e.key.toLowerCase();
@@ -723,6 +1093,32 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
         if (key === 'a') dx = -1;
         if (key === 'd') dx = 1;
         moveReferenceOverlay(dx, dy);
+        return;
+      }
+
+      // WASD keys for frame trace tool - move frame overlay (priority over variant offset)
+      if (frameTraceActive && ['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
+        e.preventDefault();
+        const key = e.key.toLowerCase();
+        let dx = 0, dy = 0;
+        if (key === 'w') dy = -1;
+        if (key === 's') dy = 1;
+        if (key === 'a') dx = -1;
+        if (key === 'd') dx = 1;
+        moveFrameOverlay(dx, dy);
+        return;
+      }
+
+      // WASD keys for variant offset adjustment when editing a variant
+      if (editingVariant && ['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
+        e.preventDefault();
+        const key = e.key.toLowerCase();
+        let dx = 0, dy = 0;
+        if (key === 'w') dy = -1;
+        if (key === 's') dy = 1;
+        if (key === 'a') dx = -1;
+        if (key === 'd') dx = 1;
+        setVariantOffset(dx, dy, e.shiftKey);
         return;
       }
 
@@ -756,11 +1152,27 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
         return;
       }
 
-      // Escape key to clear selection
-      if (e.key === 'Escape' && selection) {
-        e.preventDefault();
-        clearSelection();
-        return;
+      // Escape key - exit trace mode if active, otherwise clear selection
+      // Note: Only changes the tool, does not affect variant editing mode
+      // Stop propagation to prevent FrameTimeline from handling ESC when exiting trace mode
+      if (e.key === 'Escape') {
+        if (isReferenceTraceActive) {
+          e.preventDefault();
+          e.stopPropagation();
+          setTool('pixel');
+          return;
+        }
+        if (frameTraceActive) {
+          e.preventDefault();
+          e.stopPropagation();
+          setFrameTraceActive(false, null);
+          return;
+        }
+        if (selection) {
+          e.preventDefault();
+          clearSelection();
+          return;
+        }
       }
 
       // Frame navigation: "." for next frame, "," for previous frame
@@ -792,9 +1204,10 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentTool, borderRadius, undo, deleteSelectedFrame, moveLayerPixels, setBorderRadius, isReferenceTraceActive, moveReferenceOverlay, setTool, selection, moveSelectedPixels, clearSelection, getCurrentObject, project?.uiState.selectedFrameId, selectFrame, editingVariant, setVariantOffset, advanceVariantFrames]);
+    // Use capture phase to catch ESC before FrameTimeline handler
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [currentTool, borderRadius, undo, deleteSelectedFrame, moveLayerPixels, setBorderRadius, isReferenceTraceActive, moveReferenceOverlay, frameTraceActive, moveFrameOverlay, setFrameTraceActive, setTool, selection, moveSelectedPixels, clearSelection, getCurrentObject, project?.uiState.selectedFrameId, selectFrame, editingVariant, setVariantOffset, advanceVariantFrames]);
 
   // Get pixel color from reference image at a given canvas coordinate
   const getRefPixelAtCoord = useCallback((canvasX: number, canvasY: number) => {
@@ -812,32 +1225,75 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
     return referenceImage.pixels[refY]?.[refX] ?? 0;
   }, [referenceImage, referenceOverlayOffset]);
 
-  // Get pixel coords from reference canvas
-  const getRefCanvasPixelCoords = useCallback((clientX: number, clientY: number): Point | null => {
-    const canvas = refCanvasRef.current;
-    if (!canvas || !referenceImage) return null;
+  // Get pixel color from frame trace at a given canvas coordinate
+  const getFrameTracePixelAtCoord = useCallback((canvasX: number, canvasY: number): Pixel | null => {
+    if (!frameTraceFrame || !obj) return null;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((clientX - rect.left) / zoom);
-    const y = Math.floor((clientY - rect.top) / zoom);
+    // Calculate the frame pixel coordinate considering the overlay offset
+    const frameX = canvasX - frameOverlayOffset.x;
+    const frameY = canvasY - frameOverlayOffset.y;
 
-    if (x < 0 || x >= referenceImage.width || y < 0 || y >= referenceImage.height) return null;
-    return { x, y };
-  }, [zoom, referenceImage]);
-
-  // Handle click on reference canvas for eyedropper
-  const handleRefCanvasClick = (e: React.MouseEvent) => {
-    if (currentTool !== 'eyedropper' || !referenceImage) return;
-
-    const coords = getRefCanvasPixelCoords(e.clientX, e.clientY);
-    if (!coords) return;
-
-    const pixel = referenceImage.pixels[coords.y]?.[coords.x];
-    if (pixel && pixel.a > 0) {
-      setColorAndAddToHistory(pixel);
-      revertToPreviousTool();
+    // Check bounds
+    if (frameX < 0 || frameX >= objWidth || frameY < 0 || frameY >= objHeight) {
+      return null;
     }
-  };
+
+    // Calculate variant frame indices for the trace frame
+    const traceFrameIndex = obj.frames.findIndex(f => f.id === frameTraceFrame.id);
+    const variants = project?.variants;
+    let variantFrameIndices: { [key: string]: number } | undefined;
+
+    if (variants) {
+      variantFrameIndices = {};
+      for (const vg of variants) {
+        const variant = vg.variants[0];
+        if (variant && variant.frames.length > 0) {
+          variantFrameIndices[vg.id] = traceFrameIndex % variant.frames.length;
+        }
+      }
+    }
+
+    // Check layers from top to bottom (reverse order)
+    for (let layerIdx = frameTraceFrame.layers.length - 1; layerIdx >= 0; layerIdx--) {
+      const layer = frameTraceFrame.layers[layerIdx];
+      if (!layer.visible) continue;
+
+      // Handle variant layers
+      if (layer.isVariant && layer.variantGroupId && variants && variantFrameIndices) {
+        const vg = variants.find(vg => vg.id === layer.variantGroupId);
+        const variant = vg?.variants.find(v => v.id === layer.selectedVariantId);
+        const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
+        const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
+
+        if (variant && vFrame) {
+          const variantOffset = layer.variantOffset ?? variant.baseFrameOffsets?.[traceFrameIndex] ?? { x: 0, y: 0 };
+          const vX = frameX - variantOffset.x;
+          const vY = frameY - variantOffset.y;
+
+          if (vX >= 0 && vX < variant.gridSize.width && vY >= 0 && vY < variant.gridSize.height) {
+            for (let vlIdx = vFrame.layers.length - 1; vlIdx >= 0; vlIdx--) {
+              const vl = vFrame.layers[vlIdx];
+              if (!vl.visible) continue;
+
+              const pixel = getPixelColor(vl.pixels[vY]?.[vX]);
+              if (pixel && pixel.a > 0) {
+                return pixel;
+              }
+            }
+          }
+        }
+      } else {
+        // Regular layer
+        const pixel = getPixelColor(layer.pixels[frameY]?.[frameX]);
+        if (pixel && pixel.a > 0) {
+          return pixel;
+        }
+      }
+    }
+
+    return null;
+  }, [frameTraceFrame, obj, objWidth, objHeight, frameOverlayOffset, project?.variants]);
+
 
   // Handle mouse down
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -856,9 +1312,27 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
     // Reference trace tool: copy pixel from reference to canvas
     if (isReferenceTraceActive) {
       setIsTracing(true);
-      const refPixel = getRefPixelAtCoord(coords.x, coords.y);
+      // When in variant edit mode, coords are in variant grid space, but getRefPixelAtCoord
+      // expects canvas coordinates. Convert by adding variant offset.
+      const canvasX = editingVariant && variantData ? coords.x + variantOffset.x : coords.x;
+      const canvasY = editingVariant && variantData ? coords.y + variantOffset.y : coords.y;
+      const refPixel = getRefPixelAtCoord(canvasX, canvasY);
       if (refPixel) {
         setPixel(coords.x, coords.y, refPixel);
+      }
+      return;
+    }
+
+    // Frame trace tool: copy pixel from frame trace overlay to canvas
+    if (frameTraceActive) {
+      setIsTracing(true);
+      // When in variant edit mode, coords are in variant grid space, but getFrameTracePixelAtCoord
+      // expects canvas coordinates. Convert by adding variant offset.
+      const canvasX = editingVariant && variantData ? coords.x + variantOffset.x : coords.x;
+      const canvasY = editingVariant && variantData ? coords.y + variantOffset.y : coords.y;
+      const framePixel = getFrameTracePixelAtCoord(canvasX, canvasY);
+      if (framePixel) {
+        setPixel(coords.x, coords.y, framePixel);
       }
       return;
     }
@@ -895,7 +1369,11 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
 
       // If no pixel on any visible layer, try reference image
       if (referenceImage) {
-        const refPixel = getRefPixelAtCoord(coords.x, coords.y);
+        // When in variant edit mode, coords are in variant grid space, but getRefPixelAtCoord
+        // expects canvas coordinates. Convert by adding variant offset.
+        const canvasX = editingVariant && variantData ? coords.x + variantOffset.x : coords.x;
+        const canvasY = editingVariant && variantData ? coords.y + variantOffset.y : coords.y;
+        const refPixel = getRefPixelAtCoord(canvasX, canvasY);
         if (refPixel && refPixel.a > 0) {
           setColorAndAddToHistory(refPixel);
           revertToPreviousTool();
@@ -971,9 +1449,26 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
 
     // Handle reference trace dragging (continuous pixel copying)
     if (isTracing && isReferenceTraceActive) {
-      const refPixel = getRefPixelAtCoord(coords.x, coords.y);
+      // When in variant edit mode, coords are in variant grid space, but getRefPixelAtCoord
+      // expects canvas coordinates. Convert by adding variant offset.
+      const canvasX = editingVariant && variantData ? coords.x + variantOffset.x : coords.x;
+      const canvasY = editingVariant && variantData ? coords.y + variantOffset.y : coords.y;
+      const refPixel = getRefPixelAtCoord(canvasX, canvasY);
       if (refPixel) {
         setPixel(coords.x, coords.y, refPixel);
+      }
+      return;
+    }
+
+    // Handle frame trace dragging (continuous pixel copying)
+    if (isTracing && frameTraceActive) {
+      // When in variant edit mode, coords are in variant grid space, but getFrameTracePixelAtCoord
+      // expects canvas coordinates. Convert by adding variant offset.
+      const canvasX = editingVariant && variantData ? coords.x + variantOffset.x : coords.x;
+      const canvasY = editingVariant && variantData ? coords.y + variantOffset.y : coords.y;
+      const framePixel = getFrameTracePixelAtCoord(canvasX, canvasY);
+      if (framePixel) {
+        setPixel(coords.x, coords.y, framePixel);
       }
       return;
     }
@@ -1209,6 +1704,7 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
   const getCursorStyle = () => {
     if (currentTool === 'move') return 'move';
     if (currentTool === 'reference-trace') return 'copy';
+    if (frameTraceActive) return 'copy';
     if (currentTool === 'eyedropper') return 'crosshair';
     if (currentTool === 'selection') return 'crosshair';
     return 'crosshair';
@@ -1223,107 +1719,6 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
             transform: `translate(${panOffset.x}px, ${panOffset.y}px)`
           }}
         >
-          {/* Reference Image Canvas */}
-          {referenceImage && (
-            <div className="reference-canvas-container">
-              <div className="reference-label">📷 Reference</div>
-              <canvas
-                ref={refCanvasRef}
-                width={referenceImage.width * zoom}
-                height={referenceImage.height * zoom}
-                className="reference-canvas"
-                style={{ cursor: currentTool === 'eyedropper' ? 'crosshair' : 'default' }}
-                onClick={handleRefCanvasClick}
-              />
-              <div className="reference-info">{referenceImage.width} × {referenceImage.height}</div>
-              {/* Navigation buttons - only show when not in reference trace mode */}
-              {!isReferenceTraceActive && onReferenceImageChange && (
-                <div className="reference-navigation">
-                  <button
-                    className="reference-nav-btn"
-                    onClick={() => {
-                      const newData = shiftReferenceSelection(-1, 0);
-                      if (newData) onReferenceImageChange(newData);
-                    }}
-                    title="Left"
-                  >
-                    ←
-                  </button>
-                  <button
-                    className="reference-nav-btn"
-                    onClick={() => {
-                      const newData = shiftReferenceSelection(1, 0);
-                      if (newData) onReferenceImageChange(newData);
-                    }}
-                    title="Right"
-                  >
-                    →
-                  </button>
-                  <button
-                    className="reference-nav-btn"
-                    onClick={() => {
-                      const newData = shiftReferenceSelectionBySize(-1, 0, referenceImage.width, referenceImage.height);
-                      if (newData) onReferenceImageChange(newData);
-                    }}
-                    title="Next Left"
-                  >
-                    ⇇
-                  </button>
-                  <button
-                    className="reference-nav-btn"
-                    onClick={() => {
-                      const newData = shiftReferenceSelectionBySize(1, 0, referenceImage.width, referenceImage.height);
-                      if (newData) onReferenceImageChange(newData);
-                    }}
-                    title="Next Right"
-                  >
-                    ⇉
-                  </button>
-                  <button
-                    className="reference-nav-btn"
-                    onClick={() => {
-                      const newData = shiftReferenceSelection(0, -1);
-                      if (newData) onReferenceImageChange(newData);
-                    }}
-                    title="Up"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    className="reference-nav-btn"
-                    onClick={() => {
-                      const newData = shiftReferenceSelection(0, 1);
-                      if (newData) onReferenceImageChange(newData);
-                    }}
-                    title="Down"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    className="reference-nav-btn"
-                    onClick={() => {
-                      const newData = shiftReferenceSelectionBySize(0, -1, referenceImage.width, referenceImage.height);
-                      if (newData) onReferenceImageChange(newData);
-                    }}
-                    title="Next Up"
-                  >
-                    ⇈
-                  </button>
-                  <button
-                    className="reference-nav-btn"
-                    onClick={() => {
-                      const newData = shiftReferenceSelectionBySize(0, 1, referenceImage.width, referenceImage.height);
-                      if (newData) onReferenceImageChange(newData);
-                    }}
-                    title="Next Down"
-                  >
-                    ⇊
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Main Editing Canvas */}
           <div className="main-canvas-container">
             <canvas
@@ -1350,6 +1745,25 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
                 className="reference-overlay-canvas"
               />
             )}
+            {/* Frame Reference Overlay */}
+            {overlayFrame && !isReferenceTraceActive && !frameTraceActive && (
+              <canvas
+                ref={frameOverlayCanvasRef}
+                width={canvasWidth}
+                height={canvasHeight}
+                className="reference-overlay-canvas"
+                style={{ pointerEvents: 'none' }}
+              />
+            )}
+            {/* Frame Trace Overlay */}
+            {frameTraceActive && (
+              <canvas
+                ref={frameTraceOverlayCanvasRef}
+                width={canvasWidth}
+                height={canvasHeight}
+                className="reference-overlay-canvas"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -1358,7 +1772,7 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
       {isCanvasInfoHidden && (
         <button
           className="canvas-info-toggle-hidden"
-          onClick={() => setIsCanvasInfoHidden(false)}
+          onClick={() => setCanvasInfoHidden(false)}
           title="Show canvas info"
         >
           ℹ️
@@ -1409,7 +1823,7 @@ export function Canvas({ referenceImage, onReferenceImageChange }: CanvasProps) 
           {referenceImage && !isReferenceTraceActive && <span>📷 Ref: {referenceImage.width}×{referenceImage.height}</span>}
           <button
             className="canvas-info-hide-btn"
-            onClick={() => setIsCanvasInfoHidden(true)}
+            onClick={() => setCanvasInfoHidden(true)}
             title="Hide canvas info"
           >
             ×

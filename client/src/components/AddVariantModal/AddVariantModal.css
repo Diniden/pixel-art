@@ -1,0 +1,408 @@
+.add-variant-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.add-variant-modal {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  width: 520px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.add-variant-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.add-variant-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #f0f0f0;
+  letter-spacing: 0.5px;
+}
+
+.add-variant-modal-header .close-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.add-variant-modal-header .close-btn:hover {
+  color: #fff;
+}
+
+.add-variant-modal-content {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.no-variants-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+}
+
+.no-variants-message p {
+  margin: 0 0 12px 0;
+}
+
+.no-variants-message .hint {
+  font-size: 12px;
+  color: #666;
+}
+
+.add-to-all-frames-toggle {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.add-to-all-frames-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: #d0d0d0;
+  font-size: 14px;
+}
+
+.add-to-all-frames-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.add-variant-section-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #888;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.add-variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.add-variant-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.add-variant-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.add-variant-card.selected {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: #6366f1;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.3);
+}
+
+.add-variant-card .delete-variant-btn {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.8);
+  border: none;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s;
+  z-index: 2;
+}
+
+.add-variant-card:hover .delete-variant-btn {
+  opacity: 1;
+}
+
+.add-variant-card .delete-variant-btn:hover {
+  background: #ef4444;
+  transform: scale(1.1);
+}
+
+.add-variant-thumb {
+  width: 64px;
+  height: 64px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-variant-thumb-canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.add-variant-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.add-variant-name {
+  font-size: 12px;
+  color: #e0e0e0;
+  font-weight: 500;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.add-variant-name-input {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid #6366f1;
+  border-radius: 4px;
+  color: #fff;
+  text-align: center;
+  outline: none;
+}
+
+.add-variant-count {
+  font-size: 10px;
+  color: #888;
+}
+
+.selected-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: white;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.variant-type-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.variant-type-option {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.variant-type-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.variant-type-option.selected {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+}
+
+.variant-type-name {
+  font-size: 13px;
+  color: #d0d0d0;
+}
+
+.variant-type-option.selected .variant-type-name {
+  color: #fff;
+}
+
+.variant-type-option .check {
+  color: #6366f1;
+  font-weight: bold;
+}
+
+.add-variant-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 8px;
+}
+
+.add-variant-confirm-btn {
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-variant-confirm-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+}
+
+.add-variant-confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Delete Confirmation Modal */
+.delete-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+.delete-confirm-modal {
+  background: linear-gradient(135deg, #2a1a1a 0%, #1a1a2e 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  box-shadow: 0 8px 32px rgba(239, 68, 68, 0.2);
+  width: 400px;
+  max-width: 90vw;
+  overflow: hidden;
+}
+
+.delete-confirm-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.delete-confirm-header h4 {
+  margin: 0;
+  font-size: 15px;
+  color: #f0f0f0;
+}
+
+.delete-confirm-content {
+  padding: 20px;
+}
+
+.delete-confirm-content p {
+  margin: 0 0 12px 0;
+  color: #d0d0d0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.delete-confirm-warning {
+  color: #ef4444 !important;
+  font-weight: 500;
+}
+
+.delete-confirm-undo {
+  color: #888 !important;
+  font-size: 12px !important;
+}
+
+.delete-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.delete-confirm-actions .cancel-btn {
+  padding: 8px 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #d0d0d0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-confirm-actions .cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.delete-confirm-actions .delete-btn {
+  padding: 8px 20px;
+  background: #ef4444;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-confirm-actions .delete-btn:hover {
+  background: #dc2626;
+}
+

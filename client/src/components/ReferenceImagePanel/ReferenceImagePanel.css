@@ -1,0 +1,374 @@
+.reference-image-panel {
+  position: absolute;
+  background: linear-gradient(135deg, #2a2a3a 0%, #1a1a25 100%);
+  border: 2px solid #3a3a4a;
+  border-radius: 12px;
+  padding: 12px;
+  z-index: 900;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  max-width: 300px;
+  transition: box-shadow 0.2s ease;
+  user-select: none;
+}
+
+.reference-image-panel.dragging {
+  transition: none;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  cursor: grabbing;
+}
+
+.reference-image-panel.minimized {
+  padding: 8px 12px;
+}
+
+.reference-image-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+  user-select: none;
+  padding: 4px;
+  margin: -4px -4px 8px -4px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.reference-image-header:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.reference-image-panel.minimized .reference-image-header {
+  margin-bottom: 0;
+}
+
+.reference-image-title {
+  font-weight: 600;
+  color: #e0e0ff;
+  font-size: 14px;
+  white-space: nowrap;
+  flex: 1;
+  user-select: none;
+}
+
+.reference-image-minimize {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a0a0b0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.reference-image-minimize:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0ff;
+}
+
+.reference-image-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reference-image-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #0a0a15;
+  border: 2px solid #2a2a3a;
+  border-radius: 8px;
+  padding: 8px;
+  overflow: visible;
+  min-height: 100px;
+  position: relative;
+}
+
+.reference-canvas-wrapper {
+  position: relative;
+  display: inline-block;
+  margin: 32px;
+}
+
+.reference-image-preview canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 4px;
+  max-width: 100%;
+  max-height: 200px;
+}
+
+.reference-image-info {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Reference box adjustment buttons */
+.ref-box-btn {
+  position: absolute;
+  z-index: 102;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.ref-box-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  z-index: 1;
+}
+
+.ref-box-btn:active {
+  background: var(--bg-active);
+  transform: scale(0.9);
+}
+
+/* Top buttons - positioned at top center */
+.ref-box-btn-top {
+  top: -28px;
+  left: 50%;
+}
+
+.ref-box-btn-top.ref-box-btn-increase {
+  transform: translateX(-50%) translateX(-16px);
+}
+
+.ref-box-btn-top.ref-box-btn-decrease {
+  transform: translateX(-50%) translateX(16px);
+}
+
+.ref-box-btn-top.ref-box-btn-increase:hover {
+  transform: translateX(-50%) translateX(-16px) scale(1.05);
+}
+
+.ref-box-btn-top.ref-box-btn-decrease:hover {
+  transform: translateX(-50%) translateX(16px) scale(1.05);
+}
+
+.ref-box-btn-top.ref-box-btn-increase:active {
+  transform: translateX(-50%) translateX(-16px) scale(0.9);
+}
+
+.ref-box-btn-top.ref-box-btn-decrease:active {
+  transform: translateX(-50%) translateX(16px) scale(0.9);
+}
+
+/* Bottom buttons - positioned at bottom center */
+.ref-box-btn-bottom {
+  bottom: -28px;
+  left: 50%;
+}
+
+.ref-box-btn-bottom.ref-box-btn-increase {
+  transform: translateX(-50%) translateX(-16px);
+}
+
+.ref-box-btn-bottom.ref-box-btn-decrease {
+  transform: translateX(-50%) translateX(16px);
+}
+
+.ref-box-btn-bottom.ref-box-btn-increase:hover {
+  transform: translateX(-50%) translateX(-16px) scale(1.05);
+}
+
+.ref-box-btn-bottom.ref-box-btn-decrease:hover {
+  transform: translateX(-50%) translateX(16px) scale(1.05);
+}
+
+.ref-box-btn-bottom.ref-box-btn-increase:active {
+  transform: translateX(-50%) translateX(-16px) scale(0.9);
+}
+
+.ref-box-btn-bottom.ref-box-btn-decrease:active {
+  transform: translateX(-50%) translateX(16px) scale(0.9);
+}
+
+/* Left buttons - positioned at left center */
+.ref-box-btn-left {
+  left: -28px;
+  top: 50%;
+}
+
+.ref-box-btn-left.ref-box-btn-increase {
+  transform: translateY(-50%) translateY(-16px);
+}
+
+.ref-box-btn-left.ref-box-btn-decrease {
+  transform: translateY(-50%) translateY(16px);
+}
+
+.ref-box-btn-left.ref-box-btn-increase:hover {
+  transform: translateY(-50%) translateY(-16px) scale(1.05);
+}
+
+.ref-box-btn-left.ref-box-btn-decrease:hover {
+  transform: translateY(-50%) translateY(16px) scale(1.05);
+}
+
+.ref-box-btn-left.ref-box-btn-increase:active {
+  transform: translateY(-50%) translateY(-16px) scale(0.9);
+}
+
+.ref-box-btn-left.ref-box-btn-decrease:active {
+  transform: translateY(-50%) translateY(16px) scale(0.9);
+}
+
+/* Right buttons - positioned at right center */
+.ref-box-btn-right {
+  right: -28px;
+  top: 50%;
+}
+
+.ref-box-btn-right.ref-box-btn-increase {
+  transform: translateY(-50%) translateY(-16px);
+}
+
+.ref-box-btn-right.ref-box-btn-decrease {
+  transform: translateY(-50%) translateY(16px);
+}
+
+.ref-box-btn-right.ref-box-btn-increase:hover {
+  transform: translateY(-50%) translateY(-16px) scale(1.05);
+}
+
+.ref-box-btn-right.ref-box-btn-decrease:hover {
+  transform: translateY(-50%) translateY(16px) scale(1.05);
+}
+
+.ref-box-btn-right.ref-box-btn-increase:active {
+  transform: translateY(-50%) translateY(-16px) scale(0.9);
+}
+
+.ref-box-btn-right.ref-box-btn-decrease:active {
+  transform: translateY(-50%) translateY(16px) scale(0.9);
+}
+
+.reference-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 200px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 101;
+}
+
+.reference-nav-group {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  flex: 1;
+}
+
+.reference-nav-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  position: relative;
+}
+
+.reference-nav-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  z-index: 1;
+}
+
+.reference-nav-btn:active {
+  background: var(--bg-active);
+  transform: scale(0.9);
+}
+
+.reference-trace-btn {
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 48px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.reference-trace-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  transform: scale(1.05);
+}
+
+.reference-trace-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #000;
+  box-shadow: 0 0 12px rgba(0, 217, 255, 0.5);
+}
+
+.reference-trace-btn.active:hover {
+  background: var(--accent-secondary);
+  box-shadow: 0 0 16px rgba(0, 217, 255, 0.6);
+}
+
+.reference-trace-btn:active {
+  background: var(--bg-active);
+  transform: scale(0.95);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .reference-image-panel {
+    max-width: 250px;
+  }
+}
+
+@media (max-width: 768px) {
+  .reference-image-panel {
+    max-width: calc(100vw - 40px);
+  }
+
+  .reference-image-panel.minimized {
+    max-width: 200px;
+  }
+}
+

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { VariantSelectModal } from '../VariantSelectModal/VariantSelectModal';
 import { CopyFromModal } from '../CopyFromModal/CopyFromModal';
+import { AddVariantModal } from '../AddVariantModal/AddVariantModal';
 import './LayerPanel.css';
 
 export function LayerPanel() {
@@ -28,7 +28,7 @@ export function LayerPanel() {
     copyLayerToClipboard,
     pasteLayerFromClipboard,
     layerClipboard,
-    deleteVariantGroup
+    removeVariantLayer
   } = useEditorStore();
 
   const [newLayerName, setNewLayerName] = useState('');
@@ -37,7 +37,7 @@ export function LayerPanel() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [variantModalLayerId, setVariantModalLayerId] = useState<string | null>(null);
   const [showCopyFromModal, setShowCopyFromModal] = useState(false);
-  const [deleteConfirmLayer, setDeleteConfirmLayer] = useState<{ layerId: string; variantGroupId: string; name: string; variantCount: number } | null>(null);
+  const [showAddVariantModal, setShowAddVariantModal] = useState(false);
 
   const obj = getCurrentObject();
   const frame = getCurrentFrame();
@@ -66,6 +66,7 @@ export function LayerPanel() {
   const layers = [...frame.layers].reverse(); // Display top layer first
   const allVisible = frame.layers.every((l) => l.visible);
   const allHidden = frame.layers.every((l) => !l.visible);
+  const hasVariants = (project.variants?.length ?? 0) > 0;
 
   // Find selected layer index for header button enable/disable
   const selectedLayerIndex = selectedLayerId
@@ -140,7 +141,7 @@ export function LayerPanel() {
   return (
     <div className="panel layer-panel">
       <div className="panel-header">
-        Layers
+        <div className="panel-header-title">Layers</div>
         <div className="header-actions">
           <button
             className="header-btn move-all-frames-btn"
@@ -208,6 +209,14 @@ export function LayerPanel() {
           >
             📋
           </button>
+          <button
+            className={`header-btn add-variant-btn ${hasVariants ? '' : 'disabled'}`}
+            onClick={() => hasVariants && setShowAddVariantModal(true)}
+            disabled={!hasVariants}
+            title={hasVariants ? "Add existing variant as layer" : "No variants exist yet"}
+          >
+            ✦
+          </button>
           <button className="header-btn" onClick={handleAddLayer} title="New Layer">
             +
           </button>
@@ -241,9 +250,9 @@ export function LayerPanel() {
 
         <div className="layer-list">
           {layers.map((layer, displayIndex) => {
-            // Get variant info if this is a variant layer
+            // Get variant info if this is a variant layer (now from project.variants)
             const variantGroup = layer.isVariant && layer.variantGroupId
-              ? obj.variantGroups?.find(vg => vg.id === layer.variantGroupId)
+              ? project.variants?.find(vg => vg.id === layer.variantGroupId)
               : null;
             const selectedVariant = variantGroup?.variants.find(v => v.id === layer.selectedVariantId);
 
@@ -310,8 +319,15 @@ export function LayerPanel() {
                           }}
                         >
                           {layer.name}
+                          {layer.isVariant && variantGroup && (
+                            <span className="variant-group-badge" title={`Variant: ${variantGroup.name}`}>
+                              {variantGroup.name}
+                            </span>
+                          )}
                           {layer.isVariant && selectedVariant && (
-                            <span className="variant-name-badge">{selectedVariant.name}</span>
+                            <span className="variant-type-badge" title={`Type: ${selectedVariant.name}`}>
+                              {selectedVariant.name}
+                            </span>
                           )}
                         </span>
                       )}
@@ -425,23 +441,15 @@ export function LayerPanel() {
                           </button>
                         </>
                       )}
-                      {/* Delete button for variant layers - comes last */}
+                      {/* Delete button for variant layers - removes layer only, not the variant */}
                       {layer.isVariant && (
                         <button
                           className="layer-action-btn delete"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const vg = obj.variantGroups?.find(vg => vg.id === layer.variantGroupId);
-                            if (vg) {
-                              setDeleteConfirmLayer({
-                                layerId: layer.id,
-                                variantGroupId: layer.variantGroupId!,
-                                name: layer.name,
-                                variantCount: vg.variants.length
-                              });
-                            }
+                            removeVariantLayer(layer.id);
                           }}
-                          title="Delete variant layer and all variants"
+                          title="Remove variant layer (variant data preserved)"
                         >
                           ×
                         </button>
@@ -465,7 +473,7 @@ export function LayerPanel() {
       {variantModalLayerId && (() => {
         const modalLayer = frame.layers.find(l => l.id === variantModalLayerId);
         const modalVariantGroup = modalLayer?.variantGroupId
-          ? obj.variantGroups?.find(vg => vg.id === modalLayer.variantGroupId)
+          ? project.variants?.find(vg => vg.id === modalLayer.variantGroupId)
           : null;
 
         if (!modalLayer || !modalVariantGroup) return null;
@@ -484,41 +492,9 @@ export function LayerPanel() {
         <CopyFromModal onClose={() => setShowCopyFromModal(false)} />
       )}
 
-      {/* Delete Variant Confirmation Modal */}
-      {deleteConfirmLayer && createPortal(
-        <div className="modal-backdrop" onClick={() => setDeleteConfirmLayer(null)}>
-          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="confirm-modal-header">
-              <h3>⚠️ Delete Variant Layer</h3>
-            </div>
-            <div className="confirm-modal-content">
-              <p>
-                Are you sure you want to delete <strong>"{deleteConfirmLayer.name}"</strong>?
-              </p>
-              <p className="confirm-warning">
-                This will permanently delete all <strong>{deleteConfirmLayer.variantCount} variant{deleteConfirmLayer.variantCount !== 1 ? 's' : ''}</strong> and their pixel data.
-              </p>
-            </div>
-            <div className="confirm-modal-actions">
-              <button
-                className="confirm-btn cancel"
-                onClick={() => setDeleteConfirmLayer(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="confirm-btn delete"
-                onClick={() => {
-                  deleteVariantGroup(deleteConfirmLayer.variantGroupId);
-                  setDeleteConfirmLayer(null);
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {/* Add Variant Modal */}
+      {showAddVariantModal && (
+        <AddVariantModal onClose={() => setShowAddVariantModal(false)} />
       )}
     </div>
   );

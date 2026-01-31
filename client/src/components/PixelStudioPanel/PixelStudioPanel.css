@@ -4,4 +4,91 @@
   gap: 0;
 }
 
+.eraser-controls-panel {
+  border-radius: 0;
+}
+
+.eraser-controls-panel:first-child {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.eraser-controls-panel .panel-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.eraser-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0 12px;
+}
+
+.eraser-controls label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.eraser-controls .brush-size-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.brush-size-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brush-size-input-group input[type="range"] {
+  flex: 1;
+  width: 100%;
+}
+
+.eraser-controls .brush-shape-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.eraser-controls .shape-buttons {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.eraser-controls .shape-btn {
+  flex: 1;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.eraser-controls .shape-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.eraser-controls .shape-btn.active {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
 

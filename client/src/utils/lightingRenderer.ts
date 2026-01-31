@@ -72,7 +72,7 @@ export function composeLayers(
   gridWidth: number,
   gridHeight: number,
   baseFrameIndex: number = 0,
-  variantGroups?: VariantGroup[],
+  variants?: VariantGroup[],  // Project-level variants (renamed from variantGroups)
   variantFrameIndices?: { [variantGroupId: string]: number }
 ): ComposedBuffers {
   const totalPixels = gridWidth * gridHeight;
@@ -92,14 +92,15 @@ export function composeLayers(
     if (!layer.visible) continue;
 
     // Handle variant layers
-    if (layer.isVariant && layer.variantGroupId && variantGroups && variantFrameIndices) {
-      const vg = variantGroups.find(g => g.id === layer.variantGroupId);
+    if (layer.isVariant && layer.variantGroupId && variants && variantFrameIndices) {
+      const vg = variants.find(g => g.id === layer.variantGroupId);
       const variant = vg?.variants.find(v => v.id === layer.selectedVariantId);
 
       if (variant) {
         const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
         const vFrame = variant.frames[variantFrameIdx % variant.frames.length];
-        const vOffset = variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
+        // Use layer's variantOffset, falling back to variant.baseFrameOffsets for backward compatibility
+        const vOffset = layer.variantOffset ?? variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
 
         if (vFrame) {
           // Render variant layers

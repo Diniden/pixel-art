@@ -25,7 +25,9 @@ export function LightingCanvas() {
     isEditingVariant,
     setNormalPixel,
     setNormalPixels,
-    undo
+    undo,
+    selectFrame,
+    advanceVariantFrames
   } = useEditorStore();
 
   const obj = getCurrentObject();
@@ -125,7 +127,7 @@ export function LightingCanvas() {
       objWidth,
       objHeight,
       baseFrameIndex >= 0 ? baseFrameIndex : 0,
-      obj.variantGroups,
+      project?.variants,  // Project-level variants
       project?.uiState.variantFrameIndices
     );
 
@@ -311,7 +313,7 @@ export function LightingCanvas() {
     renderHeight();
   }, [renderPreview, renderNormal, renderHeight, project]);
 
-  // Keyboard event handler for undo
+  // Keyboard event handler for undo and frame navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is typing in an input
@@ -325,11 +327,39 @@ export function LightingCanvas() {
         undo();
         return;
       }
+
+      // Frame navigation: "." for next frame, "," for previous frame
+      if (e.key === '.' || e.key === ',') {
+        e.preventDefault();
+        const currentObj = getCurrentObject();
+        if (!currentObj || currentObj.frames.length <= 1) return;
+
+        const currentFrameId = project?.uiState.selectedFrameId;
+        const currentIndex = currentObj.frames.findIndex(f => f.id === currentFrameId);
+        if (currentIndex === -1) return;
+
+        let newIndex: number;
+        let delta: number;
+        if (e.key === '.') {
+          // Next frame (wrap around)
+          newIndex = (currentIndex + 1) % currentObj.frames.length;
+          delta = 1;
+        } else {
+          // Previous frame (wrap around)
+          newIndex = (currentIndex - 1 + currentObj.frames.length) % currentObj.frames.length;
+          delta = -1;
+        }
+
+        // Don't sync variants to base frames - advance them independently (same as playback)
+        selectFrame(currentObj.frames[newIndex].id, false);
+        advanceVariantFrames(delta);
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo]);
+  }, [undo, getCurrentObject, project?.uiState.selectedFrameId, selectFrame, advanceVariantFrames]);
 
   // Render preview overlay when hover changes
   useEffect(() => {

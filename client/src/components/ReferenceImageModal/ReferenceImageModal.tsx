@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import './ReferenceImageModal.css';
+import { useEditorStore } from '../../store';
 
 export interface ReferenceImageData {
   pixels: Array<Array<{ r: number; g: number; b: number; a: number } | 0>>;
@@ -29,6 +30,9 @@ const persistentState = {
   selection: null as SelectionBox | null,
   zoom: 1,
   panOffset: { x: 0, y: 0 },
+  // Track if the modal has ever been opened and had data set
+  // This prevents the sync effect from clearing data on mount
+  hasBeenActivated: false,
 };
 
 // Extract pixels from selection (exported for use outside modal)
@@ -99,19 +103,185 @@ export function shiftReferenceSelection(dx: number, dy: number): ReferenceImageD
 
   persistentState.selection = newSelection;
 
+  // Save to project when selection shifts
+  saveReferenceImageToProject(image, newSelection);
+
   // Extract and return new pixels
   return extractPixelsFromSelection(image, newSelection);
 }
 
 // Shift the reference selection by the width/height of the current reference image
+// Only moves if there's enough room for the full skip to prevent misalignment
 export function shiftReferenceSelectionBySize(dx: number, dy: number, currentRefWidth: number, currentRefHeight: number): ReferenceImageData | null {
   const { image, selection } = persistentState;
   if (!image || !selection) return null;
 
+  const minX = Math.min(selection.startX, selection.endX);
+  const minY = Math.min(selection.startY, selection.endY);
+  const maxX = Math.max(selection.startX, selection.endX);
+  const maxY = Math.max(selection.startY, selection.endY);
+  const width = maxX - minX;
+  const height = maxY - minY;
+
   const shiftX = dx * currentRefWidth;
   const shiftY = dy * currentRefHeight;
 
+  // Calculate where the new position would be
+  const newMinX = minX + shiftX;
+  const newMinY = minY + shiftY;
+  const newMaxX = newMinX + width;
+  const newMaxY = newMinY + height;
+
+  // Check if the full shift is possible (all corners must be within bounds)
+  const canMoveX = newMinX >= 0 && newMaxX <= image.width;
+  const canMoveY = newMinY >= 0 && newMaxY <= image.height;
+
+  // Only move if we can complete the full skip
+  if (!canMoveX || !canMoveY) {
+    return null;
+  }
+
   return shiftReferenceSelection(shiftX, shiftY);
+}
+
+// Adjust reference box size in a specific direction
+export function adjustReferenceBoxSize(direction: 'up' | 'down' | 'left' | 'right', increase: boolean): ReferenceImageData | null {
+  const { image, selection } = persistentState;
+  if (!image || !selection) return null;
+
+  const minX = Math.min(selection.startX, selection.endX);
+  const minY = Math.min(selection.startY, selection.endY);
+  const maxX = Math.max(selection.startX, selection.endX);
+  const maxY = Math.max(selection.endY, selection.startY);
+
+  const delta = increase ? 1 : -1;
+  let newMinX = minX;
+  let newMinY = minY;
+  let newMaxX = maxX;
+  let newMaxY = maxY;
+
+  switch (direction) {
+    case 'up':
+      newMinY = Math.max(0, minY - delta);
+      break;
+    case 'down':
+      newMaxY = Math.min(image.height, maxY + delta);
+      break;
+    case 'left':
+      newMinX = Math.max(0, minX - delta);
+      break;
+    case 'right':
+      newMaxX = Math.min(image.width, maxX + delta);
+      break;
+  }
+
+  // Ensure minimum size of 1x1
+  if (newMaxX - newMinX < 1 || newMaxY - newMinY < 1) return null;
+
+  // Determine which corner is start/end based on original selection
+  const startIsTopLeft = selection.startX <= selection.endX && selection.startY <= selection.endY;
+
+  const newSelection: SelectionBox = {
+    startX: startIsTopLeft ? newMinX : newMaxX,
+    startY: startIsTopLeft ? newMinY : newMaxY,
+    endX: startIsTopLeft ? newMaxX : newMinX,
+    endY: startIsTopLeft ? newMaxY : newMinY
+  };
+
+  persistentState.selection = newSelection;
+
+  // Save to project when selection adjusts
+  saveReferenceImageToProject(image, newSelection);
+
+  // Extract and return new pixels
+  return extractPixelsFromSelection(image, newSelection);
+}
+
+// Encode image to base64
+export function encodeImageToBase64(image: HTMLImageElement): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      reject(new Error('Could not get canvas context'));
+      return;
+    }
+    ctx.drawImage(image, 0, 0);
+    try {
+      const base64 = canvas.toDataURL('image/png');
+      resolve(base64);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+// Decode base64 to image
+export function decodeBase64ToImage(base64: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = (error) => reject(error);
+    img.src = base64;
+  });
+}
+
+// Save reference image to project
+export function saveReferenceImageToProject(image: HTMLImageElement | null, selection: SelectionBox | null): Promise<void> {
+  const { project, setReferenceImage } = useEditorStore.getState();
+  if (!project) return Promise.resolve();
+
+  if (!image || !selection) {
+    // Clear reference image if no image or selection
+    setReferenceImage(undefined);
+    return Promise.resolve();
+  }
+
+  return encodeImageToBase64(image).then((base64) => {
+    setReferenceImage({
+      imageBase64: base64,
+      selectionBox: {
+        startX: selection.startX,
+        startY: selection.startY,
+        endX: selection.endX,
+        endY: selection.endY
+      }
+    });
+  }).catch((error) => {
+    console.error('Failed to save reference image:', error);
+  });
+}
+
+// Restore reference image from project
+export function restoreReferenceImageFromProject(): Promise<void> {
+  const { project } = useEditorStore.getState();
+  if (!project || !project.referenceImage) {
+    return Promise.resolve();
+  }
+
+  const { imageBase64, selectionBox } = project.referenceImage;
+
+  return decodeBase64ToImage(imageBase64).then((img) => {
+    // Restore to persistent state
+    persistentState.image = img;
+    persistentState.imageUrl = imageBase64; // Base64 data URL can be used directly
+    persistentState.selection = {
+      startX: selectionBox.startX,
+      startY: selectionBox.startY,
+      endX: selectionBox.endX,
+      endY: selectionBox.endY
+    };
+    persistentState.hasBeenActivated = true; // Mark as activated so sync works correctly
+  }).catch((error) => {
+    console.error('Failed to restore reference image:', error);
+  });
+}
+
+// Get current reference image data from persistent state
+export function getCurrentReferenceImageData(): ReferenceImageData | null {
+  return extractPixelsFromSelection(persistentState.image, persistentState.selection);
 }
 
 export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceImageModalProps) {
@@ -163,16 +333,23 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
     }
   }, [isOpen]);
 
-  // Sync state to persistent storage (but not during restoration)
+  // Sync state to persistent storage (but not during restoration and only when modal is open)
   useEffect(() => {
-    if (!isRestoringRef.current) {
+    // Only sync when:
+    // 1. Not currently restoring from persistent state
+    // 2. Modal is open (user is actively interacting)
+    // This prevents clearing persistent state on component mount
+    if (!isRestoringRef.current && isOpen) {
       persistentState.image = image;
       persistentState.imageUrl = imageUrl;
       persistentState.selection = selection;
       persistentState.zoom = zoom;
       persistentState.panOffset = panOffset;
+      if (image) {
+        persistentState.hasBeenActivated = true;
+      }
     }
-  }, [image, imageUrl, selection, zoom, panOffset]);
+  }, [isOpen, image, imageUrl, selection, zoom, panOffset]);
 
   // Calculate display scale based on zoom
   const getDisplayScale = useCallback(() => {
@@ -493,6 +670,10 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
   const handleConfirm = () => {
     const data = extractPixels();
     if (data) {
+      // Save to project when user confirms selection
+      if (image && selection) {
+        saveReferenceImageToProject(image, selection);
+      }
       onConfirm(data);
       onClose();
     }
@@ -504,7 +685,8 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
   };
 
   const handleClearImage = () => {
-    if (imageUrl) {
+    if (imageUrl && !imageUrl.startsWith('data:')) {
+      // Only revoke object URLs, not data URLs (base64)
       URL.revokeObjectURL(imageUrl);
     }
     setImage(null);
@@ -519,6 +701,10 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
     persistentState.selection = null;
     persistentState.zoom = 1;
     persistentState.panOffset = { x: 0, y: 0 };
+    persistentState.hasBeenActivated = false; // Allow future restores
+
+    // Clear from project
+    saveReferenceImageToProject(null, null);
   };
 
   const handleSelectAll = () => {
