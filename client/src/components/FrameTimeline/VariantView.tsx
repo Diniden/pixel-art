@@ -1,9 +1,14 @@
-import { useState, useRef, useEffect, memo, useCallback, ReactNode } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactNode } from 'react';
 import { useEditorStore } from '../../store';
 import { Project, PixelObject, Layer, Variant, VariantFrame, VariantGroup } from '../../types';
 import { renderFramePreview, renderVariantFramePreview } from '../../utils/previewRenderer';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
+import { ResizeModal } from '../ResizeModal/ResizeModal';
+import { FrameTagsModal, tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
+import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
+import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import { FrameThumbnail } from './FramesView';
+import { AIInterpolateModal } from '../AIInterpolateModal/AIInterpolateModal';
 
 // Optimized variant frame thumbnail
 const VariantFrameThumbnail = memo(function VariantFrameThumbnail({
@@ -102,11 +107,27 @@ export function VariantView({
     duplicateVariantFrame,
     deleteVariantFrame,
     addVariantFrame,
-    moveVariantFrame
+    moveVariantFrame,
+    reorderFrame,
+    reorderVariantFrame,
+    resizeVariant
   } = useEditorStore();
 
   const [newFrameName, setNewFrameName] = useState('');
   const [copyPrevious, setCopyPrevious] = useState(true);
+  const [showResizeModal, setShowResizeModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [tagsModalContext, setTagsModalContext] = useState<FrameTagsContext | null>(null);
+  const [dragBaseFrameId, setDragBaseFrameId] = useState<string | null>(null);
+  const [dropInsertBaseIndex, setDropInsertBaseIndex] = useState<number | null>(null);
+  const [dragVariantFrameId, setDragVariantFrameId] = useState<string | null>(null);
+  const [dropInsertVariantIndex, setDropInsertVariantIndex] = useState<number | null>(null);
+  const [baseIndicatorLeft, setBaseIndicatorLeft] = useState<number | null>(null);
+  const [variantIndicatorLeft, setVariantIndicatorLeft] = useState<number | null>(null);
+  const baseListRef = useRef<HTMLDivElement | null>(null);
+  const baseItemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const variantListRef = useRef<HTMLDivElement | null>(null);
+  const variantItemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const frames = obj.frames;
   const { selectedFrameId } = project.uiState;
@@ -141,6 +162,179 @@ export function VariantView({
     }
   };
 
+  const handleBaseFrameDragStart = useCallback((e: React.DragEvent, frameId: string) => {
+    setDragBaseFrameId(frameId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', frameId);
+  }, []);
+
+  const handleBaseFrameDragOver = useCallback(
+    (e: React.DragEvent, index: number) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      const insertIndex = e.clientX < midX ? index : index + 1;
+      const clamped = Math.max(0, Math.min(frames.length, insertIndex));
+      setDropInsertBaseIndex(clamped);
+    },
+    [frames.length]
+  );
+
+  const handleBaseFrameDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragBaseFrameId != null && dropInsertBaseIndex != null) {
+        reorderFrame(dragBaseFrameId, dropInsertBaseIndex);
+      }
+      setDragBaseFrameId(null);
+      setDropInsertBaseIndex(null);
+      setBaseIndicatorLeft(null);
+    },
+    [dragBaseFrameId, dropInsertBaseIndex, reorderFrame]
+  );
+
+  const handleBaseFrameDragEnd = useCallback(() => {
+    setDragBaseFrameId(null);
+    setDropInsertBaseIndex(null);
+    setBaseIndicatorLeft(null);
+  }, []);
+
+  const handleBaseListContainerDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!dragBaseFrameId || frames.length === 0) return;
+      const lastEl = baseItemRefs.current[frames.length - 1];
+      if (!lastEl) return;
+      const rect = lastEl.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      if (e.clientX >= midX) {
+        setDropInsertBaseIndex(frames.length);
+      }
+    },
+    [dragBaseFrameId, frames.length]
+  );
+
+  const handleVariantListContainerDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!dragVariantFrameId || variantFrames.length === 0) return;
+      const lastEl = variantItemRefs.current[variantFrames.length - 1];
+      if (!lastEl) return;
+      const rect = lastEl.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      if (e.clientX >= midX) {
+        setDropInsertVariantIndex(variantFrames.length);
+      }
+    },
+    [dragVariantFrameId, variantFrames.length]
+  );
+
+  const handleVariantFrameDragStart = useCallback((e: React.DragEvent, frameId: string) => {
+    setDragVariantFrameId(frameId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', frameId);
+  }, []);
+
+  const handleVariantFrameDragOver = useCallback(
+    (e: React.DragEvent, index: number) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      const insertIndex = e.clientX < midX ? index : index + 1;
+      const clamped = Math.max(0, Math.min(variantFrames.length, insertIndex));
+      setDropInsertVariantIndex(clamped);
+    },
+    [variantFrames.length]
+  );
+
+  const handleVariantFrameDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragVariantFrameId != null && dropInsertVariantIndex != null) {
+        reorderVariantFrame(variantGroupId, variantId, dragVariantFrameId, dropInsertVariantIndex);
+      }
+      setDragVariantFrameId(null);
+      setDropInsertVariantIndex(null);
+      setVariantIndicatorLeft(null);
+    },
+    [dragVariantFrameId, dropInsertVariantIndex, variantGroupId, variantId, reorderVariantFrame]
+  );
+
+  const handleVariantFrameDragEnd = useCallback(() => {
+    setDragVariantFrameId(null);
+    setDropInsertVariantIndex(null);
+    setVariantIndicatorLeft(null);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (dropInsertBaseIndex == null || dragBaseFrameId == null || !baseListRef.current || frames.length === 0) {
+      setBaseIndicatorLeft(null);
+      return;
+    }
+    const listRect = baseListRef.current.getBoundingClientRect();
+    const n = frames.length;
+    let left: number;
+    if (dropInsertBaseIndex === 0) {
+      const first = baseItemRefs.current[0];
+      left = first ? first.getBoundingClientRect().left - listRect.left : 0;
+    } else if (dropInsertBaseIndex >= n) {
+      const last = baseItemRefs.current[n - 1];
+      left = last ? last.getBoundingClientRect().right - listRect.left : listRect.width;
+    } else {
+      const leftItem = baseItemRefs.current[dropInsertBaseIndex - 1];
+      const rightItem = baseItemRefs.current[dropInsertBaseIndex];
+      if (!leftItem || !rightItem) {
+        setBaseIndicatorLeft(null);
+        return;
+      }
+      const leftRect = leftItem.getBoundingClientRect();
+      const rightRect = rightItem.getBoundingClientRect();
+      left = (leftRect.right + rightRect.left) / 2 - listRect.left;
+    }
+    setBaseIndicatorLeft(left);
+  }, [dropInsertBaseIndex, dragBaseFrameId, frames.length]);
+
+  useLayoutEffect(() => {
+    if (
+      dropInsertVariantIndex == null ||
+      dragVariantFrameId == null ||
+      !variantListRef.current ||
+      variantFrames.length === 0
+    ) {
+      setVariantIndicatorLeft(null);
+      return;
+    }
+    const listRect = variantListRef.current.getBoundingClientRect();
+    const n = variantFrames.length;
+    let left: number;
+    if (dropInsertVariantIndex === 0) {
+      const first = variantItemRefs.current[0];
+      left = first ? first.getBoundingClientRect().left - listRect.left : 0;
+    } else if (dropInsertVariantIndex >= n) {
+      const last = variantItemRefs.current[n - 1];
+      left = last ? last.getBoundingClientRect().right - listRect.left : listRect.width;
+    } else {
+      const leftItem = variantItemRefs.current[dropInsertVariantIndex - 1];
+      const rightItem = variantItemRefs.current[dropInsertVariantIndex];
+      if (!leftItem || !rightItem) {
+        setVariantIndicatorLeft(null);
+        return;
+      }
+      const leftRect = leftItem.getBoundingClientRect();
+      const rightRect = rightItem.getBoundingClientRect();
+      left = (leftRect.right + rightRect.left) / 2 - listRect.left;
+    }
+    setVariantIndicatorLeft(left);
+  }, [dropInsertVariantIndex, dragVariantFrameId, variantFrames.length]);
+
+  const handleResize = useCallback((width: number, height: number, anchor: AnchorPosition) => {
+    resizeVariant(variantGroupId, variantId, width, height, anchor);
+  }, [resizeVariant, variantGroupId, variantId]);
+
   return (
     <div className="variant-timeline">
       {/* Base Object Frames - Compact view for offset control */}
@@ -149,16 +343,43 @@ export function VariantView({
           <span className="base-frames-title">Base Frames (WASD to adjust offset)</span>
           <span className="base-frames-offset">Offset: ({currentOffset.x}, {currentOffset.y})</span>
         </div>
-        <div className="base-frames-scroll">
-          <div className="base-frames-list">
+        <div
+          className="base-frames-scroll"
+          onDragOver={handleBaseListContainerDragOver}
+          onDrop={handleBaseFrameDrop}
+        >
+          <div
+            ref={baseListRef}
+            className="base-frames-list base-frames-list-droppable"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleBaseFrameDrop}
+            onDragLeave={() => setDropInsertBaseIndex(null)}
+          >
+            {baseIndicatorLeft != null && (
+              <div
+                className="frame-drop-indicator frame-drop-indicator-base"
+                style={{ left: baseIndicatorLeft }}
+                aria-hidden
+              />
+            )}
             {frames.map((frame, index) => {
               const isCurrentBaseFrame = index === currentBaseFrameIndex;
+              const isDragging = dragBaseFrameId === frame.id;
               return (
                 <div
                   key={frame.id}
-                  className={`base-frame-item ${isCurrentBaseFrame ? 'active' : ''}`}
+                  ref={(el) => {
+                    baseItemRefs.current[index] = el;
+                  }}
+                  className={`base-frame-item ${isCurrentBaseFrame ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
                   onClick={() => selectFrame(frame.id, true)} // Always sync variant timelines
-                  title={`${frame.name} - Click to edit offset for this base frame`}
+                  title={`${frame.name} - Click to edit offset for this base frame. Drag to reorder.`}
+                  draggable
+                  onDragStart={(e) => handleBaseFrameDragStart(e, frame.id)}
+                  onDragOver={(e) => handleBaseFrameDragOver(e, index)}
+                  onDrop={handleBaseFrameDrop}
+                  onDragLeave={() => setDropInsertBaseIndex(null)}
+                  onDragEnd={handleBaseFrameDragEnd}
                 >
                   <div className="base-frame-thumbnail">
                     <FrameThumbnail
@@ -215,6 +436,20 @@ export function VariantView({
           >
             ⚡
           </button>
+          <button
+            className="canvas-size-btn variant"
+            onClick={() => setShowResizeModal(true)}
+            title="Edit Variant Canvas Size"
+          >
+            ⤢
+          </button>
+          <button
+            className="ai-interpolate-btn"
+            onClick={() => setShowAIModal(true)}
+            title="AI Frame Interpolation"
+          >
+            ✦
+          </button>
           <label className="copy-previous-label" title="Copy pixels from current frame">
             <input
               type="checkbox"
@@ -236,15 +471,42 @@ export function VariantView({
           </button>
         </div>
       </div>
-      <div className="variant-frames-scroll">
-        <div className="variant-frames-list">
+      <div
+        className="variant-frames-scroll"
+        onDragOver={handleVariantListContainerDragOver}
+        onDrop={handleVariantFrameDrop}
+      >
+        <div
+          ref={variantListRef}
+          className="variant-frames-list variant-frames-list-droppable"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleVariantFrameDrop}
+          onDragLeave={() => setDropInsertVariantIndex(null)}
+        >
+          {variantIndicatorLeft != null && (
+            <div
+              className="frame-drop-indicator frame-drop-indicator-variant"
+              style={{ left: variantIndicatorLeft }}
+              aria-hidden
+            />
+          )}
           {variantFrames.map((vFrame, index) => {
             const isSelected = currentVariantFrameIndex === index;
+            const isDragging = dragVariantFrameId === vFrame.id;
             return (
               <div
                 key={vFrame.id}
-                className={`variant-frame-item ${isSelected ? 'selected' : ''}`}
+                ref={(el) => {
+                  variantItemRefs.current[index] = el;
+                }}
+                className={`variant-frame-item ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
                 onClick={() => selectVariantFrame(variantGroupId, index)}
+                draggable
+                onDragStart={(e) => handleVariantFrameDragStart(e, vFrame.id)}
+                onDragOver={(e) => handleVariantFrameDragOver(e, index)}
+                onDrop={handleVariantFrameDrop}
+                onDragLeave={() => setDropInsertVariantIndex(null)}
+                onDragEnd={handleVariantFrameDragEnd}
               >
                 <div className="variant-frame-thumbnail">
                   <VariantFrameThumbnail
@@ -253,9 +515,34 @@ export function VariantView({
                   />
                 </div>
                 <div className="variant-frame-info">
-                  <span className="variant-frame-index">#{index + 1}</span>
+                  <span className="variant-frame-index">
+                    #{index + 1}
+                    {vFrame.tags?.length ? (
+                      <span
+                        className="frame-tag-dot"
+                        style={{ backgroundColor: tagColorForTag(vFrame.tags[0]) }}
+                        title={vFrame.tags.join(', ')}
+                      />
+                    ) : null}
+                  </span>
                 </div>
                 <div className="variant-frame-actions">
+                  <button
+                    className="variant-frame-action-btn variant-frame-tags-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTagsModalContext({
+                        type: 'variant',
+                        variantGroupId,
+                        variantId,
+                        frameId: vFrame.id,
+                        frameIndex: index,
+                      });
+                    }}
+                    title="Frame tags"
+                  >
+                    <span className="frame-tags-icon">T</span>
+                  </button>
                   <button
                     className="variant-frame-action-btn"
                     onClick={(e) => {
@@ -292,6 +579,35 @@ export function VariantView({
         frames={frames}
         variants={project.variants}
         zoom={project.uiState.zoom}
+      />
+
+      {/* Resize Variant Canvas Modal */}
+      <ResizeModal
+        isOpen={showResizeModal}
+        onClose={() => setShowResizeModal(false)}
+        onApply={handleResize}
+        currentWidth={variantData.variant.gridSize.width}
+        currentHeight={variantData.variant.gridSize.height}
+        title={`Resize Variant: ${variantData.variant.name}`}
+      />
+
+      {/* Frame Tags Modal */}
+      {tagsModalContext && (
+        <FrameTagsModal
+          isOpen
+          onClose={() => setTagsModalContext(null)}
+          context={tagsModalContext}
+        />
+      )}
+
+      {/* AI Frame Interpolation Modal */}
+      <AIInterpolateModal
+        isOpen={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        mode="variant"
+        object={obj}
+        project={project}
+        variantData={variantData}
       />
     </div>
   );

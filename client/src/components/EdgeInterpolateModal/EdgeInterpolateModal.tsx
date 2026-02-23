@@ -9,6 +9,7 @@ interface EdgeInterpolateModalProps {
     startAngle: number; // in degrees
     smoothing: number; // Gaussian RBF smoothing parameter
     radius: number; // Gaussian RBF radius parameter
+    applyToAllFrames: boolean; // Apply to all frames for current layer
   }) => void;
 }
 
@@ -16,6 +17,7 @@ export function EdgeInterpolateModal({ isOpen, onClose, onConfirm }: EdgeInterpo
   const [startAngle, setStartAngle] = useState(90); // Default: pointing away
   const [smoothing, setSmoothing] = useState(1.0); // Default smoothing
   const [radius, setRadius] = useState(2.0); // Default radius
+  const [applyToAllFrames, setApplyToAllFrames] = useState(false);
 
   if (!isOpen) return null;
 
@@ -23,7 +25,8 @@ export function EdgeInterpolateModal({ isOpen, onClose, onConfirm }: EdgeInterpo
     onConfirm({
       startAngle,
       smoothing,
-      radius
+      radius,
+      applyToAllFrames
     });
     onClose();
   };
@@ -107,6 +110,23 @@ export function EdgeInterpolateModal({ isOpen, onClose, onConfirm }: EdgeInterpo
             </div>
             <div className="edge-interpolate-description">
               Controls the influence radius of the Gaussian RBF. Larger values allow edge normals to influence pixels further away.
+            </div>
+          </div>
+
+          <div className="edge-interpolate-control">
+            <label className="edge-interpolate-checkbox-label">
+              <input
+                type="checkbox"
+                checked={applyToAllFrames}
+                onChange={(e) => setApplyToAllFrames(e.target.checked)}
+                className="edge-interpolate-checkbox"
+              />
+              <span className="edge-interpolate-checkbox-text">
+                Apply to all frames for current layer
+              </span>
+            </label>
+            <div className="edge-interpolate-description">
+              When enabled, the computed normals will be applied to all frames that contain the current layer.
             </div>
           </div>
         </div>

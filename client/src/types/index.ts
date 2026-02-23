@@ -9,16 +9,16 @@ export interface Pixel {
 // x, y are signed bytes (-128 to 127), z is unsigned byte (0 to 255, always positive toward screen)
 // All zeros (0, 0, 0) means no normal data
 export interface Normal {
-  x: number;  // Signed byte (-128 to 127)
-  y: number;  // Signed byte (-128 to 127)
-  z: number;  // Unsigned byte (0 to 255, always positive)
+  x: number; // Signed byte (-128 to 127)
+  y: number; // Signed byte (-128 to 127)
+  z: number; // Unsigned byte (0 to 255, always positive)
 }
 
 // Complete pixel data including color, normal, and height
 export interface PixelData {
-  color: Pixel | 0;       // RGBA color (0 = empty/transparent)
-  normal: Normal | 0;     // Normal map data (0 = no normal)
-  height: number;         // Height map (0 = no height data, 1-255 = height values)
+  color: Pixel | 0; // RGBA color (0 = empty/transparent)
+  normal: Normal | 0; // Normal map data (0 = no normal)
+  height: number; // Height map (0 = no height data, 1-255 = height values)
 }
 
 export interface Layer {
@@ -28,9 +28,13 @@ export interface Layer {
   visible: boolean;
   // Variant-specific fields (only present if this is a variant layer)
   isVariant?: boolean;
-  variantGroupId?: string;  // Reference to project-level VariantGroup
-  selectedVariantId?: string;  // Reference to which Variant (variant type) is selected
-  // Per-layer offset for positioning variant within the frame (new in version 1.1.0)
+  variantGroupId?: string; // Reference to project-level VariantGroup
+  selectedVariantId?: string; // Reference to which Variant (variant type) is selected
+  // Per-layer, per-variant-type offsets for positioning variant within the frame
+  // Key is the variant ID (variant type), value is the offset for that variant type
+  // This allows different variant types to have independent positioning when selected
+  variantOffsets?: { [variantId: string]: { x: number; y: number } };
+  // DEPRECATED: Single offset for backward compatibility during migration
   variantOffset?: { x: number; y: number };
 }
 
@@ -38,6 +42,7 @@ export interface Frame {
   id: string;
   name: string;
   layers: Layer[];
+  tags?: string[];
 }
 
 // ============================================
@@ -48,6 +53,7 @@ export interface Frame {
 export interface VariantFrame {
   id: string;
   layers: Layer[]; // Regular layers (without variant fields)
+  tags?: string[];
   // DEPRECATED: offset is now stored in Variant.baseFrameOffsets
   // Kept for backwards compatibility during migration
   offset?: { x: number; y: number };
@@ -76,6 +82,8 @@ export interface PixelObject {
   name: string;
   gridSize: { width: number; height: number };
   frames: Frame[];
+  // Origin anchor point (offset from top-left of object's render region)
+  origin?: { x: number; y: number };
   // DEPRECATED: variantGroups now live at project level
   // Kept for backwards compatibility during migration
   variantGroups?: VariantGroup[];
@@ -95,7 +103,7 @@ export interface Palette {
 }
 
 export interface Project {
-  version?: string;  // Matches package.json version
+  version?: string; // Matches package.json version
   objects: PixelObject[];
   palettes: Palette[];
   uiState: UIState;
@@ -104,7 +112,7 @@ export interface Project {
   variants?: VariantGroup[];
   // Reference image data (base64 encoded image and selection box)
   referenceImage?: {
-    imageBase64: string;  // Base64 encoded image data
+    imageBase64: string; // Base64 encoded image data
     selectionBox: {
       startX: number;
       startY: number;
@@ -120,6 +128,13 @@ export interface UIState {
   selectedLayerId: string | null;
   selectedTool: Tool;
   selectedColor: Color;
+  // Selection tool options
+  selectionMode?: SelectionMode;
+  selectionBehavior?: SelectionBehavior;
+  // Focus mode: hide side/bottom panels for distraction-free editing
+  focusMode?: boolean;
+  // Light grid mode: use a light background for the canvas grid instead of dark
+  lightGridMode?: boolean;
   brushSize: number;
   bitDepth: BitDepth;
   shapeMode: ShapeMode;
@@ -127,31 +142,76 @@ export interface UIState {
   zoom: number;
   panOffset: { x: number; y: number };
   moveAllLayers: boolean;
-  eraserShape: 'circle' | 'square';
+  eraserShape: "circle" | "square";
+  // Pixel pencil brush settings
+  pencilBrushShape: "circle" | "square";
+  pencilBrushMax: 8 | 16 | 32 | 64 | 128;
+  // Trace mode nudge: how far Shift+WASD moves reference/frame trace offsets
+  traceNudgeAmount: 10 | 20 | 25 | 50 | 100;
   // Variant editing state
   variantFrameIndices?: { [variantGroupId: string]: number }; // Track current frame index for each variant group
   layerSelectionCounter?: number; // Increments on every layer click (even re-selection) to detect layer clicks
   // Lighting studio state
   studioMode: StudioMode;
+  // Which lighting data layer the pencil edits
+  lightingDataLayerEditMode?: "normals" | "height";
   selectedNormal: Normal;
   lightDirection: Normal;
   lightColor: Color;
   ambientColor: Color;
   heightScale: number; // Height scale factor for shadow calculation (default: 100)
-  normalBrushShape: 'circle' | 'square'; // Shape for normal brush tool
+  // Height brush value (0 clears height, 1-255 paints height)
+  heightBrushValue?: number;
+  normalBrushShape: "circle" | "square"; // Shape for normal brush tool
   // Frame reference panel state (position stored as percentage of canvas area)
   frameReferencePanelPosition?: { topPercent: number; leftPercent: number };
   frameReferencePanelMinimized?: boolean;
+  frameReferencePanelVisible?: boolean;
   // Reference image panel state (position stored as percentage of canvas area)
   referenceImagePanelPosition?: { topPercent: number; leftPercent: number };
   referenceImagePanelMinimized?: boolean;
+  // Lighting preview panel (floating) state (position stored as percentage of canvas area)
+  lightingPreviewPanelPosition?: { topPercent: number; leftPercent: number };
+  lightingPreviewPanelMinimized?: boolean;
   // Canvas info panel state
   canvasInfoHidden?: boolean;
+  // Object library view mode
+  objectLibraryViewMode?: "normal" | "small-rows" | "grid";
+  // Timeline thumbnail mode
+  timelineThumbnailMode?: boolean;
+  // Origin display color
+  originColor?: Color;
+
+  // Flood fill (bucket) options
+  gaussianFill?: {
+    smoothing: number;
+    radius: number;
+    radiusMax?: number;
+  };
+
+  // AI frame interpolation service URL (remote machine)
+  aiServiceUrl?: string;
 }
 
-export type Tool = 'pixel' | 'fill-square' | 'flood-fill' | 'line' | 'rectangle' | 'ellipse' | 'eraser' | 'move' | 'reference-trace' | 'eyedropper' | 'selection' | 'normal-pencil' | 'auto-normal' | 'height-map';
+export type Tool =
+  | "pixel"
+  | "fill-square"
+  | "flood-fill"
+  | "gaussian-fill"
+  | "line"
+  | "rectangle"
+  | "ellipse"
+  | "eraser"
+  | "move"
+  | "reference-trace"
+  | "eyedropper"
+  | "selection"
+  | "origin"
+  | "normal-pencil"
+  | "auto-normal"
+  | "height-map";
 
-export type StudioMode = 'pixel' | 'lighting';
+export type StudioMode = "pixel" | "lighting";
 
 export interface SelectionBox {
   x: number;
@@ -160,9 +220,12 @@ export interface SelectionBox {
   height: number;
 }
 
+export type SelectionMode = "rect" | "flood" | "lasso" | "color";
+export type SelectionBehavior = "movePixels" | "moveSelection" | "editMask";
+
 export type BitDepth = 8 | 16 | 32;
 
-export type ShapeMode = 'outline' | 'fill' | 'both';
+export type ShapeMode = "outline" | "fill" | "both";
 
 export interface Point {
   x: number;
@@ -191,64 +254,97 @@ export const DEFAULT_UI_STATE: UIState = {
   selectedObjectId: null,
   selectedFrameId: null,
   selectedLayerId: null,
-  selectedTool: 'pixel',
+  selectedTool: "pixel",
   selectedColor: DEFAULT_COLOR,
+  selectionMode: "rect",
+  selectionBehavior: "movePixels",
+  focusMode: false,
   brushSize: 1,
   bitDepth: 8,
-  shapeMode: 'both',
+  shapeMode: "both",
   borderRadius: 0,
   zoom: 10,
   panOffset: { x: 0, y: 0 },
   moveAllLayers: false,
-  eraserShape: 'circle',
+  eraserShape: "circle",
+  pencilBrushShape: "square",
+  pencilBrushMax: 16,
+  traceNudgeAmount: 10,
   variantFrameIndices: {},
   // Lighting studio defaults
-  studioMode: 'pixel',
+  studioMode: "pixel",
+  lightingDataLayerEditMode: "normals",
   selectedNormal: DEFAULT_NORMAL,
-  normalBrushShape: 'circle',
+  normalBrushShape: "circle",
   lightDirection: DEFAULT_LIGHT_DIRECTION,
   lightColor: DEFAULT_LIGHT_COLOR,
   ambientColor: DEFAULT_AMBIENT_COLOR,
-  heightScale: 100 // Default height scale for shadow calculation
+  heightScale: 100, // Default height scale for shadow calculation
+  heightBrushValue: 128,
+  objectLibraryViewMode: "normal",
+  timelineThumbnailMode: false,
+  gaussianFill: {
+    smoothing: 1.0,
+    radius: 2.0,
+    radiusMax: 16,
+  },
 };
 
-export function createEmptyPixelGrid(width: number, height: number): PixelData[][] {
+export function createEmptyPixelGrid(
+  width: number,
+  height: number,
+): PixelData[][] {
   return Array.from({ length: height }, () =>
-    Array.from({ length: width }, () => ({ color: 0, normal: 0, height: 0 }))
+    Array.from({ length: width }, () => ({ color: 0, normal: 0, height: 0 })),
   );
 }
 
-export function createDefaultLayer(id: string, name: string, width: number, height: number): Layer {
+export function createDefaultLayer(
+  id: string,
+  name: string,
+  width: number,
+  height: number,
+): Layer {
   return {
     id,
     name,
     pixels: createEmptyPixelGrid(width, height),
-    visible: true
+    visible: true,
   };
 }
 
-export function createDefaultFrame(id: string, name: string, width: number, height: number): Frame {
+export function createDefaultFrame(
+  id: string,
+  name: string,
+  width: number,
+  height: number,
+): Frame {
   return {
     id,
     name,
-    layers: [createDefaultLayer(`${id}-layer-1`, 'Layer 1', width, height)]
+    layers: [createDefaultLayer(`${id}-layer-1`, "Layer 1", width, height)],
   };
 }
 
-export function createDefaultObject(id: string, name: string, width = 32, height = 32): PixelObject {
+export function createDefaultObject(
+  id: string,
+  name: string,
+  width = 32,
+  height = 32,
+): PixelObject {
   return {
     id,
     name,
     gridSize: { width, height },
-    frames: [createDefaultFrame(`${id}-frame-1`, 'Frame 1', width, height)]
+    frames: [createDefaultFrame(`${id}-frame-1`, "Frame 1", width, height)],
   };
 }
 
 // Curated color palettes
 export const BASE_PALETTES: Palette[] = [
   {
-    id: 'palette-default',
-    name: 'Default',
+    id: "palette-default",
+    name: "Default",
     colors: [
       { r: 0, g: 0, b: 0, a: 255 },
       { r: 255, g: 255, b: 255, a: 255 },
@@ -258,122 +354,122 @@ export const BASE_PALETTES: Palette[] = [
       { r: 255, g: 255, b: 0, a: 255 },
       { r: 255, g: 0, b: 255, a: 255 },
       { r: 0, g: 255, b: 255, a: 255 },
-    ]
+    ],
   },
   {
-    id: 'palette-skin-hair-eyes',
-    name: 'Skin, Hair & Eyes',
+    id: "palette-skin-hair-eyes",
+    name: "Skin, Hair & Eyes",
     colors: [
       // Skin tones (light to dark)
       { r: 255, g: 224, b: 196, a: 255 }, // Fair
       { r: 255, g: 205, b: 178, a: 255 }, // Light
       { r: 234, g: 185, b: 157, a: 255 }, // Medium light
       { r: 210, g: 153, b: 121, a: 255 }, // Medium
-      { r: 180, g: 120, b: 90, a: 255 },  // Tan
-      { r: 141, g: 85, b: 60, a: 255 },   // Brown
-      { r: 100, g: 60, b: 40, a: 255 },   // Dark brown
-      { r: 60, g: 35, b: 25, a: 255 },    // Deep
+      { r: 180, g: 120, b: 90, a: 255 }, // Tan
+      { r: 141, g: 85, b: 60, a: 255 }, // Brown
+      { r: 100, g: 60, b: 40, a: 255 }, // Dark brown
+      { r: 60, g: 35, b: 25, a: 255 }, // Deep
       // Hair colors
-      { r: 20, g: 15, b: 10, a: 255 },    // Black
-      { r: 59, g: 48, b: 36, a: 255 },    // Dark brown
-      { r: 111, g: 78, b: 55, a: 255 },   // Brown
-      { r: 165, g: 107, b: 70, a: 255 },  // Auburn
-      { r: 185, g: 55, b: 30, a: 255 },   // Red
+      { r: 20, g: 15, b: 10, a: 255 }, // Black
+      { r: 59, g: 48, b: 36, a: 255 }, // Dark brown
+      { r: 111, g: 78, b: 55, a: 255 }, // Brown
+      { r: 165, g: 107, b: 70, a: 255 }, // Auburn
+      { r: 185, g: 55, b: 30, a: 255 }, // Red
       { r: 222, g: 188, b: 153, a: 255 }, // Blonde
       { r: 245, g: 222, b: 179, a: 255 }, // Light blonde
       { r: 192, g: 192, b: 192, a: 255 }, // Gray
       // Eye colors
-      { r: 66, g: 41, b: 21, a: 255 },    // Dark brown
-      { r: 130, g: 90, b: 50, a: 255 },   // Amber
-      { r: 85, g: 107, b: 47, a: 255 },   // Hazel
-      { r: 34, g: 139, b: 34, a: 255 },   // Green
-      { r: 70, g: 130, b: 180, a: 255 },  // Blue
+      { r: 66, g: 41, b: 21, a: 255 }, // Dark brown
+      { r: 130, g: 90, b: 50, a: 255 }, // Amber
+      { r: 85, g: 107, b: 47, a: 255 }, // Hazel
+      { r: 34, g: 139, b: 34, a: 255 }, // Green
+      { r: 70, g: 130, b: 180, a: 255 }, // Blue
       { r: 135, g: 206, b: 235, a: 255 }, // Light blue
       { r: 105, g: 105, b: 105, a: 255 }, // Gray
-    ]
+    ],
   },
   {
-    id: 'palette-earth-tones',
-    name: 'Earth Tones',
+    id: "palette-earth-tones",
+    name: "Earth Tones",
     colors: [
       // Browns
-      { r: 139, g: 90, b: 43, a: 255 },   // Saddle brown
-      { r: 160, g: 82, b: 45, a: 255 },   // Sienna
+      { r: 139, g: 90, b: 43, a: 255 }, // Saddle brown
+      { r: 160, g: 82, b: 45, a: 255 }, // Sienna
       { r: 210, g: 180, b: 140, a: 255 }, // Tan
       { r: 188, g: 143, b: 143, a: 255 }, // Rosy brown
-      { r: 101, g: 67, b: 33, a: 255 },   // Dark brown
-      { r: 205, g: 133, b: 63, a: 255 },  // Peru
+      { r: 101, g: 67, b: 33, a: 255 }, // Dark brown
+      { r: 205, g: 133, b: 63, a: 255 }, // Peru
       // Reds/Oranges
-      { r: 178, g: 34, b: 34, a: 255 },   // Brick red
-      { r: 205, g: 92, b: 92, a: 255 },   // Indian red
-      { r: 210, g: 105, b: 30, a: 255 },  // Chocolate
-      { r: 184, g: 134, b: 11, a: 255 },  // Dark goldenrod
+      { r: 178, g: 34, b: 34, a: 255 }, // Brick red
+      { r: 205, g: 92, b: 92, a: 255 }, // Indian red
+      { r: 210, g: 105, b: 30, a: 255 }, // Chocolate
+      { r: 184, g: 134, b: 11, a: 255 }, // Dark goldenrod
       // Yellows/Creams
       { r: 245, g: 245, b: 220, a: 255 }, // Beige
       { r: 255, g: 248, b: 220, a: 255 }, // Cornsilk
       { r: 189, g: 183, b: 107, a: 255 }, // Dark khaki
-      { r: 218, g: 165, b: 32, a: 255 },  // Goldenrod
+      { r: 218, g: 165, b: 32, a: 255 }, // Goldenrod
       // Grays/Stones
       { r: 128, g: 128, b: 128, a: 255 }, // Gray
       { r: 169, g: 169, b: 169, a: 255 }, // Dark gray
       { r: 112, g: 128, b: 144, a: 255 }, // Slate gray
-      { r: 47, g: 79, b: 79, a: 255 },    // Dark slate gray
+      { r: 47, g: 79, b: 79, a: 255 }, // Dark slate gray
       // Muted blues/greens
-      { r: 95, g: 158, b: 160, a: 255 },  // Cadet blue
-      { r: 85, g: 107, b: 47, a: 255 },   // Olive drab
-      { r: 128, g: 128, b: 0, a: 255 },   // Olive
-    ]
+      { r: 95, g: 158, b: 160, a: 255 }, // Cadet blue
+      { r: 85, g: 107, b: 47, a: 255 }, // Olive drab
+      { r: 128, g: 128, b: 0, a: 255 }, // Olive
+    ],
   },
   {
-    id: 'palette-plant-tones',
-    name: 'Plant Tones',
+    id: "palette-plant-tones",
+    name: "Plant Tones",
     colors: [
       // Greens (light to dark)
       { r: 144, g: 238, b: 144, a: 255 }, // Light green
       { r: 152, g: 251, b: 152, a: 255 }, // Pale green
-      { r: 124, g: 252, b: 0, a: 255 },   // Lawn green
-      { r: 50, g: 205, b: 50, a: 255 },   // Lime green
-      { r: 34, g: 139, b: 34, a: 255 },   // Forest green
-      { r: 60, g: 179, b: 113, a: 255 },  // Medium sea green
-      { r: 46, g: 139, b: 87, a: 255 },   // Sea green
-      { r: 0, g: 128, b: 0, a: 255 },     // Green
-      { r: 0, g: 100, b: 0, a: 255 },     // Dark green
-      { r: 25, g: 60, b: 25, a: 255 },    // Very dark green
+      { r: 124, g: 252, b: 0, a: 255 }, // Lawn green
+      { r: 50, g: 205, b: 50, a: 255 }, // Lime green
+      { r: 34, g: 139, b: 34, a: 255 }, // Forest green
+      { r: 60, g: 179, b: 113, a: 255 }, // Medium sea green
+      { r: 46, g: 139, b: 87, a: 255 }, // Sea green
+      { r: 0, g: 128, b: 0, a: 255 }, // Green
+      { r: 0, g: 100, b: 0, a: 255 }, // Dark green
+      { r: 25, g: 60, b: 25, a: 255 }, // Very dark green
       // Olive/Yellow greens
-      { r: 154, g: 205, b: 50, a: 255 },  // Yellow green
-      { r: 173, g: 255, b: 47, a: 255 },  // Green yellow
-      { r: 107, g: 142, b: 35, a: 255 },  // Olive drab
-      { r: 85, g: 107, b: 47, a: 255 },   // Dark olive
+      { r: 154, g: 205, b: 50, a: 255 }, // Yellow green
+      { r: 173, g: 255, b: 47, a: 255 }, // Green yellow
+      { r: 107, g: 142, b: 35, a: 255 }, // Olive drab
+      { r: 85, g: 107, b: 47, a: 255 }, // Dark olive
       // Teal/Cyan (water plants)
-      { r: 0, g: 139, b: 139, a: 255 },   // Dark cyan
-      { r: 32, g: 178, b: 170, a: 255 },  // Light sea green
+      { r: 0, g: 139, b: 139, a: 255 }, // Dark cyan
+      { r: 32, g: 178, b: 170, a: 255 }, // Light sea green
       { r: 102, g: 205, b: 170, a: 255 }, // Medium aquamarine
       // Flowers/Fruits
       { r: 255, g: 182, b: 193, a: 255 }, // Light pink
       { r: 255, g: 105, b: 180, a: 255 }, // Hot pink
-      { r: 186, g: 85, b: 211, a: 255 },  // Medium orchid
-      { r: 255, g: 215, b: 0, a: 255 },   // Gold
-      { r: 255, g: 165, b: 0, a: 255 },   // Orange
+      { r: 186, g: 85, b: 211, a: 255 }, // Medium orchid
+      { r: 255, g: 215, b: 0, a: 255 }, // Gold
+      { r: 255, g: 165, b: 0, a: 255 }, // Orange
       // Bark/Wood
-      { r: 139, g: 90, b: 43, a: 255 },   // Saddle brown
-      { r: 101, g: 67, b: 33, a: 255 },   // Dark wood
-    ]
-  }
+      { r: 139, g: 90, b: 43, a: 255 }, // Saddle brown
+      { r: 101, g: 67, b: 33, a: 255 }, // Dark wood
+    ],
+  },
 ];
 
 export function createDefaultProject(): Project {
-  const defaultObject = createDefaultObject('obj-1', 'Object 1');
+  const defaultObject = createDefaultObject("obj-1", "Object 1");
   return {
-    version: '1.1.0',
+    version: "1.1.0",
     objects: [defaultObject],
     palettes: [...BASE_PALETTES],
     uiState: {
       ...DEFAULT_UI_STATE,
       selectedObjectId: defaultObject.id,
       selectedFrameId: defaultObject.frames[0].id,
-      selectedLayerId: defaultObject.frames[0].layers[0].id
+      selectedLayerId: defaultObject.frames[0].layers[0].id,
     },
-    variants: []
+    variants: [],
   };
 }
 
@@ -387,16 +483,21 @@ export function generateId(): string {
 
 // Convert RGBA to a single hex number (0xRRGGBBAA)
 export function rgbaToHex(pixel: Pixel | Color): number {
-  return ((pixel.r & 0xFF) << 24) | ((pixel.g & 0xFF) << 16) | ((pixel.b & 0xFF) << 8) | (pixel.a & 0xFF);
+  return (
+    ((pixel.r & 0xff) << 24) |
+    ((pixel.g & 0xff) << 16) |
+    ((pixel.b & 0xff) << 8) |
+    (pixel.a & 0xff)
+  );
 }
 
 // Convert hex number back to RGBA object
 export function hexToRgba(hex: number): Pixel {
   return {
-    r: (hex >>> 24) & 0xFF,
-    g: (hex >>> 16) & 0xFF,
-    b: (hex >>> 8) & 0xFF,
-    a: hex & 0xFF
+    r: (hex >>> 24) & 0xff,
+    g: (hex >>> 16) & 0xff,
+    b: (hex >>> 8) & 0xff,
+    a: hex & 0xff,
   };
 }
 
@@ -408,9 +509,9 @@ export function normalToPacked(normal: Normal): number {
 // Unpack a normal from a packed number
 export function packedToNormal(packed: number): Normal {
   return {
-    x: ((packed >>> 16) & 0xFF) - 128,
-    y: ((packed >>> 8) & 0xFF) - 128,
-    z: packed & 0xFF
+    x: ((packed >>> 16) & 0xff) - 128,
+    y: ((packed >>> 8) & 0xff) - 128,
+    z: packed & 0xff,
   };
 }
 
@@ -433,7 +534,7 @@ export function compactToPixelData(compact: CompactPixelData): PixelData {
   return {
     color: colorHex === 0 ? 0 : hexToRgba(colorHex),
     normal: normalPacked === 0 ? 0 : packedToNormal(normalPacked),
-    height
+    height,
   };
 }
 
@@ -452,7 +553,10 @@ export interface CompactLayer {
   isVariant?: boolean;
   variantGroupId?: string;
   selectedVariantId?: string;
-  // Per-layer offset for positioning variant within the frame (new in version 1.1.0)
+  // Per-layer, per-variant-type offsets for positioning variant within the frame
+  // Key is the variant ID (variant type), value is the offset for that variant type
+  variantOffsets?: { [variantId: string]: { x: number; y: number } };
+  // DEPRECATED: Single offset for backward compatibility during migration
   variantOffset?: { x: number; y: number };
 }
 
@@ -460,12 +564,14 @@ export interface CompactFrame {
   id: string;
   name: string;
   layers: CompactLayer[];
+  tags?: string[];
 }
 
 // Compact variant types
 export interface CompactVariantFrame {
   id: string;
   layers: CompactLayer[];
+  tags?: string[];
   // DEPRECATED: offset is now stored in CompactVariant.baseFrameOffsets
   offset?: { x: number; y: number };
 }
@@ -490,6 +596,8 @@ export interface CompactPixelObject {
   name: string;
   gridSize: { width: number; height: number };
   frames: CompactFrame[];
+  // Origin anchor point (offset from top-left of object's render region)
+  origin?: { x: number; y: number };
   // DEPRECATED: variantGroups now live at project level
   // Kept for backwards compatibility during migration
   variantGroups?: CompactVariantGroup[];
@@ -507,6 +615,9 @@ export interface CompactUIState {
   selectedLayerId: string | null;
   selectedTool: Tool;
   selectedColor: number; // hex number
+  selectionMode?: SelectionMode;
+  selectionBehavior?: SelectionBehavior;
+  focusMode?: boolean;
   brushSize: number;
   bitDepth: BitDepth;
   shapeMode: ShapeMode;
@@ -514,23 +625,45 @@ export interface CompactUIState {
   zoom: number;
   panOffset: { x: number; y: number };
   moveAllLayers: boolean;
-  eraserShape?: 'circle' | 'square'; // Optional for backward compatibility
-  normalBrushShape?: 'circle' | 'square'; // Optional for backward compatibility
+  eraserShape?: "circle" | "square"; // Optional for backward compatibility
+  pencilBrushShape?: "circle" | "square"; // Optional for backward compatibility
+  pencilBrushMax?: 8 | 16 | 32 | 64 | 128; // Optional for backward compatibility
+  traceNudgeAmount?: 10 | 20 | 25 | 50 | 100; // Optional for backward compatibility
+  normalBrushShape?: "circle" | "square"; // Optional for backward compatibility
   variantFrameIndices?: { [variantGroupId: string]: number };
   // Lighting studio state
   studioMode: StudioMode;
+  lightingDataLayerEditMode?: "normals" | "height";
   selectedNormal: number; // packed normal
   lightDirection: number; // packed normal
   lightColor: number; // hex color
   ambientColor: number; // hex color
   heightScale?: number; // Height scale factor (optional for backward compatibility)
+  heightBrushValue?: number;
   frameReferencePanelPosition?: { topPercent: number; leftPercent: number };
   frameReferencePanelMinimized?: boolean;
+  frameReferencePanelVisible?: boolean;
   canvasInfoHidden?: boolean;
+  objectLibraryViewMode?: "normal" | "small-rows" | "grid";
+  timelineThumbnailMode?: boolean;
+  // Origin display color (hex number)
+  originColor?: number;
+  lightingPreviewPanelPosition?: { topPercent: number; leftPercent: number };
+  lightingPreviewPanelMinimized?: boolean;
+
+  // Flood fill (bucket) options
+  gaussianFill?: {
+    smoothing: number;
+    radius: number;
+    radiusMax?: number;
+  };
+
+  // AI frame interpolation service URL (remote machine)
+  aiServiceUrl?: string;
 }
 
 export interface CompactProject {
-  version?: string;  // Matches package.json version
+  version?: string; // Matches package.json version
   objects: CompactPixelObject[];
   palettes: CompactPalette[];
   uiState: CompactUIState;
@@ -538,7 +671,7 @@ export interface CompactProject {
   variants?: CompactVariantGroup[];
   // Reference image data (base64 encoded image and selection box)
   referenceImage?: {
-    imageBase64: string;  // Base64 encoded image data
+    imageBase64: string; // Base64 encoded image data
     selectionBox: {
       startX: number;
       startY: number;
@@ -554,15 +687,18 @@ function layerToCompact(layer: Layer): CompactLayer {
     id: layer.id,
     name: layer.name,
     visible: layer.visible,
-    pixels: layer.pixels.map(row =>
-      row.map(pd => pixelDataToCompact(pd))
-    )
+    pixels: layer.pixels.map((row) => row.map((pd) => pixelDataToCompact(pd))),
   };
   // Include variant fields if present
   if (layer.isVariant) {
     compactLayer.isVariant = layer.isVariant;
     compactLayer.variantGroupId = layer.variantGroupId;
     compactLayer.selectedVariantId = layer.selectedVariantId;
+    // Save new per-variant-type offsets
+    if (layer.variantOffsets && Object.keys(layer.variantOffsets).length > 0) {
+      compactLayer.variantOffsets = layer.variantOffsets;
+    }
+    // Also save legacy single offset for backward compatibility if present
     if (layer.variantOffset) {
       compactLayer.variantOffset = layer.variantOffset;
     }
@@ -571,43 +707,48 @@ function layerToCompact(layer: Layer): CompactLayer {
 }
 
 // Helper to convert variant groups to compact format
-function variantGroupsToCompact(groups: VariantGroup[] | undefined): CompactVariantGroup[] | undefined {
+function variantGroupsToCompact(
+  groups: VariantGroup[] | undefined,
+): CompactVariantGroup[] | undefined {
   if (!groups || groups.length === 0) return undefined;
-  return groups.map(group => ({
+  return groups.map((group) => ({
     id: group.id,
     name: group.name,
-    variants: group.variants.map(variant => ({
+    variants: group.variants.map((variant) => ({
       id: variant.id,
       name: variant.name,
       gridSize: variant.gridSize,
-      frames: variant.frames.map(frame => ({
+      frames: variant.frames.map((frame) => ({
         id: frame.id,
-        layers: frame.layers.map(layerToCompact)
+        layers: frame.layers.map(layerToCompact),
+        ...(frame.tags?.length ? { tags: frame.tags } : {}),
       })),
-      baseFrameOffsets: variant.baseFrameOffsets
-    }))
+      baseFrameOffsets: variant.baseFrameOffsets,
+    })),
   }));
 }
 
 // Convert runtime Project to compact format for saving
 export function projectToCompact(project: Project): CompactProject {
   return {
-    version: project.version ?? '1.1.0',  // Default to current version
-    objects: project.objects.map(obj => ({
+    version: project.version ?? "1.1.0", // Default to current version
+    objects: project.objects.map((obj) => ({
       id: obj.id,
       name: obj.name,
       gridSize: obj.gridSize,
-      frames: obj.frames.map(frame => ({
+      ...(obj.origin ? { origin: obj.origin } : {}),
+      frames: obj.frames.map((frame) => ({
         id: frame.id,
         name: frame.name,
-        layers: frame.layers.map(layerToCompact)
-      }))
+        layers: frame.layers.map(layerToCompact),
+        ...(frame.tags?.length ? { tags: frame.tags } : {}),
+      })),
       // Note: object-level variantGroups are no longer saved - they live at project level now
     })),
-    palettes: project.palettes.map(palette => ({
+    palettes: project.palettes.map((palette) => ({
       id: palette.id,
       name: palette.name,
-      colors: palette.colors.map(color => rgbaToHex(color))
+      colors: palette.colors.map((color) => rgbaToHex(color)),
     })),
     uiState: {
       ...project.uiState,
@@ -616,12 +757,15 @@ export function projectToCompact(project: Project): CompactProject {
       lightDirection: normalToPacked(project.uiState.lightDirection),
       lightColor: rgbaToHex(project.uiState.lightColor),
       ambientColor: rgbaToHex(project.uiState.ambientColor),
-      heightScale: project.uiState.heightScale
+      heightScale: project.uiState.heightScale,
+      originColor: project.uiState.originColor
+        ? rgbaToHex(project.uiState.originColor)
+        : undefined,
     },
     // Project-level variants
     variants: variantGroupsToCompact(project.variants),
     // Reference image (same format in compact)
-    referenceImage: project.referenceImage
+    referenceImage: project.referenceImage,
   };
 }
 
@@ -631,15 +775,18 @@ function compactToLayer(layer: CompactLayer): Layer {
     id: layer.id,
     name: layer.name,
     visible: layer.visible,
-    pixels: layer.pixels.map(row =>
-      row.map(pd => compactToPixelData(pd))
-    )
+    pixels: layer.pixels.map((row) => row.map((pd) => compactToPixelData(pd))),
   };
   // Include variant fields if present
   if (layer.isVariant) {
     runtimeLayer.isVariant = layer.isVariant;
     runtimeLayer.variantGroupId = layer.variantGroupId;
     runtimeLayer.selectedVariantId = layer.selectedVariantId;
+    // Load new per-variant-type offsets
+    if (layer.variantOffsets && Object.keys(layer.variantOffsets).length > 0) {
+      runtimeLayer.variantOffsets = layer.variantOffsets;
+    }
+    // Load legacy single offset (for migration purposes)
     if (layer.variantOffset) {
       runtimeLayer.variantOffset = layer.variantOffset;
     }
@@ -648,12 +795,14 @@ function compactToLayer(layer: CompactLayer): Layer {
 }
 
 // Helper to convert compact variant groups back to runtime format
-function compactToVariantGroups(groups: CompactVariantGroup[] | undefined): VariantGroup[] | undefined {
+function compactToVariantGroups(
+  groups: CompactVariantGroup[] | undefined,
+): VariantGroup[] | undefined {
   if (!groups || groups.length === 0) return undefined;
-  return groups.map(group => ({
+  return groups.map((group) => ({
     id: group.id,
     name: group.name,
-    variants: group.variants.map(variant => {
+    variants: group.variants.map((variant) => {
       // Handle migration from old format (offset on frames) to new format (baseFrameOffsets)
       let baseFrameOffsets = variant.baseFrameOffsets;
       if (!baseFrameOffsets || Object.keys(baseFrameOffsets).length === 0) {
@@ -661,7 +810,7 @@ function compactToVariantGroups(groups: CompactVariantGroup[] | undefined): Vari
         // This is a reasonable default since old format had offsets per variant frame
         baseFrameOffsets = {};
         // Check if frames have old-style offsets
-        const firstFrameWithOffset = variant.frames.find(f => f.offset);
+        const firstFrameWithOffset = variant.frames.find((f) => f.offset);
         if (firstFrameWithOffset?.offset) {
           // Use the first frame's offset as default for base frame 0
           // Other base frames will get this default offset too
@@ -679,20 +828,49 @@ function compactToVariantGroups(groups: CompactVariantGroup[] | undefined): Vari
         id: variant.id,
         name: variant.name,
         gridSize: variant.gridSize,
-        frames: variant.frames.map(frame => ({
+        frames: variant.frames.map((frame) => ({
           id: frame.id,
-          layers: frame.layers.map(compactToLayer)
+          layers: frame.layers.map(compactToLayer),
+          ...(frame.tags?.length ? { tags: frame.tags } : {}),
         })),
-        baseFrameOffsets
+        baseFrameOffsets,
       };
-    })
+    }),
   }));
+}
+
+// Helper to migrate a layer from old variantOffset to new variantOffsets format
+function migrateLayerVariantOffset(layer: Layer): Layer {
+  // If layer has old-style variantOffset but no variantOffsets, migrate it
+  if (
+    layer.isVariant &&
+    layer.selectedVariantId &&
+    layer.variantOffset &&
+    !layer.variantOffsets
+  ) {
+    console.log(
+      `Migrating variantOffset to variantOffsets for layer ${layer.id}, variant ${layer.selectedVariantId}`,
+    );
+    return {
+      ...layer,
+      variantOffsets: {
+        [layer.selectedVariantId]: layer.variantOffset,
+      },
+      // Clear the deprecated field after migration
+      variantOffset: undefined,
+    };
+  }
+  return layer;
 }
 
 // Convert compact format back to runtime Project
 export function compactToProject(compact: CompactProject): Project {
   // Check if we need to migrate object-level variants to project-level
-  const needsMigration = !compact.variants && compact.objects.some(obj => obj.variantGroups && obj.variantGroups.length > 0);
+  const needsMigration =
+    !compact.variants &&
+    compact.objects.some(
+      (obj) => obj.variantGroups && obj.variantGroups.length > 0,
+    );
 
   // Collect all variant groups - either from project level or migrate from objects
   let projectVariants: VariantGroup[] | undefined;
@@ -703,7 +881,7 @@ export function compactToProject(compact: CompactProject): Project {
     projectVariants = compactToVariantGroups(compact.variants);
   } else if (needsMigration) {
     // Migrate from object-level variants
-    console.log('Migrating object-level variants to project level...');
+    console.log("Migrating object-level variants to project level...");
     projectVariants = [];
 
     // For each object, migrate its variant groups
@@ -720,96 +898,137 @@ export function compactToProject(compact: CompactProject): Project {
       // Update variant layers to use per-layer offsets instead of variant-level baseFrameOffsets
       const newFrames = obj.frames.map((frame, frameIndex) => ({
         ...frame,
-        layers: frame.layers.map(layer => {
-          if (!layer.isVariant || !layer.variantGroupId || !layer.selectedVariantId) {
+        layers: frame.layers.map((layer) => {
+          if (
+            !layer.isVariant ||
+            !layer.variantGroupId ||
+            !layer.selectedVariantId
+          ) {
             return layer;
           }
 
           // Find the variant group and variant to get the offset
-          const variantGroup = obj.variantGroups?.find(vg => vg.id === layer.variantGroupId);
-          const variant = variantGroup?.variants.find(v => v.id === layer.selectedVariantId);
-          const offset = variant?.baseFrameOffsets?.[frameIndex] ?? { x: 0, y: 0 };
+          const variantGroup = obj.variantGroups?.find(
+            (vg) => vg.id === layer.variantGroupId,
+          );
+          const variant = variantGroup?.variants.find(
+            (v) => v.id === layer.selectedVariantId,
+          );
+          const offset = variant?.baseFrameOffsets?.[frameIndex] ?? {
+            x: 0,
+            y: 0,
+          };
 
+          // Use new variantOffsets format instead of old variantOffset
           return {
             ...layer,
-            variantOffset: offset
+            variantOffsets: {
+              [layer.selectedVariantId]: offset,
+            },
           };
-        })
+        }),
       }));
 
       // Return object without variantGroups (they're now at project level)
       return {
         ...obj,
-        frames: newFrames
+        frames: newFrames,
       };
     });
   }
 
   return {
-    version: compact.version ?? '1.1.0',
-    objects: migratedObjects.map(obj => ({
+    version: compact.version ?? "1.1.0",
+    objects: migratedObjects.map((obj) => ({
       id: obj.id,
       name: obj.name,
       gridSize: obj.gridSize,
-      frames: obj.frames.map(frame => ({
+      ...(obj.origin ? { origin: obj.origin } : {}),
+      frames: obj.frames.map((frame) => ({
         id: frame.id,
         name: frame.name,
-        layers: frame.layers.map(compactToLayer)
-      }))
+        // Apply layer conversion and migration from variantOffset to variantOffsets
+        layers: frame.layers.map(compactToLayer).map(migrateLayerVariantOffset),
+        ...(frame.tags?.length ? { tags: frame.tags } : {}),
+      })),
       // Note: variantGroups no longer stored on objects
     })),
-    palettes: compact.palettes.map(palette => ({
+    palettes: compact.palettes.map((palette) => ({
       id: palette.id,
       name: palette.name,
-      colors: palette.colors.map(hex => hexToRgba(hex))
+      colors: palette.colors.map((hex) => hexToRgba(hex)),
     })),
     uiState: {
       ...compact.uiState,
       selectedColor: hexToRgba(compact.uiState.selectedColor),
+      selectionMode: compact.uiState.selectionMode ?? "rect",
+      selectionBehavior: compact.uiState.selectionBehavior ?? "movePixels",
+      focusMode: compact.uiState.focusMode ?? false,
+      lightGridMode: compact.uiState.lightGridMode ?? false,
       // Handle migration from old format without lighting state
-      studioMode: compact.uiState.studioMode ?? 'pixel',
-      selectedNormal: compact.uiState.selectedNormal !== undefined
-        ? packedToNormal(compact.uiState.selectedNormal)
-        : DEFAULT_NORMAL,
-      lightDirection: compact.uiState.lightDirection !== undefined
-        ? packedToNormal(compact.uiState.lightDirection)
-        : DEFAULT_LIGHT_DIRECTION,
-      lightColor: compact.uiState.lightColor !== undefined
-        ? hexToRgba(compact.uiState.lightColor)
-        : DEFAULT_LIGHT_COLOR,
-      ambientColor: compact.uiState.ambientColor !== undefined
-        ? hexToRgba(compact.uiState.ambientColor)
-        : DEFAULT_AMBIENT_COLOR,
+      studioMode: compact.uiState.studioMode ?? "pixel",
+      lightingDataLayerEditMode:
+        compact.uiState.lightingDataLayerEditMode ?? "normals",
+      selectedNormal:
+        compact.uiState.selectedNormal !== undefined
+          ? packedToNormal(compact.uiState.selectedNormal)
+          : DEFAULT_NORMAL,
+      lightDirection:
+        compact.uiState.lightDirection !== undefined
+          ? packedToNormal(compact.uiState.lightDirection)
+          : DEFAULT_LIGHT_DIRECTION,
+      lightColor:
+        compact.uiState.lightColor !== undefined
+          ? hexToRgba(compact.uiState.lightColor)
+          : DEFAULT_LIGHT_COLOR,
+      ambientColor:
+        compact.uiState.ambientColor !== undefined
+          ? hexToRgba(compact.uiState.ambientColor)
+          : DEFAULT_AMBIENT_COLOR,
       // Handle migration from old format without eraserShape
-      eraserShape: compact.uiState.eraserShape ?? 'circle',
+      eraserShape: compact.uiState.eraserShape ?? "circle",
+      // Handle migration from old format without pencil brush settings
+      pencilBrushShape: compact.uiState.pencilBrushShape ?? "square",
+      pencilBrushMax: compact.uiState.pencilBrushMax ?? 16,
+      traceNudgeAmount: compact.uiState.traceNudgeAmount ?? 10,
       // Handle migration from old format without normalBrushShape
-      normalBrushShape: compact.uiState.normalBrushShape ?? 'circle',
+      normalBrushShape: compact.uiState.normalBrushShape ?? "circle",
       // Handle migration from old format without heightScale
-      heightScale: compact.uiState.heightScale ?? 100
+      heightScale: compact.uiState.heightScale ?? 100,
+      heightBrushValue: compact.uiState.heightBrushValue ?? 128,
+      // Handle migration from old format without objectLibraryViewMode
+      objectLibraryViewMode: compact.uiState.objectLibraryViewMode ?? "normal",
+      // Handle migration from old format without timelineThumbnailMode
+      timelineThumbnailMode: compact.uiState.timelineThumbnailMode ?? false,
+      // Handle migration from old format without originColor
+      originColor:
+        compact.uiState.originColor !== undefined
+          ? hexToRgba(compact.uiState.originColor)
+          : undefined,
     },
     variants: projectVariants,
     // Reference image (same format in compact)
-    referenceImage: compact.referenceImage
+    referenceImage: compact.referenceImage,
   };
 }
 
 // Check if a project is in compact format (colors are numbers, not objects)
 export function isCompactFormat(data: unknown): data is CompactProject {
-  if (!data || typeof data !== 'object') return false;
+  if (!data || typeof data !== "object") return false;
   const project = data as Record<string, unknown>;
 
   // Check if palettes exist and have numeric colors
   if (Array.isArray(project.palettes) && project.palettes.length > 0) {
     const palette = project.palettes[0] as Record<string, unknown>;
     if (Array.isArray(palette.colors) && palette.colors.length > 0) {
-      return typeof palette.colors[0] === 'number';
+      return typeof palette.colors[0] === "number";
     }
   }
 
   // Check uiState.selectedColor
-  if (project.uiState && typeof project.uiState === 'object') {
+  if (project.uiState && typeof project.uiState === "object") {
     const uiState = project.uiState as Record<string, unknown>;
-    return typeof uiState.selectedColor === 'number';
+    return typeof uiState.selectedColor === "number";
   }
 
   return false;
@@ -827,7 +1046,7 @@ export function isLegacyCompactFormat(data: CompactProject): boolean {
         for (const pixel of row) {
           if (pixel !== 0) {
             // If pixel is a number (not an array), it's legacy format
-            return typeof pixel === 'number';
+            return typeof pixel === "number";
           }
         }
       }
@@ -849,12 +1068,19 @@ export function migrateLegacyPixel(legacyPixel: number | 0): CompactPixelData {
 }
 
 // Migrate a legacy compact layer to new format
-export function migrateLegacyLayer(layer: { id: string; name: string; pixels: (number | 0)[][]; visible: boolean; isVariant?: boolean; variantGroupId?: string; selectedVariantId?: string }): CompactLayer {
+export function migrateLegacyLayer(layer: {
+  id: string;
+  name: string;
+  pixels: (number | 0)[][];
+  visible: boolean;
+  isVariant?: boolean;
+  variantGroupId?: string;
+  selectedVariantId?: string;
+}): CompactLayer {
   return {
     ...layer,
-    pixels: layer.pixels.map(row =>
-      row.map(pixel => migrateLegacyPixel(pixel))
-    )
+    pixels: layer.pixels.map((row) =>
+      row.map((pixel) => migrateLegacyPixel(pixel)),
+    ),
   };
 }
-

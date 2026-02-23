@@ -1,7 +1,129 @@
 import { useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { useEditorStore } from '../../store';
-import { Project, PixelObject, Frame, Layer, Pixel } from '../../types';
+import { Project, PixelObject, Frame, Layer, Pixel, PixelData, VariantGroup } from '../../types';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
+
+// Helper to render a layer's pixels to a small thumbnail canvas
+function renderThumbnail(
+  canvas: HTMLCanvasElement,
+  pixels: PixelData[][],
+  gridWidth: number,
+  gridHeight: number
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const thumbSize = canvas.width;
+  const scale = thumbSize / Math.max(gridWidth, gridHeight);
+
+  ctx.clearRect(0, 0, thumbSize, thumbSize);
+
+  // Center the content
+  const offsetX = (thumbSize - gridWidth * scale) / 2;
+  const offsetY = (thumbSize - gridHeight * scale) / 2;
+
+  for (let y = 0; y < pixels.length && y < gridHeight; y++) {
+    const row = pixels[y];
+    if (!row) continue;
+    for (let x = 0; x < row.length && x < gridWidth; x++) {
+      const pixelData = row[x];
+      if (!pixelData || pixelData.color === 0) continue;
+      const color = pixelData.color;
+      if (color.a === 0) continue;
+      ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`;
+      ctx.fillRect(
+        Math.floor(offsetX + x * scale),
+        Math.floor(offsetY + y * scale),
+        Math.ceil(scale) || 1,
+        Math.ceil(scale) || 1
+      );
+    }
+  }
+}
+
+// Component to render a thumbnail of a layer's contents
+function CellThumbnail({
+  layer,
+  gridSize,
+  variants,
+  frameIndex
+}: {
+  layer: Layer;
+  gridSize: { width: number; height: number };
+  variants?: VariantGroup[];
+  frameIndex: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+
+    // Handle variant layers
+    if (layer.isVariant && layer.variantGroupId && variants) {
+      const variantGroup = variants.find(vg => vg.id === layer.variantGroupId);
+      const variant = variantGroup?.variants.find(v => v.id === layer.selectedVariantId);
+
+      if (variant && variant.frames.length > 0) {
+        // Use frame index to select variant frame (with wrapping)
+        const variantFrame = variant.frames[frameIndex % variant.frames.length];
+
+        // Render all visible layers from the variant frame
+        const ctx = canvasRef.current.getContext('2d');
+        if (!ctx) return;
+
+        const thumbSize = canvasRef.current.width;
+        const scale = thumbSize / Math.max(variant.gridSize.width, variant.gridSize.height);
+        const offsetX = (thumbSize - variant.gridSize.width * scale) / 2;
+        const offsetY = (thumbSize - variant.gridSize.height * scale) / 2;
+
+        ctx.clearRect(0, 0, thumbSize, thumbSize);
+
+        // Render each visible layer in the variant frame
+        for (const vLayer of variantFrame.layers) {
+          if (!vLayer.visible || !vLayer.pixels) continue;
+
+          for (let y = 0; y < vLayer.pixels.length && y < variant.gridSize.height; y++) {
+            const row = vLayer.pixels[y];
+            if (!row) continue;
+            for (let x = 0; x < row.length && x < variant.gridSize.width; x++) {
+              const pixelData = row[x];
+              if (!pixelData || pixelData.color === 0) continue;
+              const color = pixelData.color;
+              if (color.a === 0) continue;
+              ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`;
+              ctx.fillRect(
+                Math.floor(offsetX + x * scale),
+                Math.floor(offsetY + y * scale),
+                Math.ceil(scale) || 1,
+                Math.ceil(scale) || 1
+              );
+            }
+          }
+        }
+        return;
+      }
+    }
+
+    // Handle regular layers
+    if (layer.pixels) {
+      renderThumbnail(
+        canvasRef.current,
+        layer.pixels,
+        gridSize.width,
+        gridSize.height
+      );
+    }
+  }, [layer, gridSize.width, gridSize.height, variants, frameIndex]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="timeline-cell-thumbnail"
+      width={20}
+      height={20}
+    />
+  );
+}
 
 interface TimelineViewProps {
   project: Project;
@@ -186,12 +308,15 @@ export function TimelineView({
     copyTimelineCell,
     pasteTimelineCell,
     timelineCellClipboard,
-    getCurrentObject
+    getCurrentObject,
+    setTimelineThumbnailMode
   } = useEditorStore();
 
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   const [emptyCellSelection, setEmptyCellSelection] = useState<EmptyCellSelection | null>(null);
   const [hoveredLayerName, setHoveredLayerName] = useState<string | null>(null);
+
+  const showThumbnails = project.uiState.timelineThumbnailMode ?? false;
   const [dragInfo, setDragInfo] = useState<{
     frameId: string;
     layerId: string;
@@ -408,6 +533,7 @@ export function TimelineView({
                   isVariant: timelineCellClipboard.isVariant,
                   variantGroupId: timelineCellClipboard.variantGroupId,
                   selectedVariantId: timelineCellClipboard.selectedVariantId,
+                  variantOffsets: timelineCellClipboard.variantOffsets,
                   variantOffset: timelineCellClipboard.variantOffset
                 } : undefined;
                 const newLayerId = addLayerToFrameAtPosition(
@@ -521,6 +647,13 @@ export function TimelineView({
         </div>
         <div className="timeline-playback-controls">
           <button
+            className={`timeline-toggle-btn ${showThumbnails ? 'active' : ''}`}
+            onClick={() => setTimelineThumbnailMode(!showThumbnails)}
+            title="Toggle thumbnails"
+          >
+            Thumbnails
+          </button>
+          <button
             className={`play-btn ${isPlaying ? 'playing' : ''}`}
             onClick={togglePlayback}
             title={isPlaying ? 'Stop (Enter)' : 'Play (Enter)'}
@@ -605,11 +738,13 @@ export function TimelineView({
         <div className="timeline-grid-scroll" ref={gridRef}>
           <div className="timeline-grid">
             {/* Playhead */}
-            {/* Playhead: account for cell width (24px) + gap (2px) = 26px per cell */}
+            {/* Playhead: account for cell width + gap (2px) */}
+            {/* Normal: 24px + 2px = 26px per cell, center at 12px */}
+            {/* With thumbnails: 28px + 2px = 30px per cell, center at 14px */}
             {selectedFrameIndex >= 0 && (
               <div
                 className="timeline-playhead"
-                style={{ left: `${selectedFrameIndex * 26 + 12}px` }}
+                style={{ left: `${selectedFrameIndex * (showThumbnails ? 30 : 26) + (showThumbnails ? 14 : 12)}px` }}
               />
             )}
 
@@ -643,10 +778,14 @@ export function TimelineView({
                     const isSelected = selectedCell?.frameId === cell.frameId && selectedCell?.layerId === cell.layerId;
                     const isHighlighted = hoveredLayerName === cell.layerName;
 
+                    // Get the layer data for thumbnail rendering
+                    const cellFrame = frames[colIndex];
+                    const cellLayer = cellFrame?.layers.find(l => l.id === cell.layerId);
+
                     return (
                       <div
                         key={`${cell.frameId}-${cell.layerId}`}
-                        className={`timeline-cell ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''} ${cell.isVariant ? 'variant' : ''}`}
+                        className={`timeline-cell ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''} ${cell.isVariant ? 'variant' : ''} ${showThumbnails ? 'with-thumbnail' : ''}`}
                         onClick={() => {
                           handleCellClick(cell);
                           setEmptyCellSelection(null); // Clear empty cell selection when clicking any filled cell
@@ -657,10 +796,19 @@ export function TimelineView({
                         onDrop={(e) => handleDrop(e, cell.rowIndex, cell.frameId)}
                         onDragEnd={handleDragEnd}
                       >
-                        <span
-                          className="timeline-cell-dot"
-                          style={{ backgroundColor: cell.color }}
-                        />
+                        {showThumbnails && cellLayer ? (
+                          <CellThumbnail
+                            layer={cellLayer}
+                            gridSize={obj.gridSize}
+                            variants={project.variants}
+                            frameIndex={colIndex}
+                          />
+                        ) : (
+                          <span
+                            className="timeline-cell-dot"
+                            style={{ backgroundColor: cell.color }}
+                          />
+                        )}
                       </div>
                     );
                   })}

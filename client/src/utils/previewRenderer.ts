@@ -89,8 +89,8 @@ export function renderFramePreview(
       const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
 
       if (variant && vFrame) {
-        // Use layer's variantOffset, falling back to variant.baseFrameOffsets for backward compatibility
-        const variantOffset = layer.variantOffset ?? variant.baseFrameOffsets?.[frameIndex] ?? { x: 0, y: 0 };
+        // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
+        const variantOffset = layer.variantOffsets?.[layer.selectedVariantId ?? ''] ?? layer.variantOffset ?? variant.baseFrameOffsets?.[frameIndex] ?? { x: 0, y: 0 };
 
         renderVariantFrame(
           data,

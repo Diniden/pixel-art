@@ -122,6 +122,12 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
 
   if (!displayObj || !currentObj) return null;
 
+  // Current frame index (timeline selection) for same-object comparison and "go to current"
+  const rawCurrentIndex = currentObj.frames.findIndex(
+    (f) => f.id === (project?.uiState.selectedFrameId ?? '')
+  );
+  const currentFrameIndex = rawCurrentIndex >= 0 ? rawCurrentIndex : 0;
+
   // Get the reference frame
   const isValidReference = referenceFrameIndex >= 0 && referenceFrameIndex < displayObj.frames.length;
   const referenceFrame = isValidReference ? displayObj.frames[referenceFrameIndex] : null;
@@ -314,10 +320,19 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
     };
   }, [isDragging, dragStart, setFrameReferencePanelPosition, pixelsToPercentage]);
 
-  // Don't show if following current object and it has only one frame
-  if (!isReferencingDifferentObject && displayObj.frames.length <= 1) {
-    return null;
-  }
+  const handleGoToCurrentFrame = () => {
+    const target = Math.min(Math.max(0, currentFrameIndex), displayObj.frames.length - 1);
+    setReferenceFrameIndex(target);
+  };
+
+  // Frames ahead/behind: positive = reference is ahead of timeline, negative = behind
+  const frameDelta = referenceFrameIndex - currentFrameIndex;
+  const framesAheadBehindLabel =
+    frameDelta === 0
+      ? 'Current frame'
+      : frameDelta > 0
+        ? `${frameDelta} frame${frameDelta === 1 ? '' : 's'} ahead`
+        : `${-frameDelta} frame${-frameDelta === 1 ? '' : 's'} behind`;
 
   return (
     <>
@@ -400,6 +415,21 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
                 title="Next frame"
               >
                 ▶
+              </button>
+            </div>
+
+            {/* Frames ahead/behind indicator and Go to current frame */}
+            <div className="frame-reference-sync-row">
+              <span className="frame-reference-ahead-behind" title="Relative to timeline">
+                {framesAheadBehindLabel}
+              </span>
+              <button
+                className="frame-reference-go-current-btn"
+                onClick={handleGoToCurrentFrame}
+                disabled={frameDelta === 0}
+                title="Sync to current frame"
+              >
+                Go to current
               </button>
             </div>
 

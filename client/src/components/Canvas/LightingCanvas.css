@@ -1,10 +1,13 @@
 .lighting-canvas-container {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
   overflow: hidden;
   background: var(--bg-primary);
-  padding: 16px;
+  padding: 0;
+  width: 100%;
+  min-width: 0;
 }
 
 .lighting-canvas-empty {
@@ -16,87 +19,52 @@
   font-size: 1rem;
 }
 
-.lighting-canvas-row {
-  display: flex;
+/* Editor area (pan/zoom like Pixel Studio) */
+.lighting-editor-outer {
   flex: 1;
-  gap: 16px;
-  overflow: auto;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 8px;
-}
-
-.lighting-canvas-panel {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-primary);
   overflow: hidden;
-}
-
-.lighting-canvas-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-primary);
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.lighting-canvas-label .label-icon {
-  font-size: 1rem;
-}
-
-.lighting-canvas-label .label-hint {
-  font-size: 0.7rem;
-  font-weight: 400;
-  color: var(--text-muted);
-  margin-left: auto;
-}
-
-.lighting-canvas-wrapper {
-  position: relative;
-  padding: 12px;
   background: var(--bg-primary);
 }
 
-.lighting-preview-canvas,
-.lighting-normal-canvas,
-.lighting-height-canvas {
+.lighting-editor-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  outline: none;
+  touch-action: none;
+}
+
+.lighting-editor-wrapper {
+  will-change: transform;
+  width: 100%;
+  height: 100%;
+}
+
+.lighting-editor-stack {
+  position: relative;
+  display: inline-block;
+  /* Stretch the interaction surface to the full canvas-area width/height */
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.lighting-edit-canvas {
   display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
   border-radius: var(--radius-sm);
   box-shadow:
     inset 0 0 0 1px var(--border-primary),
     0 4px 12px rgba(0, 0, 0, 0.2);
-  /* Prevent CSS from resizing the canvas - maintain pixel-perfect rendering */
-  max-width: none;
-  max-height: none;
-  object-fit: none;
-}
-
-.lighting-normal-canvas {
   cursor: crosshair;
 }
 
-.lighting-normal-canvas:active {
-  cursor: grabbing;
-}
-
-.lighting-preview-overlay {
+.lighting-edit-overlay {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: 0;
+  left: 0;
   pointer-events: none;
-  z-index: 1;
-}
-
-.lighting-height-canvas {
-  cursor: not-allowed;
-  opacity: 0.9;
 }
 
 .lighting-canvas-info {
@@ -115,15 +83,87 @@
   color: var(--border-primary);
 }
 
-/* Responsive adjustments */
-@media (max-width: 1200px) {
-  .lighting-canvas-row {
-    flex-wrap: wrap;
-  }
-
-  .lighting-canvas-panel {
-    flex: 1 1 300px;
-    min-width: 280px;
-  }
+/* Floating lighting preview (draggable, like frame reference) */
+.lighting-preview-panel {
+  position: absolute;
+  background: linear-gradient(135deg, #2a2a3a 0%, #1a1a25 100%);
+  border: 2px solid #3a3a4a;
+  border-radius: 12px;
+  padding: 10px;
+  z-index: 900;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  user-select: none;
 }
 
+.lighting-preview-panel.dragging {
+  transition: none;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  cursor: grabbing;
+}
+
+.lighting-preview-panel.minimized {
+  padding: 8px 10px;
+}
+
+.lighting-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  user-select: none;
+  padding: 4px;
+  margin: -4px -4px 8px -4px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.lighting-preview-header:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.lighting-preview-panel.minimized .lighting-preview-header {
+  margin-bottom: 0;
+}
+
+.lighting-preview-title {
+  font-weight: 600;
+  color: #e0e0ff;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.lighting-preview-minimize {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a0a0b0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.lighting-preview-minimize:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0ff;
+}
+
+.lighting-preview-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a15;
+  border: 2px solid #2a2a3a;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.lighting-preview-content canvas {
+  display: block;
+  width: 200px;
+  height: 200px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 6px;
+}

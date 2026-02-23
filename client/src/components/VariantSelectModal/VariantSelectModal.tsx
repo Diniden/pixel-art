@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { Layer, VariantGroup, Variant, VariantFrame } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
+import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import './VariantSelectModal.css';
 
 interface VariantSelectModalProps {
@@ -76,6 +77,9 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
   const [resizingVariantId, setResizingVariantId] = useState<string | null>(null);
   const [resizeWidth, setResizeWidth] = useState(0);
   const [resizeHeight, setResizeHeight] = useState(0);
+  const [resizeAnchor, setResizeAnchor] = useState<AnchorPosition>('middle-center');
+  const [originalWidth, setOriginalWidth] = useState(0);
+  const [originalHeight, setOriginalHeight] = useState(0);
 
   const selectedVariantId = layer.selectedVariantId;
 
@@ -111,11 +115,14 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
     setResizingVariantId(variant.id);
     setResizeWidth(variant.gridSize.width);
     setResizeHeight(variant.gridSize.height);
+    setOriginalWidth(variant.gridSize.width);
+    setOriginalHeight(variant.gridSize.height);
+    setResizeAnchor('middle-center');
   };
 
   const handleFinishResize = () => {
     if (resizingVariantId && resizeWidth > 0 && resizeHeight > 0) {
-      resizeVariant(variantGroup.id, resizingVariantId, resizeWidth, resizeHeight);
+      resizeVariant(variantGroup.id, resizingVariantId, resizeWidth, resizeHeight, resizeAnchor);
     }
     setResizingVariantId(null);
   };
@@ -259,6 +266,17 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                     min={1}
                   />
                 </label>
+              </div>
+              <div className="resize-anchor-section">
+                <label className="anchor-label">Anchor Point:</label>
+                <AnchorGrid
+                  anchor={resizeAnchor}
+                  onChange={setResizeAnchor}
+                  currentWidth={originalWidth}
+                  currentHeight={originalHeight}
+                  newWidth={resizeWidth}
+                  newHeight={resizeHeight}
+                />
               </div>
               <div className="resize-actions">
                 <button onClick={handleFinishResize}>Apply</button>

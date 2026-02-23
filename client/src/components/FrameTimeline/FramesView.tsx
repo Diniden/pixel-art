@@ -1,8 +1,13 @@
-import { useState, useRef, useEffect, memo, useCallback, ReactNode } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactNode } from 'react';
 import { useEditorStore } from '../../store';
 import { Frame, Project, PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
+import { ResizeModal } from '../ResizeModal/ResizeModal';
+import { FrameTagsModal, tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
+import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
+import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
+import { AIInterpolateModal } from '../AIInterpolateModal/AIInterpolateModal';
 
 // Memoized thumbnail component that only re-renders when frame data actually changes
 export const FrameThumbnail = memo(function FrameThumbnail({
@@ -87,9 +92,10 @@ export const FrameThumbnail = memo(function FrameThumbnail({
         if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
           return false; // Variant selection changed, re-render
         }
-        // Check if variantOffset changed
-        if (prevLayer.variantOffset?.x !== nextLayer.variantOffset?.x ||
-            prevLayer.variantOffset?.y !== nextLayer.variantOffset?.y) {
+        // Check if variantOffsets changed for the selected variant type
+        const prevOffset = prevLayer.variantOffsets?.[prevLayer.selectedVariantId ?? ''] ?? prevLayer.variantOffset;
+        const nextOffset = nextLayer.variantOffsets?.[nextLayer.selectedVariantId ?? ''] ?? nextLayer.variantOffset;
+        if (prevOffset?.x !== nextOffset?.x || prevOffset?.y !== nextOffset?.y) {
           return false;
         }
       }
@@ -128,8 +134,10 @@ export const FrameThumbnail = memo(function FrameThumbnail({
       if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
         return false; // Variant selection changed, re-render
       }
-      if (prevLayer.variantOffset?.x !== nextLayer.variantOffset?.x ||
-          prevLayer.variantOffset?.y !== nextLayer.variantOffset?.y) {
+      // Check if variantOffsets changed for the selected variant type
+      const prevOffset2 = prevLayer.variantOffsets?.[prevLayer.selectedVariantId ?? ''] ?? prevLayer.variantOffset;
+      const nextOffset2 = nextLayer.variantOffsets?.[nextLayer.selectedVariantId ?? ''] ?? nextLayer.variantOffset;
+      if (prevOffset2?.x !== nextOffset2?.x || prevOffset2?.y !== nextOffset2?.y) {
         return false;
       }
     }
@@ -168,8 +176,16 @@ const FrameItem = memo(function FrameItem({
   editingName,
   onEditingNameChange,
   onFinishRename,
+  onOpenTags,
   variants,
-  project
+  project,
+  isDragging,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragLeave,
+  onDragEnd,
+  setItemRef
 }: {
   frame: Frame;
   index: number;
@@ -185,13 +201,45 @@ const FrameItem = memo(function FrameItem({
   editingName: string;
   onEditingNameChange: (name: string) => void;
   onFinishRename: (id: string) => void;
+  onOpenTags: (context: FrameTagsContext) => void;
   variants?: import('../../types').VariantGroup[];  // Project-level variants
   project?: { uiState?: { variantFrameIndices?: { [key: string]: number } } };
+  isDragging?: boolean;
+  onDragStart?: (e: React.DragEvent, frameId: string) => void;
+  onDragOver?: (e: React.DragEvent, index: number, rect: DOMRect) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onDragLeave?: () => void;
+  onDragEnd?: () => void;
+  setItemRef?: (el: HTMLDivElement | null, index: number) => void;
 }) {
+  const itemRef = useRef<HTMLDivElement | null>(null);
+
+  const setRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      itemRef.current = el;
+      setItemRef?.(el, index);
+    },
+    [index, setItemRef]
+  );
+
   return (
     <div
-      className={`frame-item ${isSelected ? 'selected' : ''}`}
+      ref={setRef}
+      className={`frame-item ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
       onClick={() => onSelect(frame.id)}
+      draggable={onDragStart != null}
+      onDragStart={onDragStart ? (e) => onDragStart(e, frame.id) : undefined}
+      onDragOver={
+        onDragOver
+          ? (e) => {
+              const rect = itemRef.current?.getBoundingClientRect();
+              if (rect) onDragOver(e, index, rect);
+            }
+          : undefined
+      }
+      onDrop={onDrop}
+      onDragLeave={onDragLeave}
+      onDragEnd={onDragEnd}
     >
       <div className="frame-thumbnail">
         <FrameThumbnail
@@ -228,10 +276,29 @@ const FrameItem = memo(function FrameItem({
             {frame.name}
           </span>
         )}
-        <span className="frame-index">#{index + 1}</span>
+        <span className="frame-index">
+          #{index + 1}
+          {frame.tags?.length ? (
+            <span
+              className="frame-tag-dot"
+              style={{ backgroundColor: tagColorForTag(frame.tags[0]) }}
+              title={frame.tags.join(', ')}
+            />
+          ) : null}
+        </span>
       </div>
 
       <div className="frame-actions">
+        <button
+          className="frame-action-btn frame-tags-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenTags({ type: 'object', frameId: frame.id, frameName: frame.name });
+          }}
+          title="Frame tags"
+        >
+          <span className="frame-tags-icon">T</span>
+        </button>
         <button
           className="frame-action-btn"
           onClick={(e) => {
@@ -283,8 +350,18 @@ export function FramesView({
     renameFrame,
     selectFrame,
     duplicateFrame,
-    moveFrame
+    moveFrame,
+    reorderFrame,
+    resizeObject
   } = useEditorStore();
+
+  const [showResizeModal, setShowResizeModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [dragFrameId, setDragFrameId] = useState<string | null>(null);
+  const [dropInsertIndex, setDropInsertIndex] = useState<number | null>(null);
+  const [indicatorLeft, setIndicatorLeft] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Wrapper to ensure variant timelines always sync when clicking frames
   const handleFrameSelect = useCallback((frameId: string) => {
@@ -295,6 +372,7 @@ export function FramesView({
   const [copyPrevious, setCopyPrevious] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [tagsModalContext, setTagsModalContext] = useState<FrameTagsContext | null>(null);
 
   const handleAddFrame = useCallback(() => {
     const frames = obj?.frames ?? [];
@@ -338,6 +416,102 @@ export function FramesView({
     }
   };
 
+  const handleFrameDragStart = useCallback((e: React.DragEvent, frameId: string) => {
+    setDragFrameId(frameId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', frameId);
+  }, []);
+
+  const handleFrameDragOver = useCallback(
+    (e: React.DragEvent, index: number, rect: DOMRect) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const clientX = e.clientX;
+      const midX = rect.left + rect.width / 2;
+      const insertIndex = clientX < midX ? index : index + 1;
+      const clamped = Math.max(0, Math.min(frames.length, insertIndex));
+      setDropInsertIndex(clamped);
+    },
+    [frames.length]
+  );
+
+  const handleFrameDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragFrameId != null && dropInsertIndex != null) {
+        reorderFrame(dragFrameId, dropInsertIndex);
+      }
+      setDragFrameId(null);
+      setDropInsertIndex(null);
+      setIndicatorLeft(null);
+    },
+    [dragFrameId, dropInsertIndex, reorderFrame]
+  );
+
+  const handleFrameDragLeave = useCallback(() => {
+    setDropInsertIndex(null);
+  }, []);
+
+  /** When dragging over the scroll container (e.g. empty area after last frame), set insert index to end if cursor is past the last frame. */
+  const handleListContainerDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!dragFrameId || frames.length === 0) return;
+      const lastEl = itemRefs.current[frames.length - 1];
+      if (!lastEl) return;
+      const rect = lastEl.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      if (e.clientX >= midX) {
+        setDropInsertIndex(frames.length);
+      }
+    },
+    [dragFrameId, frames.length]
+  );
+
+  const handleFrameDragEnd = useCallback(() => {
+    setDragFrameId(null);
+    setDropInsertIndex(null);
+    setIndicatorLeft(null);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (dropInsertIndex == null || dragFrameId == null || !listRef.current) {
+      setIndicatorLeft(null);
+      return;
+    }
+    const listEl = listRef.current;
+    const listRect = listEl.getBoundingClientRect();
+    const n = frames.length;
+    if (n === 0) {
+      setIndicatorLeft(null);
+      return;
+    }
+    let left: number;
+    if (dropInsertIndex === 0) {
+      const first = itemRefs.current[0];
+      left = first ? first.getBoundingClientRect().left - listRect.left : 0;
+    } else if (dropInsertIndex >= n) {
+      const last = itemRefs.current[n - 1];
+      left = last ? last.getBoundingClientRect().right - listRect.left : listRect.width;
+    } else {
+      const leftItem = itemRefs.current[dropInsertIndex - 1];
+      const rightItem = itemRefs.current[dropInsertIndex];
+      if (!leftItem || !rightItem) {
+        setIndicatorLeft(null);
+        return;
+      }
+      const leftRect = leftItem.getBoundingClientRect();
+      const rightRect = rightItem.getBoundingClientRect();
+      left = (leftRect.right + rightRect.left) / 2 - listRect.left;
+    }
+    setIndicatorLeft(left);
+  }, [dropInsertIndex, dragFrameId, frames.length]);
+
+  const handleResize = useCallback((width: number, height: number, anchor: AnchorPosition) => {
+    resizeObject(obj.id, width, height, anchor);
+  }, [resizeObject, obj.id]);
+
   // Normal frames timeline
   return (
     <>
@@ -376,6 +550,20 @@ export function FramesView({
           >
             ⚡
           </button>
+          <button
+            className="canvas-size-btn"
+            onClick={() => setShowResizeModal(true)}
+            title="Edit Canvas Size"
+          >
+            ⤢
+          </button>
+          <button
+            className="ai-interpolate-btn"
+            onClick={() => setShowAIModal(true)}
+            title="AI Frame Interpolation"
+          >
+            ✦
+          </button>
           <label className="copy-previous-label" title="Copy pixels from current frame">
             <input
               type="checkbox"
@@ -398,8 +586,25 @@ export function FramesView({
         </div>
       </div>
 
-      <div className="frames-scroll">
-        <div className="frames-list">
+      <div
+        className="frames-scroll"
+        onDragOver={handleListContainerDragOver}
+        onDrop={handleFrameDrop}
+      >
+        <div
+          ref={listRef}
+          className="frames-list frames-list-droppable"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleFrameDrop}
+          onDragLeave={handleFrameDragLeave}
+        >
+          {indicatorLeft != null && (
+            <div
+              className="frame-drop-indicator"
+              style={{ left: indicatorLeft }}
+              aria-hidden
+            />
+          )}
           {frames.map((frame, index) => (
             <FrameItem
               key={frame.id}
@@ -417,8 +622,18 @@ export function FramesView({
               editingName={editingName}
               onEditingNameChange={handleEditingNameChange}
               onFinishRename={handleFinishRename}
+              onOpenTags={setTagsModalContext}
               variants={project.variants}
               project={project}
+              isDragging={dragFrameId === frame.id}
+              onDragStart={handleFrameDragStart}
+              onDragOver={handleFrameDragOver}
+              onDrop={handleFrameDrop}
+              onDragLeave={handleFrameDragLeave}
+              onDragEnd={handleFrameDragEnd}
+              setItemRef={(el, i) => {
+                itemRefs.current[i] = el;
+              }}
             />
           ))}
         </div>
@@ -432,6 +647,34 @@ export function FramesView({
         frames={frames}
         variants={project.variants}
         zoom={project.uiState.zoom}
+      />
+
+      {/* Resize Canvas Modal */}
+      <ResizeModal
+        isOpen={showResizeModal}
+        onClose={() => setShowResizeModal(false)}
+        onApply={handleResize}
+        currentWidth={obj.gridSize.width}
+        currentHeight={obj.gridSize.height}
+        title="Resize Object Canvas"
+      />
+
+      {/* Frame Tags Modal */}
+      {tagsModalContext && (
+        <FrameTagsModal
+          isOpen
+          onClose={() => setTagsModalContext(null)}
+          context={tagsModalContext}
+        />
+      )}
+
+      {/* AI Frame Interpolation Modal */}
+      <AIInterpolateModal
+        isOpen={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        mode="base"
+        object={obj}
+        project={project}
       />
     </>
   );

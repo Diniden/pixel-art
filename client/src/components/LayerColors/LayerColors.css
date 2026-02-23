@@ -69,9 +69,15 @@
 
 .layer-colors-swatches {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
-  justify-content: center;
+  justify-content: flex-start;
+  align-items: center;
+  height: 32px; /* Keep the row height stable */
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 4px;
 }
 
 .layer-color-swatch {
@@ -82,13 +88,16 @@
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
   position: relative;
   background-clip: padding-box;
 }
 
 .layer-color-swatch::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -99,7 +108,11 @@
     linear-gradient(45deg, transparent 75%, #333 75%),
     linear-gradient(-45deg, transparent 75%, #333 75%);
   background-size: 6px 6px;
-  background-position: 0 0, 0 3px, 3px -3px, -3px 0px;
+  background-position:
+    0 0,
+    0 3px,
+    3px -3px,
+    -3px 0px;
 }
 
 .layer-color-swatch:hover {
@@ -110,13 +123,15 @@
 
 .layer-color-swatch.selected {
   border-color: #ffab00;
-  box-shadow: 0 0 0 2px rgba(255, 171, 0, 0.4), 0 0 8px rgba(255, 171, 0, 0.6);
+  box-shadow:
+    0 0 0 2px rgba(255, 171, 0, 0.4),
+    0 0 8px rgba(255, 171, 0, 0.6);
   transform: scale(1.1);
   z-index: 2;
 }
 
 .layer-color-swatch.selected::after {
-  content: '✎';
+  content: "✎";
   position: absolute;
   top: -8px;
   right: -8px;

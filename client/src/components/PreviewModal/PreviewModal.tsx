@@ -367,10 +367,10 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
         if (frameLayerMap) {
           // Get offset for this variant at the current base frame
           const variant = preRendered.variants.get(`${variantGroupId}:${selectedVariantId}`);
-          // Get the layer to check for layer.variantOffset (new system)
+          // Get the layer to check for layer.variantOffsets (new system)
           const layer = currentFrameData.layers[item.info.layerIndex];
-          // Use layer's variantOffset, falling back to variant.baseFrameOffsets for backward compatibility
-          const offset = layer?.variantOffset ?? variant?.baseFrameOffsets?.[currentFrame] ?? { x: 0, y: 0 };
+          // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
+          const offset = layer?.variantOffsets?.[selectedVariantId] ?? layer?.variantOffset ?? variant?.baseFrameOffsets?.[currentFrame] ?? { x: 0, y: 0 };
 
           // Render all layers of this variant frame
           frameLayerMap.forEach((bitmap) => {

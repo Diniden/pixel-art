@@ -1,0 +1,8 @@
+procs:
+  server:
+    shell: npm run dev:server
+  client:
+    shell: npm run dev:client
+  # AI frame interpolation service (uncomment to run locally, typically runs on a GPU machine)
+  # ai-service:
+  #   shell: cd ai-service && python server.py

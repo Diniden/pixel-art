@@ -1,0 +1,215 @@
+.frame-tags-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(2px);
+}
+
+.frame-tags-modal {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(0, 217, 255, 0.1);
+  min-width: 320px;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.frame-tags-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-primary);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.frame-tags-modal-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.frame-tags-modal-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.frame-tags-modal-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+.frame-tags-modal-content {
+  padding: 16px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.frame-tags-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.frame-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #fff;
+  border-radius: var(--radius-md);
+  border: none;
+  user-select: none;
+}
+
+.frame-tag-pill.clickable {
+  cursor: pointer;
+  transition: filter var(--transition-fast);
+}
+
+.frame-tag-pill.clickable:hover {
+  filter: brightness(1.2);
+}
+
+.frame-tag-pill-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  margin-left: 2px;
+  background: rgba(0, 0, 0, 0.25);
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.frame-tag-pill-remove:hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.frame-tags-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.frame-tags-input {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast);
+}
+
+.frame-tags-input::placeholder {
+  color: var(--text-muted);
+}
+
+.frame-tags-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.frame-tags-add-btn {
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: #fff;
+  cursor: pointer;
+  transition: filter var(--transition-fast);
+}
+
+.frame-tags-add-btn:hover {
+  filter: brightness(1.1);
+}
+
+.frame-tags-project-section {
+  border-top: 1px solid var(--border-primary);
+  padding-top: 14px;
+}
+
+.frame-tags-project-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.frame-tags-project-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.frame-tags-project-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
+.frame-tags-project-group {
+  margin-bottom: 12px;
+}
+
+.frame-tags-project-group:last-child {
+  margin-bottom: 0;
+}
+
+.frame-tags-project-group-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.frame-tags-project-group-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.frame-tags-project-group-pills .frame-tag-pill {
+  font-size: 0.75rem;
+  padding: 3px 6px;
+}

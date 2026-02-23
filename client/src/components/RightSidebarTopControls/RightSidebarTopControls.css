@@ -1,0 +1,166 @@
+.right-sidebar-top-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Make these top panels a bit more compact than default. */
+.compact-panel .panel-header {
+  padding: 6px 10px;
+  font-size: 0.7rem;
+}
+
+.compact-panel-content {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.compact-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.compact-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compact-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.compact-value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  min-width: 40px;
+  text-align: center;
+}
+
+.compact-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compact-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.compact-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compact-slider {
+  flex: 1;
+}
+
+.compact-segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.compact-segment {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.compact-segment:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.compact-segment.active {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+/* Toggle styled similarly to existing move-all toggle, but compact. */
+.compact-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.compact-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.compact-toggle-slider {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  transition: all var(--transition-fast);
+}
+
+.compact-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 2px;
+  top: 2px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+}
+
+.compact-toggle input:checked + .compact-toggle-slider {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.compact-toggle input:checked + .compact-toggle-slider::before {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.compact-toggle-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.compact-toggle input:checked ~ .compact-toggle-label {
+  color: var(--accent-primary);
+}

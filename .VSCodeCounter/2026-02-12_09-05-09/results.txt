@@ -1,0 +1,191 @@
+Date : 2026-02-12 09:05:09
+Directory : /Users/diniden/Desktop/self/pixel-art
+Total : 115 files,  33021 codes, 2157 comments, 4452 blanks, all 39630 lines
+
+Languages
++--------------------+------------+------------+------------+------------+------------+
+| language           | files      | code       | comment    | blank      | total      |
++--------------------+------------+------------+------------+------------+------------+
+| TypeScript JSX     |         38 |     13,546 |        850 |      1,624 |     16,020 |
+| TypeScript         |         33 |     11,384 |      1,204 |      1,444 |     14,032 |
+| CSS                |         32 |      7,880 |        103 |      1,313 |      9,296 |
+| JSON with Comments |          3 |        107 |          0 |         62 |        169 |
+| JSON               |          7 |         75 |          0 |          5 |         80 |
+| HTML               |          2 |         29 |          0 |          4 |         33 |
++--------------------+------------+------------+------------+------------+------------+
+
+Directories
++-----------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                                            | files      | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                               |        115 |     33,021 |      2,157 |      4,452 |     39,630 |
+| . (Files)                                                                                                       |          2 |         89 |          0 |         59 |        148 |
+| client                                                                                                          |        104 |     31,639 |      1,988 |      4,172 |     37,799 |
+| client (Files)                                                                                                  |          5 |         86 |          0 |          9 |         95 |
+| client/lib                                                                                                      |          2 |        580 |        146 |         92 |        818 |
+| client/lib (Files)                                                                                              |          1 |        345 |        129 |         65 |        539 |
+| client/lib/versions                                                                                             |          1 |        235 |         17 |         27 |        279 |
+| client/public                                                                                                   |          1 |         13 |          0 |          2 |         15 |
+| client/src                                                                                                      |         96 |     30,960 |      1,842 |      4,069 |     36,871 |
+| client/src (Files)                                                                                              |          4 |        595 |         29 |        107 |        731 |
+| client/src/components                                                                                           |         67 |     21,264 |        965 |      2,903 |     25,132 |
+| client/src/components/AddVariantModal                                                                           |          2 |        596 |         12 |         85 |        693 |
+| client/src/components/AnchorGrid                                                                                |          2 |        269 |         31 |         45 |        345 |
+| client/src/components/Canvas                                                                                    |          6 |      4,409 |        298 |        530 |      5,237 |
+| client/src/components/ColorPicker                                                                               |          2 |        820 |         61 |        104 |        985 |
+| client/src/components/CopyFromModal                                                                             |          2 |        356 |          7 |         61 |        424 |
+| client/src/components/EdgeInterpolateModal                                                                      |          2 |        344 |          0 |         47 |        391 |
+| client/src/components/ExportPreviewModal                                                                        |          2 |        827 |         39 |        122 |        988 |
+| client/src/components/FrameReferencePanel                                                                       |          2 |        664 |         43 |        106 |        813 |
+| client/src/components/FrameTagsModal                                                                            |          2 |        431 |          1 |         49 |        481 |
+| client/src/components/FrameTimeline                                                                             |          5 |      2,879 |        169 |        363 |      3,411 |
+| client/src/components/Header                                                                                    |          2 |        428 |          2 |         65 |        495 |
+| client/src/components/HeightMapModal                                                                            |          2 |        459 |         17 |         73 |        549 |
+| client/src/components/LayerColors                                                                               |          2 |        426 |         15 |         48 |        489 |
+| client/src/components/LayerPanel                                                                                |          2 |        841 |         23 |        105 |        969 |
+| client/src/components/LightingStudioPanel                                                                       |          6 |        750 |         39 |        137 |        926 |
+| client/src/components/ObjectLibrary                                                                             |          2 |        973 |         22 |        117 |      1,112 |
+| client/src/components/ObjectSelectModal                                                                         |          2 |        345 |          6 |         61 |        412 |
+| client/src/components/PaletteManager                                                                            |          2 |        321 |          0 |         43 |        364 |
+| client/src/components/PixelStudioPanel                                                                          |          2 |        315 |          2 |         36 |        353 |
+| client/src/components/PreviewModal                                                                              |          2 |        595 |         43 |        101 |        739 |
+| client/src/components/ProjectSelectModal                                                                        |          2 |        409 |          0 |         61 |        470 |
+| client/src/components/ReferenceImageModal                                                                       |          2 |        981 |         81 |        171 |      1,233 |
+| client/src/components/ReferenceImagePanel                                                                       |          2 |        686 |         21 |        101 |        808 |
+| client/src/components/ResizeModal                                                                               |          2 |        244 |          1 |         33 |        278 |
+| client/src/components/RightSidebarTopControls                                                                   |          2 |        518 |          2 |         49 |        569 |
+| client/src/components/Toolbar                                                                                   |          4 |        818 |         21 |        109 |        948 |
+| client/src/components/VariantSelectModal                                                                        |          2 |        560 |          9 |         81 |        650 |
+| client/src/services                                                                                             |          3 |        364 |         43 |         53 |        460 |
+| client/src/store                                                                                                |         17 |      6,914 |        400 |        689 |      8,003 |
+| client/src/types                                                                                                |          1 |        854 |        149 |         78 |      1,081 |
+| client/src/utils                                                                                                |          4 |        969 |        256 |        239 |      1,464 |
+| server                                                                                                          |          9 |      1,293 |        169 |        221 |      1,683 |
+| server (Files)                                                                                                  |          2 |         36 |          0 |          4 |         40 |
+| server/src                                                                                                      |          7 |      1,257 |        169 |        217 |      1,643 |
+| server/src (Files)                                                                                              |          2 |        246 |         84 |         71 |        401 |
+| server/src/data                                                                                                 |          3 |          5 |          0 |          0 |          5 |
+| server/src/routes                                                                                               |          2 |      1,006 |         85 |        146 |      1,237 |
++-----------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++-----------------------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| filename                                                                                                        | language           | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| /Users/diniden/Desktop/self/pixel-art/bun.lock                                                                  | JSON with Comments |         73 |          0 |         58 |        131 |
+| /Users/diniden/Desktop/self/pixel-art/client/index.html                                                         | HTML               |         16 |          0 |          2 |         18 |
+| /Users/diniden/Desktop/self/pixel-art/client/lib/parse-pixel-project.ts                                         | TypeScript         |        345 |        129 |         65 |        539 |
+| /Users/diniden/Desktop/self/pixel-art/client/lib/versions/v1.ts                                                 | TypeScript         |        235 |         17 |         27 |        279 |
+| /Users/diniden/Desktop/self/pixel-art/client/package.json                                                       | JSON               |         30 |          0 |          2 |         32 |
+| /Users/diniden/Desktop/self/pixel-art/client/public/favicon.svg                                                 | HTML               |         13 |          0 |          2 |         15 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/App.css                                                        | CSS                |        204 |          7 |         40 |        251 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/App.tsx                                                        | TypeScript JSX     |        200 |         16 |         23 |        239 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/AddVariantModal/AddVariantModal.css                 | CSS                |        355 |          1 |         55 |        411 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/AddVariantModal/AddVariantModal.tsx                 | TypeScript JSX     |        241 |         11 |         30 |        282 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/AnchorGrid/AnchorGrid.css                           | CSS                |        116 |          4 |         22 |        142 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/AnchorGrid/AnchorGrid.tsx                           | TypeScript JSX     |        153 |         27 |         23 |        203 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/Canvas.css                                   | CSS                |        327 |          9 |         53 |        389 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/Canvas.tsx                                   | TypeScript JSX     |      2,541 |        219 |        290 |      3,050 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/CanvasInfo.tsx                               | TypeScript JSX     |        132 |          3 |         10 |        145 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/LightingCanvas.css                           | CSS                |        146 |          3 |         21 |        170 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/LightingCanvas.tsx                           | TypeScript JSX     |        830 |         23 |         83 |        936 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Canvas/drawingUtils.ts                              | TypeScript         |        433 |         41 |         73 |        547 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ColorPicker/ColorPicker.css                         | CSS                |        258 |         12 |         41 |        311 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ColorPicker/ColorPicker.tsx                         | TypeScript JSX     |        562 |         49 |         63 |        674 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/CopyFromModal/CopyFromModal.css                     | CSS                |        165 |          1 |         26 |        192 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/CopyFromModal/CopyFromModal.tsx                     | TypeScript JSX     |        191 |          6 |         35 |        232 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/EdgeInterpolateModal/EdgeInterpolateModal.css       | CSS                |        209 |          0 |         33 |        242 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/EdgeInterpolateModal/EdgeInterpolateModal.tsx       | TypeScript JSX     |        135 |          0 |         14 |        149 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ExportPreviewModal/ExportPreviewModal.css           | CSS                |        379 |         10 |         63 |        452 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ExportPreviewModal/ExportPreviewModal.tsx           | TypeScript JSX     |        448 |         29 |         59 |        536 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/FrameReferencePanel/FrameReferencePanel.css         | CSS                |        290 |          2 |         45 |        337 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/FrameReferencePanel/FrameReferencePanel.tsx         | TypeScript JSX     |        374 |         41 |         61 |        476 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTagsModal/FrameTagsModal.css                   | CSS                |        188 |          0 |         28 |        216 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTagsModal/FrameTagsModal.tsx                   | TypeScript JSX     |        243 |          1 |         21 |        265 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTimeline/FrameTimeline.css                     | CSS                |        897 |         17 |        148 |      1,062 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTimeline/FrameTimeline.tsx                     | TypeScript JSX     |        197 |         23 |         32 |        252 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTimeline/FramesView.tsx                        | TypeScript JSX     |        589 |         28 |         48 |        665 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTimeline/TimelineView.tsx                      | TypeScript JSX     |        651 |         88 |         96 |        835 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/FrameTimeline/VariantView.tsx                       | TypeScript JSX     |        545 |         13 |         39 |        597 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Header/Header.css                                   | CSS                |        252 |          0 |         43 |        295 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Header/Header.tsx                                   | TypeScript JSX     |        176 |          2 |         22 |        200 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/HeightMapModal/HeightMapModal.css                   | CSS                |        215 |          0 |         35 |        250 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/HeightMapModal/HeightMapModal.tsx                   | TypeScript JSX     |        244 |         17 |         38 |        299 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LayerColors/LayerColors.css                         | CSS                |        171 |          0 |         22 |        193 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LayerColors/LayerColors.tsx                         | TypeScript JSX     |        255 |         15 |         26 |        296 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LayerPanel/LayerPanel.css                           | CSS                |        389 |          4 |         73 |        466 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LayerPanel/LayerPanel.tsx                           | TypeScript JSX     |        452 |         19 |         32 |        503 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/LightControl.css                | CSS                |        109 |          2 |         21 |        132 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/LightControl.tsx                | TypeScript JSX     |        239 |         12 |         31 |        282 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/LightingStudioPanel.css         | CSS                |         82 |          0 |         17 |         99 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/LightingStudioPanel.tsx         | TypeScript JSX     |         83 |          0 |          8 |         91 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/NormalPicker.css                | CSS                |         49 |          0 |         11 |         60 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/LightingStudioPanel/NormalPicker.tsx                | TypeScript JSX     |        188 |         25 |         49 |        262 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ObjectLibrary/ObjectLibrary.css                     | CSS                |        397 |          5 |         68 |        470 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ObjectLibrary/ObjectLibrary.tsx                     | TypeScript JSX     |        576 |         17 |         49 |        642 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ObjectSelectModal/ObjectSelectModal.css             | CSS                |        198 |          0 |         30 |        228 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ObjectSelectModal/ObjectSelectModal.tsx             | TypeScript JSX     |        147 |          6 |         31 |        184 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/PaletteManager/PaletteManager.css                   | CSS                |        171 |          0 |         27 |        198 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/PaletteManager/PaletteManager.tsx                   | TypeScript JSX     |        150 |          0 |         16 |        166 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/PixelStudioPanel/PixelStudioPanel.css               | CSS                |        137 |          1 |         24 |        162 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/PixelStudioPanel/PixelStudioPanel.tsx               | TypeScript JSX     |        178 |          1 |         12 |        191 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/PreviewModal/PreviewModal.css                       | CSS                |        232 |          1 |         34 |        267 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/PreviewModal/PreviewModal.tsx                       | TypeScript JSX     |        363 |         42 |         67 |        472 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ProjectSelectModal/ProjectSelectModal.css           | CSS                |        245 |          0 |         38 |        283 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ProjectSelectModal/ProjectSelectModal.tsx           | TypeScript JSX     |        164 |          0 |         23 |        187 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ReferenceImageModal/ReferenceImageModal.css         | CSS                |        311 |          4 |         50 |        365 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ReferenceImageModal/ReferenceImageModal.tsx         | TypeScript JSX     |        670 |         77 |        121 |        868 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ReferenceImagePanel/ReferenceImagePanel.css         | CSS                |        310 |          6 |         59 |        375 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ReferenceImagePanel/ReferenceImagePanel.tsx         | TypeScript JSX     |        376 |         15 |         42 |        433 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ResizeModal/ResizeModal.css                         | CSS                |        148 |          0 |         21 |        169 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/ResizeModal/ResizeModal.tsx                         | TypeScript JSX     |         96 |          1 |         12 |        109 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/RightSidebarTopControls/RightSidebarTopControls.css | CSS                |        142 |          2 |         23 |        167 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/RightSidebarTopControls/RightSidebarTopControls.tsx | TypeScript JSX     |        376 |          0 |         26 |        402 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Toolbar/LightingStudioTools.tsx                     | TypeScript JSX     |        253 |         16 |         37 |        306 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Toolbar/PixelStudioTools.tsx                        | TypeScript JSX     |        106 |          0 |         14 |        120 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Toolbar/Toolbar.css                                 | CSS                |        301 |          4 |         52 |        357 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/Toolbar/Toolbar.tsx                                 | TypeScript JSX     |        158 |          1 |          6 |        165 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/VariantSelectModal/VariantSelectModal.css           | CSS                |        305 |          2 |         49 |        356 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/components/VariantSelectModal/VariantSelectModal.tsx           | TypeScript JSX     |        255 |          7 |         32 |        294 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/index.css                                                      | CSS                |        182 |          6 |         41 |        229 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/main.tsx                                                       | TypeScript JSX     |          9 |          0 |          3 |         12 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/services/api.ts                                                | TypeScript         |        307 |         37 |         39 |        383 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/services/autoSave.ts                                           | TypeScript         |         53 |          2 |         12 |         67 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/services/export.ts                                             | TypeScript         |          4 |          4 |          2 |         10 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/colorAdjustmentActions.ts                                | TypeScript         |        391 |         22 |         30 |        443 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/drawingActions.ts                                        | TypeScript         |        327 |         15 |         25 |        367 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/frameActions.ts                                          | TypeScript         |        292 |         15 |         35 |        342 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/helpers.ts                                               | TypeScript         |         76 |          4 |         14 |         94 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/index.ts                                                 | TypeScript         |        165 |         16 |         16 |        197 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/layerActions.ts                                          | TypeScript         |        650 |         37 |         77 |        764 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/layerClipboardActions.ts                                 | TypeScript         |        727 |         49 |         62 |        838 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/lightingActions.ts                                       | TypeScript         |        920 |         47 |         70 |      1,037 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/objectActions.ts                                         | TypeScript         |        210 |          8 |         16 |        234 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/paletteActions.ts                                        | TypeScript         |         65 |          0 |          6 |         71 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/projectActions.ts                                        | TypeScript         |        147 |         14 |         30 |        191 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/referenceActions.ts                                      | TypeScript         |         89 |          7 |         13 |        109 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/selectionActions.ts                                      | TypeScript         |        582 |         14 |         56 |        652 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/storeTypes.ts                                            | TypeScript         |        361 |         48 |         39 |        448 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/timelineActions.ts                                       | TypeScript         |        282 |         11 |         25 |        318 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/toolActions.ts                                           | TypeScript         |        427 |         12 |         46 |        485 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/store/variantActions.ts                                        | TypeScript         |      1,203 |         81 |        129 |      1,413 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/types/index.ts                                                 | TypeScript         |        854 |        149 |         78 |      1,081 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/utils/alphaBlend.ts                                            | TypeScript         |         40 |         24 |         14 |         78 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/utils/edgeInterpolate.ts                                       | TypeScript         |        311 |        114 |         82 |        507 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/utils/lightingRenderer.ts                                      | TypeScript         |        320 |         82 |         80 |        482 |
+| /Users/diniden/Desktop/self/pixel-art/client/src/utils/previewRenderer.ts                                       | TypeScript         |        298 |         36 |         63 |        397 |
+| /Users/diniden/Desktop/self/pixel-art/client/tsconfig.json                                                      | JSON with Comments |         21 |          0 |          2 |         23 |
+| /Users/diniden/Desktop/self/pixel-art/client/tsconfig.tsbuildinfo                                               | JSON               |          1 |          0 |          0 |          1 |
+| /Users/diniden/Desktop/self/pixel-art/client/vite.config.ts                                                     | TypeScript         |         18 |          0 |          3 |         21 |
+| /Users/diniden/Desktop/self/pixel-art/package.json                                                              | JSON               |         16 |          0 |          1 |         17 |
+| /Users/diniden/Desktop/self/pixel-art/server/package.json                                                       | JSON               |         23 |          0 |          2 |         25 |
+| /Users/diniden/Desktop/self/pixel-art/server/src/backup.ts                                                      | TypeScript         |        227 |         80 |         64 |        371 |
+| /Users/diniden/Desktop/self/pixel-art/server/src/data/Base Unit.json                                            | JSON               |          1 |          0 |          0 |          1 |
+| /Users/diniden/Desktop/self/pixel-art/server/src/data/Plains Terrain.json                                       | JSON               |          1 |          0 |          0 |          1 |
+| /Users/diniden/Desktop/self/pixel-art/server/src/data/config.json                                               | JSON               |          3 |          0 |          0 |          3 |
+| /Users/diniden/Desktop/self/pixel-art/server/src/index.ts                                                       | TypeScript         |         19 |          4 |          7 |         30 |
+| /Users/diniden/Desktop/self/pixel-art/server/src/routes/export.ts                                               | TypeScript         |        782 |         58 |         88 |        928 |
+| /Users/diniden/Desktop/self/pixel-art/server/src/routes/project.ts                                              | TypeScript         |        224 |         27 |         58 |        309 |
+| /Users/diniden/Desktop/self/pixel-art/server/tsconfig.json                                                      | JSON with Comments |         13 |          0 |          2 |         15 |
+| Total                                                                                                           |                    |     33,021 |      2,157 |      4,452 |     39,630 |
++-----------------------------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+

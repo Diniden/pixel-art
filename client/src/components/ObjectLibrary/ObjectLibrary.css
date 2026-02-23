@@ -2,6 +2,21 @@
   flex-shrink: 0;
 }
 
+/* Header actions container */
+.object-library .header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.object-library .compact-toggle {
+  font-size: 14px;
+}
+
+.object-library .compact-toggle.active {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
 .new-object-form {
   padding: 12px;
   background: var(--bg-tertiary);
@@ -202,6 +217,12 @@
   animation: fadeIn 0.2s ease;
 }
 
+.resize-anchor-section {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0;
+}
+
 .resize-actions {
   display: flex;
   gap: 8px;
@@ -313,3 +334,136 @@
   background: #dc2626;
 }
 
+/* Small Rows View */
+.object-list-small {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.object-item-small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+.object-item-small:hover {
+  background: var(--bg-hover);
+}
+
+.object-item-small.selected {
+  border-color: var(--accent-primary);
+  background: rgba(0, 217, 255, 0.1);
+}
+
+.object-thumbnail-small {
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.object-thumbnail-small .obj-thumb-canvas {
+  width: 20px;
+  height: 20px;
+}
+
+.object-name-small {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.object-name-input-small {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  font-size: 0.8rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+
+/* Compact Grid View */
+.object-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px;
+}
+
+.compact-object-item {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: var(--bg-tertiary);
+}
+
+.compact-object-item:hover {
+  border-color: var(--border-primary);
+  background: var(--bg-hover);
+}
+
+.compact-object-item.selected {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(0, 217, 255, 0.3);
+}
+
+.compact-object-item .obj-thumb-canvas {
+  display: block;
+}
+
+/* Compact Tooltip */
+.compact-tooltip {
+  position: fixed;
+  z-index: 10000;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: tooltipFadeIn 0.15s ease;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.compact-tooltip .tooltip-name {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.compact-tooltip .tooltip-details {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}

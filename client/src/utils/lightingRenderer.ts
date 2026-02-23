@@ -99,8 +99,8 @@ export function composeLayers(
       if (variant) {
         const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
         const vFrame = variant.frames[variantFrameIdx % variant.frames.length];
-        // Use layer's variantOffset, falling back to variant.baseFrameOffsets for backward compatibility
-        const vOffset = layer.variantOffset ?? variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
+        // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
+        const vOffset = layer.variantOffsets?.[layer.selectedVariantId ?? ''] ?? layer.variantOffset ?? variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
 
         if (vFrame) {
           // Render variant layers

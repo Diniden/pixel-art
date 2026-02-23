@@ -11,3 +11,12 @@ node_modules
 DS_Store
 *.bak.*
 ignore/
+# Server backups
+server/src/data/backups/
+server/src/data/*.backup*.json
+server/exports/
+
+# AI service (large model files and cloned repos)
+ai-service/model/
+ai-service/Practical-RIFE/
+ai-service/__pycache__/

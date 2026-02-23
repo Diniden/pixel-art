@@ -1,21 +1,30 @@
-import { useState } from 'react';
-import { useEditorStore } from '../../store';
-import { Tool } from '../../types';
-import { EdgeInterpolateModal } from '../EdgeInterpolateModal/EdgeInterpolateModal';
-import { HeightMapModal } from '../HeightMapModal/HeightMapModal';
-import { computeEdgeInterpolatedNormals } from '../../utils/edgeInterpolate';
-import { Pixel, PixelData } from '../../types';
+import { useState } from "react";
+import { useEditorStore } from "../../store";
+import { Tool, Normal } from "../../types";
+import { EdgeInterpolateModal } from "../EdgeInterpolateModal/EdgeInterpolateModal";
+import { HeightMapModal } from "../HeightMapModal/HeightMapModal";
+import { computeEdgeInterpolatedNormals } from "../../utils/edgeInterpolate";
+import { Pixel, PixelData } from "../../types";
 
-const lightingTools: { id: Tool; icon: string; label: string; hotkey: string }[] = [
-  { id: 'normal-pencil', icon: '🔆', label: 'Normal Pencil', hotkey: '1' },
-  { id: 'auto-normal', icon: '🔧', label: 'Auto Normal', hotkey: '2' },
-  { id: 'height-map', icon: '🗻', label: 'Height Map', hotkey: '3' },
+const lightingTools: {
+  id: Tool;
+  icon: string;
+  label: string;
+  hotkey: string;
+}[] = [
+  { id: "normal-pencil", icon: "🔆", label: "Normal Pencil", hotkey: "1" },
+  { id: "auto-normal", icon: "🔧", label: "Auto Normal", hotkey: "2" },
+  { id: "height-map", icon: "🗻", label: "Height Map", hotkey: "3" },
 ];
 
-type ChannelType = 'R' | 'G' | 'B' | 'H' | 'S' | 'L';
+type ChannelType = "R" | "G" | "B" | "H" | "S" | "L";
 
 // Convert RGB to HSL
-function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+function rgbToHsl(
+  r: number,
+  g: number,
+  b: number,
+): { h: number; s: number; l: number } {
   r /= 255;
   g /= 255;
   b /= 255;
@@ -46,41 +55,55 @@ function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: n
   return {
     h: Math.round(h * 255), // Scale to 0-255
     s: Math.round(s * 255),
-    l: Math.round(l * 255)
+    l: Math.round(l * 255),
   };
 }
 
 // Extract channel value from pixel
 function getChannelValue(pixel: Pixel, channel: ChannelType): number {
   switch (channel) {
-    case 'R':
+    case "R":
       return pixel.r;
-    case 'G':
+    case "G":
       return pixel.g;
-    case 'B':
+    case "B":
       return pixel.b;
-    case 'H':
-    case 'S':
-    case 'L': {
+    case "H":
+    case "S":
+    case "L": {
       const hsl = rgbToHsl(pixel.r, pixel.g, pixel.b);
-      return hsl[channel.toLowerCase() as 'h' | 's' | 'l'];
+      return hsl[channel.toLowerCase() as "h" | "s" | "l"];
     }
   }
 }
 
 export function LightingStudioTools() {
-  const { project, setTool, getCurrentLayer, getCurrentObject, getCurrentFrame, isEditingVariant, getCurrentVariant, setNormalPixels, setHeightPixels } = useEditorStore();
-  const [showEdgeInterpolateModal, setShowEdgeInterpolateModal] = useState(false);
+  const {
+    project,
+    setTool,
+    getCurrentLayer,
+    getCurrentObject,
+    getCurrentFrame,
+    isEditingVariant,
+    getCurrentVariant,
+    setNormalPixels,
+    computeNormalsForAllFrames,
+    setHeightPixels,
+    setLightingDataLayerEditMode,
+  } = useEditorStore();
+  const [showEdgeInterpolateModal, setShowEdgeInterpolateModal] =
+    useState(false);
   const [showHeightMapModal, setShowHeightMapModal] = useState(false);
 
   if (!project) return null;
 
   const { selectedTool } = project.uiState;
+  const editMode = project.uiState.lightingDataLayerEditMode ?? "normals";
 
   const handleToolClick = (toolId: Tool) => {
-    if (toolId === 'auto-normal') {
+    if (toolId === "auto-normal") {
       setShowEdgeInterpolateModal(true);
-    } else if (toolId === 'height-map') {
+    } else if (toolId === "height-map") {
       setShowHeightMapModal(true);
     } else {
       setTool(toolId);
@@ -91,6 +114,7 @@ export function LightingStudioTools() {
     startAngle: number;
     smoothing: number;
     radius: number;
+    applyToAllFrames: boolean;
   }) => {
     const layer = getCurrentLayer();
     const obj = getCurrentObject();
@@ -100,6 +124,17 @@ export function LightingStudioTools() {
 
     if (!layer || !obj || !frame) return;
 
+    // If applying to all frames, use the store function that computes normals per-frame
+    if (params.applyToAllFrames) {
+      computeNormalsForAllFrames({
+        startAngle: params.startAngle,
+        smoothing: params.smoothing,
+        radius: params.radius,
+      });
+      return;
+    }
+
+    // For single frame, compute and apply normals here
     // Determine grid dimensions and target layer
     let gridWidth: number;
     let gridHeight: number;
@@ -122,14 +157,14 @@ export function LightingStudioTools() {
       gridHeight,
       params.startAngle,
       params.smoothing,
-      params.radius
+      params.radius,
     );
 
     // Apply normals using setNormalPixels
     const pixelsToUpdate = normals.map((normal, index) => {
       const y = Math.floor(index / gridWidth);
       const x = index % gridWidth;
-      return { x, y, normal: normal || 0 };
+      return { x, y, normal: (normal || 0) as Normal | 0 };
     });
 
     setNormalPixels(pixelsToUpdate);
@@ -172,7 +207,11 @@ export function LightingStudioTools() {
       if (!row) continue;
       for (let x = 0; x < gridWidth; x++) {
         const pixelData: PixelData | undefined = row[x];
-        if (pixelData && pixelData.color !== 0 && typeof pixelData.color === 'object') {
+        if (
+          pixelData &&
+          pixelData.color !== 0 &&
+          typeof pixelData.color === "object"
+        ) {
           const channelValue = getChannelValue(pixelData.color, params.channel);
           channelValues.push(channelValue);
           pixelPositions.push({ x, y, pixel: pixelData.color });
@@ -212,12 +251,34 @@ export function LightingStudioTools() {
 
   return (
     <>
+      {/* Lighting data layer edit target */}
+      <div className="toolbar-section studio-mode-section">
+        <div className="studio-mode-toggle" title="Lighting edit target">
+          <button
+            className={`studio-mode-btn ${editMode === "normals" ? "active" : ""}`}
+            onClick={() => setLightingDataLayerEditMode("normals")}
+            aria-label="Edit Normals"
+            title="Edit Normals"
+          >
+            <span className="tool-icon">🔆</span>
+          </button>
+          <button
+            className={`studio-mode-btn ${editMode === "height" ? "active" : ""}`}
+            onClick={() => setLightingDataLayerEditMode("height")}
+            aria-label="Edit Height Map"
+            title="Edit Height Map"
+          >
+            <span className="tool-icon">🗻</span>
+          </button>
+        </div>
+      </div>
+
       <div className="toolbar-section">
         <div className="toolbar-group">
           {lightingTools.map((tool) => (
             <button
               key={tool.id}
-              className={`tool-btn ${selectedTool === tool.id ? 'active' : ''}`}
+              className={`tool-btn ${selectedTool === tool.id ? "active" : ""}`}
               onClick={() => handleToolClick(tool.id)}
               title={`${tool.label} (${tool.hotkey})`}
             >
@@ -242,4 +303,3 @@ export function LightingStudioTools() {
     </>
   );
 }
-

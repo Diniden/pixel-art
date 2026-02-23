@@ -1,9 +1,12 @@
-import { useState, useRef, useEffect, memo } from 'react';
+import { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
+import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import './ObjectLibrary.css';
+
+const THUMB_SIZE = 32;
 
 const ObjectThumbnail = memo(function ObjectThumbnail({
   obj,
@@ -24,7 +27,7 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
   isFirstFrameSelected: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const thumbSize = 32;
+  const thumbSize = THUMB_SIZE;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -111,8 +114,10 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
         if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
           return false; // Variant selection changed, re-render
         }
-        if (prevLayer.variantOffset?.x !== nextLayer.variantOffset?.x ||
-            prevLayer.variantOffset?.y !== nextLayer.variantOffset?.y) {
+        // Check new variantOffsets for the selected variant type
+        const prevOffset = prevLayer.variantOffsets?.[prevLayer.selectedVariantId ?? ''] ?? prevLayer.variantOffset;
+        const nextOffset = nextLayer.variantOffsets?.[nextLayer.selectedVariantId ?? ''] ?? nextLayer.variantOffset;
+        if (prevOffset?.x !== nextOffset?.x || prevOffset?.y !== nextOffset?.y) {
           return false; // Variant offset changed, re-render
         }
       }
@@ -138,6 +143,88 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
   return true;
 });
 
+// Tooltip component for compact mode
+function Tooltip({ children, visible, x, y }: { children: React.ReactNode; visible: boolean; x: number; y: number }) {
+  if (!visible) return null;
+
+  return createPortal(
+    <div
+      className="compact-tooltip"
+      style={{
+        left: x,
+        top: y,
+      }}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+// Compact item with hover tooltip
+const CompactObjectItem = memo(function CompactObjectItem({
+  obj,
+  project,
+  isSelected,
+  isFirstFrameSelected,
+  onClick,
+}: {
+  obj: PixelObject;
+  project?: {
+    variants?: import('../../types').VariantGroup[];
+    uiState?: {
+      variantFrameIndices?: { [key: string]: number };
+      selectedObjectId?: string | null;
+      selectedFrameId?: string | null;
+    }
+  };
+  isSelected: boolean;
+  isFirstFrameSelected: boolean;
+  onClick: () => void;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const itemRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseEnter = useCallback((e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({
+      x: rect.right + 8,
+      y: rect.top,
+    });
+    setShowTooltip(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setShowTooltip(false);
+  }, []);
+
+  return (
+    <>
+      <div
+        ref={itemRef}
+        className={`compact-object-item ${isSelected ? 'selected' : ''}`}
+        onClick={onClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <ObjectThumbnail
+          obj={obj}
+          project={project}
+          isSelected={isSelected}
+          isFirstFrameSelected={isFirstFrameSelected}
+        />
+      </div>
+      <Tooltip visible={showTooltip} x={tooltipPos.x} y={tooltipPos.y}>
+        <div className="tooltip-name">{obj.name}</div>
+        <div className="tooltip-details">
+          {obj.gridSize.width}×{obj.gridSize.height} • {obj.frames.length} frame{obj.frames.length !== 1 ? 's' : ''}
+        </div>
+      </Tooltip>
+    </>
+  );
+});
+
 export function ObjectLibrary() {
   const {
     project,
@@ -145,7 +232,9 @@ export function ObjectLibrary() {
     deleteObject,
     renameObject,
     resizeObject,
-    selectObject
+    selectObject,
+    duplicateObject,
+    setObjectLibraryViewMode
   } = useEditorStore();
 
   const [showNewForm, setShowNewForm] = useState(false);
@@ -157,7 +246,12 @@ export function ObjectLibrary() {
   const [showResizeFor, setShowResizeFor] = useState<string | null>(null);
   const [resizeWidth, setResizeWidth] = useState(32);
   const [resizeHeight, setResizeHeight] = useState(32);
+  const [resizeAnchor, setResizeAnchor] = useState<AnchorPosition>('middle-center');
+  const [originalWidth, setOriginalWidth] = useState(32);
+  const [originalHeight, setOriginalHeight] = useState(32);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+
+  const viewMode = project?.uiState.objectLibraryViewMode ?? 'normal';
 
   if (!project) return null;
 
@@ -190,10 +284,13 @@ export function ObjectLibrary() {
     setShowResizeFor(obj.id);
     setResizeWidth(obj.gridSize.width);
     setResizeHeight(obj.gridSize.height);
+    setOriginalWidth(obj.gridSize.width);
+    setOriginalHeight(obj.gridSize.height);
+    setResizeAnchor('middle-center');
   };
 
   const handleApplyResize = (id: string) => {
-    resizeObject(id, resizeWidth, resizeHeight);
+    resizeObject(id, resizeWidth, resizeHeight, resizeAnchor);
     setShowResizeFor(null);
   };
 
@@ -204,17 +301,48 @@ export function ObjectLibrary() {
     }
   };
 
+  const cycleViewMode = () => {
+    if (viewMode === 'normal') {
+      setObjectLibraryViewMode('small-rows');
+    } else if (viewMode === 'small-rows') {
+      setObjectLibraryViewMode('grid');
+    } else {
+      setObjectLibraryViewMode('normal');
+    }
+  };
+
+  const getViewModeIcon = () => {
+    if (viewMode === 'normal') return '☰';
+    if (viewMode === 'small-rows') return '≡';
+    return '▦';
+  };
+
+  const getViewModeTitle = () => {
+    if (viewMode === 'normal') return 'Normal View (click for Small Rows)';
+    if (viewMode === 'small-rows') return 'Small Rows (click for Grid)';
+    return 'Grid View (click for Normal)';
+  };
+
   return (
     <div className="panel object-library">
       <div className="panel-header">
         Objects
-        <button
-          className="header-btn"
-          onClick={() => setShowNewForm(!showNewForm)}
-          title="New Object"
-        >
-          +
-        </button>
+        <div className="header-actions">
+          <button
+            className={`header-btn compact-toggle ${viewMode !== 'normal' ? 'active' : ''}`}
+            onClick={cycleViewMode}
+            title={getViewModeTitle()}
+          >
+            {getViewModeIcon()}
+          </button>
+          <button
+            className="header-btn"
+            onClick={() => setShowNewForm(!showNewForm)}
+            title="New Object"
+          >
+            +
+          </button>
+        </div>
       </div>
       <div className="panel-content">
         {showNewForm && (
@@ -259,122 +387,210 @@ export function ObjectLibrary() {
           </div>
         )}
 
-        <div className="object-list">
-          {objects.map((obj) => {
-            const isSelected = selectedObjectId === obj.id;
-            const firstFrame = obj.frames[0];
-            const isFirstFrameSelected = isSelected && firstFrame && project.uiState.selectedFrameId === firstFrame.id;
+        {viewMode === 'grid' ? (
+          <div className="object-grid">
+            {objects.map((obj) => {
+              const isSelected = selectedObjectId === obj.id;
+              const firstFrame = obj.frames[0];
+              const isFirstFrameSelected = isSelected && firstFrame && project.uiState.selectedFrameId === firstFrame.id;
 
-            return (
-            <div key={obj.id} className="object-wrapper">
-              <div
-                className={`object-item ${isSelected ? 'selected' : ''}`}
-                onClick={() => selectObject(obj.id)}
-              >
-                <div className="object-thumbnail">
-                  <ObjectThumbnail
-                    obj={obj}
-                    project={project}
-                    isSelected={isSelected}
-                    isFirstFrameSelected={isFirstFrameSelected}
-                  />
-                </div>
-                <div className="object-content">
-                  <div className="object-name-row">
-                    {editingId === obj.id ? (
-                      <input
-                        type="text"
-                        className="object-name-input"
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onBlur={() => handleFinishRename(obj.id)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(obj.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        autoFocus
-                      />
-                    ) : (
-                      <span
-                        className="object-name"
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          handleStartRename(obj.id, obj.name);
-                        }}
-                      >
-                        {obj.name}
-                      </span>
-                    )}
+              return (
+                <CompactObjectItem
+                  key={obj.id}
+                  obj={obj}
+                  project={project}
+                  isSelected={isSelected}
+                  isFirstFrameSelected={isFirstFrameSelected}
+                  onClick={() => selectObject(obj.id)}
+                />
+              );
+            })}
+          </div>
+        ) : viewMode === 'small-rows' ? (
+          <div className="object-list-small">
+            {objects.map((obj) => {
+              const isSelected = selectedObjectId === obj.id;
+              const firstFrame = obj.frames[0];
+              const isFirstFrameSelected = isSelected && firstFrame && project.uiState.selectedFrameId === firstFrame.id;
+
+              return (
+                <div
+                  key={obj.id}
+                  className={`object-item-small ${isSelected ? 'selected' : ''}`}
+                  onClick={() => selectObject(obj.id)}
+                >
+                  <div className="object-thumbnail-small">
+                    <ObjectThumbnail
+                      obj={obj}
+                      project={project}
+                      isSelected={isSelected}
+                      isFirstFrameSelected={isFirstFrameSelected}
+                    />
                   </div>
-
-                  <div className="object-metrics-row">
-                    <span className="object-details">
-                      {obj.gridSize.width}×{obj.gridSize.height} • {obj.frames.length} frame{obj.frames.length !== 1 ? 's' : ''}
+                  {editingId === obj.id ? (
+                    <input
+                      type="text"
+                      className="object-name-input-small"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={() => handleFinishRename(obj.id)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(obj.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      className="object-name-small"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleStartRename(obj.id, obj.name);
+                      }}
+                    >
+                      {obj.name}
                     </span>
-                  </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="object-list">
+            {objects.map((obj) => {
+              const isSelected = selectedObjectId === obj.id;
+              const firstFrame = obj.frames[0];
+              const isFirstFrameSelected = isSelected && firstFrame && project.uiState.selectedFrameId === firstFrame.id;
 
-                  <div className="object-actions-row">
-                    <div className="object-actions">
-                      <button
-                        className="object-action-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartResize(obj);
-                        }}
-                        title="Resize"
-                      >
-                        ⤢
-                      </button>
-                      <button
-                        className="object-action-btn delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteConfirm({ id: obj.id, name: obj.name });
-                        }}
-                        title="Delete"
-                      >
-                        ×
-                      </button>
+              return (
+              <div key={obj.id} className="object-wrapper">
+                <div
+                  className={`object-item ${isSelected ? 'selected' : ''}`}
+                  onClick={() => selectObject(obj.id)}
+                >
+                  <div className="object-thumbnail">
+                    <ObjectThumbnail
+                      obj={obj}
+                      project={project}
+                      isSelected={isSelected}
+                      isFirstFrameSelected={isFirstFrameSelected}
+                    />
+                  </div>
+                  <div className="object-content">
+                    <div className="object-name-row">
+                      {editingId === obj.id ? (
+                        <input
+                          type="text"
+                          className="object-name-input"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onBlur={() => handleFinishRename(obj.id)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(obj.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                        />
+                      ) : (
+                        <span
+                          className="object-name"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleStartRename(obj.id, obj.name);
+                          }}
+                        >
+                          {obj.name}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="object-metrics-row">
+                      <span className="object-details">
+                        {obj.gridSize.width}×{obj.gridSize.height} • {obj.frames.length} frame{obj.frames.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    <div className="object-actions-row">
+                      <div className="object-actions">
+                        <button
+                          className="object-action-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            duplicateObject(obj.id);
+                          }}
+                          title="Duplicate"
+                        >
+                          ⧉
+                        </button>
+                        <button
+                          className="object-action-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartResize(obj);
+                          }}
+                          title="Resize"
+                        >
+                          ⤢
+                        </button>
+                        <button
+                          className="object-action-btn delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteConfirm({ id: obj.id, name: obj.name });
+                          }}
+                          title="Delete"
+                        >
+                          ×
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                {showResizeFor === obj.id && (
+                  <div className="resize-panel">
+                    <div className="size-inputs">
+                      <div className="size-field">
+                        <label>W</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="256"
+                          value={resizeWidth}
+                          onChange={(e) => setResizeWidth(parseInt(e.target.value) || 1)}
+                        />
+                      </div>
+                      <span className="size-separator">×</span>
+                      <div className="size-field">
+                        <label>H</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="256"
+                          value={resizeHeight}
+                          onChange={(e) => setResizeHeight(parseInt(e.target.value) || 1)}
+                        />
+                      </div>
+                    </div>
+                    <div className="resize-anchor-section">
+                      <AnchorGrid
+                        anchor={resizeAnchor}
+                        onChange={setResizeAnchor}
+                        currentWidth={originalWidth}
+                        currentHeight={originalHeight}
+                        newWidth={resizeWidth}
+                        newHeight={resizeHeight}
+                      />
+                    </div>
+                    <div className="resize-actions">
+                      <button onClick={() => setShowResizeFor(null)}>Cancel</button>
+                      <button className="apply-btn" onClick={() => handleApplyResize(obj.id)}>
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              {showResizeFor === obj.id && (
-                <div className="resize-panel">
-                  <div className="size-inputs">
-                    <div className="size-field">
-                      <label>W</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="256"
-                        value={resizeWidth}
-                        onChange={(e) => setResizeWidth(parseInt(e.target.value) || 1)}
-                      />
-                    </div>
-                    <span className="size-separator">×</span>
-                    <div className="size-field">
-                      <label>H</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="256"
-                        value={resizeHeight}
-                        onChange={(e) => setResizeHeight(parseInt(e.target.value) || 1)}
-                      />
-                    </div>
-                  </div>
-                  <div className="resize-actions">
-                    <button onClick={() => setShowResizeFor(null)}>Cancel</button>
-                    <button className="apply-btn" onClick={() => handleApplyResize(obj.id)}>
-                      Apply
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-          })}
-        </div>
+            );
+            })}
+          </div>
+        )}
 
         {objects.length === 0 && (
           <div className="empty-state">
