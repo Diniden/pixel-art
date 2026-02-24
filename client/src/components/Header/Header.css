@@ -186,6 +186,31 @@
   justify-content: flex-end;
 }
 
+.browse-backups-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.browse-backups-btn:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.backups-icon {
+  font-size: 16px;
+}
+
 .switch-project-btn {
   display: flex;
   align-items: center;
@@ -296,6 +321,15 @@
   border-color: var(--accent-success);
 }
 
+.ai-config-btn.ai-error {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.ai-config-btn.ai-error:hover {
+  border-color: #ef4444;
+}
+
 .ai-icon {
   font-size: 14px;
 }
@@ -361,6 +395,18 @@
   opacity: 0.9;
 }
 
+.ai-config-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-size: 0.75rem;
+  color: #ef4444;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .ai-config-hint {
   display: block;
   margin-top: 6px;
@@ -381,6 +427,15 @@
   .project-title-btn .project-name {
     max-width: 120px;
     font-size: 0.85rem;
+  }
+
+  .browse-backups-btn {
+    padding: 8px 8px;
+    font-size: 0;
+  }
+
+  .browse-backups-btn .backups-icon {
+    font-size: 16px;
   }
 
   .switch-project-btn span:last-child {

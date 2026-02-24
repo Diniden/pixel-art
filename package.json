@@ -4,10 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "mprocs",
-    "dev:client": "cd client && npm run dev",
-    "dev:server": "cd server && npm run dev",
-    "build": "cd client && npm run build",
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+    "dev:client": "cd client && bun run dev",
+    "dev:server": "cd server && bun run dev",
+    "build": "cd client && bun run build",
+    "install:all": "bun install && cd client && bun install && cd ../server && bun install",
+    "ai:setup": "cd ai-service && ./setup.sh",
+    "ai:run": "cd ai-service && python server.py",
+    "ai": "bun run ai:start",
+    "ai:start": "bun run ai:setup && bun run ai:run"
   },
   "devDependencies": {
     "mprocs": "^0.8.3",

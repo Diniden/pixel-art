@@ -12,7 +12,9 @@ import {
   projectExists,
   renameProjectFile,
   deleteProjectFile,
-  runBackupForProject
+  runBackupForProject,
+  listBackupsForProject,
+  readBackupFile
 } from '../backup.js';
 
 export const projectRouter = Router();
@@ -271,6 +273,57 @@ projectRouter.post('/project/switch', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error switching project:', error);
     res.status(500).json({ error: 'Failed to switch project' });
+  }
+});
+
+// GET /api/project/backups - List unzipped backups for a project
+projectRouter.get('/project/backups', async (req: Request, res: Response) => {
+  try {
+    let projectName = req.query.name as string | undefined;
+
+    if (!projectName) {
+      const config = await loadConfig();
+      projectName = config.currentProject;
+    }
+
+    const backups = await listBackupsForProject(projectName);
+    res.json({ backups });
+  } catch (error) {
+    console.error('Error listing backups:', error);
+    res.status(500).json({ error: 'Failed to list backups' });
+  }
+});
+
+// POST /api/project/restore-backup - Restore a project from a backup file
+projectRouter.post('/project/restore-backup', async (req: Request, res: Response) => {
+  try {
+    const { date, filename } = req.body;
+
+    if (!date || !filename) {
+      res.status(400).json({ error: 'Missing date or filename' });
+      return;
+    }
+
+    const backupContent = await readBackupFile(date, filename);
+
+    // Validate it's valid JSON
+    JSON.parse(backupContent);
+
+    // Get current project name
+    let projectName = req.query.name as string | undefined;
+    if (!projectName) {
+      const config = await loadConfig();
+      projectName = config.currentProject;
+    }
+
+    // Overwrite the current project file with the backup content
+    const projectFile = getProjectFilePath(projectName);
+    await safeWriteFile(projectFile, backupContent);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error restoring backup:', error);
+    res.status(500).json({ error: 'Failed to restore backup' });
   }
 });
 

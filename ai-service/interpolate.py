@@ -28,17 +28,28 @@ def _ensure_model():
 
     _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Add Practical-RIFE to path so we can import their model code
+    ai_service_dir = os.path.dirname(__file__)
+
+    # ai-service/ root on path so `model.X` resolves to ai-service/model/X
+    if ai_service_dir not in sys.path:
+        sys.path.insert(0, ai_service_dir)
+    # Practical-RIFE on path for its own model/ subpackage
     if RIFE_DIR not in sys.path:
         sys.path.insert(0, RIFE_DIR)
+    # model/ on path for direct imports (e.g. `from IFNet_HDv3 import *`)
     if MODEL_DIR not in sys.path:
         sys.path.insert(0, MODEL_DIR)
 
-    try:
-        from model.RIFE import Model
-    except ImportError:
-        # Fallback: try importing from the copied model dir
-        from RIFE import Model
+    # RIFE_HDv3.py (from the model weights archive) uses
+    #   `from train_log.IFNet_HDv3 import *`
+    # but IFNet_HDv3.py lives in model/, not train_log/.
+    # Register an alias so that import resolves correctly.
+    import importlib
+    if "train_log" not in sys.modules:
+        train_log_mod = importlib.import_module("model")
+        sys.modules["train_log"] = train_log_mod
+
+    from model.RIFE_HDv3 import Model
 
     model = Model()
     model.load_model(MODEL_DIR, -1)
@@ -75,11 +86,20 @@ def _tensor_to_img(tensor: torch.Tensor, has_alpha: bool, alpha_arr: np.ndarray 
     return img
 
 
-def _pad_to_multiple(tensor: torch.Tensor, multiple: int = 32) -> tuple[torch.Tensor, tuple[int, int]]:
-    """Pad tensor dimensions to be multiples of `multiple`. Returns padded tensor and original (H, W)."""
+def _pad_to_safe_size(tensor: torch.Tensor, multiple: int = 64, min_dim: int = 64) -> tuple[torch.Tensor, tuple[int, int]]:
+    """
+    Pad tensor so both dimensions are multiples of `multiple` and at least
+    `min_dim` pixels.  Uses edge-replication so the padded border doesn't
+    introduce colour artefacts.  Returns (padded_tensor, original (H, W)).
+    """
     _, _, h, w = tensor.shape
-    pad_h = (multiple - h % multiple) % multiple
-    pad_w = (multiple - w % multiple) % multiple
+    target_h = max(min_dim, h)
+    target_w = max(min_dim, w)
+    # Round up to next multiple
+    target_h = target_h + (multiple - target_h % multiple) % multiple
+    target_w = target_w + (multiple - target_w % multiple) % multiple
+    pad_h = target_h - h
+    pad_w = target_w - w
     if pad_h > 0 or pad_w > 0:
         tensor = torch.nn.functional.pad(tensor, (0, pad_w, 0, pad_h), mode="replicate")
     return tensor, (h, w)
@@ -90,6 +110,7 @@ def interpolate_frames(
     img_end: Image.Image,
     num_frames: int,
     scale: int = 4,
+    flow_scale: float = 1.0,
 ) -> list[Image.Image]:
     """
     Generate `num_frames` intermediate frames between img_start and img_end.
@@ -99,6 +120,7 @@ def interpolate_frames(
         img_end: The ending frame (PIL Image).
         num_frames: Number of intermediate frames to generate.
         scale: Upscale factor applied before inference (pixel art is tiny).
+        flow_scale: RIFE flow estimation precision. Higher = finer but slower.
 
     Returns:
         List of `num_frames` PIL Images (the intermediates, not including start/end).
@@ -123,21 +145,18 @@ def interpolate_frames(
     t0 = _img_to_tensor(start_up)
     t1 = _img_to_tensor(end_up)
 
-    # Pad to 32-multiple for the network
-    t0_padded, (oh, ow) = _pad_to_multiple(t0)
-    t1_padded, _ = _pad_to_multiple(t1)
+    # Pad to model-safe dimensions (64-multiple, min 64px per side)
+    t0_padded, (oh, ow) = _pad_to_safe_size(t0)
+    t1_padded, _ = _pad_to_safe_size(t1)
 
     timesteps = [(i + 1) / (num_frames + 1) for i in range(num_frames)]
     results: list[Image.Image] = []
 
     with torch.no_grad():
         for t in timesteps:
-            # RIFE inference at arbitrary timestep
-            mid = _model.inference(t0_padded, t1_padded, timestep=t)
-            # Crop back to original padded size
+            mid = _model.inference(t0_padded, t1_padded, timestep=t, scale=flow_scale)
             mid = mid[:, :, :oh, :ow]
 
-            # Interpolate alpha linearly
             interp_alpha = None
             if has_alpha and alpha_start is not None and alpha_end is not None:
                 blended = (alpha_start * (1.0 - t) + alpha_end * t).clip(0, 255).astype(np.uint8)

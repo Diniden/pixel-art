@@ -366,6 +366,51 @@ export async function switchProject(name: string): Promise<void> {
   }
 }
 
+// List unzipped backups for a project
+export async function listBackups(
+  projectName?: string,
+): Promise<{ date: string; time: string; filename: string }[]> {
+  try {
+    const url = projectName
+      ? `${API_BASE}/project/backups?name=${encodeURIComponent(projectName)}`
+      : `${API_BASE}/project/backups`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to list backups: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data.backups || [];
+  } catch (error) {
+    console.error("Error listing backups:", error);
+    return [];
+  }
+}
+
+// Restore a project from a backup file
+export async function restoreBackup(
+  date: string,
+  filename: string,
+  projectName?: string,
+): Promise<void> {
+  const url = projectName
+    ? `${API_BASE}/project/restore-backup?name=${encodeURIComponent(projectName)}`
+    : `${API_BASE}/project/restore-backup`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date, filename }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(
+      data.error || `Failed to restore backup: ${response.statusText}`,
+    );
+  }
+}
+
 // Export the current or specified project to server export folder (EXPORT_FOLDER/<projectName>/)
 export async function exportProject(
   projectName?: string,

@@ -11,6 +11,100 @@ interface InterpolateBody {
   ai_service_url?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Helper: resolve the AI service URL from request, config, or error
+// ---------------------------------------------------------------------------
+
+const DEFAULT_AI_URL = 'http://localhost:8100';
+
+async function resolveAiUrl(reqUrl?: string): Promise<string> {
+  if (reqUrl) return reqUrl.replace(/\/+$/, '');
+  const config = await loadConfig() as { currentProject: string; aiServiceUrl?: string };
+  if (config.aiServiceUrl) return config.aiServiceUrl.replace(/\/+$/, '');
+  return DEFAULT_AI_URL;
+}
+
+// ---------------------------------------------------------------------------
+// Async job endpoints -- proxy to AI service
+// ---------------------------------------------------------------------------
+
+aiRouter.post('/ai/jobs', async (req: Request, res: Response) => {
+  try {
+    const aiUrl = await resolveAiUrl(req.body?.ai_service_url);
+    if (!aiUrl) {
+      return res.status(400).json({ error: 'AI service URL not configured.' });
+    }
+
+    const response = await fetch(`${aiUrl}/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return res.status(response.status).json({
+        error: `AI service returned ${response.status}: ${text}`,
+      });
+    }
+
+    return res.json(await response.json());
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: `Proxy error: ${message}` });
+  }
+});
+
+aiRouter.get('/ai/jobs/:jobId', async (req: Request, res: Response) => {
+  try {
+    const aiUrl = await resolveAiUrl(req.query.ai_service_url as string | undefined);
+    if (!aiUrl) {
+      return res.status(400).json({ error: 'AI service URL not configured.' });
+    }
+
+    const response = await fetch(`${aiUrl}/jobs/${req.params.jobId}`);
+    if (!response.ok) {
+      const text = await response.text();
+      return res.status(response.status).json({
+        error: `AI service returned ${response.status}: ${text}`,
+      });
+    }
+
+    return res.json(await response.json());
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: `Proxy error: ${message}` });
+  }
+});
+
+aiRouter.get('/ai/jobs', async (req: Request, res: Response) => {
+  try {
+    const aiUrl = await resolveAiUrl(req.query.ai_service_url as string | undefined);
+    if (!aiUrl) {
+      return res.status(400).json({ error: 'AI service URL not configured.' });
+    }
+
+    const params = new URLSearchParams();
+    if (req.query.status) params.set('status', req.query.status as string);
+    if (req.query.page) params.set('page', req.query.page as string);
+    if (req.query.per_page) params.set('per_page', req.query.per_page as string);
+    const qs = params.toString();
+
+    const response = await fetch(`${aiUrl}/jobs${qs ? `?${qs}` : ''}`);
+    if (!response.ok) {
+      const text = await response.text();
+      return res.status(response.status).json({
+        error: `AI service returned ${response.status}: ${text}`,
+      });
+    }
+
+    return res.json(await response.json());
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: `Proxy error: ${message}` });
+  }
+});
+
 /**
  * Proxy endpoint that forwards interpolation requests to the remote AI service.
  * The AI service URL can be provided in the request body or read from server config.
@@ -26,22 +120,7 @@ aiRouter.post('/ai/interpolate', async (req: Request, res: Response) => {
       });
     }
 
-    // Resolve AI service URL: body override > config > error
-    let aiUrl = body.ai_service_url;
-
-    if (!aiUrl) {
-      const config = await loadConfig() as { currentProject: string; aiServiceUrl?: string };
-      aiUrl = config.aiServiceUrl;
-    }
-
-    if (!aiUrl) {
-      return res.status(400).json({
-        error: 'AI service URL not configured. Set it in the editor settings or provide ai_service_url in the request body.',
-      });
-    }
-
-    // Normalize URL: strip trailing slash
-    aiUrl = aiUrl.replace(/\/+$/, '');
+    const aiUrl = await resolveAiUrl(body.ai_service_url);
 
     const payload = {
       frame_start,
@@ -73,28 +152,45 @@ aiRouter.post('/ai/interpolate', async (req: Request, res: Response) => {
 });
 
 /**
+ * Lightweight health check -- just verifies the AI service is reachable.
+ * Does NOT run a model inference test (use /heartbeat for that).
+ */
+aiRouter.get('/ai/health', async (req: Request, res: Response) => {
+  try {
+    const aiUrl = await resolveAiUrl(req.query.ai_service_url as string | undefined);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const response = await fetch(`${aiUrl}/health`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        return res.json({ status: 'error', detail: `AI service returned ${response.status}` });
+      }
+
+      return res.json(await response.json());
+    } catch (fetchErr: unknown) {
+      clearTimeout(timeout);
+      const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+      return res.json({ status: 'error', detail: `Cannot reach AI service: ${msg}` });
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.json({ status: 'error', detail: message });
+  }
+});
+
+/**
  * Heartbeat check that verifies the remote AI service is reachable and the
  * model can actually produce output (runs a micro-inference test on the service).
  */
 aiRouter.get('/ai/heartbeat', async (req: Request, res: Response) => {
   try {
-    // Resolve AI service URL from query param, config, or error
-    let aiUrl = req.query.ai_service_url as string | undefined;
-
-    if (!aiUrl) {
-      const config = await loadConfig() as { currentProject: string; aiServiceUrl?: string };
-      aiUrl = config.aiServiceUrl;
-    }
-
-    if (!aiUrl) {
-      return res.json({
-        status: 'error',
-        model_ready: false,
-        detail: 'AI service URL not configured.',
-      });
-    }
-
-    aiUrl = aiUrl.replace(/\/+$/, '');
+    const aiUrl = await resolveAiUrl(req.query.ai_service_url as string | undefined);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Frame Interpolation - Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0e0e12;
+    color: #d4d4dc;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #16161e;
+    border-bottom: 1px solid #2a2a36;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  header .icon { font-size: 22px; color: #a78bfa; }
+  header h1 { font-size: 18px; font-weight: 600; color: #e4e4ec; }
+  header .mode-badge {
+    margin-left: auto;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: #1e1e2e;
+    border: 1px solid #3a3a4a;
+    color: #9090a8;
+  }
+  header .mode-badge.gpu { border-color: #22c55e; color: #22c55e; }
+  header .mode-badge.proxy { border-color: #f59e0b; color: #f59e0b; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #2a2a36;
+  }
+
+  .tab-btn {
+    background: none;
+    border: none;
+    padding: 10px 20px;
+    font-size: 14px;
+    color: #e4e4ec;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+  }
+  .tab-btn:hover { color: #b0b0c0; }
+  .tab-btn.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+  .tab-btn .count {
+    margin-left: 6px;
+    font-size: 11px;
+    background: #1e1e2e;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #505068;
+    font-size: 15px;
+  }
+
+  /* Job cards */
+  .job-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .job-card {
+    background: #16161e;
+    border: 1px solid #2a2a36;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    transition: border-color .15s;
+  }
+  .job-card:hover { border-color: #3a3a4a; }
+
+  .job-thumbs {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .job-thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: 6px;
+    background: #0e0e12;
+    image-rendering: pixelated;
+    object-fit: contain;
+    border: 1px solid #2a2a36;
+  }
+
+  .job-info { flex: 1; min-width: 0; }
+  .job-id {
+    font-family: monospace;
+    font-size: 13px;
+    color: #a78bfa;
+    margin-bottom: 4px;
+  }
+  .job-meta {
+    font-size: 12px;
+    color: #606078;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .job-status {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+  .job-status.queued { background: #1e1e2e; color: #f59e0b; border: 1px solid #f59e0b44; }
+  .job-status.processing { background: #1e1e2e; color: #3b82f6; border: 1px solid #3b82f644; }
+  .job-status.completed { background: #1e1e2e; color: #22c55e; border: 1px solid #22c55e44; }
+  .job-status.failed { background: #1e1e2e; color: #ef4444; border: 1px solid #ef444444; }
+
+  /* Animation preview for completed jobs */
+  .anim-preview {
+    width: 96px;
+    height: 96px;
+    border-radius: 6px;
+    background: #0e0e12;
+    border: 1px solid #2a2a36;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+  }
+
+  /* Pagination */
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .page-btn {
+    background: #1e1e2e;
+    border: 1px solid #2a2a36;
+    color: #b0b0c0;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background .15s;
+  }
+  .page-btn:hover:not(:disabled) { background: #2a2a36; }
+  .page-btn:disabled { opacity: 0.4; cursor: default; }
+  .page-info { font-size: 13px; color: #606078; }
+
+  .error-banner {
+    background: #2a1015;
+    border: 1px solid #ef444444;
+    color: #ef4444;
+    padding: 10px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+
+  .refresh-btn {
+    background: none;
+    border: 1px solid #2a2a36;
+    color: #9090a8;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: 8px;
+    transition: background .15s, color .15s;
+  }
+  .refresh-btn:hover { background: #1e1e2e; color: #d4d4dc; }
+
+  .delete-btn {
+    background: none;
+    border: 1px solid #ef444466;
+    color: #ef4444;
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    flex-shrink: 0;
+    align-self: center;
+    transition: background .15s, border-color .15s;
+  }
+  .delete-btn:hover { background: #2a1015; border-color: #ef4444; }
+  .delete-btn:disabled { opacity: 0.4; cursor: default; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="icon">&#10022;</span>
+  <h1>AI Frame Interpolation</h1>
+  <span class="mode-badge" id="modeBadge">loading...</span>
+</header>
+
+<div class="container">
+  <div id="errorBanner" class="error-banner" style="display:none"></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="queued">
+      Queue <span class="count" id="queuedCount">0</span>
+    </button>
+    <button class="tab-btn" data-tab="completed">
+      Completed <span class="count" id="completedCount">0</span>
+    </button>
+    <button class="tab-btn" data-tab="errors">
+      Errors <span class="count" id="errorsCount">0</span>
+    </button>
+    <button class="refresh-btn" id="refreshBtn" title="Refresh">&#x21bb; Refresh</button>
+  </div>
+
+  <div id="queuedPanel">
+    <div class="job-list" id="queuedList"></div>
+    <div class="pagination" id="queuedPagination"></div>
+  </div>
+
+  <div id="completedPanel" style="display:none">
+    <div class="job-list" id="completedList"></div>
+    <div class="pagination" id="completedPagination"></div>
+  </div>
+
+  <div id="errorsPanel" style="display:none">
+    <div class="job-list" id="errorsList"></div>
+    <div class="pagination" id="errorsPagination"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const PER_PAGE = 10;
+  let activeTab = 'queued';
+  let queuedPage = 1, completedPage = 1, errorsPage = 1;
+  let queuedTotal = 0, completedTotal = 0, errorsTotal = 0;
+  const animCanvases = new Map();
+
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      if (!tab) return;
+      activeTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('queuedPanel').style.display = tab === 'queued' ? '' : 'none';
+      document.getElementById('completedPanel').style.display = tab === 'completed' ? '' : 'none';
+      document.getElementById('errorsPanel').style.display = tab === 'errors' ? '' : 'none';
+    });
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', () => loadAll());
+
+  function showError(msg) {
+    const el = document.getElementById('errorBanner');
+    el.textContent = msg;
+    el.style.display = msg ? '' : 'none';
+  }
+
+  function timeAgo(ts) {
+    const diff = (Date.now() / 1000) - ts;
+    if (diff < 60) return Math.floor(diff) + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  async function fetchJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  function renderQueuedCard(job) {
+    const card = document.createElement('div');
+    card.className = 'job-card';
+    card.innerHTML = `
+      <div class="job-thumbs">
+        <img class="job-thumb" src="/jobs/${job.id}/input/frame_start.png" alt="start">
+        <img class="job-thumb" src="/jobs/${job.id}/input/frame_end.png" alt="end">
+      </div>
+      <div class="job-info">
+        <div class="job-id">${job.id}</div>
+        <span class="job-status ${job.status}">${job.status}</span>
+        <div class="job-meta">
+          <span>Frames: ${job.num_frames}</span>
+          <span>Scale: ${job.scale}x</span>
+          <span>Created: ${timeAgo(job.created_at)}</span>
+        </div>
+      </div>
+    `;
+    return card;
+  }
+
+  function renderCompletedCard(job) {
+    const card = document.createElement('div');
+    card.className = 'job-card';
+
+    let previewHTML = '';
+    if (job.output_count > 0) {
+      previewHTML = `<canvas class="anim-preview" data-job="${job.id}" data-count="${job.output_count}" width="96" height="96"></canvas>`;
+    }
+
+    card.innerHTML = `
+      <div class="job-thumbs">
+        <img class="job-thumb" src="/jobs/${job.id}/input/frame_start.png" alt="start">
+        <img class="job-thumb" src="/jobs/${job.id}/input/frame_end.png" alt="end">
+      </div>
+      <div class="job-info">
+        <div class="job-id">${job.id}</div>
+        <span class="job-status ${job.status}">${job.status}</span>
+        <div class="job-meta">
+          <span>Frames: ${job.num_frames}</span>
+          <span>Scale: ${job.scale}x</span>
+          ${job.completed_at ? `<span>Finished: ${timeAgo(job.completed_at)}</span>` : ''}
+        </div>
+      </div>
+      ${previewHTML}
+    `;
+    return card;
+  }
+
+  function renderErrorCard(job) {
+    const card = document.createElement('div');
+    card.className = 'job-card';
+
+    card.innerHTML = `
+      <div class="job-thumbs">
+        <img class="job-thumb" src="/jobs/${job.id}/input/frame_start.png" alt="start">
+        <img class="job-thumb" src="/jobs/${job.id}/input/frame_end.png" alt="end">
+      </div>
+      <div class="job-info">
+        <div class="job-id">${job.id}</div>
+        <span class="job-status failed">failed</span>
+        <div class="job-meta">
+          <span>Frames: ${job.num_frames}</span>
+          <span>Scale: ${job.scale}x</span>
+          ${job.completed_at ? `<span>Failed: ${timeAgo(job.completed_at)}</span>` : ''}
+        </div>
+        ${job.error ? `<div class="job-meta" style="margin-top:4px"><span style="color:#ef4444">${job.error}</span></div>` : ''}
+      </div>
+      <button class="delete-btn" data-job="${job.id}" title="Delete this job">Delete</button>
+    `;
+
+    card.querySelector('.delete-btn').addEventListener('click', () => deleteJob(job.id));
+    return card;
+  }
+
+  async function deleteJob(jobId) {
+    try {
+      const res = await fetch(`/jobs/${jobId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `${res.status} ${res.statusText}`);
+      }
+      loadAll();
+    } catch (e) {
+      showError('Failed to delete job: ' + e.message);
+    }
+  }
+
+  function startAnimations(container) {
+    container.querySelectorAll('canvas.anim-preview').forEach(canvas => {
+      const jobId = canvas.dataset.job;
+      const count = parseInt(canvas.dataset.count) || 0;
+      if (count === 0 || animCanvases.has(jobId)) return;
+
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const images = [];
+      let loaded = 0;
+
+      // Load input frames too for full sequence
+      const startImg = new Image();
+      startImg.src = `/jobs/${jobId}/input/frame_start.png`;
+      const endImg = new Image();
+      endImg.src = `/jobs/${jobId}/input/frame_end.png`;
+
+      const allImgs = [startImg];
+      for (let i = 1; i <= count; i++) {
+        const img = new Image();
+        img.src = `/jobs/${jobId}/output/frame_${String(i).padStart(3, '0')}.png`;
+        allImgs.push(img);
+      }
+      allImgs.push(endImg);
+
+      let frameIdx = 0;
+      const interval = setInterval(() => {
+        const img = allImgs[frameIdx % allImgs.length];
+        ctx.clearRect(0, 0, 96, 96);
+        if (img.complete && img.naturalWidth > 0) {
+          const s = Math.min(96 / img.width, 96 / img.height);
+          const w = img.width * s, h = img.height * s;
+          ctx.drawImage(img, (96 - w) / 2, (96 - h) / 2, w, h);
+        }
+        frameIdx++;
+      }, 125);
+
+      animCanvases.set(jobId, interval);
+    });
+  }
+
+  function renderPagination(container, page, totalPages, onChange) {
+    container.innerHTML = '';
+    if (totalPages <= 1) return;
+
+    const prev = document.createElement('button');
+    prev.className = 'page-btn';
+    prev.textContent = '\u2190 Prev';
+    prev.disabled = page <= 1;
+    prev.onclick = () => onChange(page - 1);
+    container.appendChild(prev);
+
+    const info = document.createElement('span');
+    info.className = 'page-info';
+    info.textContent = `Page ${page} of ${totalPages}`;
+    container.appendChild(info);
+
+    const next = document.createElement('button');
+    next.className = 'page-btn';
+    next.textContent = 'Next \u2192';
+    next.disabled = page >= totalPages;
+    next.onclick = () => onChange(page + 1);
+    container.appendChild(next);
+  }
+
+  function renderQueued(data) {
+    document.getElementById('queuedCount').textContent = data.total;
+    const list = document.getElementById('queuedList');
+    list.innerHTML = '';
+    if (data.jobs.length === 0) {
+      list.innerHTML = '<div class="empty-state">No jobs in the queue</div>';
+    } else {
+      data.jobs.forEach(j => list.appendChild(renderQueuedCard(j)));
+    }
+    renderPagination(
+      document.getElementById('queuedPagination'),
+      queuedPage,
+      Math.max(1, data.total_pages),
+      p => { queuedPage = p; loadAll(); }
+    );
+  }
+
+  function renderCompleted(data) {
+    document.getElementById('completedCount').textContent = data.total;
+    animCanvases.forEach(interval => clearInterval(interval));
+    animCanvases.clear();
+    const list = document.getElementById('completedList');
+    list.innerHTML = '';
+    if (data.jobs.length === 0) {
+      list.innerHTML = '<div class="empty-state">No completed jobs yet</div>';
+    } else {
+      data.jobs.forEach(j => list.appendChild(renderCompletedCard(j)));
+      startAnimations(list);
+    }
+    renderPagination(
+      document.getElementById('completedPagination'),
+      completedPage,
+      Math.max(1, data.total_pages),
+      p => { completedPage = p; loadAll(); }
+    );
+  }
+
+  function renderErrors(data) {
+    document.getElementById('errorsCount').textContent = data.total;
+    const list = document.getElementById('errorsList');
+    list.innerHTML = '';
+    if (data.jobs.length === 0) {
+      list.innerHTML = '<div class="empty-state">No failed jobs</div>';
+    } else {
+      data.jobs.forEach(j => list.appendChild(renderErrorCard(j)));
+    }
+    renderPagination(
+      document.getElementById('errorsPagination'),
+      errorsPage,
+      Math.max(1, data.total_pages),
+      p => { errorsPage = p; loadAll(); }
+    );
+  }
+
+  async function loadAll() {
+    showError('');
+    try {
+      const params = new URLSearchParams({
+        queued_page: queuedPage,
+        completed_page: completedPage,
+        errors_page: errorsPage,
+        per_page: PER_PAGE,
+      });
+      const data = await fetchJSON(`/dashboard?${params}`);
+
+      const badge = document.getElementById('modeBadge');
+      if (data.mode === 'gpu') {
+        badge.textContent = 'GPU';
+        badge.className = 'mode-badge gpu';
+      } else if (data.mode === 'proxy' && data.remote_configured === false) {
+        badge.textContent = 'Proxy (not configured)';
+        badge.className = 'mode-badge proxy';
+      } else {
+        badge.textContent = 'Proxy';
+        badge.className = 'mode-badge proxy';
+      }
+
+      renderQueued(data.queued);
+      renderCompleted(data.completed);
+      renderErrors(data.errors);
+    } catch (e) {
+      showError('Failed to load dashboard: ' + e.message);
+    }
+  }
+
+  loadAll();
+
+  // Auto-refresh every 5 seconds
+  setInterval(loadAll, 5000);
+})();
+</script>
+</body>
+</html>

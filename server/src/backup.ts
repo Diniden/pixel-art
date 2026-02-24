@@ -366,5 +366,76 @@ export async function deleteProjectFile(projectName: string): Promise<void> {
   await unlink(filePath);
 }
 
+/**
+ * List unzipped backups for a given project (only from date folders, not .gz)
+ * Returns entries sorted newest-first.
+ */
+export async function listBackupsForProject(
+  projectName: string,
+): Promise<{ date: string; time: string; filename: string }[]> {
+  await ensureDir(BACKUPS_DIR);
+
+  const entries: { date: string; time: string; filename: string; mtime: number }[] = [];
+
+  let allItems: string[];
+  try {
+    allItems = await readdir(BACKUPS_DIR);
+  } catch {
+    return [];
+  }
+
+  for (const item of allItems) {
+    const itemPath = join(BACKUPS_DIR, item);
+    const itemStat = await stat(itemPath);
+
+    if (!itemStat.isDirectory()) continue;
+
+    const dateMatch = item.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (!dateMatch) continue;
+
+    let files: string[];
+    try {
+      files = await readdir(itemPath);
+    } catch {
+      continue;
+    }
+
+    const prefix = `${projectName}-`;
+    for (const file of files) {
+      if (!file.startsWith(prefix) || !file.endsWith('.json')) continue;
+
+      const timeStr = file.slice(prefix.length, -5); // strip prefix and .json
+      const filePath = join(itemPath, file);
+      const fileStat = await stat(filePath);
+
+      entries.push({
+        date: item,
+        time: timeStr,
+        filename: file,
+        mtime: fileStat.mtime.getTime(),
+      });
+    }
+  }
+
+  entries.sort((a, b) => b.mtime - a.mtime);
+  return entries.map(({ date, time, filename }) => ({ date, time, filename }));
+}
+
+/**
+ * Read a specific backup file's content
+ */
+export async function readBackupFile(
+  dateFolderName: string,
+  filename: string,
+): Promise<string> {
+  const filePath = join(BACKUPS_DIR, dateFolderName, filename);
+
+  if (!existsSync(filePath)) {
+    throw new Error(`Backup file not found: ${dateFolderName}/${filename}`);
+  }
+
+  return await readFile(filePath, 'utf-8');
+}
+
 // Export utilities for use in project routes
 export { safeWriteFile, ensureDir, DATA_DIR, getProjectFilePath };

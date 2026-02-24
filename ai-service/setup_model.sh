@@ -27,7 +27,9 @@ if [ ! -f "$MODEL_FILE" ]; then
   if command -v gdown &> /dev/null; then
     gdown "https://drive.google.com/uc?id=$GDRIVE_ID" -O /tmp/rife_v4.25.zip
     unzip -o /tmp/rife_v4.25.zip -d /tmp/rife_model
-    cp /tmp/rife_model/train_log/* "$MODEL_DIR/"
+    for f in /tmp/rife_model/train_log/*; do
+      [ -f "$f" ] && cp "$f" "$MODEL_DIR/"
+    done
     rm -rf /tmp/rife_v4.25.zip /tmp/rife_model
   else
     echo ""
@@ -44,10 +46,13 @@ else
   echo "Model weights already present."
 fi
 
-# Copy the RIFE model Python files needed at runtime
+# Copy the RIFE model Python files needed at runtime (only when missing or source newer)
 for f in "$RIFE_DIR/model"/*.py; do
   if [ -f "$f" ]; then
-    cp "$f" "$MODEL_DIR/"
+    dest="$MODEL_DIR/$(basename "$f")"
+    if [ ! -f "$dest" ] || [ "$f" -nt "$dest" ]; then
+      cp "$f" "$dest"
+    fi
   fi
 done
 

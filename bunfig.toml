@@ -1,0 +1,3 @@
+[install.lockfile]
+# Prevent Bun from creating/updating lockfiles (bun.lock, bun.lockb)
+save = false

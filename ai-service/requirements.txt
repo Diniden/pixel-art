@@ -5,3 +5,5 @@ torchvision
 Pillow
 numpy
 opencv-python
+httpx
+jinja2

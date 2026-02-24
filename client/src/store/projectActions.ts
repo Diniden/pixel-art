@@ -11,6 +11,7 @@ import {
   renameProject as apiRenameProject,
   switchProject as apiSwitchProject,
   deleteProject as apiDeleteProject,
+  restoreBackup as apiRestoreBackup,
 } from "../services/api";
 import { scheduleAutoSave, cancelPendingSave } from "../services/autoSave";
 import type { StoreGet, StoreSet } from "./storeTypes";
@@ -167,6 +168,42 @@ export function createProjectActions(get: StoreGet, set: StoreSet) {
         set({ projectList });
       } catch (error) {
         console.error("Failed to refresh project list:", error);
+      }
+    },
+
+    restoreFromBackup: async (date: string, filename: string) => {
+      const { project, projectName, projectHistory, historyIndex } = get();
+
+      try {
+        cancelPendingSave();
+
+        // Push current state onto undo history so this is undoable
+        if (project) {
+          const compactSnapshot = projectToCompact(project);
+          const clonedSnapshot = compactToProject(compactSnapshot);
+          const newHistory = [
+            ...projectHistory.slice(0, historyIndex + 1),
+            clonedSnapshot,
+          ];
+          set({
+            projectHistory: newHistory,
+            historyIndex: newHistory.length - 1,
+          });
+        }
+
+        // Tell the server to overwrite the project file with the backup
+        await apiRestoreBackup(date, filename, projectName);
+
+        // Reload the project from the server (runs migrations etc.)
+        const restoredProject = await loadProject(projectName);
+
+        set({ project: restoredProject });
+
+        scheduleAutoSave(restoredProject, projectName);
+        return true;
+      } catch (error) {
+        console.error("Failed to restore backup:", error);
+        return false;
       }
     },
 

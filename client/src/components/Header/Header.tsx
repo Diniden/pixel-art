@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
 import { exportProject } from '../../services/export';
+import { checkAiHealth } from '../../services/aiService';
 import { ProjectSelectModal } from '../ProjectSelectModal/ProjectSelectModal';
 import { ExportPreviewModal } from '../ExportPreviewModal/ExportPreviewModal';
+import { BrowseBackupsModal } from '../BrowseBackupsModal/BrowseBackupsModal';
 import './Header.css';
 
 export function Header() {
@@ -15,10 +17,53 @@ export function Header() {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [exportKebabName, setExportKebabName] = useState<string | null>(null);
   const [showExportPreview, setShowExportPreview] = useState(false);
+  const [showBackupsModal, setShowBackupsModal] = useState(false);
   const [showAiConfig, setShowAiConfig] = useState(false);
   const [aiUrlInput, setAiUrlInput] = useState(project?.uiState.aiServiceUrl || '');
+  const [aiHealthStatus, setAiHealthStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
+  const [aiHealthDetail, setAiHealthDetail] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const aiConfigRef = useRef<HTMLDivElement>(null);
+
+  const pollAiHealth = useCallback(() => {
+    const url = project?.uiState.aiServiceUrl || undefined;
+    checkAiHealth(url).then((result) => {
+      if (result.status === 'ok') {
+        setAiHealthStatus('ok');
+        setAiHealthDetail(null);
+      } else {
+        setAiHealthStatus('error');
+        setAiHealthDetail(result.detail || 'AI service is not reachable');
+      }
+    });
+  }, [project?.uiState.aiServiceUrl]);
+
+  useEffect(() => {
+    pollAiHealth();
+    const interval = setInterval(pollAiHealth, 15_000);
+    return () => clearInterval(interval);
+  }, [pollAiHealth]);
+
+  useEffect(() => {
+    if (!showAiConfig) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (aiConfigRef.current && !aiConfigRef.current.contains(e.target as Node)) {
+        setShowAiConfig(false);
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowAiConfig(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showAiConfig]);
 
   // Update editValue when projectName changes
   useEffect(() => {
@@ -170,18 +215,21 @@ export function Header() {
       <div className="header-right">
         <div className="ai-config-wrapper" ref={aiConfigRef}>
           <button
-            className={`ai-config-btn ${project?.uiState.aiServiceUrl ? 'configured' : ''}`}
+            className={`ai-config-btn ${aiHealthStatus === 'error' ? 'ai-error' : aiHealthStatus === 'ok' ? 'configured' : ''}`}
             onClick={() => {
-              setAiUrlInput(project?.uiState.aiServiceUrl || '');
+              setAiUrlInput(project?.uiState.aiServiceUrl || 'http://localhost:8100');
               setShowAiConfig(!showAiConfig);
             }}
-            title="AI Service Settings"
+            title={aiHealthStatus === 'error' ? `AI Error: ${aiHealthDetail}` : 'AI Service Settings'}
           >
             <span className="ai-icon">✦</span>
             AI
           </button>
           {showAiConfig && (
             <div className="ai-config-popover">
+              {aiHealthStatus === 'error' && aiHealthDetail && (
+                <div className="ai-config-error">{aiHealthDetail}</div>
+              )}
               <label className="ai-config-label">AI Service URL</label>
               <div className="ai-config-row">
                 <input
@@ -193,11 +241,12 @@ export function Header() {
                     if (e.key === 'Enter') {
                       setAiServiceUrl(aiUrlInput.trim());
                       setShowAiConfig(false);
+                      setTimeout(pollAiHealth, 500);
                     } else if (e.key === 'Escape') {
                       setShowAiConfig(false);
                     }
                   }}
-                  placeholder="http://192.168.1.100:8100"
+                  placeholder="http://localhost:8100"
                   autoFocus
                 />
                 <button
@@ -205,17 +254,24 @@ export function Header() {
                   onClick={() => {
                     setAiServiceUrl(aiUrlInput.trim());
                     setShowAiConfig(false);
+                    setTimeout(pollAiHealth, 500);
                   }}
                 >
                   Save
                 </button>
               </div>
               <span className="ai-config-hint">
-                {project?.uiState.aiServiceUrl ? 'Connected' : 'Not configured'}
+                {aiHealthStatus === 'ok' ? `Connected to ${project?.uiState.aiServiceUrl || 'http://localhost:8100'}` :
+                 aiHealthStatus === 'error' ? 'Service has errors' :
+                 project?.uiState.aiServiceUrl || 'Using default: http://localhost:8100'}
               </span>
             </div>
           )}
         </div>
+        <button className="browse-backups-btn" onClick={() => setShowBackupsModal(true)} title="Browse Backups">
+          <span className="backups-icon">⟲</span>
+          Backups
+        </button>
         <button className="switch-project-btn" onClick={() => setShowProjectModal(true)} title="Switch Projects">
           <span className="folder-icon">📁</span>
           Projects
@@ -236,6 +292,10 @@ export function Header() {
 
       {showProjectModal && (
         <ProjectSelectModal onClose={() => setShowProjectModal(false)} />
+      )}
+
+      {showBackupsModal && (
+        <BrowseBackupsModal onClose={() => setShowBackupsModal(false)} />
       )}
 
       {exportKebabName && (

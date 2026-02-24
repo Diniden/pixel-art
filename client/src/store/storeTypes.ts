@@ -127,6 +127,7 @@ export interface EditorState {
   renameCurrentProject: (newName: string) => Promise<boolean>;
   deleteCurrentProject: () => Promise<boolean>;
   refreshProjectList: () => Promise<void>;
+  restoreFromBackup: (date: string, filename: string) => Promise<boolean>;
 
   // Object actions
   addObject: (name: string, width: number, height: number) => void;
