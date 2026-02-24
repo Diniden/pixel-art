@@ -9,7 +9,7 @@ import {
   CompactProject,
 } from "../types";
 
-const API_BASE = "/api";
+export const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 // Check if project has variants on objects (needs migration to project-level)
 function needsVariantMigration(data: CompactProject): boolean {

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
 import { exportProject } from '../../services/export';
-import { checkAiHealth } from '../../services/aiService';
+import { checkAiHealth, getAiConfig } from '../../services/aiService';
 import { ProjectSelectModal } from '../ProjectSelectModal/ProjectSelectModal';
 import { ExportPreviewModal } from '../ExportPreviewModal/ExportPreviewModal';
 import { BrowseBackupsModal } from '../BrowseBackupsModal/BrowseBackupsModal';
@@ -22,8 +22,15 @@ export function Header() {
   const [aiUrlInput, setAiUrlInput] = useState(project?.uiState.aiServiceUrl || '');
   const [aiHealthStatus, setAiHealthStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
   const [aiHealthDetail, setAiHealthDetail] = useState<string | null>(null);
+  const [serverDefaultUrl, setServerDefaultUrl] = useState('http://localhost:8100');
   const inputRef = useRef<HTMLInputElement>(null);
   const aiConfigRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getAiConfig().then((cfg) => {
+      setServerDefaultUrl(cfg.effectiveAiServiceUrl || 'http://localhost:8100');
+    });
+  }, []);
 
   const pollAiHealth = useCallback(() => {
     const url = project?.uiState.aiServiceUrl || undefined;
@@ -217,7 +224,7 @@ export function Header() {
           <button
             className={`ai-config-btn ${aiHealthStatus === 'error' ? 'ai-error' : aiHealthStatus === 'ok' ? 'configured' : ''}`}
             onClick={() => {
-              setAiUrlInput(project?.uiState.aiServiceUrl || 'http://localhost:8100');
+              setAiUrlInput(project?.uiState.aiServiceUrl || serverDefaultUrl);
               setShowAiConfig(!showAiConfig);
             }}
             title={aiHealthStatus === 'error' ? `AI Error: ${aiHealthDetail}` : 'AI Service Settings'}
@@ -246,7 +253,7 @@ export function Header() {
                       setShowAiConfig(false);
                     }
                   }}
-                  placeholder="http://localhost:8100"
+                  placeholder={serverDefaultUrl}
                   autoFocus
                 />
                 <button
@@ -261,9 +268,9 @@ export function Header() {
                 </button>
               </div>
               <span className="ai-config-hint">
-                {aiHealthStatus === 'ok' ? `Connected to ${project?.uiState.aiServiceUrl || 'http://localhost:8100'}` :
+                {aiHealthStatus === 'ok' ? `Connected to ${project?.uiState.aiServiceUrl || serverDefaultUrl}` :
                  aiHealthStatus === 'error' ? 'Service has errors' :
-                 project?.uiState.aiServiceUrl || 'Using default: http://localhost:8100'}
+                 project?.uiState.aiServiceUrl || `Using default: ${serverDefaultUrl}`}
               </span>
             </div>
           )}

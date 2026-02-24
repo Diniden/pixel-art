@@ -1,3 +1,10 @@
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(__dirname, '../../.env') });
+
 import express from 'express';
 import cors from 'cors';
 import { projectRouter } from './routes/project.js';
@@ -7,7 +14,8 @@ import { aiRouter } from './routes/ai.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Middleware — allow all origins by default so the client can live on a
+// different host/port without CORS issues.
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 

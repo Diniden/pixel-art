@@ -12,15 +12,31 @@ interface InterpolateBody {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: resolve the AI service URL from request, config, or error
+// Helper: resolve the AI service URL from request, config, env, or default.
+//
+// Priority (highest → lowest):
+//   1. Per-request parameter  (UI manual override)
+//   2. Persisted server config (config.json — also set from UI)
+//   3. AI_SERVICE_URL env var  (.env / shell environment)
+//   4. Hard-coded default      (http://localhost:8100)
 // ---------------------------------------------------------------------------
 
 const DEFAULT_AI_URL = 'http://localhost:8100';
 
+function getEnvAiUrl(): string | undefined {
+  const v = process.env.AI_SERVICE_URL?.trim();
+  return v || undefined;
+}
+
 async function resolveAiUrl(reqUrl?: string): Promise<string> {
   if (reqUrl) return reqUrl.replace(/\/+$/, '');
+
   const config = await loadConfig() as { currentProject: string; aiServiceUrl?: string };
   if (config.aiServiceUrl) return config.aiServiceUrl.replace(/\/+$/, '');
+
+  const envUrl = getEnvAiUrl();
+  if (envUrl) return envUrl.replace(/\/+$/, '');
+
   return DEFAULT_AI_URL;
 }
 
@@ -248,11 +264,24 @@ aiRouter.post('/ai/config', async (req: Request, res: Response) => {
 
 /**
  * Get the current AI service config.
+ *
+ * Returns:
+ *   aiServiceUrl       – value persisted in config.json (may be empty)
+ *   envAiServiceUrl    – value from AI_SERVICE_URL env var (may be empty)
+ *   effectiveAiServiceUrl – the URL that would actually be used when no
+ *                           per-request override is supplied
  */
 aiRouter.get('/ai/config', async (_req: Request, res: Response) => {
   try {
     const config = await loadConfig() as { currentProject: string; aiServiceUrl?: string };
-    return res.json({ aiServiceUrl: config.aiServiceUrl || '' });
+    const envUrl = getEnvAiUrl() || '';
+    const effective = config.aiServiceUrl || envUrl || DEFAULT_AI_URL;
+
+    return res.json({
+      aiServiceUrl: config.aiServiceUrl || '',
+      envAiServiceUrl: envUrl,
+      effectiveAiServiceUrl: effective,
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return res.status(500).json({ error: message });

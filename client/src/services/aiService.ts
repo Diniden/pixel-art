@@ -1,4 +1,4 @@
-const API_BASE = "/api";
+import { API_BASE } from "./api";
 
 export interface HeartbeatResult {
   status: "ok" | "error";
@@ -26,6 +26,28 @@ export interface JobStatusResult {
   error: string | null;
   output_count: number;
   frames?: string[];
+}
+
+export interface AiConfigResult {
+  aiServiceUrl: string;
+  envAiServiceUrl: string;
+  effectiveAiServiceUrl: string;
+}
+
+/**
+ * Fetch the server-side AI config so the client knows the effective default URL
+ * (considering env vars and persisted config).
+ */
+export async function getAiConfig(): Promise<AiConfigResult> {
+  try {
+    const response = await fetch(`${API_BASE}/ai/config`);
+    if (!response.ok) {
+      return { aiServiceUrl: "", envAiServiceUrl: "", effectiveAiServiceUrl: "http://localhost:8100" };
+    }
+    return await response.json();
+  } catch {
+    return { aiServiceUrl: "", envAiServiceUrl: "", effectiveAiServiceUrl: "http://localhost:8100" };
+  }
 }
 
 /**
