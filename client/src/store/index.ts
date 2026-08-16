@@ -124,7 +124,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
     set,
     updateProjectAndSave,
   );
-  const drawingActions = createDrawingActions(get, set, updateProjectAndSave);
+  const drawingActions = createDrawingActions(get, set, updateProjectAndSave, saveCurrentStateToHistory);
   const toolActions = createToolActions(get, set, updateProjectAndSave);
   const paletteActions = createPaletteActions(updateProjectAndSave);
   const referenceActions = createReferenceActions(

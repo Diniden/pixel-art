@@ -1,5 +1,7 @@
 import { useEditorStore } from "../../store";
 import { ReferenceImageData } from "../ReferenceImageModal/ReferenceImageModal";
+import { Icon } from "../Icon/Icon";
+import { ChevronDown, ChevronUp, Hexagon, BoxSelect, Target, Camera } from "lucide-react";
 import "./Canvas.css";
 
 interface CanvasInfoProps {
@@ -58,7 +60,7 @@ export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
         aria-expanded={!isCanvasInfoHidden}
       >
         <span className="canvas-info-arrow" aria-hidden>
-          {isCanvasInfoHidden ? "▼" : "▲"}
+          <Icon icon={isCanvasInfoHidden ? ChevronDown : ChevronUp} size={10} />
         </span>
       </button>
       <div
@@ -70,7 +72,7 @@ export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
           {editingVariant && variantData ? (
             <>
               <span className="variant-indicator">
-                ⬡ Variant: {variantData.variant.name}
+                <Icon icon={Hexagon} size={10} /> Variant: {variantData.variant.name}
               </span>
               <span className="separator">|</span>
               <span>
@@ -112,7 +114,7 @@ export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
           {selection && <span className="separator">|</span>}
           {selection && (
             <span className="selection-info">
-              ⬚ Selection: {selection.bounds.width}×{selection.bounds.height} at
+              <Icon icon={BoxSelect} size={10} /> Selection: {selection.bounds.width}×{selection.bounds.height} at
               ({selection.bounds.x}, {selection.bounds.y}) •{" "}
               {selection.mask.size}
               px
@@ -125,7 +127,7 @@ export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
           {isReferenceTraceActive && <span className="separator">|</span>}
           {isReferenceTraceActive && (
             <span className="trace-info">
-              🎯 Offset: ({referenceOverlayOffset.x}, {referenceOverlayOffset.y}
+              <Icon icon={Target} size={10} /> Offset: ({referenceOverlayOffset.x}, {referenceOverlayOffset.y}
               )
             </span>
           )}
@@ -134,7 +136,7 @@ export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
           )}
           {referenceImage && !isReferenceTraceActive && (
             <span>
-              📷 Ref: {referenceImage.width}×{referenceImage.height}
+              <Icon icon={Camera} size={10} /> Ref: {referenceImage.width}×{referenceImage.height}
             </span>
           )}
         </div>

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { Layer, PixelObject, Variant } from '../../types';
 import { renderLayerPreview, renderVariantLayerPreview } from '../../utils/previewRenderer';
+import { Icon } from '../Icon/Icon';
+import { Hexagon, ClipboardCopy, X } from 'lucide-react';
 import './CopyFromModal.css';
 
 interface CopyFromModalProps {
@@ -135,7 +137,7 @@ function LayerCell({ obj, layer, variants, onCopy }: LayerCellProps) {
           />
         )}
         {layer.isVariant && (
-          <span className="variant-badge">⬡</span>
+          <span className="variant-badge"><Icon icon={Hexagon} size={10} /></span>
         )}
       </div>
       <Tooltip
@@ -180,9 +182,9 @@ export function CopyFromModal({ onClose }: CopyFromModalProps) {
     <div className="copy-modal-backdrop" onClick={handleBackdropClick}>
       <div className="copy-modal">
         <div className="copy-modal-header">
-          <h3>📋 Copy Layer From</h3>
+          <h3><Icon icon={ClipboardCopy} size={16} /> Copy Layer From</h3>
           <span className="copy-modal-hint">Click a layer to copy it to the current object</span>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
         <div className="copy-modal-content">

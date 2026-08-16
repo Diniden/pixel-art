@@ -5,30 +5,50 @@ import {
   ReferenceImageModal,
   ReferenceImageData,
 } from "../ReferenceImageModal/ReferenceImageModal";
+import { Icon } from "../Icon/Icon";
+import type { LucideIcon } from "lucide-react";
+import {
+  Pencil,
+  Eraser,
+  Pipette,
+  Square,
+  PaintBucket,
+  CloudFog,
+  Minus,
+  RectangleHorizontal,
+  Circle,
+  Move,
+  BoxSelect,
+  Crosshair,
+  FlipHorizontal2,
+  FlipVertical2,
+  Camera,
+  X,
+} from "lucide-react";
 
 interface PixelStudioToolsProps {
   onReferenceImageChange?: (data: ReferenceImageData | null) => void;
   hasReferenceImage?: boolean;
 }
 
-const tools: { id: Tool; icon: string; label: string; hotkey: string }[] = [
-  { id: "pixel", icon: "✏️", label: "Pencil", hotkey: "1" },
-  { id: "eraser", icon: "🧹", label: "Eraser", hotkey: "2" },
-  { id: "eyedropper", icon: "💧", label: "Eyedropper", hotkey: "3" },
-  { id: "fill-square", icon: "⬛", label: "Square Brush", hotkey: "4" },
-  { id: "flood-fill", icon: "🪣", label: "Fill", hotkey: "5" },
-  { id: "gaussian-fill", icon: "🌫️", label: "Gaussian Fill", hotkey: "G" },
-  { id: "line", icon: "📏", label: "Line", hotkey: "6" },
-  { id: "rectangle", icon: "▢", label: "Rectangle (↑↓ radius)", hotkey: "7" },
-  { id: "ellipse", icon: "◯", label: "Ellipse", hotkey: "8" },
-  { id: "move", icon: "✥", label: "Move (arrows to shift)", hotkey: "9" },
+const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
+  { id: "pixel", icon: Pencil, label: "Pencil", hotkey: "1" },
+  { id: "eraser", icon: Eraser, label: "Eraser", hotkey: "2" },
+  { id: "eyedropper", icon: Pipette, label: "Eyedropper", hotkey: "3" },
+  { id: "fill-square", icon: Square, label: "Square Brush", hotkey: "4" },
+  { id: "flood-fill", icon: PaintBucket, label: "Fill", hotkey: "5" },
+  { id: "gaussian-fill", icon: CloudFog, label: "Gaussian Fill", hotkey: "G" },
+  { id: "line", icon: Minus, label: "Line", hotkey: "6" },
+  { id: "rectangle", icon: RectangleHorizontal, label: "Rectangle (↑↓ radius)", hotkey: "7" },
+  { id: "ellipse", icon: Circle, label: "Ellipse", hotkey: "8" },
+  { id: "move", icon: Move, label: "Move (arrows to shift)", hotkey: "9" },
   {
     id: "selection",
-    icon: "⬚",
+    icon: BoxSelect,
     label: "Selection (arrows to move)",
     hotkey: "0",
   },
-  { id: "origin", icon: "⊕", label: "Origin (set anchor point)", hotkey: "O" },
+  { id: "origin", icon: Crosshair, label: "Origin (set anchor point)", hotkey: "O" },
 ];
 
 export function PixelStudioTools({
@@ -62,7 +82,7 @@ export function PixelStudioTools({
               onClick={() => setTool(tool.id)}
               title={`${tool.label} (${tool.hotkey})`}
             >
-              <span className="tool-icon">{tool.icon}</span>
+              <span className="tool-icon"><Icon icon={tool.icon} /></span>
               <span className="tool-hotkey">{tool.hotkey}</span>
             </button>
           ))}
@@ -76,14 +96,14 @@ export function PixelStudioTools({
             onClick={() => flipHorizontal()}
             title="Flip Horizontal"
           >
-            <span className="tool-icon">↔️</span>
+            <span className="tool-icon"><Icon icon={FlipHorizontal2} /></span>
           </button>
           <button
             className="tool-btn"
             onClick={() => flipVertical()}
             title="Flip Vertical"
           >
-            <span className="tool-icon">↕️</span>
+            <span className="tool-icon"><Icon icon={FlipVertical2} /></span>
           </button>
         </div>
 
@@ -95,7 +115,7 @@ export function PixelStudioTools({
             onClick={() => setIsRefModalOpen(true)}
             title="Add Reference Image"
           >
-            <span className="tool-icon">📷</span>
+            <span className="tool-icon"><Icon icon={Camera} /></span>
           </button>
           {hasReferenceImage && (
             <button
@@ -103,7 +123,7 @@ export function PixelStudioTools({
               onClick={handleClearReference}
               title="Clear Reference Image"
             >
-              <span className="tool-icon">✕</span>
+              <span className="tool-icon"><Icon icon={X} /></span>
             </button>
           )}
         </div>

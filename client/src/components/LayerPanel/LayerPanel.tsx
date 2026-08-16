@@ -3,6 +3,8 @@ import { useEditorStore } from '../../store';
 import { VariantSelectModal } from '../VariantSelectModal/VariantSelectModal';
 import { CopyFromModal } from '../CopyFromModal/CopyFromModal';
 import { AddVariantModal } from '../AddVariantModal/AddVariantModal';
+import { Icon } from '../Icon/Icon';
+import { Hexagon, ArrowDownToLine, ArrowUpToLine, Eye, EyeOff, ClipboardCopy, Wand2, Plus, X, Copy, ChevronUp, ChevronDown } from 'lucide-react';
 import './LayerPanel.css';
 
 export function LayerPanel() {
@@ -154,7 +156,7 @@ export function LayerPanel() {
             disabled={!canMoveUp}
             title="Move selected layer up across all frames"
           >
-            ▲
+            <Icon icon={ChevronUp} size={12} />
           </button>
           <button
             className="header-btn move-all-frames-btn"
@@ -167,7 +169,7 @@ export function LayerPanel() {
             disabled={!canMoveDown}
             title="Move selected layer down across all frames"
           >
-            ▼
+            <Icon icon={ChevronDown} size={12} />
           </button>
           <button
             className="header-btn squash-all-frames-btn"
@@ -180,7 +182,7 @@ export function LayerPanel() {
             disabled={!canSquashDown}
             title="Squash down across all frames (this layer squashes into layer below)"
           >
-            ⬇
+            <Icon icon={ArrowDownToLine} size={12} />
           </button>
           <button
             className="header-btn squash-all-frames-btn"
@@ -193,21 +195,21 @@ export function LayerPanel() {
             disabled={!canSquashUp}
             title="Squash up across all frames (this layer squashes into layer above)"
           >
-            ⬆
+            <Icon icon={ArrowUpToLine} size={12} />
           </button>
           <button
             className={`header-btn visibility-toggle ${allVisible ? 'all-visible' : ''}`}
             onClick={() => toggleAllLayersVisibility(!allVisible)}
             title={allVisible ? 'Hide all layers' : 'Show all layers'}
           >
-            {allVisible ? '👁' : allHidden ? '○' : '◐'}
+            <Icon icon={allVisible ? Eye : EyeOff} size={12} />
           </button>
           <button
             className="header-btn copy-from-btn"
             onClick={() => setShowCopyFromModal(true)}
             title="Copy layer from another object"
           >
-            📋
+            <Icon icon={ClipboardCopy} size={12} />
           </button>
           <button
             className={`header-btn add-variant-btn ${hasVariants ? '' : 'disabled'}`}
@@ -215,10 +217,10 @@ export function LayerPanel() {
             disabled={!hasVariants}
             title={hasVariants ? "Add existing variant as layer" : "No variants exist yet"}
           >
-            ✦
+            <Icon icon={Wand2} size={12} />
           </button>
           <button className="header-btn" onClick={handleAddLayer} title="New Layer">
-            +
+            <Icon icon={Plus} size={12} />
           </button>
           <button
             className="header-btn delete-all-frames-btn"
@@ -233,7 +235,7 @@ export function LayerPanel() {
             disabled={!selectedLayerId || frame.layers.length <= 1}
             title="Delete selected layer across all frames"
           >
-            ×
+            <Icon icon={X} size={12} />
           </button>
         </div>
       </div>
@@ -276,7 +278,7 @@ export function LayerPanel() {
                       }}
                       title={layer.visible ? 'Hide layer' : 'Show layer'}
                     >
-                      {layer.visible ? '👁' : '○'}
+                      <Icon icon={layer.visible ? Eye : EyeOff} size={12} />
                     </button>
                     {/* Variant select button for variant layers - always visible */}
                     {layer.isVariant && (
@@ -288,15 +290,14 @@ export function LayerPanel() {
                         }}
                         title="Select variant"
                       >
-                        ⬡
+                        <Icon icon={Hexagon} size={12} />
                       </button>
                     )}
                   </div>
                   <div className="layer-main-column">
                     <div className="layer-label-row">
-                      {/* Variant icon for variant layers */}
                       {layer.isVariant && (
-                        <span className="variant-icon" title="Variant Layer">⬡</span>
+                        <span className="variant-icon" title="Variant Layer"><Icon icon={Hexagon} size={10} /></span>
                       )}
 
                       {editingId === layer.id ? (
@@ -343,9 +344,8 @@ export function LayerPanel() {
                         }}
                         title="Copy layer across all frames (Cmd+V pastes to current frame only)"
                       >
-                        📋
+                        <Icon icon={ClipboardCopy} size={10} />
                       </button>
-                      {/* Variant-specific actions */}
                       {!layer.isVariant && (
                         <button
                           className="layer-action-btn make-variant-btn"
@@ -355,7 +355,7 @@ export function LayerPanel() {
                           }}
                           title="Make variant"
                         >
-                          ✦
+                          <Icon icon={Wand2} size={10} />
                         </button>
                       )}
                       <button
@@ -367,7 +367,7 @@ export function LayerPanel() {
                         disabled={displayIndex === 0}
                         title="Move layer up (current frame only)"
                       >
-                        ▲
+                        <Icon icon={ChevronUp} size={10} />
                       </button>
                       <button
                         className="layer-action-btn"
@@ -378,7 +378,7 @@ export function LayerPanel() {
                         disabled={displayIndex === layers.length - 1}
                         title="Move layer down (current frame only)"
                       >
-                        ▼
+                        <Icon icon={ChevronDown} size={10} />
                       </button>
                       {!layer.isVariant && (
                         <>
@@ -402,7 +402,7 @@ export function LayerPanel() {
                                   disabled={!canSquashDownThis}
                                   title="Squash down (this layer squashes into layer below)"
                                 >
-                                  ⬇
+                                  <Icon icon={ArrowDownToLine} size={10} />
                                 </button>
                                 <button
                                   className="layer-action-btn squash-btn"
@@ -413,7 +413,7 @@ export function LayerPanel() {
                                   disabled={!canSquashUpThis}
                                   title="Squash up (this layer squashes into layer above)"
                                 >
-                                  ⬆
+                                  <Icon icon={ArrowUpToLine} size={10} />
                                 </button>
                               </>
                             );
@@ -426,7 +426,7 @@ export function LayerPanel() {
                             }}
                             title="Duplicate layer"
                           >
-                            ⧉
+                            <Icon icon={Copy} size={10} />
                           </button>
                           <button
                             className="layer-action-btn delete"
@@ -437,11 +437,10 @@ export function LayerPanel() {
                             disabled={frame.layers.length <= 1}
                             title="Delete layer"
                           >
-                            ×
+                            <Icon icon={X} size={10} />
                           </button>
                         </>
                       )}
-                      {/* Delete button for variant layers - removes layer only, not the variant */}
                       {layer.isVariant && (
                         <button
                           className="layer-action-btn delete"
@@ -451,7 +450,7 @@ export function LayerPanel() {
                           }}
                           title="Remove variant layer (variant data preserved)"
                         >
-                          ×
+                          <Icon icon={X} size={10} />
                         </button>
                       )}
                     </div>

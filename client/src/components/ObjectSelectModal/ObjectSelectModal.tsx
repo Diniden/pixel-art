@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
+import { Icon } from '../Icon/Icon';
+import { Target, Check, X, Package } from 'lucide-react';
 import './ObjectSelectModal.css';
 
 interface ObjectSelectModalProps {
@@ -106,9 +108,9 @@ export function ObjectSelectModal({ selectedObjectId, onSelect, onClose }: Objec
     <div className="object-select-modal-backdrop" onClick={handleBackdropClick}>
       <div className="object-select-modal">
         <div className="object-select-modal-header">
-          <h3>📦 Select Reference Object</h3>
+          <h3><Icon icon={Package} size={16} /> Select Reference Object</h3>
           <span className="object-select-subtitle">Choose which object's frames to preview</span>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
         <div className="object-select-modal-content">
@@ -117,7 +119,7 @@ export function ObjectSelectModal({ selectedObjectId, onSelect, onClose }: Objec
             className={`object-select-card current-object-option ${selectedObjectId === null ? 'selected' : ''}`}
             onClick={() => handleSelectObject(null)}
           >
-            <div className="current-object-icon">🎯</div>
+            <div className="current-object-icon"><Icon icon={Target} size={18} /></div>
             <div className="object-select-info">
               <span className="object-select-name">Follow Current Object</span>
               <span className="object-select-details">
@@ -125,7 +127,7 @@ export function ObjectSelectModal({ selectedObjectId, onSelect, onClose }: Objec
               </span>
             </div>
             {selectedObjectId === null && (
-              <div className="selected-badge">✓</div>
+              <div className="selected-badge"><Icon icon={Check} size={12} /></div>
             )}
           </div>
 
@@ -160,7 +162,7 @@ export function ObjectSelectModal({ selectedObjectId, onSelect, onClose }: Objec
                   )}
 
                   {isSelected && (
-                    <div className="selected-badge">✓</div>
+                    <div className="selected-badge"><Icon icon={Check} size={12} /></div>
                   )}
                 </div>
               );

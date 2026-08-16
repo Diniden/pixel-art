@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import './ReferenceImageModal.css';
 import { useEditorStore } from '../../store';
+import { Icon } from '../Icon/Icon';
+import { ImagePlus, RotateCcw, Camera, X, Trash2, Search } from 'lucide-react';
 
 export interface ReferenceImageData {
   pixels: Array<Array<{ r: number; g: number; b: number; a: number } | 0>>;
@@ -749,8 +751,8 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
     <div className="modal-overlay" onClick={handleClose}>
       <div className="reference-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>📷 Add Reference Image</h2>
-          <button className="close-btn" onClick={handleClose}>×</button>
+          <h2><Icon icon={Camera} size={18} /> Add Reference Image</h2>
+          <button className="close-btn" onClick={handleClose}><Icon icon={X} size={14} /></button>
         </div>
 
         <div className="modal-body">
@@ -769,7 +771,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
               />
-              <div className="upload-icon">🖼️</div>
+              <div className="upload-icon"><Icon icon={ImagePlus} size={32} /></div>
               <p className="upload-text">Drop an image here or click to upload</p>
               <p className="upload-hint">Supports PNG, JPG, GIF, WebP</p>
             </div>
@@ -788,7 +790,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
                     +
                   </button>
                   <button className="toolbar-btn reset-btn" onClick={handleResetView} title="Reset View">
-                    ⟲
+                    <Icon icon={RotateCcw} size={12} />
                   </button>
                 </div>
                 <button className="select-all-btn" onClick={handleSelectAll}>
@@ -805,7 +807,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
                   onClick={handleClearImage}
                   title="Clear current image"
                 >
-                  🗑️ Clear
+                  <Icon icon={Trash2} size={12} /> Clear
                 </button>
                 <input
                   ref={fileInputRef}
@@ -836,7 +838,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
                 </div>
               </div>
               <p className="selection-hint">
-                🔍 Pinch or scroll to zoom • Two-finger swipe to pan • Click and drag to select • Drag inside selection to move it
+                <Icon icon={Search} size={12} /> Pinch or scroll to zoom • Two-finger swipe to pan • Click and drag to select • Drag inside selection to move it
               </p>
             </div>
           )}

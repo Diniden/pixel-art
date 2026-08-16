@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { Pixel, PixelData } from '../../types';
+import { Icon } from '../Icon/Icon';
+import { Mountain, X } from 'lucide-react';
 import './HeightMapModal.css';
 
 type ChannelType = 'R' | 'G' | 'B' | 'H' | 'S' | 'L';
@@ -195,8 +197,8 @@ export function HeightMapModal({ isOpen, onClose, onConfirm }: HeightMapModalPro
     <div className="height-map-modal-backdrop" onClick={handleBackdropClick}>
       <div className="height-map-modal" onClick={e => e.stopPropagation()}>
         <div className="height-map-modal-header">
-          <h3>🗻 Height Map Generator</h3>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <h3><Icon icon={Mountain} size={16} /> Height Map Generator</h3>
+          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
         <div className="height-map-modal-content">

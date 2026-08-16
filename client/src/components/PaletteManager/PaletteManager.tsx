@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useEditorStore } from '../../store';
 import { Color } from '../../types';
+import { Icon } from '../Icon/Icon';
+import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import './PaletteManager.css';
 
 export function PaletteManager() {
@@ -79,7 +81,7 @@ export function PaletteManager() {
                 className="palette-header"
                 onClick={() => setExpandedId(expandedId === palette.id ? null : palette.id)}
               >
-                <span className="expand-icon">{expandedId === palette.id ? '▼' : '▶'}</span>
+                <span className="expand-icon"><Icon icon={expandedId === palette.id ? ChevronDown : ChevronRight} size={12} /></span>
                 {editingId === palette.id ? (
                   <input
                     type="text"
@@ -126,7 +128,7 @@ export function PaletteManager() {
                           onClick={() => removeColorFromPalette(palette.id, index)}
                           title="Remove color"
                         >
-                          ×
+                          <Icon icon={X} size={8} />
                         </button>
                       </div>
                     ))}

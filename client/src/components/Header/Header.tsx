@@ -5,6 +5,8 @@ import { checkAiHealth, getAiConfig } from '../../services/aiService';
 import { ProjectSelectModal } from '../ProjectSelectModal/ProjectSelectModal';
 import { ExportPreviewModal } from '../ExportPreviewModal/ExportPreviewModal';
 import { BrowseBackupsModal } from '../BrowseBackupsModal/BrowseBackupsModal';
+import { Icon } from '../Icon/Icon';
+import { Diamond, Wand2, History, FolderOpen, ExternalLink, PenLine } from 'lucide-react';
 import './Header.css';
 
 export function Header() {
@@ -179,7 +181,7 @@ export function Header() {
     <header className="header">
       <div className="header-left">
         <div className="logo">
-          <span className="logo-icon">◆</span>
+          <span className="logo-icon"><Icon icon={Diamond} size={16} /></span>
           <span className="logo-text">Pixel Studio</span>
         </div>
       </div>
@@ -206,7 +208,7 @@ export function Header() {
           ) : (
             <button className="project-title-btn" onClick={handleStartEdit} title="Click to rename project">
               <span className="project-name">{projectName}</span>
-              <span className="edit-hint">✎</span>
+              <span className="edit-hint"><Icon icon={PenLine} size={12} /></span>
             </button>
           )}
         </div>
@@ -229,7 +231,7 @@ export function Header() {
             }}
             title={aiHealthStatus === 'error' ? `AI Error: ${aiHealthDetail}` : 'AI Service Settings'}
           >
-            <span className="ai-icon">✦</span>
+            <span className="ai-icon"><Icon icon={Wand2} size={14} /></span>
             AI
           </button>
           {showAiConfig && (
@@ -276,11 +278,11 @@ export function Header() {
           )}
         </div>
         <button className="browse-backups-btn" onClick={() => setShowBackupsModal(true)} title="Browse Backups">
-          <span className="backups-icon">⟲</span>
+          <span className="backups-icon"><Icon icon={History} size={14} /></span>
           Backups
         </button>
         <button className="switch-project-btn" onClick={() => setShowProjectModal(true)} title="Switch Projects">
-          <span className="folder-icon">📁</span>
+          <span className="folder-icon"><Icon icon={FolderOpen} size={14} /></span>
           Projects
         </button>
         <button
@@ -289,7 +291,7 @@ export function Header() {
           disabled={exportStatus === 'exporting'}
           title={exportMessage ?? 'Export project to server folder'}
         >
-          <span className="export-icon">↗</span>
+          <span className="export-icon"><Icon icon={ExternalLink} size={14} /></span>
           {exportStatus === 'exporting' ? 'Exporting...' : 'Export'}
         </button>
         {exportStatus !== 'idle' && exportMessage && (

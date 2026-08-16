@@ -3,7 +3,7 @@
   "version": "1.1.0",
   "private": true,
   "scripts": {
-    "dev": "mprocs",
+    "dev": "CFG=\"$PWD/mprocs.yaml\" && cd \"$(mktemp -d)\" && exec mprocs --config \"$CFG\"",
     "dev:client": "cd client && bun run dev",
     "dev:server": "cd server && bun run dev",
     "build": "cd client && bun run build",

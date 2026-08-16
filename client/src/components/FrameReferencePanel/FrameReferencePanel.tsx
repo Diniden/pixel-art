@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { ObjectSelectModal } from '../ObjectSelectModal/ObjectSelectModal';
+import { Icon } from '../Icon/Icon';
+import { Film, Package, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Target } from 'lucide-react';
 import './FrameReferencePanel.css';
 
 interface FrameReferencePanelProps {
@@ -347,7 +349,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
           style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         >
           <span className="frame-reference-title">
-            🎞️ Frame Reference
+            <Icon icon={Film} size={12} /> Frame Reference
           </span>
           <button
             className="frame-reference-object-btn"
@@ -358,7 +360,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
             onMouseDown={(e) => e.stopPropagation()}
             title="Select reference object"
           >
-            📦
+            <Icon icon={Package} size={12} />
           </button>
           <button
             className="frame-reference-minimize"
@@ -372,7 +374,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
             onMouseDown={(e) => e.stopPropagation()}
             title={isMinimized ? 'Expand' : 'Minimize'}
           >
-            {isMinimized ? '▲' : '▼'}
+            <Icon icon={isMinimized ? ChevronUp : ChevronDown} size={12} />
           </button>
         </div>
 
@@ -393,7 +395,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
                 disabled={referenceFrameIndex <= 0}
                 title="Previous frame"
               >
-                ◀
+                <Icon icon={ChevronLeft} size={14} />
               </button>
               <div className="frame-reference-info">
                 {isValidReference ? (
@@ -414,7 +416,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
                 disabled={referenceFrameIndex + 1 >= displayObj.frames.length}
                 title="Next frame"
               >
-                ▶
+                <Icon icon={ChevronRight} size={14} />
               </button>
             </div>
 
@@ -446,7 +448,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
                     title={isOverlayActive ? 'Hide overlay' : 'Show overlay on canvas'}
                     style={{ flex: 1 }}
                   >
-                    {isOverlayActive ? '👁️ Hide Overlay' : '👁️ Show Overlay'}
+                    <Icon icon={isOverlayActive ? EyeOff : Eye} size={14} /> {isOverlayActive ? 'Hide Overlay' : 'Show Overlay'}
                   </button>
                   <button
                     className={`frame-reference-trace-btn ${isTraceActive ? 'active' : ''}`}
@@ -454,7 +456,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
                     title={isTraceActive ? 'Exit trace mode (ESC)' : 'Trace mode (WASD to align, click to copy)'}
                     style={{ flex: '0 0 auto', padding: '10px 16px' }}
                   >
-                    🎯
+                    <Icon icon={Target} size={14} />
                   </button>
                 </div>
               </>

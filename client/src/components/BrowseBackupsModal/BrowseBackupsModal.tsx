@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useEditorStore } from '../../store';
 import { listBackups } from '../../services/api';
+import { Icon } from '../Icon/Icon';
+import { Clock, X } from 'lucide-react';
 import './BrowseBackupsModal.css';
 
 interface BackupEntry {
@@ -121,7 +123,7 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
         <div className="modal-header">
           <h2>Backups — {projectName}</h2>
           <button className="close-btn" onClick={onClose} disabled={isRestoring}>
-            ×
+            <Icon icon={X} size={14} />
           </button>
         </div>
 
@@ -151,7 +153,7 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
                         onClick={() => setSelectedBackup(entry)}
                         disabled={isRestoring}
                       >
-                        <span className="backup-time-icon">⏱</span>
+                        <span className="backup-time-icon"><Icon icon={Clock} size={12} /></span>
                         <span className="backup-time">{formatTime(entry.time)}</span>
                         <span className="backup-filename">{entry.filename}</span>
                       </button>

@@ -210,6 +210,8 @@ export interface EditorState {
   pasteTimelineCell: (frameId: string, targetLayerId: string) => void;
 
   // Drawing actions
+  beginStroke: () => void;
+  endStroke: () => void;
   setPixel: (x: number, y: number, color: Color | 0) => void;
   setPixels: (pixels: { x: number; y: number; color: Color | 0 }[]) => void;
   startDrawing: (point: Point) => void;

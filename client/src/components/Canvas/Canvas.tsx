@@ -110,6 +110,8 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     getCurrentLayer,
     getCurrentVariant,
     isEditingVariant,
+    beginStroke,
+    endStroke,
     setPixel,
     setPixels,
     startDrawing,
@@ -1980,6 +1982,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
 
     // Reference trace tool: copy pixel from reference to canvas
     if (isReferenceTraceActive) {
+      beginStroke();
       setIsTracing(true);
       lastStrokePixelRef.current = coords;
 
@@ -2016,6 +2019,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
 
     // Frame trace tool: copy pixel from frame trace overlay to canvas
     if (frameTraceActive) {
+      beginStroke();
       setIsTracing(true);
       lastStrokePixelRef.current = coords;
 
@@ -2181,6 +2185,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     }
 
     if (currentTool === "pixel") {
+      beginStroke();
       if (brushSize === 1) {
         setPixel(coords.x, coords.y, currentColor);
       } else {
@@ -2199,6 +2204,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       }
       lastStrokePixelRef.current = coords;
     } else if (currentTool === "eraser") {
+      beginStroke();
       if (brushSize === 1) {
         setPixel(coords.x, coords.y, 0);
       } else {
@@ -2254,6 +2260,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       setPixels(pixels);
       endDrawing();
     } else if (currentTool === "fill-square") {
+      beginStroke();
       const pixels = getSquarePixels(coords, brushSize, currentColor);
       setPixels(pixels);
     }
@@ -2550,6 +2557,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     }
 
     if (isTracing) {
+      endStroke();
       setIsTracing(false);
       return;
     }
@@ -2609,6 +2617,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       setPixels(pixelData);
     }
 
+    endStroke();
     endDrawing();
   };
 
@@ -2730,6 +2739,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     startDrawing(coords);
 
     if (currentTool === "pixel") {
+      beginStroke();
       if (brushSize === 1) {
         setPixel(coords.x, coords.y, currentColor);
       } else {
@@ -2748,6 +2758,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       }
       lastStrokePixelRef.current = coords;
     } else if (currentTool === "eraser") {
+      beginStroke();
       if (brushSize === 1) {
         setPixel(coords.x, coords.y, 0);
         lastStrokePixelRef.current = coords;
@@ -2799,6 +2810,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       setPixels(pixels);
       endDrawing();
     } else if (currentTool === "fill-square") {
+      beginStroke();
       const pixels = getSquarePixels(coords, brushSize, currentColor);
       setPixels(pixels);
     }
@@ -2973,6 +2985,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       setLastDragPixel(null);
       return;
     }
+    endStroke();
     endDrawing();
   };
 

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
 import { ReferenceImageData, adjustReferenceBoxSize, shiftReferenceSelection, shiftReferenceSelectionBySize } from '../ReferenceImageModal/ReferenceImageModal';
+import { Icon } from '../Icon/Icon';
+import { Camera, ChevronUp, ChevronDown, Target } from 'lucide-react';
 import './ReferenceImagePanel.css';
 
 interface ReferenceImagePanelProps {
@@ -202,7 +204,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       >
         <span className="reference-image-title">
-          📷 Reference Image
+          <Icon icon={Camera} size={12} /> Reference Image
         </span>
         <button
           className="reference-image-minimize"
@@ -215,7 +217,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
           onMouseDown={(e) => e.stopPropagation()}
           title={isMinimized ? 'Expand' : 'Minimize'}
         >
-          {isMinimized ? '▲' : '▼'}
+          <Icon icon={isMinimized ? ChevronUp : ChevronDown} size={12} />
         </button>
       </div>
 
@@ -420,7 +422,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 }}
                 title="Trace Reference (WASD to align, click to copy)"
               >
-                🎯
+                <Icon icon={Target} size={14} />
               </button>
             </div>
           )}

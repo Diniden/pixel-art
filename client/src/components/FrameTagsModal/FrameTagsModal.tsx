@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useEditorStore } from "../../store";
 import type { Project, PixelObject, VariantGroup } from "../../types";
+import { Icon } from "../Icon/Icon";
+import { X } from "lucide-react";
 import "./FrameTagsModal.css";
 
 export type FrameTagsContext =
@@ -174,7 +176,7 @@ export function FrameTagsModal({
             onClick={onClose}
             aria-label="Close"
           >
-            ×
+            <Icon icon={X} size={14} />
           </button>
         </div>
 
@@ -193,7 +195,7 @@ export function FrameTagsModal({
                   onClick={() => removeTag(tag)}
                   aria-label={`Remove ${tag}`}
                 >
-                  ×
+                  <Icon icon={X} size={10} />
                 </button>
               </span>
             ))}

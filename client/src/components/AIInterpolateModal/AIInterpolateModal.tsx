@@ -6,6 +6,8 @@ import {
   VariantFrame, PixelData, Pixel, generateId,
 } from '../../types';
 import { submitJob, getJobStatus, checkAiHealth } from '../../services/aiService';
+import { Icon } from '../Icon/Icon';
+import { Wand2, X } from 'lucide-react';
 import './AIInterpolateModal.css';
 
 interface VariantData {
@@ -207,43 +209,84 @@ function Base64Thumbnail({ base64, size }: { base64: string; size: number }) {
   return <canvas ref={canvasRef} width={size} height={size} className="ai-thumb-canvas" />;
 }
 
-function AnimatedPreview({ frames, size, fps = 8 }: { frames: string[]; size: number; fps?: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+function SyncedAnimatedPreview({
+  newFrames,
+  oldFrames,
+  size,
+  fps = 8,
+}: {
+  newFrames: string[];
+  oldFrames: string[];
+  size: number;
+  fps?: number;
+}) {
+  const newCanvasRef = useRef<HTMLCanvasElement>(null);
+  const oldCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameIdxRef = useRef(0);
-  const imagesRef = useRef<HTMLImageElement[]>([]);
+  const newImagesRef = useRef<HTMLImageElement[]>([]);
+  const oldImagesRef = useRef<HTMLImageElement[]>([]);
 
   useEffect(() => {
-    imagesRef.current = frames.map((b64) => {
+    newImagesRef.current = newFrames.map((b64) => {
       const img = new Image();
       img.src = b64 ? `data:image/png;base64,${b64}` : '';
       return img;
     });
-  }, [frames]);
+  }, [newFrames]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || frames.length === 0) return;
-    const ctx = canvas.getContext('2d')!;
-    ctx.imageSmoothingEnabled = false;
+    oldImagesRef.current = oldFrames.map((b64) => {
+      const img = new Image();
+      img.src = b64 ? `data:image/png;base64,${b64}` : '';
+      return img;
+    });
+  }, [oldFrames]);
+
+  useEffect(() => {
+    const newCanvas = newCanvasRef.current;
+    const oldCanvas = oldCanvasRef.current;
+    if (!newCanvas || !oldCanvas || newFrames.length === 0) return;
+    const newCtx = newCanvas.getContext('2d')!;
+    const oldCtx = oldCanvas.getContext('2d')!;
+    newCtx.imageSmoothingEnabled = false;
+    oldCtx.imageSmoothingEnabled = false;
 
     frameIdxRef.current = 0;
-    const interval = setInterval(() => {
-      const idx = frameIdxRef.current % frames.length;
-      const img = imagesRef.current[idx];
+
+    const drawFrame = (ctx: CanvasRenderingContext2D, img: HTMLImageElement) => {
       ctx.clearRect(0, 0, size, size);
       if (img && img.complete && img.naturalWidth > 0) {
-        const scale = Math.min(size / img.width, size / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
+        const s = Math.min(size / img.width, size / img.height);
+        const w = img.width * s;
+        const h = img.height * s;
         ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      }
+    };
+
+    const interval = setInterval(() => {
+      const idx = frameIdxRef.current % newFrames.length;
+      drawFrame(newCtx, newImagesRef.current[idx]);
+      if (idx < oldFrames.length) {
+        drawFrame(oldCtx, oldImagesRef.current[idx]);
       }
       frameIdxRef.current = idx + 1;
     }, 1000 / fps);
 
     return () => clearInterval(interval);
-  }, [frames, size, fps]);
+  }, [newFrames, oldFrames, size, fps]);
 
-  return <canvas ref={canvasRef} width={size} height={size} className="ai-preview-canvas" />;
+  return (
+    <div className="ai-synced-preview">
+      <div className="ai-synced-preview-item">
+        <span className="ai-synced-preview-label">Original</span>
+        <canvas ref={oldCanvasRef} width={size} height={size} className="ai-preview-canvas" />
+      </div>
+      <div className="ai-synced-preview-item">
+        <span className="ai-synced-preview-label">Interpolated</span>
+        <canvas ref={newCanvasRef} width={size} height={size} className="ai-preview-canvas" />
+      </div>
+    </div>
+  );
 }
 
 export function AIInterpolateModal({
@@ -259,8 +302,8 @@ export function AIInterpolateModal({
   const [selectedKeyframes, setSelectedKeyframes] = useState<Set<number>>(new Set());
   const [loopBack, setLoopBack] = useState(false);
   const [numFrames, setNumFrames] = useState(3);
-  const [scale, setScale] = useState(4);
-  const [flowScale, setFlowScale] = useState(1.0);
+  const [scale, setScale] = useState(16);
+  const [flowScale, setFlowScale] = useState(4.0);
   const [activeTab, setActiveTab] = useState<ConfigTab>('keyframes');
   const [pairJobs, setPairJobs] = useState<PairJobState[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -280,8 +323,8 @@ export function AIInterpolateModal({
     setSelectedKeyframes(new Set());
     setLoopBack(false);
     setNumFrames(3);
-    setScale(4);
-    setFlowScale(1.0);
+    setScale(16);
+    setFlowScale(4.0);
     setActiveTab('keyframes');
     setPairJobs([]);
     setIsGenerating(false);
@@ -481,6 +524,20 @@ export function AIInterpolateModal({
     return fullSequenceFrames
       .filter(f => f.base64)
       .map(f => f.base64);
+  }, [fullSequenceFrames]);
+
+  const keyframeSyncFrames = useMemo(() => {
+    let currentKeyframeB64 = '';
+    const syncFrames: string[] = [];
+    for (const f of fullSequenceFrames) {
+      if (f.type === 'keyframe') {
+        currentKeyframeB64 = f.base64;
+      }
+      if (f.base64) {
+        syncFrames.push(currentKeyframeB64);
+      }
+    }
+    return syncFrames;
   }, [fullSequenceFrames]);
 
   const handleGenerate = useCallback(async () => {
@@ -803,8 +860,17 @@ export function AIInterpolateModal({
     }
   }, [sortedKeyframes, allGeneratedFrames, gridSize, mode, variantData, object, selectedLayerName, store, onClose, loopBack]);
 
-  const handleBackdropClick = useCallback(() => {
-    if (!isGenerating) onClose();
+  const backdropMouseDownRef = useRef(false);
+
+  const handleBackdropMouseDown = useCallback((e: React.MouseEvent) => {
+    backdropMouseDownRef.current = e.target === e.currentTarget;
+  }, []);
+
+  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    if (backdropMouseDownRef.current && e.target === e.currentTarget && !isGenerating) {
+      onClose();
+    }
+    backdropMouseDownRef.current = false;
   }, [isGenerating, onClose]);
 
   const canGenerate = sortedKeyframes.length >= 2;
@@ -816,15 +882,15 @@ export function AIInterpolateModal({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="ai-modal-backdrop" onClick={handleBackdropClick}>
-      <div className="ai-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="ai-modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick}>
+      <div className="ai-modal">
         <div className="ai-modal-header">
           <h2 className="ai-modal-title">
-            <span className="ai-modal-icon">✦</span>
+            <span className="ai-modal-icon"><Icon icon={Wand2} size={18} /></span>
             AI Frame Interpolation
           </h2>
           {!isGenerating && (
-            <button className="ai-modal-close" onClick={onClose}>×</button>
+            <button className="ai-modal-close" onClick={onClose}><Icon icon={X} size={14} /></button>
           )}
         </div>
 
@@ -843,7 +909,7 @@ export function AIInterpolateModal({
 
           {step === 'unavailable' && (
             <div className="ai-heartbeat-unavailable">
-              <div className="ai-unavailable-icon">✦</div>
+              <div className="ai-unavailable-icon"><Icon icon={Wand2} size={32} /></div>
               <h3 className="ai-unavailable-title">AI Service Unavailable</h3>
               <p className="ai-unavailable-detail">{unavailableDetail}</p>
               <p className="ai-unavailable-hint">
@@ -1106,14 +1172,19 @@ export function AIInterpolateModal({
                           <input
                             type="number"
                             min={1}
-                            max={30}
+                            max={120}
                             value={previewFps}
-                            onChange={(e) => setPreviewFps(Math.max(1, Math.min(30, parseInt(e.target.value) || 8)))}
+                            onChange={(e) => setPreviewFps(Math.max(1, Math.min(120, parseInt(e.target.value) || 8)))}
                             className="ai-fps-input"
                           />
                         </div>
                       </div>
-                      <AnimatedPreview frames={animationFrames} size={128} fps={previewFps} />
+                      <SyncedAnimatedPreview
+                        newFrames={animationFrames}
+                        oldFrames={keyframeSyncFrames}
+                        size={128}
+                        fps={previewFps}
+                      />
                     </div>
                   )}
                 </div>

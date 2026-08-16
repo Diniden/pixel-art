@@ -4,6 +4,8 @@ import { useEditorStore } from '../../store';
 import { Layer, VariantGroup, Variant, VariantFrame } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
+import { Icon } from '../Icon/Icon';
+import { Hexagon, X, Scaling, Copy, Check } from 'lucide-react';
 import './VariantSelectModal.css';
 
 interface VariantSelectModalProps {
@@ -137,9 +139,9 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
     <div className="variant-modal-backdrop" onClick={handleBackdropClick}>
       <div className="variant-modal">
         <div className="variant-modal-header">
-          <h3>⬡ Select Variant</h3>
+          <h3><Icon icon={Hexagon} size={16} /> Select Variant</h3>
           <span className="variant-group-name">{variantGroup.name}</span>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
         <div className="variant-modal-content">
@@ -191,7 +193,7 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                     }}
                     title="Resize"
                   >
-                    ⬜
+                    <Icon icon={Scaling} size={12} />
                   </button>
                   <button
                     className="variant-action-btn"
@@ -201,7 +203,7 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                     }}
                     title="Duplicate"
                   >
-                    ⧉
+                    <Icon icon={Copy} size={12} />
                   </button>
                   <button
                     className="variant-action-btn delete"
@@ -212,12 +214,12 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                     disabled={variantGroup.variants.length <= 1}
                     title="Delete"
                   >
-                    ×
+                    <Icon icon={X} size={12} />
                   </button>
                 </div>
 
                 {selectedVariantId === variant.id && (
-                  <div className="selected-badge">✓</div>
+                  <div className="selected-badge"><Icon icon={Check} size={12} /></div>
                 )}
               </div>
             ))}

@@ -8,6 +8,8 @@ import {
   renderHeightAsGrayscale,
 } from "../../utils/lightingRenderer";
 import { getSquarePixels, getCirclePixels } from "./drawingUtils";
+import { Icon } from "../Icon/Icon";
+import { Lightbulb, ChevronUp, ChevronDown } from "lucide-react";
 import "./LightingCanvas.css";
 
 export function LightingCanvas() {
@@ -908,7 +910,7 @@ export function LightingCanvas() {
           onMouseDown={handlePreviewHeaderMouseDown}
           style={{ cursor: isPreviewDragging ? "grabbing" : "grab" }}
         >
-          <span className="lighting-preview-title">💡 Lighting Preview</span>
+          <span className="lighting-preview-title"><Icon icon={Lightbulb} size={12} /> Lighting Preview</span>
           <button
             className="lighting-preview-minimize"
             onMouseDown={(e) => e.stopPropagation()}
@@ -920,7 +922,7 @@ export function LightingCanvas() {
             }}
             title={previewMinimized ? "Expand" : "Minimize"}
           >
-            {previewMinimized ? "▲" : "▼"}
+            <Icon icon={previewMinimized ? ChevronUp : ChevronDown} size={12} />
           </button>
         </div>
 

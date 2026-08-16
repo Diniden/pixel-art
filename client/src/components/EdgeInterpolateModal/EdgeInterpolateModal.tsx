@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Icon } from '../Icon/Icon';
+import { Wrench, X } from 'lucide-react';
 import './EdgeInterpolateModal.css';
 
 interface EdgeInterpolateModalProps {
@@ -41,8 +43,8 @@ export function EdgeInterpolateModal({ isOpen, onClose, onConfirm }: EdgeInterpo
     <div className="edge-interpolate-modal-backdrop" onClick={handleBackdropClick}>
       <div className="edge-interpolate-modal" onClick={e => e.stopPropagation()}>
         <div className="edge-interpolate-modal-header">
-          <h3>🔧 Auto Compute Normals (Edge Interpolate)</h3>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <h3><Icon icon={Wrench} size={16} /> Auto Compute Normals (Edge Interpolate)</h3>
+          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
         <div className="edge-interpolate-modal-content">

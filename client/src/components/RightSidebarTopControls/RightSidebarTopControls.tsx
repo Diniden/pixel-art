@@ -1,5 +1,7 @@
 import { useEditorStore } from "../../store";
 import type { SelectionBehavior, SelectionMode, ShapeMode } from "../../types";
+import { Icon } from "../Icon/Icon";
+import { X } from "lucide-react";
 import "./RightSidebarTopControls.css";
 
 const shapeModes: { id: ShapeMode; label: string }[] = [
@@ -387,7 +389,7 @@ export function RightSidebarTopControls() {
                       title="Deselect (Esc)"
                       style={{ marginLeft: 8 }}
                     >
-                      ✕
+                      <Icon icon={X} size={12} />
                     </button>
                   </div>
                 </div>

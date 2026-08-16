@@ -20,3 +20,6 @@ ai-service/model/
 ai-service/Practical-RIFE/
 ai-service/__pycache__/
 ai-service/jobs/
+mprocs.log
+
+PAT

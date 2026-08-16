@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { VariantGroup } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
+import { Icon } from '../Icon/Icon';
+import { Wand2, X, AlertTriangle } from 'lucide-react';
 import './AddVariantModal.css';
 
 interface AddVariantModalProps {
@@ -120,15 +122,15 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
     <div className="add-variant-modal-backdrop" onClick={handleBackdropClick}>
       <div className="add-variant-modal">
         <div className="add-variant-modal-header">
-          <h3>✦ Add Variant Layer</h3>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <h3><Icon icon={Wand2} size={16} /> Add Variant Layer</h3>
+          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
         <div className="add-variant-modal-content">
           {variants.length === 0 ? (
             <div className="no-variants-message">
               <p>No variants exist yet.</p>
-              <p className="hint">Create a variant by selecting a layer and clicking the ✦ make variant button.</p>
+              <p className="hint">Create a variant by selecting a layer and clicking the make variant button.</p>
             </div>
           ) : (
             <>
@@ -162,7 +164,7 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
                       }}
                       title="Delete variant"
                     >
-                      ×
+                      <Icon icon={X} size={10} />
                     </button>
 
                     <div className="add-variant-thumb">
@@ -244,7 +246,7 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
         <div className="delete-confirm-backdrop" onClick={() => setDeleteConfirm(null)}>
           <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="delete-confirm-header">
-              <h4>⚠️ Delete Variant</h4>
+              <h4><Icon icon={AlertTriangle} size={14} /> Delete Variant</h4>
             </div>
             <div className="delete-confirm-content">
               <p>

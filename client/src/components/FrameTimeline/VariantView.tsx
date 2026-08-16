@@ -9,6 +9,8 @@ import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
 import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import { FrameThumbnail } from './FramesView';
 import { AIInterpolateModal } from '../AIInterpolateModal/AIInterpolateModal';
+import { Icon } from '../Icon/Icon';
+import { Tag, Copy, SquareIcon, Play, Zap, Maximize, Wand2, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 // Optimized variant frame thumbnail
 const VariantFrameThumbnail = memo(function VariantFrameThumbnail({
@@ -410,7 +412,7 @@ export function VariantView({
             disabled={!canMoveVariantLeft}
             title="Move Frame Left"
           >
-            ◂
+            <Icon icon={ChevronLeft} size={12} />
           </button>
           <button
             className="frame-move-btn"
@@ -418,7 +420,7 @@ export function VariantView({
             disabled={!canMoveVariantRight}
             title="Move Frame Right"
           >
-            ▸
+            <Icon icon={ChevronRight} size={12} />
           </button>
         </div>
         <div className="timeline-controls">
@@ -427,28 +429,28 @@ export function VariantView({
             onClick={togglePlayback}
             title={isPlaying ? 'Stop (Enter)' : 'Play (Enter)'}
           >
-            {isPlaying ? '⏹' : '▶'}
+            {isPlaying ? <Icon icon={SquareIcon} size={14} /> : <Icon icon={Play} size={14} />}
           </button>
           <button
             className="preview-btn"
             onClick={() => setShowPreview(true)}
             title="Optimized Preview"
           >
-            ⚡
+            <Icon icon={Zap} size={14} />
           </button>
           <button
             className="canvas-size-btn variant"
             onClick={() => setShowResizeModal(true)}
             title="Edit Variant Canvas Size"
           >
-            ⤢
+            <Icon icon={Maximize} size={14} />
           </button>
           <button
             className="ai-interpolate-btn"
             onClick={() => setShowAIModal(true)}
             title="AI Frame Interpolation"
           >
-            ✦
+            <Icon icon={Wand2} size={14} />
           </button>
           <label className="copy-previous-label" title="Copy pixels from current frame">
             <input
@@ -541,7 +543,7 @@ export function VariantView({
                     }}
                     title="Frame tags"
                   >
-                    <span className="frame-tags-icon">T</span>
+                    <span className="frame-tags-icon"><Icon icon={Tag} size={10} /></span>
                   </button>
                   <button
                     className="variant-frame-action-btn"
@@ -551,7 +553,7 @@ export function VariantView({
                     }}
                     title="Duplicate"
                   >
-                    ⧉
+                    <Icon icon={Copy} size={10} />
                   </button>
                   <button
                     className="variant-frame-action-btn delete"
@@ -562,7 +564,7 @@ export function VariantView({
                     disabled={variantFrames.length <= 1}
                     title="Delete"
                   >
-                    ×
+                    <Icon icon={X} size={10} />
                   </button>
                 </div>
               </div>

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 're
 import { useEditorStore } from '../../store';
 import { Project, PixelObject, Frame, Layer, Pixel, PixelData, VariantGroup } from '../../types';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
+import { Icon } from '../Icon/Icon';
+import { ChevronUp, ChevronDown, SquareIcon, Play, Zap } from 'lucide-react';
 
 // Helper to render a layer's pixels to a small thumbnail canvas
 function renderThumbnail(
@@ -617,7 +619,7 @@ export function TimelineView({
             disabled={!canMoveUp}
             title="Move layer up (all frames)"
           >
-            ▲
+            <Icon icon={ChevronUp} size={12} />
           </button>
           <button
             className="timeline-action-btn"
@@ -625,7 +627,7 @@ export function TimelineView({
             disabled={!canMoveDown}
             title="Move layer down (all frames)"
           >
-            ▼
+            <Icon icon={ChevronDown} size={12} />
           </button>
           <div className="timeline-new-layer">
             <input
@@ -658,14 +660,14 @@ export function TimelineView({
             onClick={togglePlayback}
             title={isPlaying ? 'Stop (Enter)' : 'Play (Enter)'}
           >
-            {isPlaying ? '⏹' : '▶'}
+            {isPlaying ? <Icon icon={SquareIcon} size={14} /> : <Icon icon={Play} size={14} />}
           </button>
           <button
             className="preview-btn"
             onClick={() => setShowPreview(true)}
             title="Optimized Preview"
           >
-            ⚡
+            <Icon icon={Zap} size={14} />
           </button>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PixelObject, Frame, VariantGroup, Layer, Variant, Pixel, PixelData } from '../../types';
+import { Icon } from '../Icon/Icon';
+import { Zap, X } from 'lucide-react';
 import './PreviewModal.css';
 
 // Helper to extract color from PixelData
@@ -411,8 +413,8 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
     <div className="preview-modal-overlay" onClick={onClose}>
       <div className="preview-modal" onClick={e => e.stopPropagation()}>
         <div className="preview-modal-header">
-          <h3 className="preview-modal-title">⚡ Optimized Preview</h3>
-          <button className="preview-modal-close" onClick={onClose}>×</button>
+          <h3 className="preview-modal-title"><Icon icon={Zap} size={16} /> Optimized Preview</h3>
+          <button className="preview-modal-close" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
         <div className="preview-modal-content">

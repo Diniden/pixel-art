@@ -12,6 +12,8 @@ import type {
   ExportedVariantLayer,
   ExportedVariant,
 } from "../../../lib/parse-pixel-project";
+import { Icon } from "../Icon/Icon";
+import { AlertTriangle, X } from "lucide-react";
 import "./ExportPreviewModal.css";
 
 interface ExportPreviewModalProps {
@@ -457,14 +459,14 @@ export function ExportPreviewModal({
             <span className="export-preview-subtitle">{kebabName}/</span>
           </div>
           <button className="export-preview-close" onClick={onClose}>
-            ×
+            <Icon icon={X} size={14} />
           </button>
         </div>
 
         {/* Body */}
         {error ? (
           <div className="export-preview-error">
-            <span className="export-preview-error-icon">!</span>
+            <span className="export-preview-error-icon"><Icon icon={AlertTriangle} size={16} /></span>
             <span className="export-preview-error-msg">{error}</span>
           </div>
         ) : !loaded ? (

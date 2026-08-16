@@ -1,7 +1,10 @@
 procs:
   server:
     shell: bun run dev:server
+    cwd: <CONFIG_DIR>
   client:
     shell: bun run dev:client
+    cwd: <CONFIG_DIR>
   ai-service:
     shell: bun run ai
+    cwd: <CONFIG_DIR>

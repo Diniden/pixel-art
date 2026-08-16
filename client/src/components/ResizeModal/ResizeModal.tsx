@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
+import { Icon } from '../Icon/Icon';
+import { X } from 'lucide-react';
 import './ResizeModal.css';
 
 interface ResizeModalProps {
@@ -55,7 +57,7 @@ export function ResizeModal({
       <div className="resize-modal" onClick={e => e.stopPropagation()}>
         <div className="resize-modal-header">
           <h4>{title}</h4>
-          <button className="resize-modal-close" onClick={onClose}>×</button>
+          <button className="resize-modal-close" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
         <div className="resize-modal-content">

@@ -5,16 +5,19 @@ import { EdgeInterpolateModal } from "../EdgeInterpolateModal/EdgeInterpolateMod
 import { HeightMapModal } from "../HeightMapModal/HeightMapModal";
 import { computeEdgeInterpolatedNormals } from "../../utils/edgeInterpolate";
 import { Pixel, PixelData } from "../../types";
+import { Icon } from "../Icon/Icon";
+import type { LucideIcon } from "lucide-react";
+import { Sun, Wrench, Mountain } from "lucide-react";
 
 const lightingTools: {
   id: Tool;
-  icon: string;
+  icon: LucideIcon;
   label: string;
   hotkey: string;
 }[] = [
-  { id: "normal-pencil", icon: "🔆", label: "Normal Pencil", hotkey: "1" },
-  { id: "auto-normal", icon: "🔧", label: "Auto Normal", hotkey: "2" },
-  { id: "height-map", icon: "🗻", label: "Height Map", hotkey: "3" },
+  { id: "normal-pencil", icon: Sun, label: "Normal Pencil", hotkey: "1" },
+  { id: "auto-normal", icon: Wrench, label: "Auto Normal", hotkey: "2" },
+  { id: "height-map", icon: Mountain, label: "Height Map", hotkey: "3" },
 ];
 
 type ChannelType = "R" | "G" | "B" | "H" | "S" | "L";
@@ -260,7 +263,7 @@ export function LightingStudioTools() {
             aria-label="Edit Normals"
             title="Edit Normals"
           >
-            <span className="tool-icon">🔆</span>
+            <span className="tool-icon"><Icon icon={Sun} /></span>
           </button>
           <button
             className={`studio-mode-btn ${editMode === "height" ? "active" : ""}`}
@@ -268,7 +271,7 @@ export function LightingStudioTools() {
             aria-label="Edit Height Map"
             title="Edit Height Map"
           >
-            <span className="tool-icon">🗻</span>
+            <span className="tool-icon"><Icon icon={Mountain} /></span>
           </button>
         </div>
       </div>
@@ -282,7 +285,7 @@ export function LightingStudioTools() {
               onClick={() => handleToolClick(tool.id)}
               title={`${tool.label} (${tool.hotkey})`}
             >
-              <span className="tool-icon">{tool.icon}</span>
+              <span className="tool-icon"><Icon icon={tool.icon} /></span>
               <span className="tool-hotkey">{tool.hotkey}</span>
             </button>
           ))}

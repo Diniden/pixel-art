@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useEditorStore } from '../../store';
+import { Icon } from '../Icon/Icon';
+import { FolderOpen, Plus, X } from 'lucide-react';
 import './ProjectSelectModal.css';
 
 interface ProjectSelectModalProps {
@@ -103,7 +105,7 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
       <div className="project-select-modal" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className="modal-header">
           <h2>Switch Project</h2>
-          <button className="close-btn" onClick={onClose} disabled={isLoading}>×</button>
+          <button className="close-btn" onClick={onClose} disabled={isLoading}><Icon icon={X} size={14} /></button>
         </div>
 
         {error && (
@@ -119,7 +121,7 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
                 onClick={() => handleSwitchProject(name)}
                 disabled={isLoading}
               >
-                <span className="project-icon">📁</span>
+                <span className="project-icon"><Icon icon={FolderOpen} size={14} /></span>
                 <span className="project-name">{name}</span>
                 {name === projectName && <span className="current-badge">Current</span>}
               </button>
@@ -163,7 +165,7 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
               onClick={() => setIsCreating(true)}
               disabled={isLoading}
             >
-              <span className="plus-icon">+</span>
+              <span className="plus-icon"><Icon icon={Plus} size={14} /></span>
               New Project
             </button>
           )}

@@ -4,6 +4,8 @@ import { useEditorStore } from '../../store';
 import { PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
+import { Icon } from '../Icon/Icon';
+import { Copy, Maximize, X, AlertTriangle } from 'lucide-react';
 import './ObjectLibrary.css';
 
 const THUMB_SIZE = 32;
@@ -516,7 +518,7 @@ export function ObjectLibrary() {
                           }}
                           title="Duplicate"
                         >
-                          ⧉
+                          <Icon icon={Copy} size={12} />
                         </button>
                         <button
                           className="object-action-btn"
@@ -526,7 +528,7 @@ export function ObjectLibrary() {
                           }}
                           title="Resize"
                         >
-                          ⤢
+                          <Icon icon={Maximize} size={12} />
                         </button>
                         <button
                           className="object-action-btn delete"
@@ -536,7 +538,7 @@ export function ObjectLibrary() {
                           }}
                           title="Delete"
                         >
-                          ×
+                          <Icon icon={X} size={12} />
                         </button>
                       </div>
                     </div>
@@ -604,7 +606,7 @@ export function ObjectLibrary() {
         <div className="delete-confirm-backdrop" onClick={() => setDeleteConfirm(null)}>
           <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="delete-confirm-header">
-              <h4>⚠️ Delete Object</h4>
+              <h4><Icon icon={AlertTriangle} size={14} /> Delete Object</h4>
             </div>
             <div className="delete-confirm-content">
               <p>

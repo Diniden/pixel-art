@@ -749,7 +749,7 @@
 }
 
 .ai-fps-input {
-  width: 48px;
+  width: 64px;
   padding: 3px 6px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-secondary);
@@ -770,6 +770,27 @@
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
+}
+
+.ai-synced-preview {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.ai-synced-preview-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-synced-preview-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Actions */

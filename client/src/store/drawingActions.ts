@@ -5,7 +5,9 @@ export function createDrawingActions(
   get: StoreGet,
   set: StoreSet,
   updateProjectAndSave: UpdateProjectAndSave,
+  saveCurrentStateToHistory: () => void,
 ) {
+  let _strokeActive = false;
   const isEditMaskActiveFor = (
     x: number,
     y: number,
@@ -22,6 +24,15 @@ export function createDrawingActions(
   };
 
   return {
+    beginStroke: () => {
+      saveCurrentStateToHistory();
+      _strokeActive = true;
+    },
+
+    endStroke: () => {
+      _strokeActive = false;
+    },
+
     setPixel: (x: number, y: number, color: Color | 0) => {
       const obj = get().getCurrentObject();
       const frame = get().getCurrentFrame();
@@ -105,7 +116,7 @@ export function createDrawingActions(
               };
             }),
           }),
-          true,
+          !_strokeActive,
         );
         return;
       }
@@ -170,7 +181,7 @@ export function createDrawingActions(
               : o,
           ),
         }),
-        true,
+        !_strokeActive,
       );
     },
 
@@ -259,7 +270,7 @@ export function createDrawingActions(
               };
             }),
           }),
-          true,
+          !_strokeActive,
         );
         return;
       }
@@ -338,7 +349,7 @@ export function createDrawingActions(
               : o,
           ),
         }),
-        true,
+        !_strokeActive,
       );
     },
 

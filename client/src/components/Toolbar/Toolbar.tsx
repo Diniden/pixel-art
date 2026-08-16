@@ -3,6 +3,8 @@ import { useEditorStore } from "../../store";
 import { ReferenceImageData } from "../ReferenceImageModal/ReferenceImageModal";
 import { PixelStudioTools } from "./PixelStudioTools";
 import { LightingStudioTools } from "./LightingStudioTools";
+import { Icon } from "../Icon/Icon";
+import { Maximize2, Sun, Moon, Film, Palette, Lightbulb } from "lucide-react";
 import "./Toolbar.css";
 
 interface ToolbarProps {
@@ -60,7 +62,7 @@ export function Toolbar({
             }}
             onMouseLeave={() => setTooltip(null)}
           >
-            <span className="tool-icon">⛶</span>
+            <span className="tool-icon"><Icon icon={Maximize2} /></span>
             <span className="tool-hotkey">`</span>
           </button>
           <button
@@ -80,7 +82,7 @@ export function Toolbar({
             }}
             onMouseLeave={() => setTooltip(null)}
           >
-            <span className="tool-icon">{isLightGrid ? "☀" : "☾"}</span>
+            <span className="tool-icon"><Icon icon={isLightGrid ? Sun : Moon} /></span>
           </button>
           {!isLightingMode && (
             <button
@@ -100,7 +102,7 @@ export function Toolbar({
               }}
               onMouseLeave={() => setTooltip(null)}
             >
-              <span className="tool-icon">🎞️</span>
+              <span className="tool-icon"><Icon icon={Film} /></span>
             </button>
           )}
         </div>
@@ -126,7 +128,7 @@ export function Toolbar({
             }}
             onMouseLeave={() => setTooltip(null)}
           >
-            <span className="tool-icon">🎨</span>
+            <span className="tool-icon"><Icon icon={Palette} /></span>
           </button>
           <button
             className={`studio-mode-btn ${isLightingMode ? "active" : ""}`}
@@ -143,7 +145,7 @@ export function Toolbar({
             }}
             onMouseLeave={() => setTooltip(null)}
           >
-            <span className="tool-icon">💡</span>
+            <span className="tool-icon"><Icon icon={Lightbulb} /></span>
           </button>
         </div>
       </div>
