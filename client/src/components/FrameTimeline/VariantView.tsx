@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactNode } from 'react';
 import { useEditorStore } from '../../store';
 import { Project, PixelObject, Layer, Variant, VariantFrame, VariantGroup } from '../../types';
-import { renderFramePreview, renderVariantFramePreview } from '../../utils/previewRenderer';
+import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
 import { ResizeModal } from '../ResizeModal/ResizeModal';
 import { FrameTagsModal, tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
@@ -95,7 +95,6 @@ interface VariantViewProps {
 export function VariantView({
   project,
   obj,
-  layer,
   variantData,
   isPlaying,
   togglePlayback,

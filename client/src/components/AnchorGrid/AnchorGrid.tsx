@@ -24,9 +24,6 @@ function getArrows(
 ): { direction: string; expanding: boolean }[] {
   const arrows: { direction: string; expanding: boolean }[] = [];
 
-  const isExpanding = widthDiff > 0 || heightDiff > 0;
-  const isShrinking = widthDiff < 0 || heightDiff < 0;
-
   // Only show arrows if there's a size change
   if (widthDiff === 0 && heightDiff === 0) return arrows;
 
@@ -97,9 +94,7 @@ export const AnchorGrid = memo(function AnchorGrid({
   return (
     <div className="anchor-grid-container">
       <div className="anchor-grid">
-        {POSITIONS.map((pos, index) => {
-          const row = Math.floor(index / 3);
-          const col = index % 3;
+        {POSITIONS.map((pos) => {
           const isAnchor = pos === anchor;
 
           return (

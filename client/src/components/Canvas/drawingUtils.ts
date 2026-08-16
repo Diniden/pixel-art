@@ -435,7 +435,10 @@ export function gaussianFloodFill(
       // Only consider neighbors that are NOT the target color and HAVE a color
       if (isSamePixelColor(neighbor, start)) continue;
       const c = neighbor?.color;
-      if (!c || c === 0) continue;
+      // `color` is typed `Pixel | 0`, so the falsy check already excludes the
+      // `0` sentinel (and `undefined` from the optional index) — the former
+      // explicit `c === 0` arm was unreachable and is dropped. No behaviour change.
+      if (!c) continue;
 
       const k = `${nx},${ny}`;
       if (seedKey.has(k)) continue;

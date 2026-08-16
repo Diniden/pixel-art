@@ -113,7 +113,10 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
       for (let y = 0; y < referenceImage.height; y++) {
         for (let x = 0; x < referenceImage.width; x++) {
           const pixel = referenceImage.pixels[y][x];
-          if (pixel && pixel !== 0) {
+          // Elements are typed `{r,g,b,a} | 0`, so the truthiness check already
+          // excludes the `0` sentinel; the former `pixel !== 0` arm was
+          // unreachable and is dropped. No behaviour change.
+          if (pixel) {
             ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
             ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
           }

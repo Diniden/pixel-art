@@ -73,7 +73,7 @@ function getChannelValue(pixel: Pixel, channel: ChannelType): number {
 }
 
 export function HeightMapModal({ isOpen, onClose, onConfirm }: HeightMapModalProps) {
-  const { getCurrentLayer, getCurrentObject, getCurrentFrame, isEditingVariant, getCurrentVariant } = useEditorStore();
+  const { getCurrentLayer, getCurrentObject, isEditingVariant, getCurrentVariant } = useEditorStore();
   const [channel, setChannel] = useState<ChannelType>('L');
   const [min, setMin] = useState(0);
   const [max, setMax] = useState(255);
@@ -81,7 +81,6 @@ export function HeightMapModal({ isOpen, onClose, onConfirm }: HeightMapModalPro
 
   const layer = getCurrentLayer();
   const obj = getCurrentObject();
-  const frame = getCurrentFrame();
   const editingVariant = isEditingVariant();
   const variantData = getCurrentVariant();
 

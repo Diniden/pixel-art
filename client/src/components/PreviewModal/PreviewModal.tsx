@@ -339,7 +339,6 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
     const layersToRender: { type: 'base' | 'variant'; layerIndex: number; info?: VariantLayerInfo }[] = [];
 
     for (let layerIdx = 0; layerIdx < currentFrameData.layers.length; layerIdx++) {
-      const layer = currentFrameData.layers[layerIdx];
       // Layer visibility is ignored in optimized playback
 
       const variantInfo = variantInfos.find(v => v.layerIndex === layerIdx);

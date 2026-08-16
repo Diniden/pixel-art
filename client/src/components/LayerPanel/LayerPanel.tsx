@@ -67,7 +67,6 @@ export function LayerPanel() {
   const { selectedLayerId } = project.uiState;
   const layers = [...frame.layers].reverse(); // Display top layer first
   const allVisible = frame.layers.every((l) => l.visible);
-  const allHidden = frame.layers.every((l) => !l.visible);
   const hasVariants = (project.variants?.length ?? 0) > 0;
 
   // Find selected layer index for header button enable/disable

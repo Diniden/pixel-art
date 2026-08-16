@@ -684,7 +684,9 @@ export function AIInterpolateModal({
     const { width, height } = gridSize;
 
     try {
-      const allPixelDataPairs: PixelData[][][] = [];
+      // One entry per keyframe pair; each entry is a list of frames, and each
+      // frame is a PixelData grid (PixelData[][]) — hence rank 4.
+      const allPixelDataPairs: PixelData[][][][] = [];
       for (const pairFrames of allGeneratedFrames) {
         const pixData = await Promise.all(
           pairFrames.map((b64) => base64ToPixelData(b64, width, height))
@@ -877,7 +879,6 @@ export function AIInterpolateModal({
 
   const completedPairs = pairJobs.filter(j => j.status === 'completed').length;
   const totalPairs = pairJobs.length;
-  const currentProcessingPair = pairJobs.findIndex(j => j.status === 'processing' || j.status === 'queued');
 
   if (!isOpen) return null;
 

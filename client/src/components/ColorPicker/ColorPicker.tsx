@@ -195,7 +195,7 @@ export function ColorPicker() {
   }, [colorAdjustment, saveCurrentStateToHistory]);
 
   // Debounced history save - saves final state to history after mouse release
-  const saveFinalStateToHistory = useCallback((color: Color) => {
+  const saveFinalStateToHistory = useCallback(() => {
     if (historySaveTimeoutRef.current) {
       clearTimeout(historySaveTimeoutRef.current);
     }
@@ -224,7 +224,7 @@ export function ColorPicker() {
     const handleGlobalMouseUp = () => {
       if (isDraggingSlider && colorAdjustment && hasSavedInitialStateRef.current) {
         setIsDraggingSlider(false);
-        saveFinalStateToHistory(localColor);
+        saveFinalStateToHistory();
       }
     };
 
@@ -253,7 +253,7 @@ export function ColorPicker() {
     setIsDraggingSlider(false);
     if (colorAdjustment && hasSavedInitialStateRef.current) {
       // Save final state to history with debounce
-      saveFinalStateToHistory(localColor);
+      saveFinalStateToHistory();
     }
   }, [colorAdjustment, localColor, saveFinalStateToHistory]);
 
@@ -455,14 +455,14 @@ export function ColorPicker() {
                 setIsDraggingSV(false);
                 setIsDraggingSlider(false);
                 if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory(localColor);
+                  saveFinalStateToHistory();
                 }
               }}
               onMouseLeave={() => {
                 setIsDraggingSV(false);
                 setIsDraggingSlider(false);
                 if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory(localColor);
+                  saveFinalStateToHistory();
                 }
               }}
             />
@@ -494,14 +494,14 @@ export function ColorPicker() {
                 setIsDraggingHue(false);
                 setIsDraggingSlider(false);
                 if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory(localColor);
+                  saveFinalStateToHistory();
                 }
               }}
               onMouseLeave={() => {
                 setIsDraggingHue(false);
                 setIsDraggingSlider(false);
                 if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory(localColor);
+                  saveFinalStateToHistory();
                 }
               }}
             />

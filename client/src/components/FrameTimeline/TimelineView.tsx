@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { useEditorStore } from '../../store';
-import { Project, PixelObject, Frame, Layer, Pixel, PixelData, VariantGroup } from '../../types';
+import { Project, PixelObject, Frame, Layer, PixelData, VariantGroup } from '../../types';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
 import { Icon } from '../Icon/Icon';
 import { ChevronUp, ChevronDown, SquareIcon, Play, Zap } from 'lucide-react';
@@ -302,7 +302,6 @@ export function TimelineView({
   const {
     selectFrame,
     selectLayer,
-    moveLayer,
     addLayerToAllFrames,
     addLayerToFrameAtPosition,
     deleteLayerFromFrame,
@@ -310,7 +309,6 @@ export function TimelineView({
     copyTimelineCell,
     pasteTimelineCell,
     timelineCellClipboard,
-    getCurrentObject,
     setTimelineThumbnailMode
   } = useEditorStore();
 
@@ -325,7 +323,6 @@ export function TimelineView({
     startRow: number;
   } | null>(null);
   const [newLayerName, setNewLayerName] = useState('');
-  const gridRef = useRef<HTMLDivElement>(null);
 
   const frames = obj.frames;
   const selectedFrameId = project.uiState.selectedFrameId;
@@ -580,7 +577,7 @@ export function TimelineView({
     e.dataTransfer.effectAllowed = 'move';
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, targetRow: number, frameId: string) => {
+  const handleDragOver = useCallback((e: React.DragEvent, frameId: string) => {
     e.preventDefault();
     if (!dragInfo || dragInfo.frameId !== frameId) return;
     e.dataTransfer.dropEffect = 'move';
@@ -737,7 +734,7 @@ export function TimelineView({
         </div>
 
         {/* Grid with cells and playhead */}
-        <div className="timeline-grid-scroll" ref={gridRef}>
+        <div className="timeline-grid-scroll">
           <div className="timeline-grid">
             {/* Playhead */}
             {/* Playhead: account for cell width + gap (2px) */}
@@ -771,7 +768,7 @@ export function TimelineView({
                           key={`${frame.id}-${rowIndex}`}
                           className={`timeline-cell empty ${isEmptySelected ? 'empty-selected' : ''}`}
                           onClick={() => handleEmptyCellClick(frame.id, actualZOrder)}
-                          onDragOver={(e) => handleDragOver(e, actualZOrder, frame.id)}
+                          onDragOver={(e) => handleDragOver(e, frame.id)}
                           onDrop={(e) => handleDrop(e, actualZOrder, frame.id)}
                         />
                       );
@@ -794,7 +791,7 @@ export function TimelineView({
                         }}
                         draggable
                         onDragStart={(e) => handleDragStart(e, cell)}
-                        onDragOver={(e) => handleDragOver(e, cell.rowIndex, cell.frameId)}
+                        onDragOver={(e) => handleDragOver(e, cell.frameId)}
                         onDrop={(e) => handleDrop(e, cell.rowIndex, cell.frameId)}
                         onDragEnd={handleDragEnd}
                       >

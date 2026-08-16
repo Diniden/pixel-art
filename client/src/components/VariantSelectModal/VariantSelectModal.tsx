@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
-import { Layer, VariantGroup, Variant, VariantFrame } from '../../types';
+import { Layer, VariantGroup, Variant } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import { Icon } from '../Icon/Icon';

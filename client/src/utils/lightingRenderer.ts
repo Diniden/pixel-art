@@ -1,4 +1,4 @@
-import { Frame, Layer, VariantGroup, Normal, Color, PixelData, Pixel } from '../types';
+import { Frame, Layer, VariantGroup, Normal, Color, Pixel } from '../types';
 
 export interface LightingParams {
   lightDirection: Normal;
