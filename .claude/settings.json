@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "permissions": {
+    "allow": [
+      "Bash(bun run:*)",
+      "Bash(bun install)",
+      "Bash(bun test:*)",
+      "Bash(bunx tsc:*)",
+      "Bash(bunx vitest run:*)",
+      "Bash(bunx eslint:*)",
+      "Bash(bunx stylelint:*)",
+      "Bash(bunx prettier:*)",
+      "Bash(bunx vite build:*)",
+      "Bash(bunx storybook build:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git add:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash list:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(diff:*)",
+      "Bash(comm:*)",
+      "Bash(sort:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)"
+    ],
+    "deny": [
+      "Bash(npm:*)",
+      "Bash(node:*)",
+      "Bash(yarn:*)",
+      "Bash(pnpm:*)",
+      "Read(./server/src/data/**)",
+      "Edit(./server/src/data/**)",
+      "Edit(./server/exports/**)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git reset:*)",
+      "Bash(git rebase:*)",
+      "Bash(git revert:*)",
+      "Bash(git rm:*)",
+      "Bash(git commit:*)",
+      "Bash(bun add:*)",
+      "Bash(bun remove:*)",
+      "Bash(rm:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-data-safety.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

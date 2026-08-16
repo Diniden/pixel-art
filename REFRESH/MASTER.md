@@ -1,5 +1,10 @@
 # REFRESH — Master Execution Plan
 
+> **▶ Executing this plan? Start with [`PROTOCOL.md`](./PROTOCOL.md), and check
+> [`HANDOFF.md`](./HANDOFF.md) for which waves have already landed.**
+> `HANDOFF.md` is the single source of truth for progress — this file is the specification
+> and does not change as waves complete.
+
 **Authored:** 2026-08-16, from the eight completed audits in `REFRESH-PREP/findings/` (11,086 lines of measured evidence).
 
 **38 tasks · 30 waves (W0-W29) · 38 agent-sessions.** Most waves are a single task, because the dependency chain genuinely is a chain — the store migration is incremental and each slice depends on the last. Parallelism is claimed only where the collision matrix proves it.
