@@ -1,0 +1,23 @@
+# Dependencies and build output
+**/node_modules
+**/dist
+**/coverage
+**/storybook-static
+
+# Public API copied verbatim into exports — must not be reformatted.
+client/lib/**
+
+# The owner's real project files and backups. Highest-severity rule in
+# CLAUDE.md: never touch these.
+server/src/data/**
+
+# Generated export artefacts. server/exports/lib/ is consumed by external
+# game code (OPEN-QUESTIONS.md Q33) and its format may not change.
+server/exports/**
+
+# Test fixtures are byte-significant.
+**/__fixtures__/**
+
+# No lockfiles exist by policy (owner decision, 2026-08-16), but guard anyway.
+**/bun.lock
+**/bun.lockb
