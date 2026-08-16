@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useEditorStore } from "../../store";
-import { Point, Normal } from "../../types";
+import { Point } from "../../types";
 import {
   composeLayers,
   renderWithLighting,

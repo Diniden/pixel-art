@@ -8,7 +8,7 @@ import { Pixel, PixelData } from '../types';
  * @param dst - Destination pixel (from lower layer)
  * @returns Blended pixel
  */
-export function alphaBlend(src: Pixel, dst: Pixel): Pixel {
+function alphaBlend(src: Pixel, dst: Pixel): Pixel {
   const srcAlpha = src.a / 255;
   const dstAlpha = dst.a / 255;
 

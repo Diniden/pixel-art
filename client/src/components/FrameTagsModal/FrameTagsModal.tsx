@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useEditorStore } from "../../store";
-import type { Project, PixelObject, VariantGroup } from "../../types";
 import { Icon } from "../Icon/Icon";
 import { X } from "lucide-react";
 import "./FrameTagsModal.css";

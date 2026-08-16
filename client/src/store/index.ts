@@ -8,13 +8,7 @@ import { MAX_HISTORY } from "./storeTypes";
 import type { EditorState } from "./storeTypes";
 
 // Re-export types so existing imports from "store" still work
-export type {
-  SaveStatus,
-  ColorAdjustmentState,
-  LayerClipboard,
-  TimelineCellClipboard,
-  EditorState,
-} from "./storeTypes";
+export type { EditorState } from "./storeTypes";
 
 // Import module creators
 import { createHelpers } from "./helpers";

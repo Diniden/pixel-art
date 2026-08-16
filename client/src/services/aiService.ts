@@ -1,15 +1,5 @@
 import { API_BASE } from "./api";
 
-export interface HeartbeatResult {
-  status: "ok" | "error";
-  model_ready: boolean;
-  detail?: string;
-}
-
-export interface InterpolateResult {
-  frames: string[];
-}
-
 export interface JobSubmitResult {
   job_id: string;
   status: string;
@@ -80,40 +70,6 @@ export async function checkAiHealth(
 }
 
 /**
- * Check whether the remote AI service is reachable and the model is warm.
- * Runs a micro-inference test on the service side.
- */
-export async function checkAiHeartbeat(
-  aiServiceUrl?: string,
-): Promise<HeartbeatResult> {
-  const params = new URLSearchParams();
-  if (aiServiceUrl) {
-    params.set("ai_service_url", aiServiceUrl);
-  }
-
-  const qs = params.toString();
-  const url = `${API_BASE}/ai/heartbeat${qs ? `?${qs}` : ""}`;
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      return {
-        status: "error",
-        model_ready: false,
-        detail: `Proxy returned ${response.status}`,
-      };
-    }
-    return await response.json();
-  } catch (err) {
-    return {
-      status: "error",
-      model_ready: false,
-      detail: err instanceof Error ? err.message : "Network error",
-    };
-  }
-}
-
-/**
  * Submit an async interpolation job. Returns immediately with a job_id.
  */
 export async function submitJob(
@@ -171,46 +127,4 @@ export async function getJobStatus(
   }
 
   return await response.json();
-}
-
-/**
- * Submit a job and poll until completion. Calls onStatus on each poll.
- * Returns the completed job's base64 frames.
- */
-export async function interpolateFrames(
-  frameStartBase64: string,
-  frameEndBase64: string,
-  numFrames: number,
-  aiServiceUrl?: string,
-  scale: number = 4,
-  flowScale: number = 1.0,
-  onStatus?: (status: JobStatusResult) => void,
-): Promise<string[]> {
-  const { job_id } = await submitJob(
-    frameStartBase64,
-    frameEndBase64,
-    numFrames,
-    aiServiceUrl,
-    scale,
-    flowScale,
-  );
-
-  let pollInterval = 500;
-  const maxInterval = 3000;
-
-  while (true) {
-    await new Promise((r) => setTimeout(r, pollInterval));
-    const job = await getJobStatus(job_id, aiServiceUrl);
-    onStatus?.(job);
-
-    if (job.status === "completed") {
-      return job.frames ?? [];
-    }
-
-    if (job.status === "failed") {
-      throw new Error(job.error || "Interpolation job failed");
-    }
-
-    pollInterval = Math.min(pollInterval * 1.3, maxInterval);
-  }
 }

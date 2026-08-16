@@ -618,6 +618,7 @@ export interface CompactUIState {
   selectionMode?: SelectionMode;
   selectionBehavior?: SelectionBehavior;
   focusMode?: boolean;
+  lightGridMode?: boolean;
   brushSize: number;
   bitDepth: BitDepth;
   shapeMode: ShapeMode;
@@ -885,7 +886,7 @@ export function compactToProject(compact: CompactProject): Project {
     projectVariants = [];
 
     // For each object, migrate its variant groups
-    migratedObjects = compact.objects.map((obj, objIndex) => {
+    migratedObjects = compact.objects.map((obj) => {
       if (!obj.variantGroups || obj.variantGroups.length === 0) {
         return obj;
       }

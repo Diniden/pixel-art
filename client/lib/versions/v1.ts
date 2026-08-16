@@ -29,14 +29,24 @@ export interface ExportedFrame {
   layers: ExportedLayer[];
 }
 
-export interface ExportedVariantLayer {
+/**
+ * A single texture-pair layer inside a variant frame.
+ *
+ * NOTE: this used to also be named `ExportedVariantLayer`, colliding with the
+ * variant-group interface below. TypeScript declaration-merged the two, so the
+ * merged type demanded all five properties and nothing could satisfy it. The
+ * group meaning is the one consumers use (`parse-pixel-project.ts` aliases it
+ * as `ExportedVariantGroup`), so the texture-pair meaning was given this
+ * distinct name. `ExportedVariantLayer` keeps its group shape unchanged.
+ */
+export interface ExportedVariantFrameLayer {
   colorTexture: string | null;
   normalTexture: string | null;
 }
 
 export interface ExportedVariantFrame {
   id: string;
-  layers: ExportedVariantLayer[];
+  layers: ExportedVariantFrameLayer[];
 }
 
 export interface ExportedVariant {
@@ -113,14 +123,15 @@ interface CompactExportedObject_ {
   mc?: [number, number, number, number]; // maxCanvas [width, height, offsetX, offsetY]
 }
 
-interface CompactExportedVariantLayer_ {
+/** Compact counterpart of ExportedVariantFrameLayer (see note above). */
+interface CompactExportedVariantFrameLayer_ {
   c: number | null;
   m: number | null;
 }
 
 interface CompactExportedVariantFrame_ {
   i: number;
-  l: CompactExportedVariantLayer_[];
+  l: CompactExportedVariantFrameLayer_[];
 }
 
 interface CompactExportedVariant_ {
