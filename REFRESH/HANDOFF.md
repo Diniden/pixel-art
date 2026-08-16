@@ -8,15 +8,24 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W0 — task 01 (repo hygiene: exact version pinning, no lockfiles, `tsc -b` misuse)**
+> **Next wave: W1 — task 02 (green the typecheck baseline, 29 → 0)**
 >
-> **Status:** not started. No refresh work has landed yet.
-> **Last commit on `main`:** `c3a56b4` — *Checkpoint: Some more prep before executing the refactor*
-> **Working tree at last handoff:** clean, plus the untracked scaffolding this session added
-> (`CLAUDE.md`, `ARCHITECTURE.md`, `.claude/`, `REFRESH/PROTOCOL.md`, `REFRESH/HANDOFF.md`).
+> **Status:** W0 done and merged. Executing subagent-per-wave (see `PROTOCOL.md`).
+> **Last commit on `main`:** `afd93cd` — *Merge W0: repo hygiene (task 01)*
+> **Working tree at last handoff:** clean.
 >
-> **Next action:** read `REFRESH/01-repo-hygiene-and-lockfiles.md` in full, branch
-> `refresh/w0-repo-hygiene`, execute its 12 steps, run the W0 gate below, update this file.
+> **Next action:** dispatch a subagent with `REFRESH/02-green-the-typecheck-baseline.md`,
+> on branch `refresh/w1-green-baseline`. Coordinator verifies the gate, commits, merges.
+>
+> ⚠️ **W1 blocks literally everything.** Until `bun run build` exits 0 and emits `dist/`,
+> no later wave's gate can be trusted.
+>
+> ⚠️ **Read the two task-02 spec corrections** in "Deviations" below before dispatching —
+> the spec is wrong about `alphaBlend` (deleting it breaks the build) and about the
+> `AIInterpolateModal` fix being a behaviour change.
+>
+> **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
+> `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
 
 ---
 
@@ -86,7 +95,7 @@ them. Run them from the repo root unless the command says otherwise.
 
 | Wave | Tasks | Dep | Status | Commit | Gate command |
 | --- | --- | --- | :---: | --- | --- |
-| **W0** | 01 | — | ⬜ | — | `! grep -qE '"[^"]+": *"[~^><*]' package.json client/package.json server/package.json` · no lockfiles anywhere · `bun install` clean in all 3 workspaces · `! git ls-files --error-unmatch client/tsconfig.tsbuildinfo` · client still reports **exactly 29** errors |
+| **W0** | 01 | — | ✅ | `afd93cd` | `! grep -qE '"[^"]+": *"[~^><*]' package.json client/package.json server/package.json` · no lockfiles anywhere · `bun install` clean in all 3 workspaces · `! git ls-files --error-unmatch client/tsconfig.tsbuildinfo` · client still reports **exactly 29** errors |
 | **W1** | 02 | W0 | ⬜ | — | `cd client && bunx tsc --noEmit && bun run build && test -d dist` · `cd server && bunx tsc --noEmit` |
 | **W2a** | 03 | W1 | ⬜ | — | client: `bunx tsc --noEmit && bunx vite build`; server: `bunx tsc --noEmit` |
 | **W2b** | 04 | W2a | ⬜ | — | server: `bunx tsc --noEmit` + `diff -r` on the export goldens |
