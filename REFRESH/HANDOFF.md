@@ -8,33 +8,30 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W3 — task 05 (ESLint flat config, Prettier, scoped sweep)**
+> **Next wave: W4 — task 06 (Vitest + Testing Library harness)**
 >
-> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ merged. Subagent-per-wave.
-> **Last commit on `main`:** `a26f41f` — *Merge W2b: Express 5 + dead deps*
+> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ merged. Subagent-per-wave.
+> **Last commit on `main`:** `fa22107` — *Merge W3: ESLint, Prettier, Sweep A*
 > **Working tree at last handoff:** clean.
 >
 > ### Current stack
 > React **19.2.8** · Vite **7.3.6** · TypeScript **5.9.3** · Express **5.2.1** ·
-> sharp **0.33.5** (upgrade deferred, see Q45) · zustand 4.5.2.
-> Both workspaces typecheck **0 errors**; `bun run build` emits `dist/`.
+> sharp **0.33.5** (deferred, Q45) · zustand 4.5.2 · ESLint 9 flat + Prettier.
+> Both workspaces typecheck **0 errors**, lint **0 errors**, `bun run build` emits `dist/`.
 >
-> 🔴 **One blocking question is open: Q45 (sharp).** It blocks nothing scheduled — W3
-> onward can proceed. See "New questions" at the foot of this file.
+> ### 🛡️ The architecture boundary is LIVE and PROVEN
+> `src/ui/**` may not import a store, the API, or MobX; `observer()` is confined to
+> `src/containers/`. Verified by probe in both directions. **If you move or rename
+> `src/ui/`, re-run the probe** — and note that block ORDER in `client/eslint.config.js`
+> is load-bearing (a later flat-config block REPLACES a rule's options rather than merging).
 >
-> **Next action:** dispatch a subagent with `REFRESH/05-eslint-prettier-and-scoped-sweep.md`
-> on branch `refresh/w3-eslint-prettier`.
+> **Next action:** dispatch a subagent with `REFRESH/06-vitest-harness.md` on branch
+> `refresh/w4-vitest-harness`.
 >
-> ⚠️ **Task 05 writes the `src/ui/**` boundary rule, which is load-bearing for the whole
-> architecture.** The directory does not exist yet (task 19 creates it), so the rule can
-> silently match nothing — the worst failure mode for an architecture rule. The spec
-> requires TWO boundary probes that must **FAIL** ESLint. A rule matching nothing looks
-> exactly like a rule that passes.
->
-> ⚠️ **Prettier Sweep A only** — root config files, `client/src/types/**`,
-> `services/api.ts`. Sweeping components now would reformat ~1,400 lines that later waves
-> delete, and would destroy the byte-identity evidence tasks 30/31 rely on. Sweep B is
-> task 38.
+> ⚠️ **W4 is the last wave before W5, the plan's most valuable checkpoint.** Task 06 builds
+> the harness that task 07 uses to freeze the migration corpus and protect 1.1 MB of the
+> owner's real artwork. `canvasStub.ts` matters especially — tasks 30 and 33 depend on it
+> for canvas pixel hashing.
 >
 > **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
 > `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
@@ -111,7 +108,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W1** | 02 | W0 | ⚠️ | `2cfa756` | `cd client && bunx tsc --noEmit && bun run build && test -d dist` · `cd server && bunx tsc --noEmit` |
 | **W2a** | 03 | W1 | ⚠️ | `ebaca8b` | client: `bunx tsc --noEmit && bunx vite build`; server: `bunx tsc --noEmit` |
 | **W2b** | 04 | W2a | ⚠️ | `a26f41f` | server: `bunx tsc --noEmit` + `diff -r` on the export goldens |
-| **W3** | 05 | W2b | ⬜ | — | `bunx eslint .` in both workspaces · `bun run format:check` · the two boundary probes must **fail** ESLint |
+| **W3** | 05 | W2b | ✅ | `fa22107` | `bunx eslint .` in both workspaces · `bun run format:check` · the two boundary probes must **fail** ESLint |
 | **W4** | 06 | W3 | ⬜ | — | `bunx vitest run --reporter=json \| grep -q '"numPassedTests":[1-9]'` · `--project unit` and `--project dom` both exit 0 |
 | **W5** | 07, 08, 09 | W4 | ⬜ | — | `bunx vitest run` · `bunx vite build` · `node scripts/check-classes.mjs --dead` · no undefined custom property in the bundle · **3 agents** |
 | **W6** | 10, 11 | W5 | ⬜ | — | `bunx storybook build && test -d storybook-static` · `diff -r` on export goldens produces no output · **2 agents** |
@@ -164,6 +161,13 @@ confirmations rather than tests. The `bun run dev` smoke check (both servers ser
 
 **Cleared by the coordinator:** W2a's dev-server proxy check — Vite 7 serves the client
 (200) and proxies `/api/projects` to the server (200); direct `/health` also 200.
+
+**W3 owes nothing** — its gate is fully automated and was verified in both directions.
+One small item was deliberately deferred rather than fixed: `server/src/routes/project.ts:6`
+has an unused `ensureDir` import. It is a genuine one-line fix, but that file is **not in
+task 05's `Touches` list**, so per §10 rule 6 the agent demoted `no-unused-vars` to `warn`
+for `src/routes/**` and left the code alone rather than widening scope. Task 11 owns that
+file and should clear it.
 
 ### 🎯 R11 static risk list — where to look during the W2a canvas smoke test
 
@@ -294,6 +298,35 @@ runtime change** — `handleAccept` already wrote correctly-ranked grids.
 **Also confirmed:** after step 3's hygiene deletions, removing `frame` in
 `HeightMapModal.tsx` exposes a now-unused `getCurrentFrame` in the same destructure —
 a 21st hygiene error appears mid-task. That is expected, not a mistake.
+
+### 🔴 Task 05's boundary blocks silently enforced NOTHING as specified (found in W3)
+
+**The most important spec bug found so far.** Task 05 lists the four `no-restricted-imports`
+blocks with the `observer()` block (`files: ["src/**/*.{ts,tsx}"]`) **after** the two
+`src/ui/**` blocks. **In ESLint flat config a later block REPLACES a rule's entire options
+object — options do not merge.** So the `src/**` block matched every `ui/` file and
+overwrote the purity patterns with only its own `mobx-react-lite` entry.
+
+Confirmed by `--print-config`, and **both boundary probes PASSED lint** under the spec's
+ordering. This is exactly the failure `MASTER.md` §9.9 exists to prevent: it would have
+looked green for sixteen waves, until task 19 created `src/ui/` and someone discovered the
+rule had never enforced anything.
+
+**The mandatory probe requirement is the only reason this was caught.** Keep it.
+
+**Fix, now in `client/eslint.config.js`:** broadest block first, narrower blocks after,
+and every narrower block re-states the `mobx-react-lite` ban so the override loses nothing.
+The file carries a load-bearing-order warning comment. **Any future edit to those blocks
+must re-run the probes.**
+
+Two further task-05 spec bugs, both fixed in W3:
+- `reactHooks.configs["recommended-latest"]` is the **legacy eslintrc shape** in
+  `eslint-plugin-react-hooks@7.1.1` and hard-crashes flat config. The flat entry is
+  `configs.flat["recommended-latest"]`.
+- Root `"format:check": "prettier --check ."` **cannot exit 0** — 154 component files are
+  deliberately outside Sweep A. The spec's own Verification annotates this "exit 0 *on
+  swept paths*", contradicting itself. `format`/`format:check` are now scoped to Sweep A;
+  `format:all`/`format:check:all` added as task 38's target.
 
 **Both corrections were independently CONFIRMED by the W1 subagent.** It found a third:
 
