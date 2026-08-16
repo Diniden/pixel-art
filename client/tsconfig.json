@@ -15,7 +15,21 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    // ⚠️ MUST stay in sync with `aliases.ts`, which is the single source of
+    // truth for `vite.config.ts` and `vitest.config.ts`. This block is a hand
+    // mirror because tsconfig is JSON and cannot import it. The proof the two
+    // agree is `src/utils/__tests__/alphaBlend.test.ts`, which imports via `@/`
+    // and must pass under BOTH `bunx tsc --noEmit` and `bunx vitest run`.
+    "baseUrl": ".",
+    "paths": {
+      "@ui/*": ["src/ui/*"],
+      "@stores/*": ["src/stores/*"],
+      "@api/*": ["src/api/*"],
+      "@test/*": ["src/test/*"],
+      "@/*": ["src/*"]
+    }
   },
   "include": ["src", "lib"]
 }
