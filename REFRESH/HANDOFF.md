@@ -8,21 +8,25 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W1 — task 02 (green the typecheck baseline, 29 → 0)**
+> **Next wave: W2a — task 03 (React 19 · Vite 7 · TypeScript 5.9)**
 >
-> **Status:** W0 done and merged. Executing subagent-per-wave (see `PROTOCOL.md`).
-> **Last commit on `main`:** `afd93cd` — *Merge W0: repo hygiene (task 01)*
+> **Status:** W0 ✅ and W1 ⚠️ merged. Executing subagent-per-wave (see `PROTOCOL.md`).
+> **Last commit on `main`:** `2cfa756` — *Merge W1: green the typecheck baseline*
 > **Working tree at last handoff:** clean.
 >
-> **Next action:** dispatch a subagent with `REFRESH/02-green-the-typecheck-baseline.md`,
-> on branch `refresh/w1-green-baseline`. Coordinator verifies the gate, commits, merges.
+> ### 🟢 The build is GREEN as of W1 — the baseline has moved
 >
-> ⚠️ **W1 blocks literally everything.** Until `bun run build` exits 0 and emits `dist/`,
-> no later wave's gate can be trusted.
+> `bun run build` now **exits 0 and emits `client/dist/`**, and both workspaces
+> typecheck clean. Every later wave is checked against **0 errors**, not 29.
+> If a wave leaves the client with any type error, it has regressed.
 >
-> ⚠️ **Read the two task-02 spec corrections** in "Deviations" below before dispatching —
-> the spec is wrong about `alphaBlend` (deleting it breaks the build) and about the
-> `AIInterpolateModal` fix being a behaviour change.
+> **Next action:** dispatch a subagent with `REFRESH/03-upgrade-client-foundation.md`
+> on branch `refresh/w2a-client-foundation`. Coordinator verifies the gate and merges.
+>
+> ⚠️ **Task 03 is R11:** 111 `useRef` sites across 23 files, concentrated in canvas code.
+> React 19's StrictMode changes have **no automated gate** — the spec's manual canvas
+> smoke test is the only one, and a subagent cannot run it. Expect this wave to land
+> `PARTIAL` with a significant owed check.
 >
 > **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
 > `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
@@ -37,9 +41,9 @@ direct measurement when this ledger was created; the rest come from the eight au
 
 | Metric | Value | Re-verified |
 | --- | ---: | :---: |
-| `bunx tsc --noEmit` errors in `client` | **29** | ✅ measured |
+| `bunx tsc --noEmit` errors in `client` | ~~29~~ → **0** as of W1 | ✅ measured |
 | `bunx tsc --noEmit` errors in `server` | **0** | — |
-| `bun run build` | **exits 1, no `dist/`** | — |
+| `bun run build` | ~~exits 1~~ → **exits 0, emits `dist/`** as of W1 | ✅ measured |
 | Flexible version specifiers across 3 manifests | **22** | ✅ measured |
 | Tracked build artifacts | `client/tsconfig.tsbuildinfo` | ✅ measured |
 | Tracked lockfiles | **1** — `server/bun.lock` **is tracked in HEAD** | ✅ measured |
@@ -96,7 +100,7 @@ them. Run them from the repo root unless the command says otherwise.
 | Wave | Tasks | Dep | Status | Commit | Gate command |
 | --- | --- | --- | :---: | --- | --- |
 | **W0** | 01 | — | ✅ | `afd93cd` | `! grep -qE '"[^"]+": *"[~^><*]' package.json client/package.json server/package.json` · no lockfiles anywhere · `bun install` clean in all 3 workspaces · `! git ls-files --error-unmatch client/tsconfig.tsbuildinfo` · client still reports **exactly 29** errors |
-| **W1** | 02 | W0 | ⬜ | — | `cd client && bunx tsc --noEmit && bun run build && test -d dist` · `cd server && bunx tsc --noEmit` |
+| **W1** | 02 | W0 | ⚠️ | `2cfa756` | `cd client && bunx tsc --noEmit && bun run build && test -d dist` · `cd server && bunx tsc --noEmit` |
 | **W2a** | 03 | W1 | ⬜ | — | client: `bunx tsc --noEmit && bunx vite build`; server: `bunx tsc --noEmit` |
 | **W2b** | 04 | W2a | ⬜ | — | server: `bunx tsc --noEmit` + `diff -r` on the export goldens |
 | **W3** | 05 | W2b | ⬜ | — | `bunx eslint .` in both workspaces · `bun run format:check` · the two boundary probes must **fail** ESLint |
@@ -126,6 +130,27 @@ them. Run them from the repo root unless the command says otherwise.
 | **W27** | 36 | W26 | ⬜ | — | the `ui/` boundary grep returns nothing |
 | **W28** | 37 | W27 | ⬜ | — | `App.tsx` deleted · layout stories render with no store provider |
 | **W29** | 38 | W28 | ⬜ | — | **`! grep -rl useEditorStore client/src`** and **`bun run verify` exits 0** |
+
+---
+
+## ⚠️ Manual checks owed
+
+Verifications a wave's spec requires that a subagent **cannot** perform (they need a
+running app and a human). A wave with outstanding entries here is marked `⚠️ PARTIAL`,
+never `✅ DONE`. **Work through this before trusting any PARTIAL wave.**
+
+| Wave | Task | Unperformed check | Risk left unverified |
+| --- | --- | --- | --- |
+| W1 | 02 | **`lightGridMode` persistence** — toggle the light grid, wait 2 s for autosave, hard-reload; the setting must survive. | ⭐ The one check with a **real behaviour delta**. This was a live data-loss bug — the field was dropped on undo as well as on reload. Do this one first. |
+| W1 | 02 | **Canvas smoke** — draw, erase, undo, switch layers, open lighting studio, scrub the timeline. | ⭐ Widest blast radius in W1. `TimelineView.tsx` lost `moveLayer`/`getCurrentObject` from its store destructure and had `handleDragOver`'s signature changed (2 call sites); `ColorPicker.tsx` had `saveFinalStateToHistory`'s signature changed (6 call sites). |
+| W1 | 02 | **AI accept** end-to-end against a live `ai-service`. | **No delta expected.** The array-rank fix was annotation-only; `handleAccept` already wrote correctly-ranked grids. Confirms pre-existing behaviour. |
+| W1 | 02 | **Flood fill** on transparent and on solid regions (`drawingUtils.ts:438`). | **No delta expected** — proven behaviour-preserving: `!c` already covered the `0` sentinel, so the dropped clause was unreachable. |
+| W1 | 02 | **Reference panel** nudge/resize with an image loaded (`ReferenceImagePanel.tsx:116`). | **No delta expected** — same reasoning as flood fill. |
+
+**Priority:** of W1's five, only the two starred can plausibly surface a regression. The
+other three cover edits proven behaviour-preserving at the type level, so they are
+confirmations rather than tests. The `bun run dev` smoke check (both servers serve HTTP
+200 after 19 files changed) **was** performed by the coordinator and passed.
 
 ---
 
@@ -219,6 +244,29 @@ runtime change** — `handleAccept` already wrote correctly-ranked grids.
 **Also confirmed:** after step 3's hygiene deletions, removing `frame` in
 `HeightMapModal.tsx` exposes a now-unused `getCurrentFrame` in the same destructure —
 a 21st hygiene error appears mid-task. That is expected, not a mistake.
+
+**Both corrections were independently CONFIRMED by the W1 subagent.** It found a third:
+
+**3. Neither `TS2367` was an always-false live bug.** Task 02 step 7 frames both as
+always-false comparisons whose fixes "change runtime behaviour", and requires a written
+note for each. In fact both were **correct guards with a redundant second clause** that
+TypeScript's narrowing had already made unreachable:
+- `drawingUtils.ts:438` — `if (!c || c === 0)`. `PixelData.color` is `Pixel | 0`, so `!c`
+  already covers the `0` sentinel *and* the `undefined` from the optional index.
+- `ReferenceImagePanel.tsx:116` — `if (pixel && pixel !== 0)`. Same shape, same conclusion.
+
+Both reduced to the falsy check alone. `0` is falsy in JS, so runtime semantics are
+bit-identical. **Consequence: manual checks 3 and 4 have no behaviour delta to detect.**
+
+**4. `client/lib/versions/v1.ts:210` was a NAME COLLISION, not a plain type mismatch.**
+`ExportedVariantLayer` was declared twice — a texture-pair at `:32` and a variant-group at
+`:50`. TypeScript declaration-merged them into a type demanding all five properties, which
+nothing could satisfy. Consumers use the **group** meaning (`parse-pixel-project.ts`
+aliases it as `ExportedVariantGroup`), so the group shape kept the existing name and the
+texture-pair was renamed `ExportedVariantFrameLayer`. **Additive only** — no existing
+exported name changed meaning and no wire key changed, so `server/exports/lib/`'s external
+game-code consumers (Q33) are unaffected. Verified: `server/src/routes/export.ts` has its
+own independent declarations and was not touched.
 
 ---
 
