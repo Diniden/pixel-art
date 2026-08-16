@@ -15,7 +15,6 @@
     "ai:start": "bun run ai:setup && bun run ai:run"
   },
   "devDependencies": {
-    "mprocs": "0.8.3",
-    "sharp": "0.34.5"
+    "mprocs": "0.8.3"
   }
 }
