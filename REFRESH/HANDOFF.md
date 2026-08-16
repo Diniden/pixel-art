@@ -8,30 +8,34 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W4 — task 06 (Vitest + Testing Library harness)**
+> **Next wave: W5 — tasks 07, 08, 09 (THREE AGENTS, parallel)**
 >
-> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ merged. Subagent-per-wave.
-> **Last commit on `main`:** `fa22107` — *Merge W3: ESLint, Prettier, Sweep A*
+> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ · W4 ✅ merged.
+> **Last commit on `main`:** `47c14bb` — *Merge W4: Vitest harness*
 > **Working tree at last handoff:** clean.
 >
 > ### Current stack
 > React **19.2.8** · Vite **7.3.6** · TypeScript **5.9.3** · Express **5.2.1** ·
-> sharp **0.33.5** (deferred, Q45) · zustand 4.5.2 · ESLint 9 flat + Prettier.
-> Both workspaces typecheck **0 errors**, lint **0 errors**, `bun run build` emits `dist/`.
+> sharp **0.33.5** (deferred, Q45) · zustand 4.5.2 · ESLint 9 flat · Prettier ·
+> **Vitest 3.2.7 (25 tests, unit + dom)**.
+> Both workspaces: tsc **0**, eslint **0**. `bun run build` emits `dist/`. `bun run verify` **exits 0**.
 >
-> ### 🛡️ The architecture boundary is LIVE and PROVEN
-> `src/ui/**` may not import a store, the API, or MobX; `observer()` is confined to
-> `src/containers/`. Verified by probe in both directions. **If you move or rename
-> `src/ui/`, re-run the probe** — and note that block ORDER in `client/eslint.config.js`
-> is load-bearing (a later flat-config block REPLACES a rule's options rather than merging).
+> ### ⭐ W5 IS THE PLAN'S MOST VALUABLE CHECKPOINT
+> Task 07 freezes the migration corpus. After it, **1.1 MB of the owner's real artwork is
+> protected by tests** even if the whole refactor is abandoned. There is no other safety
+> net: all 149 backup snapshots are already migrated, so the 8 migrations can only ever be
+> tested against hand-authored synthetic fixtures.
 >
-> **Next action:** dispatch a subagent with `REFRESH/06-vitest-harness.md` on branch
-> `refresh/w4-vitest-harness`.
+> **Next action:** dispatch **three parallel subagents** — task 07, task 08, task 09.
+> Their collision matrix is proven empty in `MASTER.md` §6 (disjoint directories, no
+> semantic overlap). Branch `refresh/w5-characterise`.
 >
-> ⚠️ **W4 is the last wave before W5, the plan's most valuable checkpoint.** Task 06 builds
-> the harness that task 07 uses to freeze the migration corpus and protect 1.1 MB of the
-> owner's real artwork. `canvasStub.ts` matters especially — tasks 30 and 33 depend on it
-> for canvas pixel hashing.
+> ⚠️ **Rule 9 is absolute in W5: NEVER `vitest -u`.** Every snapshot diff on the migration
+> or corpus suites is a change to real user data and must be read by a human. A
+> `PreToolUse` hook blocks the flag, but do not rely on it.
+>
+> ⚠️ **Rule 10: assert OBSERVED behaviour, not desired.** Task 07 pins four KNOWN migration
+> bugs deliberately. No task in this plan fixes them.
 >
 > **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
 > `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
@@ -109,7 +113,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W2a** | 03 | W1 | ⚠️ | `ebaca8b` | client: `bunx tsc --noEmit && bunx vite build`; server: `bunx tsc --noEmit` |
 | **W2b** | 04 | W2a | ⚠️ | `a26f41f` | server: `bunx tsc --noEmit` + `diff -r` on the export goldens |
 | **W3** | 05 | W2b | ✅ | `fa22107` | `bunx eslint .` in both workspaces · `bun run format:check` · the two boundary probes must **fail** ESLint |
-| **W4** | 06 | W3 | ⬜ | — | `bunx vitest run --reporter=json \| grep -q '"numPassedTests":[1-9]'` · `--project unit` and `--project dom` both exit 0 |
+| **W4** | 06 | W3 | ✅ | `47c14bb` | `bunx vitest run --reporter=json \| grep -q '"numPassedTests":[1-9]'` · `--project unit` and `--project dom` both exit 0 |
 | **W5** | 07, 08, 09 | W4 | ⬜ | — | `bunx vitest run` · `bunx vite build` · `node scripts/check-classes.mjs --dead` · no undefined custom property in the bundle · **3 agents** |
 | **W6** | 10, 11 | W5 | ⬜ | — | `bunx storybook build && test -d storybook-static` · `diff -r` on export goldens produces no output · **2 agents** |
 | **W7** | 12, 13 | W6 | ⬜ | — | `bunx stylelint "src/**/*.css"` · zero numeric `z-index` · `bunx vitest run src/types/__tests__/` · `bunx tsc --noEmit` · **2 agents** |
