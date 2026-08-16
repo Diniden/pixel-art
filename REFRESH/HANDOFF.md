@@ -8,25 +8,26 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W2a — task 03 (React 19 · Vite 7 · TypeScript 5.9)**
+> **Next wave: W2b — task 04 (Express 5, sharp 0.35, dead-dependency removal)**
 >
-> **Status:** W0 ✅ and W1 ⚠️ merged. Executing subagent-per-wave (see `PROTOCOL.md`).
-> **Last commit on `main`:** `2cfa756` — *Merge W1: green the typecheck baseline*
+> **Status:** W0 ✅, W1 ⚠️, W2a ⚠️ merged. Subagent-per-wave (see `PROTOCOL.md`).
+> **Last commit on `main`:** `ebaca8b` — *Merge W2a: React 19 / Vite 7 / TypeScript 5.9*
 > **Working tree at last handoff:** clean.
 >
-> ### 🟢 The build is GREEN as of W1 — the baseline has moved
+> ### Current stack
+> React **19.2.8** · Vite **7.3.6** · TypeScript **5.9.3** (both workspaces) · zustand 4.5.2.
+> Client and server both typecheck **0 errors**; `bun run build` emits `dist/`.
 >
-> `bun run build` now **exits 0 and emits `client/dist/`**, and both workspaces
-> typecheck clean. Every later wave is checked against **0 errors**, not 29.
-> If a wave leaves the client with any type error, it has regressed.
+> **Next action:** dispatch a subagent with `REFRESH/04-upgrade-server-and-prune-deps.md`
+> on branch `refresh/w2b-server-deps`.
 >
-> **Next action:** dispatch a subagent with `REFRESH/03-upgrade-client-foundation.md`
-> on branch `refresh/w2a-client-foundation`. Coordinator verifies the gate and merges.
+> ⚠️ **Task 04 is R12:** sharp's libvips upgrade can silently change PNG encoding. For a
+> pixel-art exporter, output drift does not throw — it corrupts sprites. The spec requires
+> capturing export goldens BEFORE the version changes and `diff -r` producing NO output.
+> If any byte differs, the wave must STOP and report rather than re-bless.
 >
-> ⚠️ **Task 03 is R11:** 111 `useRef` sites across 23 files, concentrated in canvas code.
-> React 19's StrictMode changes have **no automated gate** — the spec's manual canvas
-> smoke test is the only one, and a subagent cannot run it. Expect this wave to land
-> `PARTIAL` with a significant owed check.
+> ⚠️ **W2a left `devDependencies.typescript` at 5.9.3 in `server/package.json`.** Task 04
+> must re-read that file and write only `express`, `@types/express`, `sharp`, `tsx`.
 >
 > **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
 > `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
@@ -101,7 +102,7 @@ them. Run them from the repo root unless the command says otherwise.
 | --- | --- | --- | :---: | --- | --- |
 | **W0** | 01 | — | ✅ | `afd93cd` | `! grep -qE '"[^"]+": *"[~^><*]' package.json client/package.json server/package.json` · no lockfiles anywhere · `bun install` clean in all 3 workspaces · `! git ls-files --error-unmatch client/tsconfig.tsbuildinfo` · client still reports **exactly 29** errors |
 | **W1** | 02 | W0 | ⚠️ | `2cfa756` | `cd client && bunx tsc --noEmit && bun run build && test -d dist` · `cd server && bunx tsc --noEmit` |
-| **W2a** | 03 | W1 | ⬜ | — | client: `bunx tsc --noEmit && bunx vite build`; server: `bunx tsc --noEmit` |
+| **W2a** | 03 | W1 | ⚠️ | `ebaca8b` | client: `bunx tsc --noEmit && bunx vite build`; server: `bunx tsc --noEmit` |
 | **W2b** | 04 | W2a | ⬜ | — | server: `bunx tsc --noEmit` + `diff -r` on the export goldens |
 | **W3** | 05 | W2b | ⬜ | — | `bunx eslint .` in both workspaces · `bun run format:check` · the two boundary probes must **fail** ESLint |
 | **W4** | 06 | W3 | ⬜ | — | `bunx vitest run --reporter=json \| grep -q '"numPassedTests":[1-9]'` · `--project unit` and `--project dom` both exit 0 |
@@ -147,10 +148,52 @@ never `✅ DONE`. **Work through this before trusting any PARTIAL wave.**
 | W1 | 02 | **Flood fill** on transparent and on solid regions (`drawingUtils.ts:438`). | **No delta expected** — proven behaviour-preserving: `!c` already covered the `0` sentinel, so the dropped clause was unreachable. |
 | W1 | 02 | **Reference panel** nudge/resize with an image loaded (`ReferenceImagePanel.tsx:116`). | **No delta expected** — same reasoning as flood fill. |
 
+| W2a | 03 | ⭐⭐ **StrictMode canvas smoke test** — the **sole gate for R11**. Stroke / undo / redo, layer visibility toggle, lighting-studio normals, timeline scrub, trackpad-pinch and ctrl+wheel zoom, on **both** `Canvas` and `LightingCanvas`. Watch for doubled listeners (one drag producing two strokes) or early cleanup. | React 19's StrictMode double-invocation has **no automated gate at all**. See the 4-site risk list below — start there rather than clicking around. |
+
 **Priority:** of W1's five, only the two starred can plausibly surface a regression. The
 other three cover edits proven behaviour-preserving at the type level, so they are
 confirmations rather than tests. The `bun run dev` smoke check (both servers serve HTTP
 200 after 19 files changed) **was** performed by the coordinator and passed.
+
+**Cleared by the coordinator:** W2a's dev-server proxy check — Vite 7 serves the client
+(200) and proxies `/api/projects` to the server (200); direct `/health` also 200.
+
+### 🎯 R11 static risk list — where to look during the W2a canvas smoke test
+
+Produced by static analysis during W2a. **Compile-level React 19 breakages are confirmed
+absent** — zero hits for `forwardRef`, `defaultProps`, `propTypes`, string refs,
+`findDOMNode`, `createFactory`, or argument-less `useRef`. Both inline ref callbacks
+(`VariantView.tsx:372,500`) use block bodies returning `undefined`, so React 19's
+ref-cleanup change is a no-op there. **The remaining risk is StrictMode double-invocation,
+not types.** Four sites, highest first:
+
+1. **`client/src/App.tsx:65-67`** — ⭐ highest risk, and it touches the data-loss path.
+   `useEffect(() => { initProject() }, [initProject])` has no cleanup and no abort.
+   `initProject` (`store/projectActions.ts:21-53`) runs `getConfig` → `listProjects` →
+   `loadProject` then `set(...)`. StrictMode fires it twice, racing two loads; the loser's
+   `set` can land last, and its catch branch installs `createDefaultProject()` — **this is
+   R5's blank-project overwrite path.** Task 16 closes it properly; until then this is the
+   single most important thing to watch.
+2. **`client/src/App.tsx:42,72-73`** — `hasRestoredReferenceRef = useRef(false)` is set
+   `true` before the async restore and **never reset in cleanup**. Under double-mount the
+   surviving mount early-returns, so the reference image may silently fail to restore.
+3. **`ReferenceImageModal.tsx:303,312-336`** — `hasRestoredRef` resets only when `isOpen`
+   goes false, not on unmount. A StrictMode remount while open skips the restore, leaving
+   the modal blank.
+4. **`ReferenceImageModal.tsx:302,313-328`** — `isRestoringRef` is cleared inside a
+   `requestAnimationFrame` that is never cancelled. If unmount lands before that frame,
+   the flag stays `true` and the sync effect at `:339-354` stops writing `persistentState`.
+
+**The canvas files came out cleaner than the spec predicted.** `Canvas.tsx:2625-2686`
+(ctrl+wheel zoom) and `LightingCanvas.tsx:379-439` both remove their wheel listener and
+clear the zoom-anchor timeout; `Canvas.tsx:1524-1562` cancels its RAF. Unbalanced
+timer set/clear counts elsewhere were each read and found to be intentional
+fire-and-forget (e.g. `Header.tsx:253,266`); both real intervals (`Header.tsx:52`,
+`AIInterpolateModal.tsx:266`) are cleared.
+
+**Benign, noted:** every install warns that `use-sync-external-store` (transitive via
+zustand 4.x) peers `react ^16.8||^17||^18`. Harmless — React 19 ships
+`useSyncExternalStore` natively, and zustand is removed by task 38.
 
 ---
 
