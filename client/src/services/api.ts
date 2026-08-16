@@ -42,8 +42,7 @@ function migrateLegacyProject(legacy: CompactProject): CompactProject {
   // For migration, we'll just take the first occurrence of each unique variant group
   const allVariantGroups: {
     [id: string]: (typeof legacy.objects)[0]["variantGroups"] extends
-      | (infer T)[]
-      | undefined
+      (infer T)[] | undefined
       ? T
       : never;
   } = {};
@@ -115,8 +114,7 @@ function migrateVariantsToProjectLevel(data: CompactProject): CompactProject {
   // Collect all variant groups from all objects
   const allVariantGroups: {
     [id: string]: (typeof data.objects)[0]["variantGroups"] extends
-      | (infer T)[]
-      | undefined
+      (infer T)[] | undefined
       ? T
       : never;
   } = {};
