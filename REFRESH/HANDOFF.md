@@ -8,26 +8,33 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W2b — task 04 (Express 5, sharp 0.35, dead-dependency removal)**
+> **Next wave: W3 — task 05 (ESLint flat config, Prettier, scoped sweep)**
 >
-> **Status:** W0 ✅, W1 ⚠️, W2a ⚠️ merged. Subagent-per-wave (see `PROTOCOL.md`).
-> **Last commit on `main`:** `ebaca8b` — *Merge W2a: React 19 / Vite 7 / TypeScript 5.9*
+> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ merged. Subagent-per-wave.
+> **Last commit on `main`:** `a26f41f` — *Merge W2b: Express 5 + dead deps*
 > **Working tree at last handoff:** clean.
 >
 > ### Current stack
-> React **19.2.8** · Vite **7.3.6** · TypeScript **5.9.3** (both workspaces) · zustand 4.5.2.
-> Client and server both typecheck **0 errors**; `bun run build` emits `dist/`.
+> React **19.2.8** · Vite **7.3.6** · TypeScript **5.9.3** · Express **5.2.1** ·
+> sharp **0.33.5** (upgrade deferred, see Q45) · zustand 4.5.2.
+> Both workspaces typecheck **0 errors**; `bun run build` emits `dist/`.
 >
-> **Next action:** dispatch a subagent with `REFRESH/04-upgrade-server-and-prune-deps.md`
-> on branch `refresh/w2b-server-deps`.
+> 🔴 **One blocking question is open: Q45 (sharp).** It blocks nothing scheduled — W3
+> onward can proceed. See "New questions" at the foot of this file.
 >
-> ⚠️ **Task 04 is R12:** sharp's libvips upgrade can silently change PNG encoding. For a
-> pixel-art exporter, output drift does not throw — it corrupts sprites. The spec requires
-> capturing export goldens BEFORE the version changes and `diff -r` producing NO output.
-> If any byte differs, the wave must STOP and report rather than re-bless.
+> **Next action:** dispatch a subagent with `REFRESH/05-eslint-prettier-and-scoped-sweep.md`
+> on branch `refresh/w3-eslint-prettier`.
 >
-> ⚠️ **W2a left `devDependencies.typescript` at 5.9.3 in `server/package.json`.** Task 04
-> must re-read that file and write only `express`, `@types/express`, `sharp`, `tsx`.
+> ⚠️ **Task 05 writes the `src/ui/**` boundary rule, which is load-bearing for the whole
+> architecture.** The directory does not exist yet (task 19 creates it), so the rule can
+> silently match nothing — the worst failure mode for an architecture rule. The spec
+> requires TWO boundary probes that must **FAIL** ESLint. A rule matching nothing looks
+> exactly like a rule that passes.
+>
+> ⚠️ **Prettier Sweep A only** — root config files, `client/src/types/**`,
+> `services/api.ts`. Sweeping components now would reformat ~1,400 lines that later waves
+> delete, and would destroy the byte-identity evidence tasks 30/31 rely on. Sweep B is
+> task 38.
 >
 > **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
 > `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
@@ -103,7 +110,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W0** | 01 | — | ✅ | `afd93cd` | `! grep -qE '"[^"]+": *"[~^><*]' package.json client/package.json server/package.json` · no lockfiles anywhere · `bun install` clean in all 3 workspaces · `! git ls-files --error-unmatch client/tsconfig.tsbuildinfo` · client still reports **exactly 29** errors |
 | **W1** | 02 | W0 | ⚠️ | `2cfa756` | `cd client && bunx tsc --noEmit && bun run build && test -d dist` · `cd server && bunx tsc --noEmit` |
 | **W2a** | 03 | W1 | ⚠️ | `ebaca8b` | client: `bunx tsc --noEmit && bunx vite build`; server: `bunx tsc --noEmit` |
-| **W2b** | 04 | W2a | ⬜ | — | server: `bunx tsc --noEmit` + `diff -r` on the export goldens |
+| **W2b** | 04 | W2a | ⚠️ | `a26f41f` | server: `bunx tsc --noEmit` + `diff -r` on the export goldens |
 | **W3** | 05 | W2b | ⬜ | — | `bunx eslint .` in both workspaces · `bun run format:check` · the two boundary probes must **fail** ESLint |
 | **W4** | 06 | W3 | ⬜ | — | `bunx vitest run --reporter=json \| grep -q '"numPassedTests":[1-9]'` · `--project unit` and `--project dom` both exit 0 |
 | **W5** | 07, 08, 09 | W4 | ⬜ | — | `bunx vitest run` · `bunx vite build` · `node scripts/check-classes.mjs --dead` · no undefined custom property in the bundle · **3 agents** |
@@ -320,4 +327,46 @@ there too, marked BLOCKING or NON-BLOCKING.
 
 | Q | Wave | Question | Status |
 | --- | --- | --- | --- |
-| — | — | *(none yet)* | — |
+| **Q45** | W2b | **May sharp be upgraded to 0.35.x if PNG output is pixel-identical but not byte-identical?** | 🔴 **BLOCKING — needs the owner.** Blocks only the sharp half of task 04. Everything else in W2b landed. |
+
+### Q45 — the sharp upgrade decision (raised by W2b, 2026-08-16)
+
+**What happened.** Task 04's R12 gate requires `diff -r` on the export goldens to produce
+**no output**. Under sharp 0.35.3, **214 of 232 PNGs differed**. The agent stopped and
+reverted sharp to 0.33.5 rather than re-blessing, exactly as the spec demands.
+
+**What the difference actually is.** Analysed across all 232 files:
+
+| Property | Result |
+| --- | --- |
+| Decoded pixels | **bit-identical in all 232 files** |
+| Inflated raw PNG scanlines | **identical in all 214 differing files** |
+| Non-IDAT chunks (IHDR, PLTE, tRNS, pHYs) | **zero differences** |
+| Total size | **identical** — 48,584 bytes before and after |
+| The delta | zlib CMF header `78da` → `08d7` (×139) / `18d3` (×19), plus equivalent-length deflate re-encoding in 56 files |
+
+Cause: libvips **8.15.3 → 8.18.3** re-emits the zlib stream. **This is encoder-internal
+re-emission, not sprite corruption.** Filenames are content-hashes of the raw buffer and
+none changed, independently confirming the source pixels are unchanged.
+
+**Why it is still your call.** `server/exports/lib/` is consumed by external game code
+(Q33). Any consumer that hashes or diffs PNG assets sees **214 changed files**, even
+though every pixel is the same. Whether that is acceptable depends on facts about the
+downstream pipeline that only you have.
+
+**The options:**
+
+1. **Keep sharp at 0.33.5** (current state). Zero risk; the dependency stays a minor
+   version behind. Everything else in W2b has landed and nothing downstream is blocked.
+2. **Accept pixel-identity as the criterion and upgrade.** The evidence above is strong —
+   pixels are provably unchanged. Re-running the upgrade takes minutes. Requires
+   re-blessing the goldens and accepting that 214 asset files change bytes once.
+
+**Recommendation: option 1 for now.** No scheduled wave depends on sharp 0.35, so
+deferring costs nothing, and this decision is cheap to revisit at any point.
+
+**A control worth adopting into the spec:** the agent ran a second export on the
+*unchanged* sharp 0.33.5 and diffed it against the goldens — exit 0. This proves the
+exporter is deterministic and the golden diff is a valid instrument. Without it, a failing
+diff is ambiguous between "the upgrade changed output" and "the exporter is
+nondeterministic". Task 11 and any future export work should run this control first.
