@@ -1,0 +1,18 @@
+# Commits that are pure formatting. `git blame` should skip them.
+#
+# Enable locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add one full 40-character SHA per line, with the commit subject as a comment
+# above it. A short SHA or a non-existent SHA makes `git blame` fail outright.
+
+# ── Task 05 (wave W3) — Prettier Sweep A ─────────────────────────────────────
+# Scope: root *.{json,md,yaml,yml}, client/*.{ts,js,json}, server/*.{ts,js,json},
+# client/src/types/**, client/src/services/api.ts.
+# Reformatted 5 files: ARCHITECTURE.md, client/tsconfig.json,
+# client/vite.config.ts, server/tsconfig.json, client/src/services/api.ts.
+#
+b78aeafe5b6856394cf5df460e21cdc1e409fbf7
+
+# ── Task 38 — Prettier Sweep B (everything else) ─────────────────────────────
+# TODO: append the Sweep B commit SHA when that task lands.

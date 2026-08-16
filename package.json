@@ -8,6 +8,12 @@
     "dev:server": "cd server && bun run dev",
     "build": "cd client && bun run build",
     "typecheck": "bun run --cwd client typecheck && bun run --cwd server typecheck",
+    "lint": "bun run --cwd client lint && bun run --cwd server lint",
+    "lint:fix": "bun run --cwd client lint:fix && bun run --cwd server lint:fix",
+    "format": "bunx prettier --write \"*.{json,md,yaml,yml}\" \"client/*.{ts,js,json}\" \"server/*.{ts,js,json}\" \"client/src/types/**\" \"client/src/services/api.ts\"",
+    "format:check": "bunx prettier --check \"*.{json,md,yaml,yml}\" \"client/*.{ts,js,json}\" \"server/*.{ts,js,json}\" \"client/src/types/**\" \"client/src/services/api.ts\"",
+    "format:all": "bunx prettier --write .",
+    "format:check:all": "bunx prettier --check .",
     "install:all": "bun install && cd client && bun install && cd ../server && bun install",
     "ai:setup": "cd ai-service && ./setup.sh",
     "ai:run": "cd ai-service && python server.py",
@@ -15,6 +21,7 @@
     "ai:start": "bun run ai:setup && bun run ai:run"
   },
   "devDependencies": {
-    "mprocs": "0.8.3"
+    "mprocs": "0.8.3",
+    "prettier": "3.9.6"
   }
 }

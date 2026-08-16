@@ -31,11 +31,11 @@ rules exist around it.
 
 ## 2. The three processes
 
-| Workspace | Stack | Role |
-| --- | --- | --- |
-| `client/` | React 18.3 + Vite 5.4 + TypeScript (→ React 19 / Vite 7 / TS 5.9) | The editor UI. All authoring happens here. |
-| `server/` | Express 4 + sharp (→ Express 5) | Project persistence, backups, sprite export. Owns the files on disk. |
-| `ai-service/` | Python | Frame interpolation (RIFE). Optional; the editor works without it. |
+| Workspace     | Stack                                                             | Role                                                                 |
+| ------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `client/`     | React 18.3 + Vite 5.4 + TypeScript (→ React 19 / Vite 7 / TS 5.9) | The editor UI. All authoring happens here.                           |
+| `server/`     | Express 4 + sharp (→ Express 5)                                   | Project persistence, backups, sprite export. Owns the files on disk. |
+| `ai-service/` | Python                                                            | Frame interpolation (RIFE). Optional; the editor works without it.   |
 
 `bun run dev` starts all three under mprocs. The client talks to the server over HTTP;
 the server talks to the AI service.
@@ -111,7 +111,7 @@ stores/
 Two design choices worth knowing before you add to it:
 
 **Domain sub-stores do not own data.** `ObjectStore` does not hold `objects` —
-`DomainStore` does. Sub-stores are *behaviour modules over one observable tree*, because
+`DomainStore` does. Sub-stores are _behaviour modules over one observable tree_, because
 operations like `makeVariant` mutate `project.objects` **and** `project.variants`
 together. Splitting the data would turn an internal call into a cross-store write.
 
@@ -246,11 +246,11 @@ done.
 
 ## 8. Where to read next
 
-| Question | File |
-| --- | --- |
-| What is the refresh doing, and where is it? | `REFRESH/HANDOFF.md` |
-| How do I execute a refresh wave? | `REFRESH/PROTOCOL.md` |
-| What is the full plan? | `REFRESH/MASTER.md` |
-| What exactly does task N do? | `REFRESH/NN-*.md` |
-| Why was X decided that way? | `REFRESH/OPEN-QUESTIONS.md` |
-| What was measured, and how? | `REFRESH-PREP/findings/` (8 audits) |
+| Question                                    | File                                |
+| ------------------------------------------- | ----------------------------------- |
+| What is the refresh doing, and where is it? | `REFRESH/HANDOFF.md`                |
+| How do I execute a refresh wave?            | `REFRESH/PROTOCOL.md`               |
+| What is the full plan?                      | `REFRESH/MASTER.md`                 |
+| What exactly does task N do?                | `REFRESH/NN-*.md`                   |
+| Why was X decided that way?                 | `REFRESH/OPEN-QUESTIONS.md`         |
+| What was measured, and how?                 | `REFRESH-PREP/findings/` (8 audits) |
