@@ -23,3 +23,15 @@ ai-service/jobs/
 mprocs.log
 
 PAT
+
+# Build artifacts and caches
+client/tsconfig.tsbuildinfo
+client/dist
+client/coverage
+client/storybook-static
+
+# Lockfiles — project policy: exact pinning in package.json, never a lockfile
+bun.lock
+bun.lockb
+package-lock.json
+yarn.lock
