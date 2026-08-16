@@ -11,7 +11,7 @@ not the task files. Every session updates it before finishing. Read
 > **Next wave: W0 — task 01 (repo hygiene: exact version pinning, no lockfiles, `tsc -b` misuse)**
 >
 > **Status:** not started. No refresh work has landed yet.
-> **Last commit on `main`:** `0e05c6b` — *Checkpoint: Staleness refactor to bring everything up to date*
+> **Last commit on `main`:** `c3a56b4` — *Checkpoint: Some more prep before executing the refactor*
 > **Working tree at last handoff:** clean, plus the untracked scaffolding this session added
 > (`CLAUDE.md`, `ARCHITECTURE.md`, `.claude/`, `REFRESH/PROTOCOL.md`, `REFRESH/HANDOFF.md`).
 >
@@ -184,6 +184,32 @@ starts. **A deviation recorded here is fine; an unrecorded one is a defect.**
 | Wave | Task | Deviation | Reason |
 | --- | --- | --- | --- |
 | — | — | *(none yet)* | — |
+
+### ⚠️ Two corrections to task 02's spec — verified by execution, trust these over the spec
+
+A first attempt at W0/W1 was executed and then **deliberately discarded** (reset to
+`c3a56b4`) to restart with subagent-per-wave execution. The code is gone; these findings
+are not, because whoever runs task 02 will hit both.
+
+**1. `client/src/utils/alphaBlend.ts:11` `alphaBlend` is NOT dead code.** Task 02's
+Context table lists it as "exported, never imported" and instructs you to delete it. It is
+called by `blendPixels` at `alphaBlend.ts:65`, and `store/layerActions.ts:3` imports
+`blendPixels`. **Deleting the function breaks the build** — the opposite of task 02's
+goal. The finding holds only for *external* imports; the correct minimal action is to drop
+the `export` keyword and keep the function.
+
+**2. The 5 `AIInterpolateModal` errors are a type-only fix, not a behaviour fix.** Step 5
+says to fix "the value, not the annotation" and predicts frames "land malformed". Tracing
+the values shows they are correct at every site. The one defect is that
+`allPixelDataPairs` (line ~687) is annotated `PixelData[][][]` but holds rank 4:
+`allGeneratedFrames: string[][]` → `pairFrames: string[]` → `base64ToPixelData` returns
+`PixelData[][]` → `Promise.all(...)` yields `PixelData[][][]` → an array of those is
+`PixelData[][][][]`. Correcting the annotation clears all 5 errors in one line with **no
+runtime change** — `handleAccept` already wrote correctly-ranked grids.
+
+**Also confirmed:** after step 3's hygiene deletions, removing `frame` in
+`HeightMapModal.tsx` exposes a now-unused `getCurrentFrame` in the same destructure —
+a 21st hygiene error appears mid-task. That is expected, not a mistake.
 
 ---
 

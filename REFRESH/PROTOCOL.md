@@ -23,6 +23,35 @@ wave, W3 is the next wave.
 
 ---
 
+## Execution model: one subagent per wave
+
+**Waves are executed by subagents, one per wave, each with a fresh context.** The
+coordinator (the main session) does not do the wave's work itself. This is deliberate:
+a wave's task file is a complete, self-contained spec, and a fresh context that reads only
+that spec produces better work than a long-running context that has drifted through
+twenty earlier waves.
+
+**Coordinator's job, per wave:**
+
+1. Confirm the tree is clean and matches the ledger.
+2. Create the wave branch.
+3. **Dispatch a subagent** with: the wave number, its task file path(s), `PROTOCOL.md`,
+   `CLAUDE.md`, and the gate command from the ledger. Tell it to execute the task and
+   report what it did, what passed, and what it could not do.
+4. **Verify the gate itself** — do not take the subagent's word for it. Run the gate
+   command and read the real output.
+5. Commit, merge `--no-ff`, update the ledger with the merge SHA.
+6. Dispatch the next wave.
+
+**The coordinator never edits source files during a wave.** If a wave needs fixing, that
+is a follow-up dispatch, not the coordinator reaching in. Keeping this boundary is what
+stops the coordinator's context filling with line-level detail.
+
+**Multi-task waves** (W5 runs 3 tasks; W6, W7, W11, W14, W25 run 2) dispatch one subagent
+per task, in parallel — their collision matrices are proven empty in `MASTER.md` §6.
+
+---
+
 ## Starting a session
 
 Do this in order. Do not skip step 3 — a stale working tree has bitten this plan before.
