@@ -12,9 +12,7 @@
 # Reformatted 5 files: ARCHITECTURE.md, client/tsconfig.json,
 # client/vite.config.ts, server/tsconfig.json, client/src/services/api.ts.
 #
-# TODO(coordinator): append the Sweep A commit SHA below once it is committed.
-# The wave agent could not fill this in — it is forbidden from committing, so
-# the SHA did not exist at authoring time.
+b78aeafe5b6856394cf5df460e21cdc1e409fbf7
 
 # ── Task 38 — Prettier Sweep B (everything else) ─────────────────────────────
 # TODO: append the Sweep B commit SHA when that task lands.
