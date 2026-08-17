@@ -111,6 +111,12 @@ export function createProjectActions(get: StoreGet, set: StoreSet) {
     renameCurrentProject: async (newName: string) => {
       const { projectName } = get();
       try {
+        // Cancel any pending saves to the old project (task 14, defect 3):
+        // a save debounced against the OLD name would otherwise fire with the
+        // stale name AFTER the server-side rename. Matches the three siblings
+        // (createNewProject, switchToProject, deleteCurrentProject).
+        cancelPendingSave();
+
         await apiRenameProject(projectName, newName);
 
         // Refresh project list

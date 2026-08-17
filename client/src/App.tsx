@@ -10,7 +10,9 @@ import { LayerPanel } from "./components/LayerPanel/LayerPanel";
 import { LayerColors } from "./components/LayerColors/LayerColors";
 import { FrameTimeline } from "./components/FrameTimeline/FrameTimeline";
 import { ObjectLibrary } from "./components/ObjectLibrary/ObjectLibrary";
-import { Header } from "./components/Header/Header";
+// Task 14: Header is rendered through its observer container, which feeds it
+// `saveStatus` + `aiServiceUrl` from SessionStore.
+import { HeaderContainer } from "./containers/HeaderContainer";
 import {
   ReferenceImageData,
   restoreReferenceImageFromProject,
@@ -168,7 +170,7 @@ function App() {
 
   return (
     <div className="app">
-      <Header />
+      <HeaderContainer />
 
       <div className="main-content">
         {/* Left Panel - Objects & Layers */}

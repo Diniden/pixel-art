@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
+import type { SaveStatus } from '../../store/storeTypes';
 import { exportProject } from '../../services/export';
 import { checkAiHealth, getAiConfig } from '../../services/aiService';
 import { ProjectSelectModal } from '../ProjectSelectModal/ProjectSelectModal';
@@ -9,8 +10,19 @@ import { Icon } from '../Icon/Icon';
 import { Diamond, Wand2, History, FolderOpen, ExternalLink, PenLine } from 'lucide-react';
 import './Header.css';
 
-export function Header() {
-  const { project, projectName, projectList, saveStatus, renameCurrentProject, setAiServiceUrl } = useEditorStore();
+export interface HeaderProps {
+  /** From SessionStore via HeaderContainer (task 14). Header is its sole reader. */
+  saveStatus: SaveStatus;
+  /** From SessionStore via HeaderContainer (task 14) — the single read source. */
+  aiServiceUrl: string | null;
+}
+
+export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
+  // Everything below stays on Zustand for now — the full Header purification
+  // is a later task. `setAiServiceUrl` still WRITES through the Zustand store
+  // (Phase A: Zustand is the source of truth; the bridge mirrors it back into
+  // SessionStore, which re-renders the container).
+  const { projectName, projectList, renameCurrentProject, setAiServiceUrl } = useEditorStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(projectName);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +33,7 @@ export function Header() {
   const [showExportPreview, setShowExportPreview] = useState(false);
   const [showBackupsModal, setShowBackupsModal] = useState(false);
   const [showAiConfig, setShowAiConfig] = useState(false);
-  const [aiUrlInput, setAiUrlInput] = useState(project?.uiState.aiServiceUrl || '');
+  const [aiUrlInput, setAiUrlInput] = useState(aiServiceUrl || '');
   const [aiHealthStatus, setAiHealthStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
   const [aiHealthDetail, setAiHealthDetail] = useState<string | null>(null);
   const [serverDefaultUrl, setServerDefaultUrl] = useState('http://localhost:8100');
@@ -35,7 +47,7 @@ export function Header() {
   }, []);
 
   const pollAiHealth = useCallback(() => {
-    const url = project?.uiState.aiServiceUrl || undefined;
+    const url = aiServiceUrl || undefined;
     checkAiHealth(url).then((result) => {
       if (result.status === 'ok') {
         setAiHealthStatus('ok');
@@ -45,7 +57,7 @@ export function Header() {
         setAiHealthDetail(result.detail || 'AI service is not reachable');
       }
     });
-  }, [project?.uiState.aiServiceUrl]);
+  }, [aiServiceUrl]);
 
   useEffect(() => {
     pollAiHealth();
@@ -226,7 +238,7 @@ export function Header() {
           <button
             className={`ai-config-btn ${aiHealthStatus === 'error' ? 'ai-error' : aiHealthStatus === 'ok' ? 'configured' : ''}`}
             onClick={() => {
-              setAiUrlInput(project?.uiState.aiServiceUrl || serverDefaultUrl);
+              setAiUrlInput(aiServiceUrl || serverDefaultUrl);
               setShowAiConfig(!showAiConfig);
             }}
             title={aiHealthStatus === 'error' ? `AI Error: ${aiHealthDetail}` : 'AI Service Settings'}
@@ -270,9 +282,9 @@ export function Header() {
                 </button>
               </div>
               <span className="ai-config-hint">
-                {aiHealthStatus === 'ok' ? `Connected to ${project?.uiState.aiServiceUrl || serverDefaultUrl}` :
+                {aiHealthStatus === 'ok' ? `Connected to ${aiServiceUrl || serverDefaultUrl}` :
                  aiHealthStatus === 'error' ? 'Service has errors' :
-                 project?.uiState.aiServiceUrl || `Using default: ${serverDefaultUrl}`}
+                 aiServiceUrl || `Using default: ${serverDefaultUrl}`}
               </span>
             </div>
           )}

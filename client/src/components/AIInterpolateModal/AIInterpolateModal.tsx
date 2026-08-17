@@ -750,23 +750,10 @@ export function AIInterpolateModal({
 
         variant.frames = [...before, ...middle, ...after];
 
-        const compactVariant = (await import('../../types')).projectToCompact(newProject);
-        const clonedForVariantHistory = (await import('../../types')).compactToProject(compactVariant);
-
-        useEditorStore.setState((state) => {
-          const newHistory = [
-            ...state.projectHistory.slice(0, state.historyIndex + 1),
-            clonedForVariantHistory,
-          ];
-          return {
-            project: newProject,
-            projectHistory: newHistory,
-            historyIndex: newHistory.length - 1,
-          };
-        });
-
-        const { scheduleAutoSave } = await import('../../services/autoSave');
-        scheduleAutoSave(newProject, store.projectName);
+        // Task 14 (defect 2): commit through the store's single path so the
+        // MAX_HISTORY cap and the normal auto-save both apply, instead of a
+        // hand-rolled setState splice + a direct scheduleAutoSave call.
+        store.updateProjectAndSave(() => newProject, true);
       } else {
         const newProject = structuredClone(currentProject) as Project;
         const objIdx = newProject.objects.findIndex((o) => o.id === object.id);
@@ -837,23 +824,10 @@ export function AIInterpolateModal({
 
         obj.frames = [...before, ...middle, ...after];
 
-        const compactProject = (await import('../../types')).projectToCompact(newProject);
-        const clonedForHistory = (await import('../../types')).compactToProject(compactProject);
-
-        useEditorStore.setState((state) => {
-          const newHistory = [
-            ...state.projectHistory.slice(0, state.historyIndex + 1),
-            clonedForHistory,
-          ];
-          return {
-            project: newProject,
-            projectHistory: newHistory,
-            historyIndex: newHistory.length - 1,
-          };
-        });
-
-        const { scheduleAutoSave } = await import('../../services/autoSave');
-        scheduleAutoSave(newProject, store.projectName);
+        // Task 14 (defect 2): commit through the store's single path so the
+        // MAX_HISTORY cap and the normal auto-save both apply, instead of a
+        // hand-rolled setState splice + a direct scheduleAutoSave call.
+        store.updateProjectAndSave(() => newProject, true);
       }
 
       onClose();
