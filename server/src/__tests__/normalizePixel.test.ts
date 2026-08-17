@@ -2,19 +2,27 @@
 //
 // Characterisation tests for the two SERVER-SIDE migrations (REFRESH task 07):
 //
-//   M7 — `normalizePixel` (`src/routes/export.ts:412-418`): legacy scalar pixel
+//   M7 — `normalizePixel` (`src/export/pixelDecode.ts`): legacy scalar pixel
 //        → `[c,n,h]` tuple. This is the ARRAY-SAFE reference implementation that
 //        the client's `migrateLegacyPixel` should have been.
 //   M8 — export-time `variantOffset` → `variantOffsets`
-//        (`src/routes/export.ts:576-580`), which keys on
+//        (`src/export/transform.ts`), which keys on
 //        `layer.selectedVariantId ?? ""`.
 //
-// ⚠️ Both functions are module-private inside `export.ts`, and task 07 may not
-// modify production source to export them. They are therefore TRANSCRIBED
-// below, and a source-fidelity guard at the bottom of this file re-reads
-// `export.ts` and fails if the original text no longer matches the
-// transcription. That guard is what keeps these tests honest — without it a
-// change to `export.ts` would leave these passing against a stale copy.
+// ⚠️ HISTORY (REFRESH task 11). Task 07 wrote this file when both functions were
+// module-private inside the 927-line `src/routes/export.ts` and could not be
+// imported, so it TRANSCRIBED them and added a source-fidelity guard that
+// re-read `export.ts` to prove the transcriptions had not gone stale.
+//
+// Task 11 decomposed `export.ts` into `src/export/*` and, in doing so, both
+// functions became genuine module exports. The transcriptions are therefore
+// GONE and these tests now import and exercise the REAL production functions —
+// which is strictly stronger than what the guard could achieve, because there
+// is no longer a copy that can drift.
+//
+// The source-fidelity guards below are RETAINED, not weakened: they now assert
+// that the production text in its new home is still character-for-character
+// what task 07 pinned. Behaviour assertions are unchanged from task 07.
 //
 // ⚠️ Assertions are OBSERVED behaviour. M8's empty-string key is a real defect,
 // pinned deliberately.
@@ -24,43 +32,20 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-type CompactPixelData = [number, number, number] | 0;
+import { normalizePixel } from "../export/pixelDecode.js";
+import { exportVariantOffsets } from "../export/transform.js";
+import type { CompactPixelData } from "../export/exportTypes.js";
 
-const exportSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "routes", "export.ts"),
+const here = dirname(fileURLToPath(import.meta.url));
+
+const pixelDecodeSource = readFileSync(
+  join(here, "..", "export", "pixelDecode.ts"),
   "utf8",
 );
-
-// ---------------------------------------------------------------------------
-// Transcribed verbatim from `src/routes/export.ts:412-418`.
-// ---------------------------------------------------------------------------
-function normalizePixel(pixel: unknown): CompactPixelData {
-  if (pixel === 0 || pixel === null || pixel === undefined) return 0;
-  if (Array.isArray(pixel) && pixel.length >= 3)
-    return pixel as CompactPixelData;
-  if (typeof pixel === "number") return [pixel, 0, 1]; // legacy: color only
-  return 0;
-}
-
-// ---------------------------------------------------------------------------
-// Transcribed verbatim from `src/routes/export.ts:576-580`.
-// ---------------------------------------------------------------------------
-interface VariantLayerLike {
-  variantOffsets?: { [variantId: string]: { x: number; y: number } };
-  variantOffset?: { x: number; y: number };
-  selectedVariantId?: string;
-}
-
-function exportVariantOffsets(
-  layer: VariantLayerLike,
-): { [variantId: string]: { x: number; y: number } } | undefined {
-  return (
-    layer.variantOffsets ??
-    (layer.variantOffset
-      ? { [layer.selectedVariantId ?? ""]: layer.variantOffset }
-      : undefined)
-  );
-}
+const transformSource = readFileSync(
+  join(here, "..", "export", "transform.ts"),
+  "utf8",
+);
 
 // ===========================================================================
 // M7
@@ -197,38 +182,61 @@ describe("M8 — export-time variantOffset → variantOffsets", () => {
 // ===========================================================================
 // Source-fidelity guard
 //
-// The two functions above are transcriptions of module-private code. If
-// `export.ts` changes and these copies do not, the tests above would keep
-// passing while testing nothing real. These assertions fail in that case.
+// Task 07 needed these because the functions were transcribed. Task 11 made
+// them importable, so the tests above already exercise the real code. The
+// guards are KEPT anyway, at the same strength, for what they still prove:
+// that the pinned production text is character-for-character unchanged. A
+// behaviour test can pass against a rewritten body; these cannot.
+//
+// If you are moving this code again, update the PATHS here — do not delete or
+// relax the assertions, and do not change the expected text.
 // ===========================================================================
-describe("source fidelity — the transcriptions still match export.ts", () => {
-  it("normalizePixel is unchanged in export.ts", () => {
+describe("source fidelity — the pinned production text is unchanged", () => {
+  it("normalizePixel is unchanged in src/export/pixelDecode.ts", () => {
     const expected = [
-      "function normalizePixel(pixel: unknown): CompactPixelData {",
-      '  if (pixel === 0 || pixel === null || pixel === undefined) return 0;',
+      "export function normalizePixel(pixel: unknown): CompactPixelData {",
+      "  if (pixel === 0 || pixel === null || pixel === undefined) return 0;",
       "  if (Array.isArray(pixel) && pixel.length >= 3)",
       "    return pixel as CompactPixelData;",
-      "  if (typeof pixel === \"number\") return [pixel, 0, 1]; // legacy: color only",
+      '  if (typeof pixel === "number") return [pixel, 0, 1]; // legacy: color only',
       "  return 0;",
       "}",
     ].join("\n");
-    expect(exportSource).toContain(expected);
+    expect(pixelDecodeSource).toContain(expected);
   });
 
-  it("the M8 variantOffsets expression is unchanged in export.ts", () => {
+  it("the M8 variantOffsets expression is unchanged in src/export/transform.ts", () => {
     const expected = [
-      "              variantOffsets:",
-      "                layer.variantOffsets ??",
-      "                (layer.variantOffset",
-      '                  ? { [layer.selectedVariantId ?? ""]: layer.variantOffset }',
-      "                  : undefined),",
+      "  return (",
+      "    layer.variantOffsets ??",
+      "    (layer.variantOffset",
+      '      ? { [layer.selectedVariantId ?? ""]: layer.variantOffset }',
+      "      : undefined)",
+      "  );",
     ].join("\n");
-    expect(exportSource).toContain(expected);
+    expect(transformSource).toContain(expected);
   });
 
-  it("normalizePixel is still module-private (not exported)", () => {
-    // If a later task exports it, these tests should import the real function
-    // instead of transcribing it. This assertion is the reminder.
-    expect(exportSource).not.toContain("export function normalizePixel");
+  it("both functions are now REAL exports, so the tests above are not transcriptions", () => {
+    // Task 07's original guard asserted the opposite — that `normalizePixel`
+    // was still module-private — because a transcription was the only option
+    // then. Task 11's decomposition exported it, which is what task 07's own
+    // comment asked a later task to do. This assertion pins the new, stronger
+    // arrangement: if someone un-exports them, the imports at the top of this
+    // file break loudly rather than silently reverting to a stale copy.
+    expect(pixelDecodeSource).toContain("export function normalizePixel");
+    expect(transformSource).toContain("export function exportVariantOffsets");
+  });
+
+  it("the array-safety guard precedes the number branch — M7's defining property", () => {
+    // The single ordering that makes the server implementation array-safe and
+    // the client's `migrateLegacyPixel` not. If a refactor ever reorders these
+    // two branches, already-migrated tuples get re-wrapped and pixel data is
+    // silently corrupted.
+    const arrayGuard = pixelDecodeSource.indexOf("Array.isArray(pixel)");
+    const numberGuard = pixelDecodeSource.indexOf('typeof pixel === "number"');
+    expect(arrayGuard).toBeGreaterThan(-1);
+    expect(numberGuard).toBeGreaterThan(-1);
+    expect(arrayGuard).toBeLessThan(numberGuard);
   });
 });

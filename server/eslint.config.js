@@ -37,17 +37,12 @@ export default tseslint.config(
     },
   },
 
-  // One finding: an unused `ensureDir` import in src/routes/project.ts.
-  // Genuine and trivially removable, but `server/src/routes/project.ts` is NOT
-  // in task 05's `Touches` list, and MASTER.md §10 rule 6 says to report rather
-  // than widen scope. Demoted to `warn` so the finding stays visible; the
-  // one-line import removal is left for the wave that owns that file.
-  {
-    files: ["src/routes/**/*.ts"],
-    rules: {
-      "@typescript-eslint/no-unused-vars": "warn",
-    },
-  },
+  // NOTE (REFRESH task 11): this block used to demote
+  // `@typescript-eslint/no-unused-vars` to `warn` for `src/routes/**` to keep
+  // W3's one genuine finding — an unused `ensureDir` import in
+  // `src/routes/project.ts` — visible without widening task 05's scope. Task 11
+  // owns `server/src/**`, removed that import, and has therefore removed the
+  // demotion: unused vars are a hard ERROR again everywhere on the server.
 
   prettier,
 );

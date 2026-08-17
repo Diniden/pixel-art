@@ -3,7 +3,6 @@ import { readFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import {
   safeWriteFile,
-  ensureDir,
   DATA_DIR,
   getProjectFilePath,
   loadConfig,
@@ -16,6 +15,7 @@ import {
   listBackupsForProject,
   readBackupFile
 } from '../backup.js';
+import { isValidProjectName } from '../validation.js';
 
 export const projectRouter = Router();
 
@@ -26,16 +26,8 @@ async function ensureDataDir() {
   }
 }
 
-// Validate project name (no special characters, reasonable length)
-function isValidProjectName(name: string): boolean {
-  if (!name || typeof name !== 'string') return false;
-  if (name.length === 0 || name.length > 100) return false;
-  // Allow alphanumeric, spaces, hyphens, underscores
-  if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) return false;
-  // Don't allow names that could conflict with system files
-  if (name === 'config' || name.startsWith('.')) return false;
-  return true;
-}
+// `isValidProjectName` moved to `src/validation.ts` (REFRESH task 11) so the
+// export route can share the same rule. Imported above; behaviour unchanged.
 
 // GET /api/config - Get current project name
 projectRouter.get('/config', async (_req: Request, res: Response) => {

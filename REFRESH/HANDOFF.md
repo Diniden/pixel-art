@@ -340,6 +340,80 @@ runtime change** — `handleAccept` already wrote correctly-ranked grids.
 `HeightMapModal.tsx` exposes a now-unused `getCurrentFrame` in the same destructure —
 a 21st hygiene error appears mid-task. That is expected, not a mistake.
 
+### ⚠️ `storybook dev` CANNOT RUN in this repo — a permanent consequence of the no-lockfile policy
+
+**Not a misconfiguration, and not fixable without violating project policy.** Diagnosed in
+W6 by reading the shipped `node_modules/storybook/dist/common/index.cjs`:
+
+`storybook dev` calls `getPackageManagerType()`, which detects the package manager
+**lockfile-first**. It returns `"bun"` **only** if `bun.lock`/`bun.lockb` exists. This repo
+deliberately has none. It then falls back to `inferPackageManagerFromUserAgent()` (which
+recognises pnpm/npm/yarn — **never bun**), then `hasNPM()` (npm is not on PATH), then
+throws:
+
+```
+Error: Unable to find a usable package manager within NPM, PNPM, Yarn and Yarn 2
+```
+
+`--preview-only` fails identically. **`bunx storybook init` cannot run at all** — it shells
+out to `npx`.
+
+**The agent did NOT create a lockfile to work around this**, which was the right call:
+trading the highest-standing project policy for a dev-server convenience. Instead
+`bun run storybook` **builds** and serves the static output — verified serving the manager,
+iframe, `index.json` (all 7 stories) and the `staticDirs` favicon at HTTP 200. **The only
+loss is hot-reload, not fidelity.** A `storybook:dev` script is retained in case upstream
+fixes bun detection.
+
+**Every later Storybook wave (12, 19, 32–37) must use the build-and-serve path.** Do not
+"fix" this by adding a lockfile.
+
+### ⚠️ The replace-not-merge hazard bit again in W6 — this time in `parserOptions`
+
+W3 found it in rule options. W6 hit it in **`parserOptions`**: a separate `.storybook/**`
+block with its own `projectService` **dropped** the root's
+`allowDefaultProject: ["*.ts","*.js"]`, turning `aliases.ts`, `vite.config.ts` and
+`vitest.config.ts` into three hard parse errors. Fixed by extending the existing list
+rather than redeclaring it; the hazard is now commented at that site.
+
+**Generalised rule for anyone editing `client/eslint.config.js`: a later flat-config block
+REPLACES whatever it redeclares — rules AND parser options. Extend, do not redeclare, and
+re-run the boundary probes afterwards.** (Coordinator re-verified after W6: `ui/` importing
+a store still exits 1.)
+
+### 🔴 Task 11's spec was wrong about the `path` response field (found in W6)
+
+The spec states that only `kebabName` is consumed (by `ExportPreviewModal.tsx:407`) and
+that the absolute server path should be dropped from the export response. **False.**
+`client/src/components/Header/Header.tsx:97` reads it:
+
+```ts
+setExportMessage(`Exported to ${result.path}`);
+```
+
+Removing it would have silently broken the export toast. **`path` was retained**; the new
+fields (`frameCount`, `textureCount`, `bytes`) are purely additive. Verified by the
+coordinator with a live export:
+
+```json
+{"success":true,"path":"…/exports/base-unit","kebabName":"base-unit",
+ "frameCount":54,"textureCount":214,"bytes":72893}
+```
+
+**Lesson, now twice-proven** (this and task 09's dead-class list): a "nothing consumes
+this" claim in a spec must be re-verified by grep before acting on it.
+
+### ✅ Task 07's source-fidelity guards were STRENGTHENED by W6
+
+Task 07 could not import `normalizePixel` or the M8 logic — they were module-private
+inside `export.ts` — so it transcribed them and added guards that re-read the source and
+fail if the originals drift. **Decomposition made both genuine exports, so the tests now
+import the real production code.** A transcription can drift; an import cannot. The guard
+asserting `normalizePixel` was *private* was inverted to pin the new arrangement (exactly
+what task 07's comment asked a later task to do), and a new guard was added asserting the
+array-safety branch still precedes the number branch. 17 → 18 tests, no behaviour
+assertion altered.
+
 ### 📦 Corpus storage — OWNER DECISION (2026-08-16)
 
 Task 07 decompressed **149 MB** of real artwork into
