@@ -8,34 +8,37 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W5 — tasks 07, 08, 09 (THREE AGENTS, parallel)**
+> **Next wave: W6 — tasks 10, 11 (TWO AGENTS, parallel)**
 >
-> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ · W4 ✅ merged.
-> **Last commit on `main`:** `47c14bb` — *Merge W4: Vitest harness*
+> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ · W4 ✅ · W5 ⚠️ merged.
+> **Last commit on `main`:** `53cc953` — *Merge W5: characterisation checkpoint*
 > **Working tree at last handoff:** clean.
 >
 > ### Current stack
 > React **19.2.8** · Vite **7.3.6** · TypeScript **5.9.3** · Express **5.2.1** ·
 > sharp **0.33.5** (deferred, Q45) · zustand 4.5.2 · ESLint 9 flat · Prettier ·
-> **Vitest 3.2.7 (25 tests, unit + dom)**.
-> Both workspaces: tsc **0**, eslint **0**. `bun run build` emits `dist/`. `bun run verify` **exits 0**.
+> Vitest 3.2.7 with **640 tests across 19 files**.
+> Both workspaces: tsc **0**, eslint **0**. Build emits `dist/`. Coverage thresholds **all met**.
 >
-> ### ⭐ W5 IS THE PLAN'S MOST VALUABLE CHECKPOINT
-> Task 07 freezes the migration corpus. After it, **1.1 MB of the owner's real artwork is
-> protected by tests** even if the whole refactor is abandoned. There is no other safety
-> net: all 149 backup snapshots are already migrated, so the 8 migrations can only ever be
-> tested against hand-authored synthetic fixtures.
+> ### ⭐ THE ARTWORK IS NOW PROTECTED — W5 landed
+> 151 real projects round-trip verified; all 8 migrations characterised with 17 `// BUG:`
+> sites pinned as OBSERVED behaviour. **The corpus JSON is gitignored** (owner decision);
+> the committed SHA-256 digests are the gate. `corpusFiles()` THROWS if the corpus is
+> missing rather than passing on zero files — regenerate per
+> `client/src/test/__fixtures__/corpus/README.md`.
 >
-> **Next action:** dispatch **three parallel subagents** — task 07, task 08, task 09.
-> Their collision matrix is proven empty in `MASTER.md` §6 (disjoint directories, no
-> semantic overlap). Branch `refresh/w5-characterise`.
+> **Next action:** dispatch **two parallel subagents** — task 10 (Storybook) and task 11
+> (decompose `server/src/routes/export.ts`). Collision matrix proven empty: task 10 is
+> client-only, task 11 is `server/src/**` only. Branch `refresh/w6-storybook-export`.
 >
-> ⚠️ **Rule 9 is absolute in W5: NEVER `vitest -u`.** Every snapshot diff on the migration
-> or corpus suites is a change to real user data and must be read by a human. A
-> `PreToolUse` hook blocks the flag, but do not rely on it.
+> ⚠️ **Task 11 touches the export path, which W2b proved is byte-sensitive.** Capture
+> goldens FIRST and require `diff -r` to produce NO output. Run the determinism control
+> W2b invented (re-export on unchanged code, diff against goldens) so a failing diff is
+> unambiguous. `server/exports/lib/` is consumed by external game code (Q33) — task 11 is
+> forbidden from restoring frame tags or changing the published format.
 >
-> ⚠️ **Rule 10: assert OBSERVED behaviour, not desired.** Task 07 pins four KNOWN migration
-> bugs deliberately. No task in this plan fixes them.
+> ⚠️ **Task 11 should also clear the unused `ensureDir` import at `server/src/routes/project.ts:6`**,
+> deferred by W3 because that file was outside task 05's Touches.
 >
 > **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
 > `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
@@ -114,7 +117,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W2b** | 04 | W2a | ⚠️ | `a26f41f` | server: `bunx tsc --noEmit` + `diff -r` on the export goldens |
 | **W3** | 05 | W2b | ✅ | `fa22107` | `bunx eslint .` in both workspaces · `bun run format:check` · the two boundary probes must **fail** ESLint |
 | **W4** | 06 | W3 | ✅ | `47c14bb` | `bunx vitest run --reporter=json \| grep -q '"numPassedTests":[1-9]'` · `--project unit` and `--project dom` both exit 0 |
-| **W5** | 07, 08, 09 | W4 | ⬜ | — | `bunx vitest run` · `bunx vite build` · `node scripts/check-classes.mjs --dead` · no undefined custom property in the bundle · **3 agents** |
+| **W5** | 07, 08, 09 | W4 | ⚠️ | `53cc953` | `bunx vitest run` · `bunx vite build` · `node scripts/check-classes.mjs --dead` · no undefined custom property in the bundle · **3 agents** |
 | **W6** | 10, 11 | W5 | ⬜ | — | `bunx storybook build && test -d storybook-static` · `diff -r` on export goldens produces no output · **2 agents** |
 | **W7** | 12, 13 | W6 | ⬜ | — | `bunx stylelint "src/**/*.css"` · zero numeric `z-index` · `bunx vitest run src/types/__tests__/` · `bunx tsc --noEmit` · **2 agents** |
 | **W8** | 14 | W7 | ⬜ | — | `bunx vitest run && bunx tsc --noEmit && bun run build` · lighting settings persist across a reload |
@@ -150,6 +153,7 @@ never `✅ DONE`. **Work through this before trusting any PARTIAL wave.**
 
 | Wave | Task | Unperformed check | Risk left unverified |
 | --- | --- | --- | --- |
+| W5 | 07 | ⭐ **Review the 11 committed SHA-256 digests and sign off.** They are the frozen contract afterwards — every later wave that touches serialization is checked against them. | The agent reviewed them and verified the snapshot counts (50+18+10+41+12+6+2+6+4 = 149 ✓), but task 07's spec requires owner review before they are treated as canonical. |
 | W5 | 09 | ⭐ **Visual review of the 6 newly-defined tokens** — see the table below. **76 declarations change appearance by design**, since these properties were referenced but never defined. | Three of the six values are the agent's judgement calls, not spec-supplied. Each is a one-line change in `client/src/styles/tokens.css`. |
 | W5 | 09 | ⭐ **The `main.tsx` import-order reversal** — confirm nothing regressed visually. | The single change most likely to break something visually, and exactly what static analysis misses. Static check says tokens now emit at byte 6 vs `.layer-panel` at 55574, and component overrides win on specificity either way. |
 | W5 | 09 | **The 5 modal fade/slide animations** (`app-fade-in`, `app-pulse`, `app-slide-in`) still play. | Six animations were silently depending on the CSS collision this task removed. Now explicitly defined in `reset.css`, but unverified at runtime. |
@@ -335,6 +339,43 @@ runtime change** — `handleAccept` already wrote correctly-ranked grids.
 **Also confirmed:** after step 3's hygiene deletions, removing `frame` in
 `HeightMapModal.tsx` exposes a now-unused `getCurrentFrame` in the same destructure —
 a 21st hygiene error appears mid-task. That is expected, not a mistake.
+
+### 📦 Corpus storage — OWNER DECISION (2026-08-16)
+
+Task 07 decompressed **149 MB** of real artwork into
+`client/src/test/__fixtures__/corpus/` and staged it. The owner chose to **gitignore the
+corpus JSON and keep the SHA-256 digests as the committed gate.** Rationale: the repo's
+entire history was ~8 MB and git history is effectively permanent.
+
+Result: `.git` grew only 7.9 MB → 8.4 MB.
+
+**Consequences every later wave must know:**
+
+- The **digests in `client/src/types/__tests__/__snapshots__/` ARE the regression gate.**
+  A digest change means the serialization layer changed. **Read the diff. Never `vitest -u`.**
+- **A fresh clone cannot run the corpus suites** until the corpus is regenerated from
+  `server/src/data/backups/*.gz`. Instructions are in
+  `client/src/test/__fixtures__/corpus/README.md`; the coordinator verified those commands
+  produce the exact expected filenames.
+- **`corpusFiles()` THROWS when the corpus is absent** rather than returning `[]`.
+  Without that guard every corpus suite would iterate zero files and report PASS — a green
+  gate that verifies nothing, the same failure class as the W3 boundary-rule bug.
+  Coordinator verified the guard fires by hiding the corpus and re-running.
+
+### 📋 Task 07's snapshot strategy was not implementable as specified
+
+The spec calls for `toMatchSnapshot()` over 149 runtime snapshots. **Measured:** the
+*smallest* corpus file expands 29,922 B → **780,687 B of `.snap` (26×)**; the full corpus
+would be **~4.1 GB** — which defeats the spec's own requirement that a human review every
+snapshot by eye.
+
+Replaced with **SHA-256 digests**: same gate, **3,359 bytes**, actually reviewable.
+
+Two further task-07 premises were wrong and are now pinned as observed behaviour:
+**R1** (the round trip is *not* identity — it adds `lightGridMode`, adds an
+`originColor: undefined` key, and turns `variants: []` into `undefined`) and **R4** (the
+three fields absent from `CompactUIState` **do** survive via the `...uiState` spread, so
+the type and the runtime disagree).
 
 ### 🔴 Task 09's "60 dead classes" list is WRONG — 18 of them are LIVE (found in W5)
 
