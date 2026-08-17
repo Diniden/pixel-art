@@ -1,0 +1,65 @@
+{
+  "plugins": ["stylelint-declaration-strict-value"],
+  "rules": {
+    "scale-unlimited/declaration-strict-value": [
+      [
+        "/color$/",
+        "fill",
+        "stroke",
+        "z-index",
+        "box-shadow",
+        "border-radius",
+        "font-family",
+        "transition-duration"
+      ],
+      {
+        "ignoreValues": [
+          "transparent",
+          "inherit",
+          "currentColor",
+          "currentcolor",
+          "none",
+          "0",
+          "50%",
+          "auto",
+          "initial",
+          "unset",
+          "/var\\(/"
+        ],
+        "message": "Use a design token from src/styles/tokens.css (task 12)"
+      }
+    ],
+    "keyframes-name-pattern": [
+      "^[a-z][a-z0-9]*(-[a-z0-9]+)+$",
+      {
+        "message": "Keyframes must be kebab-case with a namespacing prefix (they share one global namespace)"
+      }
+    ],
+    "declaration-no-important": [
+      true,
+      {
+        "severity": "warning",
+        "message": "23 pre-existing !important declarations compensate for collisions task 16 fixes; promote this rule to error in task 21"
+      }
+    ],
+    "color-hex-length": "short",
+    "declaration-block-no-duplicate-properties": [
+      true,
+      { "ignore": ["consecutive-duplicates-with-different-values"] }
+    ],
+    "no-duplicate-selectors": true
+  },
+  "overrides": [
+    {
+      "files": ["src/styles/reset.css", "src/styles/tokens.css"],
+      "rules": {
+        "scale-unlimited/declaration-strict-value": null,
+        "keyframes-name-pattern": null,
+        "declaration-no-important": null,
+        "color-hex-length": null,
+        "declaration-block-no-duplicate-properties": null,
+        "no-duplicate-selectors": null
+      }
+    }
+  ]
+}

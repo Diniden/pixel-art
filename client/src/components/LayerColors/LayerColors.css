@@ -2,8 +2,8 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-primary);
   min-height: 44px;
@@ -14,13 +14,13 @@
 .layer-colors-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: flex-start;
 }
 
 .layer-colors-label {
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -31,13 +31,13 @@
 .layer-colors-toggle {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   flex-shrink: 0;
 }
 
@@ -70,28 +70,28 @@
 .layer-colors-swatches {
   display: flex;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: var(--space-1-5);
   justify-content: flex-start;
   align-items: center;
   height: 32px; /* Keep the row height stable */
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 2px 4px;
+  padding: var(--space-0-5) var(--space-1);
 }
 
 .layer-color-swatch {
   width: 24px;
   height: 24px;
   border: 2px solid var(--border-primary);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
   transition:
-    transform 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
   position: relative;
   background-clip: padding-box;
 }
@@ -100,13 +100,13 @@
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
-  border-radius: 2px;
+  z-index: var(--z-behind);
+  border-radius: var(--radius-xs);
   background-image:
-    linear-gradient(45deg, #333 25%, transparent 25%),
-    linear-gradient(-45deg, #333 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #333 75%),
-    linear-gradient(-45deg, transparent 75%, #333 75%);
+    linear-gradient(45deg, var(--swatch-border) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--swatch-border) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--swatch-border) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--swatch-border) 75%);
   background-size: 6px 6px;
   background-position:
     0 0,
@@ -118,16 +118,14 @@
 .layer-color-swatch:hover {
   transform: scale(1.15);
   border-color: var(--accent-primary);
-  z-index: 1;
+  z-index: var(--z-hover-lift);
 }
 
 .layer-color-swatch.selected {
-  border-color: #ffab00;
-  box-shadow:
-    0 0 0 2px rgba(255, 171, 0, 0.4),
-    0 0 8px rgba(255, 171, 0, 0.6);
+  border-color: var(--accent-warning);
+  box-shadow: var(--ring-warning-glow);
   transform: scale(1.1);
-  z-index: 2;
+  z-index: var(--z-raised);
 }
 
 .layer-color-swatch.selected::after {
@@ -137,14 +135,14 @@
   right: -8px;
   width: 14px;
   height: 14px;
-  background: #ffab00;
+  background: var(--accent-warning);
   border-radius: 50%;
   font-size: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #000;
-  font-weight: bold;
+  color: var(--black);
+  font-weight: var(--weight-bold);
 }
 
 .layer-colors-right {
@@ -155,22 +153,22 @@
 
 .layer-colors-hint {
   font-size: 0.7rem;
-  color: #ffab00;
+  color: var(--accent-warning);
   font-style: italic;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .layer-colors-empty {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-style: italic;
 }
 
 @media (max-width: 768px) {
   .layer-colors {
-    padding: 6px 12px;
-    gap: 8px;
+    padding: var(--space-1-5) var(--space-3);
+    gap: var(--space-2);
   }
 
   .layer-color-swatch {

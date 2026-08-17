@@ -19,9 +19,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   font-family: var(--font-sans);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   white-space: nowrap;
   /* background, border, radius, padding, colour, cursor and transition all come
      from the global `button` rule in reset.css — not restated here, so a
@@ -72,13 +72,13 @@
 /* ── Sizes ──────────────────────────────────────────────────────────────── */
 
 .btn--sm {
-  padding: 4px 10px;
+  padding: var(--space-1) var(--space-2-5);
   font-size: 0.8125rem;
 }
 
 .btn--lg {
-  padding: 10px 20px;
-  font-size: 1rem;
+  padding: var(--space-2-5) var(--space-5);
+  font-size: var(--text-base);
 }
 
 /*

@@ -1,42 +1,42 @@
 .reference-image-panel {
   position: absolute;
-  background: linear-gradient(135deg, #2a2a3a 0%, #1a1a25 100%);
-  border: 2px solid #3a3a4a;
-  border-radius: 12px;
-  padding: 12px;
-  z-index: 900;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(135deg, var(--bg-hover) 0%, var(--bg-tertiary) 100%);
+  border: 2px solid var(--bg-active);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  z-index: var(--z-floating-panel);
+  box-shadow: var(--shadow-lg);
   backdrop-filter: blur(10px);
   max-width: 300px;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow var(--transition-base);
   user-select: none;
 }
 
 .reference-image-panel.dragging {
   transition: none;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-xl);
   cursor: grabbing;
 }
 
 .reference-image-panel.minimized {
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
 }
 
 .reference-image-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  gap: 12px;
+  margin-bottom: var(--space-3);
+  gap: var(--space-3);
   user-select: none;
-  padding: 4px;
-  margin: -4px -4px 8px -4px;
-  border-radius: 8px;
-  transition: background-color 0.2s ease;
+  padding: var(--space-1);
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1)) var(--space-2) calc(-1 * var(--space-1));
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-base);
 }
 
 .reference-image-header:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--white-05);
 }
 
 .reference-image-panel.minimized .reference-image-header {
@@ -44,44 +44,44 @@
 }
 
 .reference-image-title {
-  font-weight: 600;
-  color: #e0e0ff;
-  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
   white-space: nowrap;
   flex: 1;
   user-select: none;
 }
 
 .reference-image-minimize {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #a0a0b0;
-  padding: 4px 8px;
-  border-radius: 4px;
+  background: var(--white-05);
+  border: 1px solid var(--white-10);
+  color: var(--text-secondary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s;
+  font-size: var(--text-xs);
+  transition: all var(--transition-base);
 }
 
 .reference-image-minimize:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e0e0ff;
+  background: var(--white-10);
+  color: var(--text-primary);
 }
 
 .reference-image-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .reference-image-preview {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #0a0a15;
-  border: 2px solid #2a2a3a;
-  border-radius: 8px;
-  padding: 8px;
+  background: var(--bg-primary);
+  border: 2px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
   overflow: visible;
   min-height: 100px;
   position: relative;
@@ -90,14 +90,14 @@
 .reference-canvas-wrapper {
   position: relative;
   display: inline-block;
-  margin: 32px;
+  margin: var(--space-8);
 }
 
 .reference-image-preview canvas {
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   max-width: 100%;
   max-height: 200px;
 }
@@ -112,7 +112,7 @@
 /* Reference box adjustment buttons */
 .ref-box-btn {
   position: absolute;
-  z-index: 102;
+  z-index: var(--z-overlay-control);
   width: 24px;
   height: 24px;
   padding: 0;
@@ -123,10 +123,10 @@
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 12px;
-  line-height: 1;
+  font-size: var(--text-xs);
+  line-height: var(--leading-none);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   font-family: inherit;
 }
 
@@ -134,7 +134,7 @@
   background: var(--bg-hover);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  z-index: 1;
+  z-index: var(--z-hover-lift);
 }
 
 .ref-box-btn:active {
@@ -265,18 +265,18 @@
 .reference-navigation {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   max-width: 200px;
   margin: 0 auto;
   position: relative;
-  z-index: 101;
+  z-index: var(--z-overlay-control);
 }
 
 .reference-nav-group {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 3px;
+  gap: var(--space-1);
   flex: 1;
 }
 
@@ -291,10 +291,10 @@
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 12px;
-  line-height: 1;
+  font-size: var(--text-xs);
+  line-height: var(--leading-none);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   font-family: inherit;
   position: relative;
 }
@@ -303,7 +303,7 @@
   background: var(--bg-hover);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  z-index: 1;
+  z-index: var(--z-hover-lift);
 }
 
 .reference-nav-btn:active {
@@ -323,9 +323,9 @@
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: 48px;
-  line-height: 1;
+  line-height: var(--leading-none);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   font-family: inherit;
   position: relative;
   flex-shrink: 0;
@@ -341,13 +341,13 @@
 .reference-trace-btn.active {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: #000;
-  box-shadow: 0 0 12px rgba(0, 217, 255, 0.5);
+  color: var(--black);
+  box-shadow: var(--glow-accent-12-50);
 }
 
 .reference-trace-btn.active:hover {
   background: var(--accent-secondary);
-  box-shadow: 0 0 16px rgba(0, 217, 255, 0.6);
+  box-shadow: var(--glow-accent-16-60);
 }
 
 .reference-trace-btn:active {
