@@ -520,6 +520,10 @@
   font-size: 0.8rem;
 }
 
+/* dynamic: queued|processing|completed|failed built at AIInterpolateModal.tsx:1060,1066
+   (`ai-gen-pair ${pj.status}`) — the WHOLE class name is interpolated, so it is
+   never a literal anywhere. Bounded by the union type at line 33.
+   Do not delete as dead. */
 .ai-gen-pair.processing,
 .ai-gen-pair.queued {
   border-left-color: var(--accent-primary);
@@ -688,16 +692,16 @@
   border-radius: var(--radius-sm);
 }
 
+/* dynamic: keyframe|generated built at AIInterpolateModal.tsx:1152
+   (`ai-preview-item ${item.type}`), union-typed at line 493.
+   `.ai-preview-item.placeholder` was deleted in task 09: `item.type` cannot
+   produce 'placeholder', so that rule was unreachable. Do not delete as dead. */
 .ai-preview-item.keyframe {
   border: 1px solid var(--accent-primary);
 }
 
 .ai-preview-item.generated {
   border: 1px solid #a855f7;
-}
-
-.ai-preview-item.placeholder {
-  border: 1px dashed var(--border-secondary);
 }
 
 .ai-preview-item-label {
@@ -820,22 +824,6 @@
   background: var(--bg-tertiary);
   border-color: var(--text-tertiary);
   color: var(--text-primary);
-}
-
-.ai-btn-preview {
-  padding: 8px 20px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--accent-primary);
-  border-radius: var(--radius-md);
-  color: var(--accent-primary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.ai-btn-preview:hover {
-  background: rgba(0, 217, 255, 0.1);
 }
 
 .ai-btn-generate {

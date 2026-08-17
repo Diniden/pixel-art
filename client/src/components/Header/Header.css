@@ -150,6 +150,10 @@
   border-radius: 50%;
 }
 
+/* dynamic: status-{saving|saved|error} RETURNED from getStatusClass() at
+   Header.tsx:171-178 (a switch on saveStatus), so the names reach className
+   through a variable and never appear at a className= site.
+   Do not delete as dead. */
 .status-saving {
   background: rgba(0, 217, 255, 0.1);
   color: var(--accent-primary);
@@ -157,7 +161,7 @@
 
 .status-saving .status-dot {
   background: var(--accent-primary);
-  animation: pulse 1s ease-in-out infinite;
+  animation: app-pulse 1s ease-in-out infinite;
 }
 
 .status-saved {
@@ -278,6 +282,8 @@
   white-space: nowrap;
 }
 
+/* dynamic: export-status-{success|error} built at Header.tsx:298
+   (`export-status export-status-${exportStatus}`). Do not delete as dead. */
 .export-status-success {
   color: var(--accent-primary);
 }
@@ -312,6 +318,8 @@
   color: var(--text-primary);
 }
 
+/* dynamic: ai-error|configured built at Header.tsx:227 (nested ternary on
+   aiHealthStatus). Do not delete as dead. */
 .ai-config-btn.configured {
   color: var(--accent-success);
   border-color: rgba(0, 255, 136, 0.3);

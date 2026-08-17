@@ -35,3 +35,14 @@ bun.lock
 bun.lockb
 package-lock.json
 yarn.lock
+
+# Migration corpus: 149 MB of the owner's REAL artwork, decompressed from
+# server/src/data/backups/*.gz by task 07. Deliberately NOT committed (owner
+# decision, 2026-08-16) -- the repo's whole history is ~8 MB and git history is
+# effectively permanent.
+#
+# The committed SHA-256 digest snapshots in
+# client/src/types/__tests__/__snapshots__/ ARE the regression gate. Regenerate
+# the corpus locally from the backups to run the corpus suites; see
+# client/src/test/__fixtures__/corpus/README.md.
+client/src/test/__fixtures__/corpus/*.json

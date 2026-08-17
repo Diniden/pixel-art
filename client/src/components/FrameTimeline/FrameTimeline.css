@@ -8,28 +8,6 @@
   height: 100%;
 }
 
-.timeline-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  flex-shrink: 0;
-}
-
-.timeline-title-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.timeline-title {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-}
-
 .frame-move-controls {
   display: flex;
   gap: 2px;
@@ -451,19 +429,6 @@
   font-family: var(--font-mono);
 }
 
-.variant-timeline-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.variant-timeline-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #8b5cf6;
-}
-
 .variant-frame-info {
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -710,16 +675,6 @@
   overflow: visible;
 }
 
-.timeline-action-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border-primary);
-  margin-bottom: 8px;
-  flex-shrink: 0;
-}
-
 /* When timeline-action-bar is replaced by timeline-header-row, hide border */
 .timeline-view > .timeline-header-row {
   border-bottom: 1px solid var(--border-primary);
@@ -830,6 +785,7 @@
 }
 
 .timeline-layer-header:hover,
+/* dynamic: hovered built at TimelineView.tsx:719. Do not delete as dead. */
 .timeline-layer-header.hovered {
   background: var(--bg-hover);
   border-left: 3px solid var(--layer-color, var(--accent-primary));
@@ -880,6 +836,9 @@
   min-height: 32px;
 }
 
+/* dynamic: even|odd built at TimelineView.tsx:758 (`${rowIndex % 2 === 0 ?
+   'even' : 'odd'}`). NOTE: `.odd` has no rule — see the "missing CSS" list;
+   task 09 deliberately does not invent one. Do not delete as dead. */
 .timeline-grid-row.even {
   background: rgba(0, 0, 0, 0.15);
   border-radius: var(--radius-sm);
@@ -1018,10 +977,6 @@
 @media (max-width: 768px) {
   .frame-timeline {
     padding: 8px;
-  }
-
-  .timeline-title {
-    display: none;
   }
 
   .new-frame-input {

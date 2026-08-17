@@ -1,0 +1,176 @@
+/*
+ * Global reset and element styling.
+ *
+ * Moved VERBATIM from index.css:39-186 (task 09) — not rewritten. The only
+ * removals are the dead `button.primary` and `button.danger` rules, which the
+ * class audit proved unreferenced.
+ *
+ * This file is LOAD-BEARING. `button`, `input`, `select`, `input[type="range"]`,
+ * `input[type="number"]` and `::-webkit-scrollbar` are styled globally and every
+ * component depends on it. In particular ColorPicker, LightControl,
+ * RightSidebarTopControls, Toolbar and PixelStudioPanel each render
+ * <input type="range"> whose ENTIRE track and thumb styling comes from here.
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-accent);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+}
+
+/* Input styles */
+input, select, button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+input[type="text"],
+input[type="number"] {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast);
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-tertiary);
+  height: 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+button {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+button:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* Panel styles */
+.panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+}
+
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-content {
+  padding: 12px;
+}
+
+/* ------------------------------------------------------------------------ *
+ * Shared animations.
+ *
+ * @keyframes share ONE global namespace and the last definition wins, so task
+ * 09 prefixed every per-component keyframe. These three are different: they are
+ * genuinely shared, consumed by files that never defined them and which relied
+ * on the old global collision to resolve.
+ *
+ *   app-pulse    <- Header.css (.status-dot); was index.css's `pulse`
+ *   app-fade-in  <- App.css, ObjectLibrary.css, PaletteManager.css,
+ *                   BrowseBackupsModal.css; was index.css's `fadeIn`
+ *   app-slide-in <- BrowseBackupsModal.css; was ProjectSelectModal.css's
+ *                   `slideIn`, i.e. a cross-file dependency by accident
+ *
+ * Deleting them without a shared home would silently stop six animations.
+ * ------------------------------------------------------------------------ */
+
+@keyframes app-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes app-fade-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* copied verbatim from ProjectSelectModal.css's `slideIn` (-20px, not -10px),
+   which is the definition BrowseBackupsModal.css was actually resolving to. */
+@keyframes app-slide-in {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

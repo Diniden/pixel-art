@@ -1,0 +1,83 @@
+/*
+ * Design tokens — :root custom properties ONLY.
+ *
+ * Moved verbatim from index.css:1-37 (task 09), plus the 6 properties that were
+ * referenced 76 times across the codebase but never defined. Every one of those
+ * 76 declarations previously resolved to the property's inherited or initial
+ * value — a live rendering bug. See the block at the bottom of :root.
+ *
+ * The full token scale (spacing, z-index, the complete colour ramp) arrives in
+ * task 12. Do not add tokens here before then.
+ */
+
+:root {
+  /* Dark theme inspired by cyberpunk aesthetics */
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #12121a;
+  --bg-tertiary: #1a1a25;
+  --bg-elevated: #22222f;
+  --bg-hover: #2a2a3a;
+
+  --border-primary: #2d2d3d;
+  --border-accent: #4a4a6a;
+
+  --text-primary: #e8e8f0;
+  --text-secondary: #a0a0b8;
+  --text-muted: #606078;
+
+  --accent-primary: #00d9ff;
+  --accent-secondary: #ff00aa;
+  --accent-tertiary: #7b2dff;
+  --accent-success: #00ff88;
+  --accent-warning: #ffaa00;
+  --accent-danger: #ff3366;
+
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(0, 217, 255, 0.15);
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --font-sans: 'Outfit', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+
+  /* ------------------------------------------------------------------ *
+   * Previously referenced but NEVER defined (task 09).
+   * 76 declarations across the codebase resolved to inherited/initial.
+   * Each value below is a VISUAL DECISION — see the task 09 report.
+   * ------------------------------------------------------------------ */
+
+  /* 28 uses. Sits on the existing text ramp between --text-secondary
+     (#a0a0b8) and --text-muted (#606078); #808098 is the midpoint of both
+     channels, keeping the ramp evenly spaced. */
+  --text-tertiary: #808098;
+
+  /* 28 uses. A dimmer --border-primary (#2d2d3d), sitting between it and
+     --bg-elevated (#22222f) so a --border-secondary edge reads as present
+     but recessive. Fixes e.g. ProjectSelectModal's .cancel-btn, which
+     renders borderless today. */
+  --border-secondary: #23232f;
+
+  /* 8 uses. A lighter --accent-primary (#00d9ff) for hover states; raising
+     the red channel brightens toward white without shifting hue. */
+  --accent-hover: #4de6ff;
+
+  /* 5 uses. Between --bg-hover (#2a2a3a) and --bg-elevated (#22222f) — this
+     literal already appears 4x in FrameReferencePanel.css, LightingCanvas.css
+     and ReferenceImagePanel.css, so it is the measured house value. */
+  --bg-active: #3a3a4a;
+
+  /* 2 uses. The accent is bright cyan (#00d9ff); black is the legible
+     foreground on it. Fixes .shape-btn.active, whose label is currently
+     inherited and illegible. */
+  --text-on-accent: #000;
+
+  /* 1 use. Alias of --accent-danger, which is what the call site means. */
+  --danger: var(--accent-danger);
+}

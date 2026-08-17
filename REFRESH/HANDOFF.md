@@ -150,6 +150,11 @@ never `✅ DONE`. **Work through this before trusting any PARTIAL wave.**
 
 | Wave | Task | Unperformed check | Risk left unverified |
 | --- | --- | --- | --- |
+| W5 | 09 | ⭐ **Visual review of the 6 newly-defined tokens** — see the table below. **76 declarations change appearance by design**, since these properties were referenced but never defined. | Three of the six values are the agent's judgement calls, not spec-supplied. Each is a one-line change in `client/src/styles/tokens.css`. |
+| W5 | 09 | ⭐ **The `main.tsx` import-order reversal** — confirm nothing regressed visually. | The single change most likely to break something visually, and exactly what static analysis misses. Static check says tokens now emit at byte 6 vs `.layer-panel` at 55574, and component overrides win on specificity either way. |
+| W5 | 09 | **The 5 modal fade/slide animations** (`app-fade-in`, `app-pulse`, `app-slide-in`) still play. | Six animations were silently depending on the CSS collision this task removed. Now explicitly defined in `reset.css`, but unverified at runtime. |
+| W5 | 09 | **The 12 dynamically-constructed classes still style correctly** — especially AI generation status (`ai-gen-pair ${status}`) and preview items (`ai-preview-item ${type}`). | These are the runtime-interpolated names the spec's parser missed. Worth confirming the AI status UI actually renders styled. |
+| W5 | 09 | **`<input type="range">` styling survives the move to `reset.css`.** | Slider appearance across ColorPicker, brush controls, and lighting panels. |
 | W1 | 02 | **`lightGridMode` persistence** — toggle the light grid, wait 2 s for autosave, hard-reload; the setting must survive. | ⭐ The one check with a **real behaviour delta**. This was a live data-loss bug — the field was dropped on undo as well as on reload. Do this one first. |
 | W1 | 02 | **Canvas smoke** — draw, erase, undo, switch layers, open lighting studio, scrub the timeline. | ⭐ Widest blast radius in W1. `TimelineView.tsx` lost `moveLayer`/`getCurrentObject` from its store destructure and had `handleDragOver`'s signature changed (2 call sites); `ColorPicker.tsx` had `saveFinalStateToHistory`'s signature changed (6 call sites). |
 | W1 | 02 | **AI accept** end-to-end against a live `ai-service`. | **No delta expected.** The array-rank fix was annotation-only; `handleAccept` already wrote correctly-ranked grids. Confirms pre-existing behaviour. |
@@ -165,6 +170,34 @@ confirmations rather than tests. The `bun run dev` smoke check (both servers ser
 
 **Cleared by the coordinator:** W2a's dev-server proxy check — Vite 7 serves the client
 (200) and proxies `/api/projects` to the server (200); direct `/health` also 200.
+
+### 🎨 The 6 token values chosen in W5 — three are judgement calls
+
+These properties were **referenced 76 times and defined nowhere**, one of the three live
+bugs in `MASTER.md` §1. Defining them necessarily changes rendering. Each is one line in
+`client/src/styles/tokens.css`.
+
+| Token | Uses | Value | Basis |
+| --- | ---: | --- | --- |
+| `--text-tertiary` | 28× | `#808098` | ⭐ **Agent's call.** Exact per-channel midpoint of `--text-secondary` `#a0a0b8` and `--text-muted` `#606078`, keeping the ramp evenly spaced. |
+| `--border-secondary` | 28× | `#23232f` | ⭐ **Agent's call.** Between `--border-primary` `#2d2d3d` and `--bg-elevated` `#22222f`, so the edge reads present but recessive. Fixes ProjectSelectModal's currently-borderless `.cancel-btn`. |
+| `--accent-hover` | 8× | `#4de6ff` | ⭐ **Agent's call.** Lighter `--accent-primary` `#00d9ff`; raises the red channel to brighten toward white without a hue shift. |
+| `--bg-active` | 5× | `#3a3a4a` | Spec-supplied, and this literal already appears 4× in the codebase — the measured house value. |
+| `--text-on-accent` | 2× | `#000` | Spec-supplied. The accent is bright cyan; black is the legible foreground. |
+| `--danger` | 1× | `var(--accent-danger)` | Spec-supplied alias. |
+
+### Follow-ups filed by W5 task 09 (not blocking)
+
+- **`--r`, `--g`, `--b` are never set anywhere in the TSX.** ColorPicker's RGB slider
+  gradients fall back to `0`. **Pre-existing, not introduced** — out of task 09's scope
+  because fixing it changes appearance. Worth a look during the CSS waves (12, 20–22).
+- **`eslint.config.js` scopes `globals.node` to `files: ["*.{js,ts}"]`**, which matches
+  only the workspace root, so `scripts/*.mjs` lints as browser code and fails `no-undef`.
+  Task 09 declared the globals in its own file and left the config alone (outside its
+  `Touches`). **Recommend widening the block to `["*.{js,ts}", "scripts/**"]`** in a task
+  that owns `eslint.config.js`.
+- See also W3's deferred unused `ensureDir` import in `server/src/routes/project.ts:6`,
+  which task 11 owns.
 
 **W3 owes nothing** — its gate is fully automated and was verified in both directions.
 One small item was deliberately deferred rather than fixed: `server/src/routes/project.ts:6`
@@ -302,6 +335,42 @@ runtime change** — `handleAccept` already wrote correctly-ranked grids.
 **Also confirmed:** after step 3's hygiene deletions, removing `frame` in
 `HeightMapModal.tsx` exposes a now-unused `getCurrentFrame` in the same destructure —
 a 21st hygiene error appears mid-task. That is expected, not a mistake.
+
+### 🔴 Task 09's "60 dead classes" list is WRONG — 18 of them are LIVE (found in W5)
+
+**Deleting them as specified would have silently broken working UI.** Verified
+independently by the coordinator. The spec's own parser missed two patterns:
+
+**8 applied conditionally inside template literals** — `.all-visible`
+(`LayerPanel.tsx:200`), `.has-reference` (`PixelStudioTools.tsx:114`),
+`.light-grid-active` (`Toolbar.tsx:69`), `.empty-selected` (`TimelineView.tsx:769`),
+`.highlighted` (`TimelineView.tsx:787`), `.playing` (3 files), `.has-error`
+(`Header.tsx:196`), `.different-object` (`FrameReferencePanel.tsx:343`), plus
+`.disabled`, `.between`, `.keyframe`.
+
+**6 built by whole-name interpolation** — the dangerous ones. `AIInterpolateModal.tsx`
+line 1060 is ``className={`ai-gen-pair ${pj.status}`}`` and line 1152 is
+``className={`ai-preview-item ${item.type}`}``. The class name does not exist as a literal
+anywhere, so **no static search for `className="queued"` can find it.** Deleting
+`queued`/`processing`/`completed`/`failed`/`generated` would have silently killed the AI
+generation status UI. Coordinator confirmed both interpolation sites by direct read.
+
+**Lesson for tasks 20–22 (BEM conversion), which rename every class:** a class-name
+audit must grep the **bare name** across `.ts`/`.tsx`, never just `className="x"`, and
+must look for interpolation into a class string. The spec's substring-trap warning *was*
+correct and useful (`.mode-btn` matching `studio-mode-btn`, etc.) — the gap is
+runtime-constructed names.
+
+Only the 42 independently-verified classes were deleted. Final audit: **0 dead, 0
+keyframe collisions**, confirmed by the coordinator.
+
+### ⚠️ Task 09 also found 6 animations depending on the collision it was removing
+
+Four files (`App.css`, `ObjectLibrary.css`, `PaletteManager.css`, `BrowseBackupsModal.css`)
+**consume `fadeIn` but define it nowhere** — they resolved to `index.css`'s copy purely
+because it was emitted last. Naively prefixing the keyframes would have killed all six
+animations silently. Resolved by promoting `app-fade-in` / `app-pulse` / `app-slide-in`
+into `reset.css` as genuinely shared definitions, copying `slideIn`'s `-20px` verbatim.
 
 ### 🔴 Task 05's boundary blocks silently enforced NOTHING as specified (found in W3)
 

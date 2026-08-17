@@ -1,0 +1,89 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`corpus golden digests — the real regression gate > backup-01-31-2026.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "8e86303863515f97294a91ccd76a538ab9435ddd5de2452e3335c8a887c68083",
+  "file": "backup-01-31-2026.json",
+  "snapshots": 50,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > backup-02-01-2026.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "c8b608543c7a85960190ca28f248f1eb6d3874eafa80c52a9ba48adfffd58ef9",
+  "file": "backup-02-01-2026.json",
+  "snapshots": 18,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > backup-02-07-2026.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "82810e18c0fa530f316c696c1d7d13b4770ab45559773b164f116e4fac486323",
+  "file": "backup-02-07-2026.json",
+  "snapshots": 10,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > backup-02-08-2026.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "addd61816c278cdbca38477f83e28d0713173d37e8c63829e662e52e7c8d754b",
+  "file": "backup-02-08-2026.json",
+  "snapshots": 41,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > backup-02-09-2026.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "294dc1f351a3bbd5ee832c411196f3893cbee36602d390a093cba30be2ea45f2",
+  "file": "backup-02-09-2026.json",
+  "snapshots": 12,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > backup-02-10-2026.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "12f9abd0869510f99e4fc525b505d3471b1b09082a8505f77fdefb0dda5a9440",
+  "file": "backup-02-10-2026.json",
+  "snapshots": 6,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > backup-02-23-2026.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "ae337433d4d70f09aff9a777f8efd1bedd3c34ae06d64caa59403f9cf72a0ebf",
+  "file": "backup-02-23-2026.json",
+  "snapshots": 2,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > backup-02-24-2026.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "9ea1592417f7401aef7299003c6d1addcf4ad6542054ec47bd2d643e6b036582",
+  "file": "backup-02-24-2026.json",
+  "snapshots": 6,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > backup-02-25-2026.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "3dcb24c29083c9b63c8236ed7d15380eba31cfa6567db5216e9d72fe16dac926",
+  "file": "backup-02-25-2026.json",
+  "snapshots": 4,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > base-unit.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "ddfddd358a1be4920e87eb1eb1c8e6d2c47cf7e2721180c5b55991aba011a51d",
+  "file": "base-unit.json",
+  "snapshots": 1,
+}
+`;
+
+exports[`corpus golden digests — the real regression gate > test-blend.json: the migration pipeline is a no-op and the result digest is frozen 1`] = `
+{
+  "digest": "2dd642fffb05c9645a7f4435116cf68791e821e6e02929e6c46cc21f3cf83cd2",
+  "file": "test-blend.json",
+  "snapshots": 1,
+}
+`;
