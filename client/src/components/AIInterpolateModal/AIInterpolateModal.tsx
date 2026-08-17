@@ -5,7 +5,7 @@ import {
   Project, PixelObject, Frame, Layer, VariantGroup, Variant,
   VariantFrame, PixelData, Pixel, generateId,
 } from '../../types';
-import { submitJob, getJobStatus, checkAiHealth } from '../../services/aiService';
+import { aiApi } from '../../api';
 import { Icon } from '../Icon/Icon';
 import { Wand2, X } from 'lucide-react';
 import './AIInterpolateModal.css';
@@ -314,6 +314,10 @@ export function AIInterpolateModal({
   const framesRowRef = useRef<HTMLDivElement>(null);
   const [loopLineStyle, setLoopLineStyle] = useState<React.CSSProperties | null>(null);
   const store = useEditorStore();
+  // Task 15: aborting this stops job submission AND polling. Closing the modal
+  // (or unmounting) aborts it, so a job can no longer poll forever behind a
+  // closed modal.
+  const generationAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -334,17 +338,37 @@ export function AIInterpolateModal({
     let cancelled = false;
     const aiUrl = project.uiState.aiServiceUrl || undefined;
 
-    checkAiHealth(aiUrl).then((result) => {
-      if (cancelled) return;
-      if (result.status === 'ok') {
-        setStep(mode === 'variant' ? 'configure' : 'select-layer');
-      } else {
+    aiApi
+      .health(aiUrl)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.status === 'ok' && result.remote_configured === false) {
+          // Health can lie: proxy up, remote unconfigured — jobs would fail.
+          setStep('unavailable');
+          setUnavailableDetail(
+            'The AI proxy is running but no remote service is configured (AI_REMOTE_URL unset).',
+          );
+        } else if (result.status === 'ok') {
+          setStep(mode === 'variant' ? 'configure' : 'select-layer');
+        } else {
+          setStep('unavailable');
+          setUnavailableDetail(result.detail || 'The AI service is not reachable.');
+        }
+      })
+      .catch((err: unknown) => {
+        // Task 15: a THROW means the Express server itself is unreachable.
+        if (cancelled) return;
         setStep('unavailable');
-        setUnavailableDetail(result.detail || 'The AI service is not reachable.');
-      }
-    });
+        setUnavailableDetail(
+          err instanceof Error ? err.message : 'The server is not reachable.',
+        );
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Closing the modal stops any in-flight generation/polling.
+      generationAbortRef.current?.abort();
+    };
   }, [isOpen, mode, project.uiState.aiServiceUrl]);
 
   const gridSize = useMemo(() => {
@@ -546,6 +570,11 @@ export function AIInterpolateModal({
     const aiUrl = project.uiState.aiServiceUrl || undefined;
     const { width, height } = gridSize;
 
+    // One controller per generation run; closing the modal aborts it.
+    generationAbortRef.current?.abort();
+    const controller = new AbortController();
+    generationAbortRef.current = controller;
+
     setIsGenerating(true);
     setError(null);
     setStep('generating');
@@ -627,13 +656,16 @@ export function AIInterpolateModal({
 
       const jobIds: string[] = [];
       for (let i = 0; i < pairs.length; i++) {
-        const { job_id } = await submitJob(
-          pairs[i].startB64,
-          pairs[i].endB64,
-          numFrames,
-          aiUrl,
-          scale,
-          flowScale,
+        const { job_id } = await aiApi.submitJob(
+          {
+            frameStartBase64: pairs[i].startB64,
+            frameEndBase64: pairs[i].endB64,
+            numFrames,
+            aiServiceUrl: aiUrl,
+            scale,
+            flowScale,
+          },
+          controller.signal,
         );
         jobIds.push(job_id);
         setPairJobs(prev => prev.map((pj, idx) =>
@@ -641,36 +673,44 @@ export function AIInterpolateModal({
         ));
       }
 
-      let pollInterval = 500;
-      const maxInterval = 3000;
-      const completed = new Set<number>();
-
-      while (completed.size < pairs.length) {
-        await new Promise((r) => setTimeout(r, pollInterval));
-
-        for (let i = 0; i < jobIds.length; i++) {
-          if (completed.has(i)) continue;
-          const job = await getJobStatus(jobIds[i], aiUrl);
-
-          if (job.status === 'completed') {
-            completed.add(i);
-            setPairJobs(prev => prev.map((pj, idx) =>
-              idx === i ? { ...pj, status: 'completed', frames: job.frames ?? [] } : pj
-            ));
-          } else if (job.status === 'failed') {
-            throw new Error(job.error || `Interpolation job ${i + 1} failed`);
-          } else {
-            setPairJobs(prev => prev.map((pj, idx) =>
-              idx === i ? { ...pj, status: job.status } : pj
-            ));
-          }
-        }
-
-        pollInterval = Math.min(pollInterval * 1.3, maxInterval);
-      }
+      // Task 15: `aiApi.pollJob` replaces the old unbounded while(true) loop.
+      // The REQUIRED signal stops polling when the modal closes, and the
+      // built-in deadline surfaces a stuck job as a timeout error.
+      await Promise.all(
+        jobIds.map((jobId, i) =>
+          aiApi
+            .pollJob(jobId, {
+              aiServiceUrl: aiUrl,
+              signal: controller.signal,
+              onStatus: (job) => {
+                if (job.status === 'completed') {
+                  setPairJobs(prev => prev.map((pj, idx) =>
+                    idx === i ? { ...pj, status: 'completed', frames: job.frames ?? [] } : pj
+                  ));
+                } else if (job.status !== 'failed') {
+                  setPairJobs(prev => prev.map((pj, idx) =>
+                    idx === i ? { ...pj, status: job.status } : pj
+                  ));
+                }
+              },
+            })
+            .then((job) => {
+              if (job.status === 'failed') {
+                throw new Error(job.error || `Interpolation job ${i + 1} failed`);
+              }
+              return job;
+            }),
+        ),
+      );
 
       setStep('review');
     } catch (e) {
+      // Stop any sibling polls that are still running.
+      controller.abort();
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        // The modal was closed (or a new run started): stay silent.
+        return;
+      }
       setError(e instanceof Error ? e.message : 'Generation failed');
       setStep('configure');
     } finally {

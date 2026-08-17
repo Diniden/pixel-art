@@ -36,6 +36,7 @@ import {
   observableRef,
   observableShallow,
 } from "mobx";
+import type { ApiError } from "../../api";
 import type {
   LayerClipboard,
   SaveStatus,
@@ -50,8 +51,10 @@ export type AiConnectionState = "unknown" | "ok" | "unconfigured" | "error";
 export class SessionStore {
   /* ── persistence health (moved from EditorState.saveStatus) ───────────── */
   saveStatus: SaveStatus = "idle";
-  // Typed `Error` until task 15 lands the typed API layer's `ApiError`.
-  lastSaveError: Error | null = null;
+  // The typed API layer's `ApiError` (task 15): a failed save carries `kind`
+  // (network/timeout/server/…) so consumers branch on it, never on message
+  // strings. Wired up by task 16's auto-save reaction.
+  lastSaveError: ApiError | null = null;
   /** Set during rename/switch/delete flows (wired up by task 16). */
   saveSuspended = false;
 
@@ -105,7 +108,7 @@ export class SessionStore {
     this.saveStatus = status;
   }
 
-  setSaveError(error: Error | null): void {
+  setSaveError(error: ApiError | null): void {
     this.lastSaveError = error;
   }
 
