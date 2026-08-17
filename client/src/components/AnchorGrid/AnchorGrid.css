@@ -38,18 +38,16 @@
 }
 
 .anchor-cell.active {
-  background: rgba(0, 217, 255, 0.2);
+  background: var(--accent-primary-20);
   border-color: var(--accent-primary);
-  box-shadow: 0 0 8px rgba(0, 217, 255, 0.4);
-}
+  box-shadow: 0 0 8px rgba(0, 217, 255, 0.4);}
 
 .anchor-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: var(--accent-primary);
-  box-shadow: 0 0 6px var(--accent-primary);
-}
+  box-shadow: 0 0 6px var(--accent-primary);}
 
 /* Arrow positioning */
 .anchor-arrow {
@@ -91,12 +89,12 @@
 /* dynamic: expanding|shrinking built at AnchorGrid.tsx:116
    (`... ${expanding ? 'expanding' : 'shrinking'}`). Do not delete as dead. */
 .anchor-arrow.expanding {
-  color: #22c55e; /* Green for expansion */
+  color: var(--status-ok); /* Green for expansion */
   animation: pulse-expand 1.2s ease-in-out infinite;
 }
 
 .anchor-arrow.shrinking {
-  color: #f97316; /* Orange for shrinking */
+  color: var(--status-warn); /* Orange for shrinking */
   animation: pulse-shrink 1.2s ease-in-out infinite;
 }
 
@@ -133,11 +131,11 @@
 }
 
 .anchor-info .size-change.expanding {
-  color: #22c55e;
+  color: var(--status-ok);
 }
 
 .anchor-info .size-change.shrinking {
-  color: #f97316;
+  color: var(--status-warn);
 }
 
 .anchor-info .no-change {

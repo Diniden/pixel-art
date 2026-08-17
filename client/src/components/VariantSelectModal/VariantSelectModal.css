@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--overlay-70);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -20,8 +20,7 @@
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-}
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);}
 
 .variant-modal-header {
   display: flex;
@@ -33,7 +32,7 @@
 
 .variant-modal-header h3 {
   margin: 0;
-  color: #8b5cf6;
+  color: var(--accent-variant);
   font-size: 1.1rem;
   font-weight: 600;
 }
@@ -63,7 +62,7 @@
 .variant-modal-header .close-btn:hover {
   border-color: var(--accent-danger);
   color: var(--accent-danger);
-  background: rgba(255, 85, 85, 0.1);
+  background: var(--accent-danger-10);
 }
 
 .variant-modal-content {
@@ -94,15 +93,14 @@
 }
 
 .variant-card:hover {
-  border-color: rgba(139, 92, 246, 0.5);
+  border-color: var(--accent-variant-50);
   background: var(--bg-hover);
 }
 
 .variant-card.selected {
-  border-color: #8b5cf6;
-  background: rgba(139, 92, 246, 0.15);
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
-}
+  border-color: var(--accent-variant);
+  background: var(--accent-variant-15);
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);}
 
 .variant-thumb {
   width: 64px;
@@ -194,13 +192,13 @@
   right: 6px;
   width: 20px;
   height: 20px;
-  background: #8b5cf6;
+  background: var(--accent-variant);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: white;
+  color: var(--white);
   font-weight: bold;
 }
 
@@ -212,18 +210,18 @@
 .add-variant-btn {
   width: 100%;
   padding: 12px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(0, 217, 255, 0.1) 100%);
-  border: 2px dashed rgba(139, 92, 246, 0.4);
+  background: linear-gradient(135deg, var(--accent-variant-20) 0%, var(--accent-primary-10) 100%);
+  border: 2px dashed var(--accent-variant-40);
   border-radius: var(--radius-md);
-  color: #8b5cf6;
+  color: var(--accent-variant);
   font-size: 0.9rem;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .add-variant-btn:hover {
-  border-color: #8b5cf6;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(0, 217, 255, 0.15) 100%);
+  border-color: var(--accent-variant);
+  background: linear-gradient(135deg, var(--accent-variant-30) 0%, var(--accent-primary-15) 100%);
 }
 
 .add-options {
@@ -240,14 +238,14 @@
 }
 
 .add-options button:first-child {
-  background: rgba(139, 92, 246, 0.2);
-  border: 1px solid rgba(139, 92, 246, 0.4);
-  color: #c4b5fd;
+  background: var(--accent-variant-20);
+  border: 1px solid var(--accent-variant-40);
+  color: var(--accent-variant-light);
 }
 
 .add-options button:first-child:hover {
-  background: rgba(139, 92, 246, 0.3);
-  border-color: #8b5cf6;
+  background: var(--accent-variant-30);
+  border-color: var(--accent-variant);
 }
 
 .add-options button:last-child {
@@ -267,7 +265,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay-50);
   display: flex;
   align-items: center;
   justify-content: center;

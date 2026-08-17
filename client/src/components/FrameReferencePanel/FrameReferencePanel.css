@@ -1,12 +1,11 @@
 .frame-reference-panel {
   position: absolute;
-  background: linear-gradient(135deg, #2a2a3a 0%, #1a1a25 100%);
-  border: 2px solid #3a3a4a;
+  background: linear-gradient(135deg, var(--bg-hover) 0%, var(--bg-tertiary) 100%);
+  border: 2px solid var(--bg-active);
   border-radius: 12px;
   padding: 12px;
   z-index: 900;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);  backdrop-filter: blur(10px);
   max-width: 300px;
   transition: box-shadow 0.2s ease;
   user-select: none;
@@ -14,8 +13,7 @@
 
 .frame-reference-panel.dragging {
   transition: none;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
-  cursor: grabbing;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);  cursor: grabbing;
 }
 
 .frame-reference-panel.minimized {
@@ -36,7 +34,7 @@
 }
 
 .frame-reference-header:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--white-05);
 }
 
 .frame-reference-panel.minimized .frame-reference-header {
@@ -45,7 +43,7 @@
 
 .frame-reference-title {
   font-weight: 600;
-  color: #e0e0ff;
+  color: var(--text-primary);
   font-size: 14px;
   white-space: nowrap;
   flex: 1;
@@ -53,9 +51,9 @@
 }
 
 .frame-reference-object-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #a0a0b0;
+  background: var(--white-05);
+  border: 1px solid var(--white-10);
+  color: var(--text-secondary);
   padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -64,21 +62,21 @@
 }
 
 .frame-reference-object-btn:hover {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #10b981;
+  background: var(--status-ok-20);
+  border-color: var(--status-ok-40);
+  color: var(--status-ok);
 }
 
 .frame-reference-panel.different-object .frame-reference-object-btn {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #10b981;
+  background: var(--status-ok-20);
+  border-color: var(--status-ok-40);
+  color: var(--status-ok);
 }
 
 .frame-reference-minimize {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #a0a0b0;
+  background: var(--white-05);
+  border: 1px solid var(--white-10);
+  color: var(--text-secondary);
   padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -87,8 +85,8 @@
 }
 
 .frame-reference-minimize:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e0e0ff;
+  background: var(--white-10);
+  color: var(--text-primary);
 }
 
 .frame-reference-content {
@@ -99,7 +97,7 @@
 
 /* Different object indicator */
 .frame-reference-panel.different-object {
-  border-color: rgba(16, 185, 129, 0.5);
+  border-color: var(--status-ok-50);
 }
 
 .frame-reference-object-info {
@@ -107,18 +105,18 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--status-ok-10);
+  border: 1px solid var(--status-ok-30);
   border-radius: 6px;
   font-size: 12px;
 }
 
 .frame-reference-object-label {
-  color: #6a8a7a;
+  color: var(--text-tertiary);
 }
 
 .frame-reference-object-name {
-  color: #10b981;
+  color: var(--status-ok);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -132,9 +130,9 @@
 }
 
 .frame-reference-btn {
-  background: linear-gradient(135deg, #4a4a5a 0%, #3a3a4a 100%);
+  background: linear-gradient(135deg, #4a4a5a 0%, var(--bg-active) 100%);
   border: 1px solid #5a5a6a;
-  color: #e0e0ff;
+  color: var(--text-primary);
   padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
@@ -146,10 +144,9 @@
 
 .frame-reference-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #5a5a6a 0%, #4a4a5a 100%);
-  border-color: #6a6a7a;
+  border-color: var(--text-muted);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);}
 
 .frame-reference-btn:disabled {
   opacity: 0.3;
@@ -166,7 +163,7 @@
 
 .frame-reference-number {
   font-weight: 700;
-  color: #e0e0ff;
+  color: var(--text-primary);
   font-size: 16px;
   white-space: nowrap;
   margin-bottom: 2px;
@@ -174,7 +171,7 @@
 
 .frame-reference-name {
   font-weight: 400;
-  color: #8a8a9a;
+  color: var(--text-tertiary);
   font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
@@ -185,12 +182,12 @@
 
 .frame-reference-index {
   font-size: 10px;
-  color: #6a6a7a;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .frame-reference-invalid {
-  color: #8a8a9a;
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 
@@ -204,14 +201,14 @@
 
 .frame-reference-ahead-behind {
   font-size: 11px;
-  color: #8a8a9a;
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
 .frame-reference-go-current-btn {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  color: #10b981;
+  background: var(--status-ok-15);
+  border: 1px solid var(--status-ok-35);
+  color: var(--status-ok);
   padding: 4px 10px;
   border-radius: 4px;
   cursor: pointer;
@@ -221,8 +218,8 @@
 }
 
 .frame-reference-go-current-btn:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: rgba(16, 185, 129, 0.5);
+  background: var(--status-ok-25);
+  border-color: var(--status-ok-50);
 }
 
 .frame-reference-go-current-btn:disabled {
@@ -234,8 +231,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #0a0a15;
-  border: 2px solid #2a2a3a;
+  background: var(--bg-primary);
+  border: 2px solid var(--bg-hover);
   border-radius: 8px;
   padding: 8px;
   overflow: hidden;
@@ -254,9 +251,9 @@
 }
 
 .frame-reference-overlay-btn {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  border: 2px solid #9d6cfd;
-  color: white;
+  background: linear-gradient(135deg, var(--accent-variant) 0%, var(--accent-variant-deep) 100%);
+  border: 2px solid var(--accent-variant-light);
+  color: var(--white);
   padding: 10px 16px;
   border-radius: 8px;
   cursor: pointer;
@@ -271,25 +268,23 @@
 }
 
 .frame-reference-overlay-btn:hover {
-  background: linear-gradient(135deg, #9d6cfd 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, var(--accent-variant-light) 0%, var(--accent-variant) 100%);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
-}
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);}
 
 .frame-reference-overlay-btn.active {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-color: #34d399;
+  background: linear-gradient(135deg, var(--status-ok) 0%, var(--status-ok-deep) 100%);
+  border-color: var(--status-ok-light);
 }
 
 .frame-reference-overlay-btn.active:hover {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
-}
+  background: linear-gradient(135deg, var(--status-ok-light) 0%, var(--status-ok) 100%);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);}
 
 .frame-reference-trace-btn {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  border: 2px solid #9d6cfd;
-  color: white;
+  background: linear-gradient(135deg, var(--accent-variant) 0%, var(--accent-variant-deep) 100%);
+  border: 2px solid var(--accent-variant-light);
+  color: var(--white);
   padding: 10px 16px;
   border-radius: 8px;
   cursor: pointer;
@@ -302,20 +297,18 @@
 }
 
 .frame-reference-trace-btn:hover {
-  background: linear-gradient(135deg, #9d6cfd 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, var(--accent-variant-light) 0%, var(--accent-variant) 100%);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
-}
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);}
 
 .frame-reference-trace-btn.active {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  border-color: #fbbf24;
+  background: linear-gradient(135deg, var(--status-warn) 0%, var(--status-warn-deep) 100%);
+  border-color: var(--status-warn-light);
 }
 
 .frame-reference-trace-btn.active:hover {
-  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
-}
+  background: linear-gradient(135deg, var(--status-warn-light) 0%, var(--status-warn) 100%);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);}
 
 /* Responsive adjustments */
 @media (max-width: 1200px) {

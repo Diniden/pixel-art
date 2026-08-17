@@ -7,8 +7,7 @@
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  animation: app-slide-in 0.2s ease-out;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);  animation: app-slide-in 0.2s ease-out;
 }
 
 .browse-backups-modal .modal-header {
@@ -53,8 +52,8 @@
 .browse-backups-modal .error-message {
   margin: 0 0 12px;
   padding: 10px 14px;
-  background: rgba(255, 51, 102, 0.1);
-  border: 1px solid rgba(255, 51, 102, 0.3);
+  background: var(--accent-danger-10);
+  border: 1px solid var(--accent-danger-30);
   border-radius: var(--radius-md);
   color: var(--accent-danger);
   font-size: 0.85rem;
@@ -125,7 +124,7 @@
 }
 
 .backup-item.selected {
-  background: rgba(0, 217, 255, 0.08);
+  background: var(--accent-primary-08);
   border-color: var(--accent-primary);
 }
 
@@ -164,7 +163,7 @@
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
   border: none;
   border-radius: var(--radius-md);
-  color: #fff;
+  color: var(--white);
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
@@ -173,8 +172,7 @@
 
 .browse-backups-modal .restore-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);
-}
+  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);}
 
 .browse-backups-modal .restore-btn:disabled {
   opacity: 0.4;
@@ -186,7 +184,7 @@
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay-60);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -202,8 +200,7 @@
   width: 380px;
   max-width: 90vw;
   padding: 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-  animation: app-slide-in 0.15s ease-out;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);  animation: app-slide-in 0.15s ease-out;
 }
 
 .confirm-dialog h3 {
@@ -256,14 +253,13 @@
 .confirm-restore-btn {
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
   border: none;
-  color: #fff;
+  color: var(--white);
   font-weight: 600;
 }
 
 .confirm-restore-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);
-}
+  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);}
 
 .confirm-restore-btn:disabled {
   opacity: 0.6;

@@ -100,7 +100,7 @@
 
 .compact-segment.active {
   background: var(--accent-primary);
-  color: #fff;
+  color: var(--white);
 }
 
 /* Toggle styled similarly to existing move-all toggle, but compact. */
@@ -151,7 +151,7 @@
 
 .compact-toggle input:checked + .compact-toggle-slider::before {
   transform: translateX(16px);
-  background: #fff;
+  background: var(--white);
 }
 
 .compact-toggle-label {

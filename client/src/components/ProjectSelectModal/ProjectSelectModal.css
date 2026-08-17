@@ -1,7 +1,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--overlay-70);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -28,8 +28,7 @@
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  animation: project-select-modal-slide-in 0.2s ease-out;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);  animation: project-select-modal-slide-in 0.2s ease-out;
 }
 
 @keyframes project-select-modal-slide-in {
@@ -79,8 +78,8 @@
 .project-select-modal .error-message {
   margin: 12px 20px 0;
   padding: 10px 14px;
-  background: rgba(255, 51, 102, 0.1);
-  border: 1px solid rgba(255, 51, 102, 0.3);
+  background: var(--accent-danger-10);
+  border: 1px solid var(--accent-danger-30);
   border-radius: var(--radius-md);
   color: var(--accent-danger);
   font-size: 0.85rem;
@@ -120,7 +119,7 @@
 }
 
 .project-item.current {
-  background: rgba(0, 217, 255, 0.08);
+  background: var(--accent-primary-08);
   border-color: var(--accent-primary);
 }
 
@@ -169,7 +168,7 @@
 .new-project-btn:hover:not(:disabled) {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  background: rgba(0, 217, 255, 0.05);
+  background: var(--accent-primary-05);
 }
 
 .new-project-btn:disabled {
@@ -237,13 +236,12 @@
 .create-btn {
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
   border: none;
-  color: #fff;
+  color: var(--white);
 }
 
 .create-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);
-}
+  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);}
 
 .create-btn:disabled,
 .cancel-btn:disabled {
@@ -272,7 +270,7 @@
 }
 
 .delete-btn:hover:not(:disabled) {
-  background: rgba(255, 51, 102, 0.1);
+  background: var(--accent-danger-10);
 }
 
 .delete-btn:disabled {

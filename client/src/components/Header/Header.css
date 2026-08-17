@@ -28,7 +28,7 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 0 8px rgba(0, 217, 255, 0.4));
+  filter: drop-shadow(0 0 8px var(--accent-primary-40));
 }
 
 .logo-text {
@@ -155,7 +155,7 @@
    through a variable and never appear at a className= site.
    Do not delete as dead. */
 .status-saving {
-  background: rgba(0, 217, 255, 0.1);
+  background: var(--accent-primary-10);
   color: var(--accent-primary);
 }
 
@@ -165,7 +165,7 @@
 }
 
 .status-saved {
-  background: rgba(0, 255, 136, 0.1);
+  background: var(--accent-success-10);
   color: var(--accent-success);
 }
 
@@ -174,7 +174,7 @@
 }
 
 .status-error {
-  background: rgba(255, 51, 102, 0.1);
+  background: var(--accent-danger-10);
   color: var(--accent-danger);
 }
 
@@ -248,7 +248,7 @@
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
   border: none;
   border-radius: var(--radius-md);
-  color: #fff;
+  color: var(--white);
   font-weight: 600;
   font-size: 0.875rem;
   cursor: pointer;
@@ -257,8 +257,7 @@
 
 .export-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);
-}
+  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);}
 
 .export-btn:active {
   transform: translateY(0);
@@ -289,7 +288,7 @@
 }
 
 .export-status-error {
-  color: var(--danger, #e74c3c);
+  color: var(--danger);
 }
 
 /* AI Service Config */
@@ -322,7 +321,7 @@
    aiHealthStatus). Do not delete as dead. */
 .ai-config-btn.configured {
   color: var(--accent-success);
-  border-color: rgba(0, 255, 136, 0.3);
+  border-color: var(--accent-success-30);
 }
 
 .ai-config-btn.configured:hover {
@@ -330,12 +329,12 @@
 }
 
 .ai-config-btn.ai-error {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.4);
+  color: var(--accent-danger);
+  border-color: var(--accent-danger-40);
 }
 
 .ai-config-btn.ai-error:hover {
-  border-color: #ef4444;
+  border-color: var(--accent-danger);
 }
 
 .ai-icon {
@@ -351,8 +350,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 1000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);  z-index: 1000;
   min-width: 300px;
 }
 
@@ -392,7 +390,7 @@
   background: var(--accent-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: #000;
+  color: var(--black);
   font-weight: 600;
   font-size: 0.8rem;
   cursor: pointer;
@@ -404,13 +402,13 @@
 }
 
 .ai-config-error {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--accent-danger-10);
+  border: 1px solid var(--accent-danger-30);
   border-radius: var(--radius-md);
   padding: 8px 10px;
   margin-bottom: 10px;
   font-size: 0.75rem;
-  color: #ef4444;
+  color: var(--accent-danger);
   line-height: 1.4;
   word-break: break-word;
 }

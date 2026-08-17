@@ -1,7 +1,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--overlay-80);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -24,8 +24,7 @@
   max-height: 700px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  animation: reference-image-modal-slide-up 0.2s ease;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);  animation: reference-image-modal-slide-up 0.2s ease;
 }
 
 @keyframes reference-image-modal-slide-up {
@@ -100,7 +99,7 @@
 .upload-zone:hover,
 .upload-zone.dragging {
   border-color: var(--accent-primary);
-  background: rgba(0, 217, 255, 0.05);
+  background: var(--accent-primary-05);
 }
 
 .upload-icon {
@@ -208,14 +207,14 @@
 }
 
 .clear-image-btn {
-  background: rgba(255, 80, 80, 0.1);
-  border-color: rgba(255, 80, 80, 0.3);
-  color: #ff6b6b;
+  background: var(--accent-danger-10);
+  border-color: var(--accent-danger-30);
+  color: var(--accent-danger);
 }
 
 .clear-image-btn:hover {
-  background: rgba(255, 80, 80, 0.2);
-  border-color: #ff6b6b;
+  background: var(--accent-danger-20);
+  border-color: var(--accent-danger);
 }
 
 .canvas-area {
@@ -224,7 +223,7 @@
   align-items: center;
   justify-content: center;
   background:
-    repeating-conic-gradient(#1a1a25 0% 25%, #222230 0% 50%) 50% / 16px 16px;
+    repeating-conic-gradient(var(--bg-tertiary) 0% 25%, var(--canvas-checker-b) 0% 50%) 50% / 16px 16px;
   border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
@@ -300,14 +299,13 @@
 .confirm-btn {
   background: var(--accent-primary);
   border: none;
-  color: #000;
+  color: var(--black);
   font-weight: 600;
 }
 
 .confirm-btn:hover:not(:disabled) {
   background: var(--accent-secondary);
-  box-shadow: 0 0 12px rgba(0, 217, 255, 0.4);
-}
+  box-shadow: 0 0 12px rgba(0, 217, 255, 0.4);}
 
 .confirm-btn:disabled {
   opacity: 0.5;

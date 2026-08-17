@@ -2,7 +2,7 @@
 .ai-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: var(--overlay-85);
   z-index: 99999;
   display: flex;
   align-items: center;
@@ -19,8 +19,7 @@
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-  width: 90vw;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);  width: 90vw;
   max-width: 720px;
   max-height: 85vh;
   display: flex;
@@ -55,7 +54,7 @@
 
 .ai-modal-icon {
   font-size: 1.2rem;
-  background: linear-gradient(135deg, var(--accent-primary), #a855f7);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-variant));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -86,8 +85,8 @@
 .ai-modal-error {
   margin: 12px 20px 0;
   padding: 10px 14px;
-  background: rgba(255, 51, 102, 0.1);
-  border: 1px solid rgba(255, 51, 102, 0.3);
+  background: var(--accent-danger-10);
+  border: 1px solid var(--accent-danger-30);
   border-radius: var(--radius-md);
   color: var(--accent-danger);
   font-size: 0.85rem;
@@ -164,8 +163,8 @@
   text-align: center;
   max-width: 420px;
   padding: 10px 14px;
-  background: rgba(255, 51, 102, 0.08);
-  border: 1px solid rgba(255, 51, 102, 0.2);
+  background: var(--accent-danger-08);
+  border: 1px solid var(--accent-danger-20);
   border-radius: var(--radius-md);
 }
 
@@ -216,7 +215,7 @@
 }
 
 .ai-layer-item.selected {
-  background: rgba(0, 217, 255, 0.1);
+  background: var(--accent-primary-10);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
@@ -300,8 +299,7 @@
 .ai-config-tab.active {
   background: var(--bg-primary);
   color: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);}
 
 .ai-config-tab:disabled {
   opacity: 0.5;
@@ -310,7 +308,7 @@
 
 .ai-tab-badge {
   background: var(--accent-primary);
-  color: #000;
+  color: var(--black);
   font-size: 0.65rem;
   font-weight: 700;
   padding: 1px 6px;
@@ -373,13 +371,13 @@
 }
 
 .ai-loop-toggle input:checked + .ai-loop-switch {
-  background: rgba(255, 136, 0, 0.2);
-  border-color: #ff8800;
+  background: var(--status-warn-20);
+  border-color: var(--status-warn);
 }
 
 .ai-loop-toggle input:checked + .ai-loop-switch::after {
   transform: translateX(16px);
-  background: #ff8800;
+  background: var(--status-warn);
 }
 
 .ai-loop-toggle input:disabled + .ai-loop-switch {
@@ -394,7 +392,7 @@
 }
 
 .ai-loop-toggle input:checked ~ .ai-loop-label-text {
-  color: #ff8800;
+  color: var(--status-warn);
 }
 
 /* Frame selection strip */
@@ -414,7 +412,7 @@
 /* Loop return line (U-shape below the frame row using CSS borders) */
 .ai-loop-line {
   height: 14px;
-  border: 2px solid #ff8800;
+  border: 2px solid var(--status-warn);
   border-top: none;
   border-radius: 0 0 8px 8px;
   margin-top: 4px;
@@ -431,7 +429,7 @@
   height: 0;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
-  border-bottom: 6px solid #ff8800;
+  border-bottom: 6px solid var(--status-warn);
 }
 
 .ai-loop-line::after {
@@ -441,7 +439,7 @@
   right: -5px;
   width: 6px;
   height: 6px;
-  background: #ff8800;
+  background: var(--status-warn);
   border-radius: 50%;
 }
 
@@ -464,12 +462,12 @@
 
 .ai-frame-item.keyframe {
   border-color: var(--accent-primary);
-  background: rgba(0, 217, 255, 0.08);
+  background: var(--accent-primary-08);
 }
 
 .ai-frame-item.between {
-  border-color: rgba(255, 170, 51, 0.4);
-  background: rgba(255, 170, 51, 0.06);
+  border-color: var(--accent-warning-40);
+  background: var(--accent-warning-06);
   opacity: 0.7;
 }
 
@@ -493,10 +491,10 @@
 /* Warning */
 .ai-warning {
   padding: 10px 14px;
-  background: rgba(255, 170, 51, 0.1);
-  border: 1px solid rgba(255, 170, 51, 0.3);
+  background: var(--accent-warning-10);
+  border: 1px solid var(--accent-warning-30);
   border-radius: var(--radius-md);
-  color: #ffaa33;
+  color: var(--accent-warning);
   font-size: 0.8rem;
   margin-bottom: 12px;
 }
@@ -635,8 +633,7 @@
   background: var(--accent-primary);
   cursor: pointer;
   border: 2px solid var(--bg-primary);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-}
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);}
 
 .ai-setting-range::-moz-range-thumb {
   width: 16px;
@@ -645,8 +642,7 @@
   background: var(--accent-primary);
   cursor: pointer;
   border: 2px solid var(--bg-primary);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-}
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);}
 
 .ai-setting-range:disabled {
   opacity: 0.5;
@@ -701,7 +697,7 @@
 }
 
 .ai-preview-item.generated {
-  border: 1px solid #a855f7;
+  border: 1px solid var(--accent-variant);
 }
 
 .ai-preview-item-label {
@@ -828,10 +824,10 @@
 
 .ai-btn-generate {
   padding: 8px 24px;
-  background: linear-gradient(135deg, var(--accent-primary), #a855f7);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-variant));
   border: none;
   border-radius: var(--radius-md);
-  color: #fff;
+  color: var(--white);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -840,8 +836,7 @@
 
 .ai-btn-generate:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);
-}
+  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);}
 
 .ai-btn-generate:disabled {
   opacity: 0.6;
@@ -854,7 +849,7 @@
   background: var(--accent-success);
   border: none;
   border-radius: var(--radius-md);
-  color: #000;
+  color: var(--black);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -863,8 +858,7 @@
 
 .ai-btn-accept:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
-}
+  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);}
 
 /* Wand button in timeline controls */
 .ai-interpolate-btn {
@@ -880,7 +874,7 @@
 }
 
 .ai-interpolate-btn:hover {
-  background: rgba(168, 85, 247, 0.1);
-  border-color: #a855f7;
-  color: #a855f7;
+  background: var(--accent-variant-10);
+  border-color: var(--accent-variant);
+  color: var(--accent-variant);
 }

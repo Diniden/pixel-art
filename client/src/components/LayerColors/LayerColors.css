@@ -103,10 +103,10 @@
   z-index: -1;
   border-radius: 2px;
   background-image:
-    linear-gradient(45deg, #333 25%, transparent 25%),
-    linear-gradient(-45deg, #333 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #333 75%),
-    linear-gradient(-45deg, transparent 75%, #333 75%);
+    linear-gradient(45deg, var(--swatch-border) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--swatch-border) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--swatch-border) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--swatch-border) 75%);
   background-size: 6px 6px;
   background-position:
     0 0,
@@ -122,11 +122,10 @@
 }
 
 .layer-color-swatch.selected {
-  border-color: #ffab00;
+  border-color: var(--accent-warning);
   box-shadow:
     0 0 0 2px rgba(255, 171, 0, 0.4),
-    0 0 8px rgba(255, 171, 0, 0.6);
-  transform: scale(1.1);
+    0 0 8px rgba(255, 171, 0, 0.6);  transform: scale(1.1);
   z-index: 2;
 }
 
@@ -137,13 +136,13 @@
   right: -8px;
   width: 14px;
   height: 14px;
-  background: #ffab00;
+  background: var(--accent-warning);
   border-radius: 50%;
   font-size: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #000;
+  color: var(--black);
   font-weight: bold;
 }
 
@@ -155,7 +154,7 @@
 
 .layer-colors-hint {
   font-size: 0.7rem;
-  color: #ffab00;
+  color: var(--accent-warning);
   font-style: italic;
   white-space: nowrap;
   flex-shrink: 0;

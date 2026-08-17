@@ -1,7 +1,7 @@
 .height-map-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: var(--overlay-85);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18,8 +18,7 @@
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 217, 255, 0.1);
-  min-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 217, 255, 0.1);  min-width: 480px;
   max-width: 600px;
   display: flex;
   flex-direction: column;
@@ -198,7 +197,7 @@
 
 .channel-btn.active {
   background: var(--accent-primary);
-  color: white;
+  color: var(--white);
   border-color: var(--accent-primary);
 }
 
@@ -235,7 +234,7 @@
 
 .height-map-btn.confirm {
   background: var(--accent-primary);
-  color: white;
+  color: var(--white);
   border-color: var(--accent-primary);
 }
 

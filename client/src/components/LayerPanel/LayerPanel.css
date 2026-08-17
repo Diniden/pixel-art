@@ -94,7 +94,7 @@
 
 .layer-item.selected {
   border-color: var(--accent-primary);
-  background: rgba(0, 217, 255, 0.1);
+  background: var(--accent-primary-10);
   border-width: 1px;
 }
 
@@ -201,17 +201,17 @@
 
 /* Variant layer styles */
 .layer-item.variant-layer {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(0, 217, 255, 0.05) 100%);
-  border-color: rgba(139, 92, 246, 0.3);
+  background: linear-gradient(135deg, var(--accent-variant-10) 0%, var(--accent-primary-05) 100%);
+  border-color: var(--accent-variant-30);
 }
 
 .layer-item.variant-layer.selected {
-  border-color: #8b5cf6;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(0, 217, 255, 0.1) 100%);
+  border-color: var(--accent-variant);
+  background: linear-gradient(135deg, var(--accent-variant-20) 0%, var(--accent-primary-10) 100%);
 }
 
 .variant-icon {
-  color: #8b5cf6;
+  color: var(--accent-variant);
   font-size: 10px;
   margin-right: 2px;
 }
@@ -221,9 +221,9 @@
   margin-left: 4px;
   padding: 1px 5px;
   font-size: 0.6rem;
-  background: rgba(99, 102, 241, 0.3);
+  background: var(--accent-variant-30);
   border-radius: 6px;
-  color: #a5b4fc;
+  color: var(--accent-variant-light);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -234,29 +234,29 @@
   margin-left: 2px;
   padding: 1px 4px;
   font-size: 0.6rem;
-  background: rgba(139, 92, 246, 0.3);
+  background: var(--accent-variant-30);
   border-radius: 6px;
-  color: #c4b5fd;
+  color: var(--accent-variant-light);
 }
 
 .layer-action-btn.make-variant-btn {
-  color: #8b5cf6;
+  color: var(--accent-variant);
 }
 
 .layer-action-btn.make-variant-btn:hover:not(:disabled) {
-  border-color: #8b5cf6;
-  background: rgba(139, 92, 246, 0.2);
+  border-color: var(--accent-variant);
+  background: var(--accent-variant-20);
 }
 
 .layer-action-btn.variant-select-btn {
-  color: #8b5cf6;
-  background: rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.3);
+  color: var(--accent-variant);
+  background: var(--accent-variant-15);
+  border-color: var(--accent-variant-30);
 }
 
 .layer-action-btn.variant-select-btn:hover {
-  border-color: #8b5cf6;
-  background: rgba(139, 92, 246, 0.3);
+  border-color: var(--accent-variant);
+  background: var(--accent-variant-30);
 }
 
 .layer-action-btn.variant-select-in-column {
@@ -272,7 +272,7 @@
 
 .layer-action-btn.copy-layer-btn:hover:not(:disabled) {
   border-color: var(--accent-primary);
-  background: rgba(0, 217, 255, 0.1);
+  background: var(--accent-primary-10);
 }
 
 .header-btn.copy-from-btn {
@@ -280,18 +280,18 @@
 }
 
 .header-btn.copy-from-btn:hover {
-  background: rgba(0, 217, 255, 0.2);
+  background: var(--accent-primary-20);
   border-color: var(--accent-primary);
 }
 
 .header-btn.add-variant-btn {
   font-size: 10px;
-  color: #8b5cf6;
+  color: var(--accent-variant);
 }
 
 .header-btn.add-variant-btn:hover:not(:disabled) {
-  background: rgba(139, 92, 246, 0.2);
-  border-color: #8b5cf6;
+  background: var(--accent-variant-20);
+  border-color: var(--accent-variant);
 }
 
 .header-btn.add-variant-btn:disabled,
@@ -305,7 +305,7 @@
 }
 
 .header-btn.move-all-frames-btn:hover:not(:disabled) {
-  background: rgba(0, 217, 255, 0.2);
+  background: var(--accent-primary-20);
   border-color: var(--accent-primary);
 }
 
@@ -319,7 +319,7 @@
 }
 
 .header-btn.delete-all-frames-btn:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.2);
+  background: var(--accent-danger-20);
   border-color: var(--accent-danger);
   color: var(--accent-danger);
 }
@@ -334,7 +334,7 @@
 }
 
 .header-btn.squash-all-frames-btn:hover:not(:disabled) {
-  background: rgba(0, 217, 255, 0.2);
+  background: var(--accent-primary-20);
   border-color: var(--accent-primary);
 }
 
@@ -349,7 +349,7 @@
 
 .layer-action-btn.squash-btn:hover:not(:disabled) {
   border-color: var(--accent-primary);
-  background: rgba(0, 217, 255, 0.1);
+  background: var(--accent-primary-10);
 }
 
 /* ------------------------------------------------------------------------ *
@@ -362,7 +362,7 @@
  * should not have to re-invent a complete, coherent dialog.
  *
  * .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0;
- *   background: rgba(0,0,0,0.7); display: flex; align-items: center;
+ *   background: var(--overlay-70); display: flex; align-items: center;
  *   justify-content: center; z-index: 9999; }
  * .confirm-modal { background: var(--bg-secondary);
  *   border: 1px solid var(--border-primary); border-radius: var(--radius-lg);
@@ -376,9 +376,9 @@
  * .confirm-modal-content p { margin: 0 0 12px 0; font-size: 0.9rem;
  *   color: var(--text-secondary); line-height: 1.5; }
  * .confirm-modal-content p:last-child { margin-bottom: 0; }
- * .confirm-warning { color: #f59e0b !important;
- *   background: rgba(245,158,11,0.1); padding: 10px 14px;
- *   border-radius: var(--radius-sm); border: 1px solid rgba(245,158,11,0.3); }
+ * .confirm-warning { color: var(--status-warn) !important;
+ *   background: var(--status-warn-10); padding: 10px 14px;
+ *   border-radius: var(--radius-sm); border: 1px solid var(--status-warn-30); }
  * .confirm-modal-actions { display: flex; gap: 10px;
  *   justify-content: flex-end; padding: 16px 20px;
  *   border-top: 1px solid var(--border-primary); background: var(--bg-tertiary);
@@ -407,12 +407,12 @@
 }
 
 .confirm-btn.delete {
-  background: #dc2626;
-  border: 1px solid #dc2626;
-  color: white;
+  background: var(--accent-danger-hover);
+  border: 1px solid var(--accent-danger-hover);
+  color: var(--white);
 }
 
 .confirm-btn.delete:hover {
-  background: #ef4444;
-  border-color: #ef4444;
+  background: var(--accent-danger);
+  border-color: var(--accent-danger);
 }

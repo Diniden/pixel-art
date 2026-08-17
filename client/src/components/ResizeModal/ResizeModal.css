@@ -1,7 +1,7 @@
 .resize-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay-60);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10,11 +10,10 @@
 }
 
 .resize-modal {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: linear-gradient(135deg, var(--modal-gradient-a) 0%, var(--modal-gradient-b) 100%);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 217, 255, 0.1);
-  min-width: 300px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 217, 255, 0.1);  min-width: 300px;
   max-width: 400px;
   overflow: hidden;
 }
@@ -25,7 +24,7 @@
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-primary);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--overlay-20);
 }
 
 .resize-modal-header h4 {
@@ -52,9 +51,9 @@
 }
 
 .resize-modal-close:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
+  background: var(--accent-danger-20);
+  border-color: var(--accent-danger-40);
+  color: var(--accent-danger);
 }
 
 .resize-modal-content {
@@ -98,8 +97,7 @@
 .resize-modal-field input:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.2);
-}
+  box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.2);}
 
 .resize-modal-separator {
   font-size: 1.2rem;
@@ -128,7 +126,7 @@
   gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid var(--border-primary);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--overlay-20);
 }
 
 .resize-modal-cancel {
@@ -156,13 +154,12 @@
   background: var(--accent-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: #fff;
+  color: var(--white);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .resize-modal-apply:hover {
   filter: brightness(1.15);
-  box-shadow: 0 0 12px rgba(0, 217, 255, 0.4);
-}
+  box-shadow: 0 0 12px rgba(0, 217, 255, 0.4);}
 

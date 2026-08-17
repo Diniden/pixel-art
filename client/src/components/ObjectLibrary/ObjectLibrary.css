@@ -14,7 +14,7 @@
 
 .object-library .compact-toggle.active {
   background: var(--accent-primary);
-  color: #fff;
+  color: var(--white);
 }
 
 .new-object-form {
@@ -74,7 +74,7 @@
 .create-btn, .apply-btn {
   background: var(--accent-primary);
   border: none;
-  color: #fff;
+  color: var(--white);
 }
 
 .object-list {
@@ -107,7 +107,7 @@
 
 .object-item.selected {
   border-color: var(--accent-primary);
-  background: rgba(0, 217, 255, 0.1);
+  background: var(--accent-primary-10);
 }
 
 .object-thumbnail {
@@ -245,7 +245,7 @@
 .delete-confirm-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -253,24 +253,23 @@
 }
 
 .delete-confirm-modal {
-  background: linear-gradient(135deg, #2a1a1a 0%, #1a1a2e 100%);
+  background: linear-gradient(135deg, var(--modal-gradient-danger-a) 0%, var(--modal-gradient-a) 100%);
   border-radius: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  box-shadow: 0 8px 32px rgba(239, 68, 68, 0.2);
-  width: 400px;
+  border: 1px solid var(--accent-danger-30);
+  box-shadow: 0 8px 32px rgba(239, 68, 68, 0.2);  width: 400px;
   max-width: 90vw;
   overflow: hidden;
 }
 
 .delete-confirm-header {
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+  border-bottom: 1px solid var(--accent-danger-20);
 }
 
 .delete-confirm-header h4 {
   margin: 0;
   font-size: 15px;
-  color: #f0f0f0;
+  color: var(--text-primary);
 }
 
 .delete-confirm-content {
@@ -279,18 +278,18 @@
 
 .delete-confirm-content p {
   margin: 0 0 12px 0;
-  color: #d0d0d0;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.5;
 }
 
 .delete-confirm-warning {
-  color: #ef4444 !important;
+  color: var(--accent-danger) !important;
   font-weight: 500;
 }
 
 .delete-confirm-undo {
-  color: #888 !important;
+  color: var(--text-muted) !important;
   font-size: 12px !important;
 }
 
@@ -299,31 +298,31 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid var(--white-10);
+  background: var(--overlay-20);
 }
 
 .delete-confirm-actions .cancel-btn {
   padding: 8px 20px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--white-10);
+  border: 1px solid var(--white-20);
   border-radius: 6px;
-  color: #d0d0d0;
+  color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .delete-confirm-actions .cancel-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--white-15);
 }
 
 .delete-confirm-actions .delete-btn {
   padding: 8px 20px;
-  background: #ef4444;
+  background: var(--accent-danger);
   border: none;
   border-radius: 6px;
-  color: white;
+  color: var(--white);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -331,7 +330,7 @@
 }
 
 .delete-confirm-actions .delete-btn:hover {
-  background: #dc2626;
+  background: var(--accent-danger-hover);
 }
 
 /* Small Rows View */
@@ -359,7 +358,7 @@
 
 .object-item-small.selected {
   border-color: var(--accent-primary);
-  background: rgba(0, 217, 255, 0.1);
+  background: var(--accent-primary-10);
 }
 
 .object-thumbnail-small {
@@ -422,8 +421,7 @@
 
 .compact-object-item.selected {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 8px rgba(0, 217, 255, 0.3);
-}
+  box-shadow: 0 0 8px rgba(0, 217, 255, 0.3);}
 
 .compact-object-item .obj-thumb-canvas {
   display: block;
@@ -437,8 +435,7 @@
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   padding: 8px 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);  pointer-events: none;
   animation: tooltipFadeIn 0.15s ease;
 }
 

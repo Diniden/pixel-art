@@ -6,8 +6,11 @@
  * 76 declarations previously resolved to the property's inherited or initial
  * value — a live rendering bug. See the block at the bottom of :root.
  *
- * The full token scale (spacing, z-index, the complete colour ramp) arrives in
- * task 12. Do not add tokens here before then.
+ * Task 12 added the full scale: the colour ramps (variant, danger, info,
+ * status, alpha ramps), spacing, typography, radii, shadows, transitions and
+ * the layered z-index scale. Alpha ramps are explicit literals, not
+ * color-mix() — simpler to grep and lint, and there is no theming today
+ * (OPEN-QUESTIONS Q8).
  */
 
 :root {
@@ -80,4 +83,209 @@
 
   /* 1 use. Alias of --accent-danger, which is what the call site means. */
   --danger: var(--accent-danger);
+
+  /* ------------------------------------------------------------------ *
+   * Task 12 — the full token scale.
+   * ------------------------------------------------------------------ */
+
+  /* The violet "variant" accent — a first-class domain concept (71 colour
+     declarations had zero tokens). #6366f1 and #a855f7 collapse onto
+     --accent-variant; #9d6cfd, #c4b5fd and #a5b4fc onto -light (Q6-style
+     collapses, listed in the task 12 report). */
+  --accent-variant: #8b5cf6;
+  --accent-variant-light: #a78bfa;
+  --accent-variant-deep: #7c3aed; /* gradient stop paired with the base */
+  --accent-variant-10: rgba(139, 92, 246, 0.1);
+  --accent-variant-15: rgba(139, 92, 246, 0.15);
+  --accent-variant-20: rgba(139, 92, 246, 0.2);
+  --accent-variant-30: rgba(139, 92, 246, 0.3);
+  --accent-variant-40: rgba(139, 92, 246, 0.4);
+  --accent-variant-50: rgba(139, 92, 246, 0.5);
+  --accent-variant-60: rgba(139, 92, 246, 0.6);
+
+  /* The red family. Owner decision (Q1, 2026-08-16): #ff3366 is the danger
+     red; #ef4444 was drift. The whole alpha ramp derives from #ff3366. */
+  --accent-danger-hover: #dc2626;
+  --accent-danger-08: rgba(255, 51, 102, 0.08);
+  --accent-danger-10: rgba(255, 51, 102, 0.1);
+  --accent-danger-20: rgba(255, 51, 102, 0.2);
+  --accent-danger-30: rgba(255, 51, 102, 0.3);
+  --accent-danger-40: rgba(255, 51, 102, 0.4);
+  --accent-danger-60: rgba(255, 51, 102, 0.6);
+  --accent-danger-80: rgba(255, 51, 102, 0.8);
+
+  /* The blue "info / current" family (ObjectSelectModal's current-object
+     badge and hover gradients). */
+  --accent-info-light: #60a5fa;
+  --accent-info-10: rgba(59, 130, 246, 0.1);
+  --accent-info-15: rgba(59, 130, 246, 0.15);
+  --accent-info-20: rgba(59, 130, 246, 0.2);
+  --accent-info-30: rgba(59, 130, 246, 0.3);
+  --accent-info-50: rgba(59, 130, 246, 0.5);
+
+  /* Status colours (cluster E) with the light/deep gradient stops the
+     status-button gradients actually use. */
+  --status-ok: #10b981;
+  --status-ok-light: #34d399;
+  --status-ok-deep: #059669;
+  --status-ok-10: rgba(16, 185, 129, 0.1);
+  --status-ok-15: rgba(16, 185, 129, 0.15);
+  --status-ok-20: rgba(16, 185, 129, 0.2);
+  --status-ok-25: rgba(16, 185, 129, 0.25);
+  --status-ok-30: rgba(16, 185, 129, 0.3);
+  --status-ok-35: rgba(16, 185, 129, 0.35);
+  --status-ok-40: rgba(16, 185, 129, 0.4);
+  --status-ok-50: rgba(16, 185, 129, 0.5);
+  --status-warn: #f59e0b;
+  --status-warn-light: #fbbf24;
+  --status-warn-deep: #d97706;
+  --status-warn-10: rgba(245, 158, 11, 0.1);
+  --status-warn-20: rgba(245, 158, 11, 0.2);
+  --status-warn-30: rgba(245, 158, 11, 0.3);
+  --status-warn-40: rgba(245, 158, 11, 0.4);
+
+  /* Alpha ramp for the existing --accent-warning (#ffaa00). */
+  --accent-warning-06: rgba(255, 170, 0, 0.06);
+  --accent-warning-10: rgba(255, 170, 0, 0.1);
+  --accent-warning-15: rgba(255, 170, 0, 0.15);
+  --accent-warning-20: rgba(255, 170, 0, 0.2);
+  --accent-warning-30: rgba(255, 170, 0, 0.3);
+  --accent-warning-40: rgba(255, 170, 0, 0.4);
+  --accent-warning-60: rgba(255, 170, 0, 0.6);
+
+  /* Alpha ramps for existing accents. */
+  --accent-success-10: rgba(0, 255, 136, 0.1);
+  --accent-success-30: rgba(0, 255, 136, 0.3);
+  --accent-tertiary-03: rgba(123, 45, 255, 0.03);
+  --accent-primary-02: rgba(0, 217, 255, 0.02);
+  --accent-primary-03: rgba(0, 217, 255, 0.03);
+  --accent-primary-05: rgba(0, 217, 255, 0.05);
+  --accent-primary-08: rgba(0, 217, 255, 0.08);
+  --accent-primary-10: rgba(0, 217, 255, 0.1);
+  --accent-primary-15: rgba(0, 217, 255, 0.15);
+  --accent-primary-20: rgba(0, 217, 255, 0.2);
+  --accent-primary-30: rgba(0, 217, 255, 0.3);
+  --accent-primary-35: rgba(0, 217, 255, 0.35);
+  --accent-primary-40: rgba(0, 217, 255, 0.4);
+  --accent-primary-50: rgba(0, 217, 255, 0.5);
+  --accent-primary-60: rgba(0, 217, 255, 0.6);
+
+  /* Black overlay ramp (cluster D). */
+  --overlay-15: rgba(0, 0, 0, 0.15);
+  --overlay-20: rgba(0, 0, 0, 0.2);
+  --overlay-25: rgba(0, 0, 0, 0.25);
+  --overlay-30: rgba(0, 0, 0, 0.3);
+  --overlay-40: rgba(0, 0, 0, 0.4);
+  --overlay-45: rgba(0, 0, 0, 0.45);
+  --overlay-50: rgba(0, 0, 0, 0.5);
+  --overlay-60: rgba(0, 0, 0, 0.6);
+  --overlay-70: rgba(0, 0, 0, 0.7);
+  --overlay-80: rgba(0, 0, 0, 0.8);
+  --overlay-85: rgba(0, 0, 0, 0.85);
+  --overlay-88: rgba(0, 0, 0, 0.88);
+  --overlay-90: rgba(0, 0, 0, 0.9);
+
+  /* White ramp (cluster D). */
+  --white: #fff;
+  --black: #000;
+  --white-03: rgba(255, 255, 255, 0.03);
+  --white-05: rgba(255, 255, 255, 0.05);
+  --white-08: rgba(255, 255, 255, 0.08);
+  --white-10: rgba(255, 255, 255, 0.1);
+  --white-15: rgba(255, 255, 255, 0.15);
+  --white-20: rgba(255, 255, 255, 0.2);
+  --white-25: rgba(255, 255, 255, 0.25);
+  --white-40: rgba(255, 255, 255, 0.4);
+  --white-50: rgba(255, 255, 255, 0.5);
+  --white-80: rgba(255, 255, 255, 0.8);
+  --white-95: rgba(255, 255, 255, 0.95);
+
+  /* Cluster A one-offs that earn a name. */
+  --swatch-border: #333; /* checkerboard swatch border, 12 uses */
+  --canvas-checker-b: #222230; /* dark square of the canvas checkerboard */
+  --modal-gradient-a: #1a1a2e; /* the second, warmer dark modal palette */
+  --modal-gradient-b: #16213e;
+  --modal-gradient-danger-a: #2a1a1a; /* red-tinted stop of confirm dialogs */
+
+  /* ColorPicker channel indicators — semantic R/G/B hues, deliberately NOT
+     collapsed onto the danger/status accents. */
+  --channel-r: #ff6b6b;
+  --channel-g: #69db7c;
+  --channel-b: #74c0fc;
+
+  /* Toolbar light-grid mode indicator (unique yellow). */
+  --tool-lightgrid: #e8d44d;
+  --tool-lightgrid-50: rgba(232, 212, 77, 0.5);
+
+  /* Spacing — the scale that already existed implicitly (96.5% of uses). */
+  --space-px: 1px;
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Typography. */
+  --text-2xs: 0.625rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --leading-none: 1;
+  --leading-snug: 1.4;
+  --leading-normal: 1.5;
+
+  /* Radii — completes the existing sm/md/lg set. --radius-pill is used on
+     pill/toggle shapes whose literal radii (10px/20px) were already >= half
+     the box height, so the browser clamps it to the same rendered curve. */
+  --radius-xs: 3px;
+  --radius-base: 6px;
+  --radius-pill: 999px;
+
+  /* Transitions — 0.2s is the second-most-common duration (17 uses). */
+  --transition-base: 0.2s ease;
+
+  /* Shadows. --shadow-modal is the dominant measured modal shadow;
+     --shadow-danger derives from the owner-confirmed #ff3366 red. */
+  --shadow-xl: 0 12px 48px rgba(0, 0, 0, 0.6);
+  --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.5);
+  --shadow-modal-glow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 217, 255, 0.1);
+  --shadow-accent: 0 4px 12px rgba(0, 217, 255, 0.3);
+  --shadow-accent-sm: 0 2px 6px rgba(0, 217, 255, 0.3);
+  --shadow-variant: 0 6px 20px rgba(139, 92, 246, 0.4);
+  --shadow-danger: 0 8px 32px rgba(255, 51, 102, 0.2);
+  --ring-accent: 0 0 0 2px rgba(0, 217, 255, 0.2);
+
+  /* z-index — a layered scale replacing 15 magic numbers (-1 to 99999).
+     Rules: never write a numeric z-index; a modal backdrop and its dialog
+     share --z-modal (the dialog is a child); a dialog opened FROM a dialog
+     uses --z-modal-nested; --z-tooltip deliberately outranks it. */
+  --z-behind: -1; /* decorative ::before / bg grids            */
+  --z-base: 0;
+  --z-hover-lift: 1; /* :hover raise above siblings               */
+  --z-raised: 2; /* badges, per-card action buttons           */
+  --z-canvas-overlay: 20; /* overlay canvases, playhead, drop markers  */
+  --z-overlay-control: 30; /* floating buttons over a canvas            */
+  --z-shell: 100; /* side panels, bottom panel, header         */
+  --z-chrome: 110; /* shell affordances                         */
+  --z-dropdown: 300; /* select menus anchored to a control        */
+  --z-floating-panel: 400; /* reference / lighting preview panels       */
+  --z-popover: 500; /* ai-config popover                         */
+  --z-modal: 600; /* modal backdrop + dialog                   */
+  --z-modal-nested: 700; /* a confirm dialog opened FROM a modal      */
+  --z-tooltip: 800; /* always above everything it explains       */
+  --z-toast: 900; /* reserved — no toasts today                */
 }

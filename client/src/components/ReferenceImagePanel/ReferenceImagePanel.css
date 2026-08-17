@@ -1,12 +1,11 @@
 .reference-image-panel {
   position: absolute;
-  background: linear-gradient(135deg, #2a2a3a 0%, #1a1a25 100%);
-  border: 2px solid #3a3a4a;
+  background: linear-gradient(135deg, var(--bg-hover) 0%, var(--bg-tertiary) 100%);
+  border: 2px solid var(--bg-active);
   border-radius: 12px;
   padding: 12px;
   z-index: 900;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);  backdrop-filter: blur(10px);
   max-width: 300px;
   transition: box-shadow 0.2s ease;
   user-select: none;
@@ -14,8 +13,7 @@
 
 .reference-image-panel.dragging {
   transition: none;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
-  cursor: grabbing;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);  cursor: grabbing;
 }
 
 .reference-image-panel.minimized {
@@ -36,7 +34,7 @@
 }
 
 .reference-image-header:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--white-05);
 }
 
 .reference-image-panel.minimized .reference-image-header {
@@ -45,7 +43,7 @@
 
 .reference-image-title {
   font-weight: 600;
-  color: #e0e0ff;
+  color: var(--text-primary);
   font-size: 14px;
   white-space: nowrap;
   flex: 1;
@@ -53,9 +51,9 @@
 }
 
 .reference-image-minimize {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #a0a0b0;
+  background: var(--white-05);
+  border: 1px solid var(--white-10);
+  color: var(--text-secondary);
   padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -64,8 +62,8 @@
 }
 
 .reference-image-minimize:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e0e0ff;
+  background: var(--white-10);
+  color: var(--text-primary);
 }
 
 .reference-image-content {
@@ -78,8 +76,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #0a0a15;
-  border: 2px solid #2a2a3a;
+  background: var(--bg-primary);
+  border: 2px solid var(--bg-hover);
   border-radius: 8px;
   padding: 8px;
   overflow: visible;
@@ -341,14 +339,12 @@
 .reference-trace-btn.active {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: #000;
-  box-shadow: 0 0 12px rgba(0, 217, 255, 0.5);
-}
+  color: var(--black);
+  box-shadow: 0 0 12px rgba(0, 217, 255, 0.5);}
 
 .reference-trace-btn.active:hover {
   background: var(--accent-secondary);
-  box-shadow: 0 0 16px rgba(0, 217, 255, 0.6);
-}
+  box-shadow: 0 0 16px rgba(0, 217, 255, 0.6);}
 
 .reference-trace-btn:active {
   background: var(--bg-active);
