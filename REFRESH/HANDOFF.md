@@ -8,37 +8,40 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W6 — tasks 10, 11 (TWO AGENTS, parallel)**
+> **Next wave: W7 — tasks 12, 13 (TWO AGENTS, parallel)**
 >
-> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ · W4 ✅ · W5 ⚠️ merged.
-> **Last commit on `main`:** `53cc953` — *Merge W5: characterisation checkpoint*
+> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ · W4 ✅ · W5 ⚠️ · W6 ⚠️ merged.
+> **Last commit on `main`:** `3e81bc4` — *Merge W6: Storybook + export decomposition*
 > **Working tree at last handoff:** clean.
 >
 > ### Current stack
 > React **19.2.8** · Vite **7.3.6** · TypeScript **5.9.3** · Express **5.2.1** ·
 > sharp **0.33.5** (deferred, Q45) · zustand 4.5.2 · ESLint 9 flat · Prettier ·
-> Vitest 3.2.7 with **640 tests across 19 files**.
-> Both workspaces: tsc **0**, eslint **0**. Build emits `dist/`. Coverage thresholds **all met**.
+> Vitest 3.2.7 (**640 client + 48 server tests**) · **Storybook 9.1.20 (7 stories)**.
+> Both workspaces: tsc **0**, eslint **0**. Build emits `dist/`. Coverage thresholds all met.
+> `server/src/routes/export.ts` is **gone** — 12 modules under `server/src/export/`.
 >
-> ### ⭐ THE ARTWORK IS NOW PROTECTED — W5 landed
-> 151 real projects round-trip verified; all 8 migrations characterised with 17 `// BUG:`
-> sites pinned as OBSERVED behaviour. **The corpus JSON is gitignored** (owner decision);
-> the committed SHA-256 digests are the gate. `corpusFiles()` THROWS if the corpus is
-> missing rather than passing on zero files — regenerate per
-> `client/src/test/__fixtures__/corpus/README.md`.
+> ### 🛑 STOP AND READ BEFORE DISPATCHING W7
 >
-> **Next action:** dispatch **two parallel subagents** — task 10 (Storybook) and task 11
-> (decompose `server/src/routes/export.ts`). Collision matrix proven empty: task 10 is
-> client-only, task 11 is `server/src/**` only. Branch `refresh/w6-storybook-export`.
+> **Task 12 is the refresh's highest visual-regression risk** (R8): it substitutes **585
+> colour literals**, plus radius and transition literals, and deliberately collapses several
+> near-identical values. `MASTER.md` §9.10 says Storybook lands FIRST precisely so there is
+> a real baseline to compare against.
 >
-> ⚠️ **Task 11 touches the export path, which W2b proved is byte-sensitive.** Capture
-> goldens FIRST and require `diff -r` to produce NO output. Run the determinism control
-> W2b invented (re-export on unchanged code, diff against goldens) so a failing diff is
-> unambiguous. `server/exports/lib/` is consumed by external game code (Q33) — task 11 is
-> forbidden from restoring frame tags or changing the published format.
+> **That baseline now exists but NOBODY HAS LOOKED AT IT.** Running task 12 before a human
+> reviews the Storybook forfeits the entire reason Storybook was scheduled first.
 >
-> ⚠️ **Task 11 should also clear the unused `ensureDir` import at `server/src/routes/project.ts:6`**,
-> deferred by W3 because that file was outside task 05's Touches.
+> **Recommended: the owner runs `bun run storybook`, opens the 7 stories, and confirms the
+> 5 checks in "Manual checks owed" — BEFORE W7 is dispatched.**
+>
+> **Next action (after that review):** dispatch two parallel subagents — task 12 (CSS tokens
+> + z-index scale) and task 13 (split `types/index.ts`, complete `CompactUIState`). Branch
+> `refresh/w7-tokens-types`. Collision matrix proven empty: 12 is CSS-only, 13 is
+> TypeScript-only, and **12 is explicitly forbidden from renaming any class**.
+>
+> ⚠️ **Task 13 edits `client/src/types/index.ts` — the serialization layer.** The corpus
+> digests are the gate. Code must move **VERBATIM**; a digest change means a real
+> regression. **Never `vitest -u`.**
 >
 > **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
 > `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
@@ -118,7 +121,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W3** | 05 | W2b | ✅ | `fa22107` | `bunx eslint .` in both workspaces · `bun run format:check` · the two boundary probes must **fail** ESLint |
 | **W4** | 06 | W3 | ✅ | `47c14bb` | `bunx vitest run --reporter=json \| grep -q '"numPassedTests":[1-9]'` · `--project unit` and `--project dom` both exit 0 |
 | **W5** | 07, 08, 09 | W4 | ⚠️ | `53cc953` | `bunx vitest run` · `bunx vite build` · `node scripts/check-classes.mjs --dead` · no undefined custom property in the bundle · **3 agents** |
-| **W6** | 10, 11 | W5 | ⬜ | — | `bunx storybook build && test -d storybook-static` · `diff -r` on export goldens produces no output · **2 agents** |
+| **W6** | 10, 11 | W5 | ⚠️ | `3e81bc4` | `bunx storybook build && test -d storybook-static` · `diff -r` on export goldens produces no output · **2 agents** |
 | **W7** | 12, 13 | W6 | ⬜ | — | `bunx stylelint "src/**/*.css"` · zero numeric `z-index` · `bunx vitest run src/types/__tests__/` · `bunx tsc --noEmit` · **2 agents** |
 | **W8** | 14 | W7 | ⬜ | — | `bunx vitest run && bunx tsc --noEmit && bun run build` · lighting settings persist across a reload |
 | **W9** | 15 | W8 | ⬜ | — | `bunx vitest run src/api` · exactly one `fetch(` call site in the codebase |
@@ -153,6 +156,8 @@ never `✅ DONE`. **Work through this before trusting any PARTIAL wave.**
 
 | Wave | Task | Unperformed check | Risk left unverified |
 | --- | --- | --- | --- |
+| W6 | 10 | ⭐⭐⭐ **Open the Storybook and look at it.** `bun run storybook`, then `http://localhost:6006`. Five checks: (1) Button renders styled, not a native browser button; (2) **`var(--font-mono)` renders in real JetBrains Mono, not fallback `monospace`** — the `Monospace` story puts sans and mono adjacent; the slashed zero is the tell; (3) canvas background is `#0a0a0f`, not white; (4) `client/public` assets resolve; (5) `projectDense` shows 12×12×8, not silently truncated. | **This is the blocking one.** Storybook's entire purpose here is human visual review against a baseline, and nobody has looked. **Task 12 substitutes 585 colour literals and deliberately collapses near-identical values** — the refresh's highest visual-regression risk (R8). `MASTER.md` §9.10 scheduled Storybook first *precisely* to have this baseline. Reviewing it after W7 is worthless. |
+| W6 | 11 | **Visually inspect exported sprites**, and run the generated `index.ts` against real downstream game code. | Byte-identity is proven (`diff -r` exit 0, verified twice), so this is confirmation rather than a test. The agent compiled the generated code under `--strict` against `exports/lib/` but did not execute it in a consuming project. |
 | W5 | 07 | ⭐ **Review the 11 committed SHA-256 digests and sign off.** They are the frozen contract afterwards — every later wave that touches serialization is checked against them. | The agent reviewed them and verified the snapshot counts (50+18+10+41+12+6+2+6+4 = 149 ✓), but task 07's spec requires owner review before they are treated as canonical. |
 | W5 | 09 | ⭐ **Visual review of the 6 newly-defined tokens** — see the table below. **76 declarations change appearance by design**, since these properties were referenced but never defined. | Three of the six values are the agent's judgement calls, not spec-supplied. Each is a one-line change in `client/src/styles/tokens.css`. |
 | W5 | 09 | ⭐ **The `main.tsx` import-order reversal** — confirm nothing regressed visually. | The single change most likely to break something visually, and exactly what static analysis misses. Static check says tokens now emit at byte 6 vs `.layer-panel` at 55574, and component overrides win on specificity either way. |
