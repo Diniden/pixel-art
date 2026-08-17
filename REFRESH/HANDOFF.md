@@ -8,29 +8,34 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W8 — task 14 (fix 3 store defects; install MobX; SessionStore + bridge Phase A)**
+> **Next wave: W10 — task 16 (DomainStore lifecycle, AutoSaveController, THE LOAD-STATE GATE)**
 >
-> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ · W4 ✅ · W5 ⚠️ · W6 ⚠️ · W7 ⚠️ merged.
-> **Last commit on `main`:** `989f754` — *Merge W7: CSS tokens + types split*
+> **Status:** W0–W9 all merged (see wave table). MobX chain in progress.
+> **Last commit on `main`:** `a023531` — *Merge W9: typed API layer*
 > **Working tree at last handoff:** clean.
 >
 > ### Current stack
 > React 19.2.8 · Vite 7.3.6 · TS 5.9.3 · Express 5.2.1 · sharp 0.33.5 (Q45) ·
-> zustand 4.5.2 · ESLint 9 · Prettier · stylelint 17 · Vitest (640 client + 48 server) ·
-> Storybook 9 (7 stories). tsc 0 / eslint 0 / stylelint 0 in both workspaces.
-> `types/index.ts` is a 20-line barrel over 8 modules; CSS is fully tokenised with a
-> semantic z-index scale; corpus digests byte-identical throughout.
+> zustand 4.5.2 + MobX 7.0.0 (bridged) · ESLint 9 · stylelint 17 ·
+> Vitest (**701 client + 48 server**) · Storybook 9 · MSW 2.15.0.
+> tsc 0 / eslint 0 / stylelint 0. **Exactly one `fetch(` site** (`api/client/httpClient.ts`).
+> Bridge ledger: Phase A = 5 fields, Phase B = empty.
 >
-> ### ⛓️ W8 BEGINS THE MOBX CHAIN — tasks 14–29 are strictly sequential
-> Task 14: fix the 3 measured store defects (the 8 lighting setters that never autosave
-> among them), install MobX, create `ApplicationStore` + `SessionStore`, stand up bridge
-> Phase A. **The bridge's two field lists become the migration's progress ledger from here
-> to task 38** (R6): the task that flips a field moves it between lists in the same change,
-> and a dev-mode assertion fails if a field appears in both.
+> ### 🎯 W10 CLOSES R5 — the highest-severity bug in the repo
+> The API half landed in W9 (no more fabricated successes). What remains: `initProject`'s
+> own catch still installs a blank default store-side. Task 16 builds `DomainStore`'s
+> load lifecycle, the `AutoSaveController`, and the **load-state gate** — after it, a
+> failed load produces **zero** `POST /api/project`. Task 16 also dissolves W9's
+> `services/api.ts` facade into `DomainStore` (migration chain moves VERBATIM; §9.6) and
+> flips the FIRST bridge fields to Phase B.
 >
-> ⚠️ Task 08's store suite is the equivalence baseline — it must pass UNCHANGED after every
-> slice. R14: clipboards and colorHistory live on `SessionStore` BY CONSTRUCTION so they
-> survive a project switch; that cross-document lifetime is load-bearing.
+> ⚠️ The corpus digests remain the serialization gate. The App.tsx:65 StrictMode
+> double-invocation risk (W2a's R11 list, site 1) is the same code path — task 16's gate
+> must make the double-fire harmless.
+>
+> ⚠️ **Reproducibility gap OBSERVED in W9:** a fresh install re-resolved transitive
+> `@types/node` to 26.2.0 and broke pure-HEAD tsc. Exact pinning does not pin transitives.
+> If a wave fails tsc in code it never touched, suspect dependency drift first.
 >
 > **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
 > `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
@@ -113,7 +118,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W6** | 10, 11 | W5 | ⚠️ | `3e81bc4` | `bunx storybook build && test -d storybook-static` · `diff -r` on export goldens produces no output · **2 agents** |
 | **W7** | 12, 13 | W6 | ⚠️ | `989f754` | `bunx stylelint "src/**/*.css"` · zero numeric `z-index` · `bunx vitest run src/types/__tests__/` · `bunx tsc --noEmit` · **2 agents** |
 | **W8** | 14 | W7 | ⚠️ | `d97e5fb` | `bunx vitest run && bunx tsc --noEmit && bun run build` · lighting settings persist across a reload |
-| **W9** | 15 | W8 | ⬜ | — | `bunx vitest run src/api` · exactly one `fetch(` call site in the codebase |
+| **W9** | 15 | W8 | ⚠️ | `a023531` | `bunx vitest run src/api` · exactly one `fetch(` call site in the codebase |
 | **W10** | 16 | W9 | ⬜ | — | a failed load produces **zero** `POST /api/project` · corpus snapshots unchanged |
 | **W11** | 17, 18 | W10 | ⬜ | — | `bunx vitest run src/store/__tests__/` passes **unchanged** · the five CSS block-extraction greps return 0 · **2 agents** |
 | **W12** | 19 | W11 | ⬜ | — | `bunx storybook build` · 18 primitives report 0 a11y violations (**advisory only**) · the boundary probe fails ESLint |
