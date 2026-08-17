@@ -2,28 +2,27 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px;
+  padding: var(--space-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-primary);
 }
 
 .normal-picker-header {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .normal-picker-canvas-container {
   position: relative;
   border-radius: 50%;
   overflow: hidden;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.3),
-    0 2px 8px rgba(0, 0, 0, 0.2);}
+  box-shadow: var(--inset-well);
+}
 
 .normal-picker-canvas {
   display: block;
@@ -36,18 +35,18 @@
 }
 
 .normal-picker-value {
-  margin-top: 8px;
+  margin-top: var(--space-2);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   background: var(--bg-primary);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-primary);
 }
 
 .normal-picker-hint {
-  margin-top: 6px;
+  margin-top: var(--space-1-5);
   font-size: 0.65rem;
   color: var(--text-muted);
   font-style: italic;

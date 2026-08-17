@@ -16,7 +16,7 @@
   justify-content: center;
   flex: 1;
   color: var(--text-muted);
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 /* Editor area (pan/zoom like Pixel Studio) */
@@ -54,9 +54,8 @@
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   border-radius: var(--radius-sm);
-  box-shadow:
-    inset 0 0 0 1px var(--border-primary),
-    0 4px 12px rgba(0, 0, 0, 0.2);  cursor: crosshair;
+  box-shadow: var(--inset-panel);
+  cursor: crosshair;
 }
 
 .lighting-edit-overlay {
@@ -70,11 +69,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px;
+  gap: var(--space-2);
+  padding: var(--space-2-5);
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-primary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -88,29 +87,31 @@
   background: linear-gradient(135deg, var(--bg-hover) 0%, var(--bg-tertiary) 100%);
   border: 2px solid var(--bg-active);
   border-radius: var(--radius-lg);
-  padding: 10px;
-  z-index: 900;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);  backdrop-filter: blur(10px);
+  padding: var(--space-2-5);
+  z-index: var(--z-floating-panel);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(10px);
   user-select: none;
 }
 
 .lighting-preview-panel.dragging {
   transition: none;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);  cursor: grabbing;
+  box-shadow: var(--shadow-xl);
+  cursor: grabbing;
 }
 
 .lighting-preview-panel.minimized {
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-2-5);
 }
 
 .lighting-preview-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-2-5);
   user-select: none;
-  padding: 4px;
-  margin: -4px -4px 8px -4px;
+  padding: var(--space-1);
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1)) var(--space-2) calc(-1 * var(--space-1));
   border-radius: var(--radius-md);
   transition: background-color var(--transition-base);
 }
@@ -124,7 +125,7 @@
 }
 
 .lighting-preview-title {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   font-size: 13px;
   white-space: nowrap;
@@ -134,10 +135,10 @@
   background: var(--white-05);
   border: 1px solid var(--white-10);
   color: var(--text-secondary);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-xs);
   transition: all var(--transition-base);
 }
 
@@ -153,7 +154,7 @@
   background: var(--bg-primary);
   border: 2px solid var(--bg-hover);
   border-radius: var(--radius-md);
-  padding: 8px;
+  padding: var(--space-2);
 }
 
 .lighting-preview-content canvas {

@@ -8,7 +8,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: var(--z-modal);
 }
 
 .variant-modal {
@@ -20,13 +20,14 @@
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);}
+  box-shadow: var(--shadow-modal);
+}
 
 .variant-modal-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-primary);
 }
 
@@ -34,7 +35,7 @@
   margin: 0;
   color: var(--accent-variant);
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .variant-group-name {
@@ -47,7 +48,7 @@
   width: 32px;
   height: 32px;
   padding: 0;
-  font-size: 20px;
+  font-size: var(--text-xl);
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-muted);
@@ -68,14 +69,14 @@
 .variant-modal-content {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 .variants-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
 }
 
 .variant-card {
@@ -83,13 +84,13 @@
   background: var(--bg-tertiary);
   border: 2px solid var(--border-primary);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: var(--space-3);
   cursor: pointer;
   transition: all var(--transition-fast);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .variant-card:hover {
@@ -100,7 +101,8 @@
 .variant-card.selected {
   border-color: var(--accent-variant);
   background: var(--accent-variant-15);
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);}
+  box-shadow: var(--glow-variant-15);
+}
 
 .variant-thumb {
   width: 64px;
@@ -118,7 +120,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-0-5);
   width: 100%;
 }
 
@@ -134,7 +136,7 @@
 
 .variant-name-input {
   width: 100%;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   font-size: 0.85rem;
   text-align: center;
 }
@@ -146,7 +148,7 @@
 
 .variant-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -197,19 +199,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--white);
-  font-weight: bold;
+  font-weight: var(--weight-bold);
 }
 
 .add-variant-section {
   border-top: 1px solid var(--border-primary);
-  padding-top: 16px;
+  padding-top: var(--space-4);
 }
 
 .add-variant-btn {
   width: 100%;
-  padding: 12px;
+  padding: var(--space-3);
   background: linear-gradient(135deg, var(--accent-variant-20) 0%, var(--accent-primary-10) 100%);
   border: 2px dashed var(--accent-variant-40);
   border-radius: var(--radius-md);
@@ -226,12 +228,12 @@
 
 .add-options {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .add-options button {
   flex: 1;
-  padding: 10px;
+  padding: var(--space-2-5);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -269,51 +271,51 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: var(--z-modal-nested);
 }
 
 .resize-dialog {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
-  padding: 20px;
+  padding: var(--space-5);
   min-width: 250px;
 }
 
 .resize-dialog h4 {
-  margin: 0 0 16px 0;
+  margin: 0 0 var(--space-4) 0;
   color: var(--text-primary);
 }
 
 .resize-inputs {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .resize-inputs label {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
 .resize-inputs input {
   flex: 1;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   max-width: 100px;
 }
 
 .resize-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: flex-end;
 }
 
 .resize-actions button {
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -341,13 +343,13 @@
 
 /* Resize anchor section */
 .resize-anchor-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .resize-anchor-section .anchor-label {
   display: block;
   color: var(--text-secondary);
   font-size: 0.9rem;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 

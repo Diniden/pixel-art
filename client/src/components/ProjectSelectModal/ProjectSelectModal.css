@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   animation: project-select-modal-fade-in 0.15s ease-out;
 }
 
@@ -28,7 +28,8 @@
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);  animation: project-select-modal-slide-in 0.2s ease-out;
+  box-shadow: var(--shadow-modal);
+  animation: project-select-modal-slide-in 0.2s ease-out;
 }
 
 @keyframes project-select-modal-slide-in {
@@ -46,14 +47,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-secondary);
 }
 
 .project-select-modal .modal-header h2 {
   margin: 0;
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 
@@ -63,8 +64,8 @@
   border: none;
   background: transparent;
   color: var(--text-tertiary);
-  font-size: 1.5rem;
-  line-height: 1;
+  font-size: var(--text-2xl);
+  line-height: var(--leading-none);
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
@@ -76,8 +77,8 @@
 }
 
 .project-select-modal .error-message {
-  margin: 12px 20px 0;
-  padding: 10px 14px;
+  margin: var(--space-3) var(--space-5) 0;
+  padding: var(--space-2-5) var(--space-4);
   background: var(--accent-danger-10);
   border: 1px solid var(--accent-danger-30);
   border-radius: var(--radius-md);
@@ -88,21 +89,21 @@
 .project-select-modal .modal-content {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
 }
 
 .project-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
+  gap: var(--space-1-5);
+  margin-bottom: var(--space-4);
 }
 
 .project-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-md);
@@ -134,15 +135,15 @@
 
 .project-name {
   flex: 1;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .current-badge {
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   background: var(--accent-primary);
   color: var(--bg-primary);
   border-radius: var(--radius-sm);
@@ -152,15 +153,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 12px;
+  padding: var(--space-3);
   background: transparent;
   border: 2px dashed var(--border-secondary);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -178,18 +179,18 @@
 
 .plus-icon {
   font-size: 1.2rem;
-  font-weight: 400;
+  font-weight: var(--weight-normal);
 }
 
 .create-project-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .create-project-form input {
   width: 100%;
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-4);
   background: var(--bg-primary);
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-md);
@@ -209,15 +210,15 @@
 
 .form-buttons {
   display: flex;
-  gap: 10px;
+  gap: var(--space-2-5);
   justify-content: flex-end;
 }
 
 .form-buttons button {
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -241,7 +242,8 @@
 
 .create-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);}
+  box-shadow: var(--shadow-accent);
+}
 
 .create-btn:disabled,
 .cancel-btn:disabled {
@@ -251,20 +253,20 @@
 }
 
 .project-select-modal .modal-footer {
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--border-secondary);
   display: flex;
   justify-content: flex-end;
 }
 
 .delete-btn {
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   background: transparent;
   border: 1px solid var(--accent-danger);
   border-radius: var(--radius-md);
   color: var(--accent-danger);
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-fast);
 }

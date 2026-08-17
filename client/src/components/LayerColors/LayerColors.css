@@ -2,8 +2,8 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-primary);
   min-height: 44px;
@@ -14,13 +14,13 @@
 .layer-colors-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: flex-start;
 }
 
 .layer-colors-label {
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -31,9 +31,9 @@
 .layer-colors-toggle {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
@@ -70,14 +70,14 @@
 .layer-colors-swatches {
   display: flex;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: var(--space-1-5);
   justify-content: flex-start;
   align-items: center;
   height: 32px; /* Keep the row height stable */
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 2px 4px;
+  padding: var(--space-0-5) var(--space-1);
 }
 
 .layer-color-swatch {
@@ -100,7 +100,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: var(--z-behind);
   border-radius: var(--radius-xs);
   background-image:
     linear-gradient(45deg, var(--swatch-border) 25%, transparent 25%),
@@ -118,15 +118,14 @@
 .layer-color-swatch:hover {
   transform: scale(1.15);
   border-color: var(--accent-primary);
-  z-index: 1;
+  z-index: var(--z-hover-lift);
 }
 
 .layer-color-swatch.selected {
   border-color: var(--accent-warning);
-  box-shadow:
-    0 0 0 2px rgba(255, 171, 0, 0.4),
-    0 0 8px rgba(255, 171, 0, 0.6);  transform: scale(1.1);
-  z-index: 2;
+  box-shadow: var(--ring-warning-glow);
+  transform: scale(1.1);
+  z-index: var(--z-raised);
 }
 
 .layer-color-swatch.selected::after {
@@ -143,7 +142,7 @@
   align-items: center;
   justify-content: center;
   color: var(--black);
-  font-weight: bold;
+  font-weight: var(--weight-bold);
 }
 
 .layer-colors-right {
@@ -161,15 +160,15 @@
 }
 
 .layer-colors-empty {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-style: italic;
 }
 
 @media (max-width: 768px) {
   .layer-colors {
-    padding: 6px 12px;
-    gap: 8px;
+    padding: var(--space-1-5) var(--space-3);
+    gap: var(--space-2);
   }
 
   .layer-color-swatch {

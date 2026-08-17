@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 99999;
+  z-index: var(--z-modal);
   animation: preview-modal-fade-in 0.15s ease-out;
 }
 
@@ -18,7 +18,8 @@
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 217, 255, 0.1);  max-width: 90vw;
+  box-shadow: var(--shadow-modal-glow);
+  max-width: 90vw;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -41,19 +42,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-secondary);
 }
 
 .preview-modal-title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
   color: var(--accent-primary);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .preview-modal-close {
@@ -62,7 +63,7 @@
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 24px;
+  font-size: var(--text-2xl);
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
@@ -81,7 +82,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-6);
   min-height: 200px;
   background: var(--bg-tertiary);
   overflow: auto;
@@ -91,7 +92,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
@@ -121,28 +122,29 @@
   image-rendering: crisp-edges;
   border: 2px solid var(--border-secondary);
   border-radius: var(--radius-sm);
-  box-shadow: 0 0 20px rgba(0, 217, 255, 0.15);}
+  box-shadow: var(--shadow-glow);
+}
 
 .preview-modal-controls {
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--border-primary);
   background: var(--bg-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: var(--space-6);
   flex-wrap: wrap;
 }
 
 .preview-fps-control {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .preview-fps-label {
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -167,7 +169,8 @@
   background: var(--accent-primary);
   border-radius: 50%;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 217, 255, 0.3);  transition: transform var(--transition-fast);
+  box-shadow: var(--shadow-accent-sm);
+  transition: transform var(--transition-fast);
 }
 
 .preview-fps-slider::-webkit-slider-thumb:hover {
@@ -181,11 +184,12 @@
   border-radius: 50%;
   cursor: pointer;
   border: none;
-  box-shadow: 0 2px 6px rgba(0, 217, 255, 0.3);}
+  box-shadow: var(--shadow-accent-sm);
+}
 
 .preview-fps-input {
   width: 60px;
-  padding: 6px 8px;
+  padding: var(--space-1-5) var(--space-2);
   font-size: 0.85rem;
   font-family: var(--font-mono);
   text-align: center;
@@ -198,12 +202,13 @@
 .preview-fps-input:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.2);}
+  box-shadow: var(--ring-accent);
+}
 
 .preview-info {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .preview-frame-counter {
@@ -211,7 +216,7 @@
   font-family: var(--font-mono);
   color: var(--accent-primary);
   background: var(--accent-primary-10);
-  padding: 6px 12px;
+  padding: var(--space-1-5) var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid var(--accent-primary-20);
 }
@@ -230,17 +235,17 @@
   }
 
   .preview-modal-header {
-    padding: 12px 16px;
+    padding: var(--space-3) var(--space-4);
   }
 
   .preview-modal-content {
-    padding: 16px;
+    padding: var(--space-4);
   }
 
   .preview-modal-controls {
     flex-direction: column;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
   }
 
   .preview-fps-control {

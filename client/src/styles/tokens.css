@@ -37,7 +37,9 @@
 
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  /* Task 12: redefined from 0 8px 24px rgba(0,0,0,0.5) to the measured
+     dominant large-shadow value (spec 12, "Shadows"). */
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 20px rgba(0, 217, 255, 0.15);
 
   --radius-sm: 4px;
@@ -268,6 +270,42 @@
   --shadow-variant: 0 6px 20px rgba(139, 92, 246, 0.4);
   --shadow-danger: 0 8px 32px rgba(255, 51, 102, 0.2);
   --ring-accent: 0 0 0 2px rgba(0, 217, 255, 0.2);
+
+  /* Composite glow/ring shadows. Every one-off box-shadow keeps its exact
+     measured geometry, with the colour drawn from the ramps above — the
+     whole value is a token so stylelint's strict-value rule can enforce
+     box-shadow. Numeric suffixes are blur px and colour-ramp alpha. */
+  --glow-accent-6: 0 0 6px var(--accent-primary);
+  --glow-accent-6-30: 0 0 6px var(--accent-primary-30);
+  --glow-accent-6-35: 0 0 6px var(--accent-primary-35);
+  --glow-accent-8-30: 0 0 8px var(--accent-primary-30);
+  --glow-accent-8-40: 0 0 8px var(--accent-primary-40);
+  --glow-accent-12-40: 0 0 12px var(--accent-primary-40);
+  --glow-accent-12-50: 0 0 12px var(--accent-primary-50);
+  --glow-accent-16-60: 0 0 16px var(--accent-primary-60);
+  --ring-accent-1: 0 0 0 1px var(--accent-primary);
+  --ring-accent-1-30: 0 0 0 1px var(--accent-primary-30);
+  --ring-variant-accent: 0 0 0 2px var(--accent-variant), 0 0 0 3px var(--accent-primary);
+  --glow-variant-12: 0 4px 12px var(--accent-variant-30);
+  --glow-variant-15: 0 0 15px var(--accent-variant-30);
+  --glow-variant-16: 0 0 16px var(--accent-variant-30);
+  --shadow-variant-lift: 0 4px 16px var(--accent-variant-40);
+  --glow-danger-8-60: 0 0 8px var(--accent-danger-60);
+  --ring-warning-glow: 0 0 0 2px var(--accent-warning-40), 0 0 8px var(--accent-warning-60);
+  --glow-warn-12: 0 0 12px var(--status-warn-40);
+  --glow-ok-15: 0 0 15px var(--status-ok-30);
+  --shadow-ok: 0 6px 20px var(--status-ok-40);
+  --shadow-warn: 0 6px 20px var(--status-warn-40);
+  --shadow-success: 0 4px 12px var(--accent-success-30);
+  --glow-white-8-15: 0 0 8px var(--white-15);
+  --glow-white-toggle: 0 0 6px var(--white-40), inset 0 0 4px var(--white-20);
+  --glow-lightgrid: 0 0 8px var(--tool-lightgrid-50);
+  --shadow-lg-ring: var(--shadow-lg), 0 0 0 1px var(--accent-primary-10);
+  --shadow-canvas: 0 0 0 1px var(--overlay-50), var(--shadow-lg), 0 0 40px var(--accent-primary-10);
+  --shadow-swatch: 0 0 0 1px var(--overlay-50), inset 0 0 0 1px var(--overlay-30);
+  --inset-well: inset 0 2px 4px var(--overlay-30), 0 2px 8px var(--overlay-20);
+  --inset-thumb: inset 0 1px 2px var(--overlay-20);
+  --inset-panel: inset 0 0 0 1px var(--border-primary), 0 4px 12px var(--overlay-20);
 
   /* z-index — a layered scale replacing 15 magic numbers (-1 to 99999).
      Rules: never write a numeric z-index; a modal backdrop and its dialog

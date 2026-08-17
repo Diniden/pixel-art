@@ -5,11 +5,11 @@
 /* Header actions container */
 .object-library .header-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .object-library .compact-toggle {
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .object-library .compact-toggle.active {
@@ -18,13 +18,13 @@
 }
 
 .new-object-form {
-  padding: 12px;
+  padding: var(--space-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .new-object-form input[type="text"] {
@@ -34,26 +34,26 @@
 .size-inputs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .size-field {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 .size-field label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .size-field input {
   width: 60px;
-  padding: 6px 8px;
+  padding: var(--space-1-5) var(--space-2);
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   text-align: center;
 }
 
@@ -63,7 +63,7 @@
 
 .form-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   justify-content: flex-end;
 }
 
@@ -80,7 +80,7 @@
 .object-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .object-wrapper {
@@ -92,8 +92,8 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -122,7 +122,7 @@
 .object-content {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-px);
   flex: 1;
   min-width: 0;
 }
@@ -138,7 +138,7 @@
 }
 
 .object-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -148,8 +148,8 @@
 }
 
 .object-name-input {
-  padding: 2px 6px;
-  font-size: 0.875rem;
+  padding: var(--space-0-5) var(--space-1-5);
+  font-size: var(--text-sm);
   flex: 1;
   min-width: 0;
 }
@@ -172,14 +172,14 @@
 
 .object-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .object-action-btn {
   width: 24px;
   height: 24px;
   padding: 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -205,40 +205,40 @@
 }
 
 .resize-panel {
-  padding: 8px;
+  padding: var(--space-2);
   background: var(--bg-elevated);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
-  margin-top: -2px;
+  margin-top: calc(-1 * var(--space-0-5));
   border: 1px solid var(--border-primary);
   border-top: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   animation: app-fade-in 0.2s ease;
 }
 
 .resize-anchor-section {
   display: flex;
   justify-content: center;
-  margin: 8px 0;
+  margin: var(--space-2) 0;
 }
 
 .resize-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   justify-content: flex-end;
 }
 
 .resize-actions button {
-  padding: 6px 12px;
-  font-size: 0.75rem;
+  padding: var(--space-1-5) var(--space-3);
+  font-size: var(--text-xs);
 }
 
 .empty-state {
   text-align: center;
-  padding: 24px;
+  padding: var(--space-6);
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Delete Confirmation Modal */
@@ -249,20 +249,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1001;
+  z-index: var(--z-modal-nested);
 }
 
 .delete-confirm-modal {
   background: linear-gradient(135deg, var(--modal-gradient-danger-a) 0%, var(--modal-gradient-a) 100%);
   border-radius: var(--radius-lg);
   border: 1px solid var(--accent-danger-30);
-  box-shadow: 0 8px 32px rgba(239, 68, 68, 0.2);  width: 400px;
+  box-shadow: var(--shadow-danger);
+  width: 400px;
   max-width: 90vw;
   overflow: hidden;
 }
 
 .delete-confirm-header {
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--accent-danger-20);
 }
 
@@ -273,37 +274,37 @@
 }
 
 .delete-confirm-content {
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 .delete-confirm-content p {
-  margin: 0 0 12px 0;
+  margin: 0 0 var(--space-3) 0;
   color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .delete-confirm-warning {
   color: var(--accent-danger) !important;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .delete-confirm-undo {
   color: var(--text-muted) !important;
-  font-size: 12px !important;
+  font-size: var(--text-xs) !important;
 }
 
 .delete-confirm-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--white-10);
   background: var(--overlay-20);
 }
 
 .delete-confirm-actions .cancel-btn {
-  padding: 8px 20px;
+  padding: var(--space-2) var(--space-5);
   background: var(--white-10);
   border: 1px solid var(--white-20);
   border-radius: var(--radius-base);
@@ -318,13 +319,13 @@
 }
 
 .delete-confirm-actions .delete-btn {
-  padding: 8px 20px;
+  padding: var(--space-2) var(--space-5);
   background: var(--accent-danger);
   border: none;
   border-radius: var(--radius-base);
   color: var(--white);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-base);
 }
@@ -337,14 +338,14 @@
 .object-list-small {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-px);
 }
 
 .object-item-small {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 6px;
+  gap: var(--space-1-5);
+  padding: var(--space-0-5) var(--space-1-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -387,7 +388,7 @@
 .object-name-input-small {
   flex: 1;
   min-width: 0;
-  padding: 1px 4px;
+  padding: var(--space-px) var(--space-1);
   font-size: 0.8rem;
   background: var(--bg-secondary);
   border: 1px solid var(--accent-primary);
@@ -399,8 +400,8 @@
 .object-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 2px;
+  gap: var(--space-1);
+  padding: var(--space-0-5);
 }
 
 .compact-object-item {
@@ -421,7 +422,8 @@
 
 .compact-object-item.selected {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 8px rgba(0, 217, 255, 0.3);}
+  box-shadow: var(--glow-accent-8-30);
+}
 
 .compact-object-item .obj-thumb-canvas {
   display: block;
@@ -430,16 +432,17 @@
 /* Compact Tooltip */
 .compact-tooltip {
   position: fixed;
-  z-index: 10000;
+  z-index: var(--z-tooltip);
   background: var(--bg-elevated);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
-  padding: 8px 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);  pointer-events: none;
-  animation: tooltipFadeIn 0.15s ease;
+  padding: var(--space-2) var(--space-3);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  animation: tooltip-fade-in 0.15s ease;
 }
 
-@keyframes tooltipFadeIn {
+@keyframes tooltip-fade-in {
   from {
     opacity: 0;
     transform: translateX(-4px);
@@ -451,10 +454,10 @@
 }
 
 .compact-tooltip .tooltip-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
-  font-weight: 500;
-  margin-bottom: 2px;
+  font-weight: var(--weight-medium);
+  margin-bottom: var(--space-0-5);
   white-space: nowrap;
 }
 

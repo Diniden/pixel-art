@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   backdrop-filter: blur(2px);
 }
 
@@ -13,7 +13,8 @@
   background: linear-gradient(135deg, var(--modal-gradient-a) 0%, var(--modal-gradient-b) 100%);
   border-radius: var(--radius-lg);
   border: 1px solid var(--white-10);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);  width: 520px;
+  box-shadow: var(--shadow-lg);
+  width: 520px;
   max-width: 90vw;
   max-height: 80vh;
   display: flex;
@@ -25,15 +26,15 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--white-10);
   background: var(--overlay-20);
 }
 
 .add-variant-modal-header h3 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   letter-spacing: 0.5px;
 }
@@ -42,10 +43,10 @@
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 24px;
+  font-size: var(--text-2xl);
   cursor: pointer;
   padding: 0;
-  line-height: 1;
+  line-height: var(--leading-none);
   transition: color var(--transition-base);
 }
 
@@ -54,29 +55,29 @@
 }
 
 .add-variant-modal-content {
-  padding: 20px;
+  padding: var(--space-5);
   overflow-y: auto;
   flex: 1;
 }
 
 .no-variants-message {
   text-align: center;
-  padding: 40px 20px;
+  padding: var(--space-10) var(--space-5);
   color: var(--text-muted);
 }
 
 .no-variants-message p {
-  margin: 0 0 12px 0;
+  margin: 0 0 var(--space-3) 0;
 }
 
 .no-variants-message .hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .add-to-all-frames-toggle {
-  margin-bottom: 20px;
-  padding: 12px 16px;
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
   background: var(--white-05);
   border-radius: var(--radius-md);
   border: 1px solid var(--white-08);
@@ -85,10 +86,10 @@
 .add-to-all-frames-toggle label {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2-5);
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .add-to-all-frames-toggle input[type="checkbox"] {
@@ -99,19 +100,19 @@
 }
 
 .add-variant-section-title {
-  font-size: 12px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-muted);
-  margin-bottom: 12px;
-  font-weight: 500;
+  margin-bottom: var(--space-3);
+  font-weight: var(--weight-medium);
 }
 
 .add-variant-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
 }
 
 .add-variant-card {
@@ -119,13 +120,13 @@
   background: var(--white-03);
   border: 1px solid var(--white-08);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: var(--space-3);
   cursor: pointer;
   transition: all var(--transition-base);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .add-variant-card:hover {
@@ -137,7 +138,8 @@
 .add-variant-card.selected {
   background: var(--accent-variant-15);
   border-color: var(--accent-variant);
-  box-shadow: 0 0 16px rgba(99, 102, 241, 0.3);}
+  box-shadow: var(--glow-variant-16);
+}
 
 .add-variant-card .delete-variant-btn {
   position: absolute;
@@ -149,15 +151,15 @@
   background: var(--accent-danger-80);
   border: none;
   color: var(--white);
-  font-size: 14px;
-  font-weight: bold;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   transition: all var(--transition-base);
-  z-index: 2;
+  z-index: var(--z-raised);
 }
 
 .add-variant-card:hover .delete-variant-btn {
@@ -190,14 +192,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   width: 100%;
 }
 
 .add-variant-name {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   text-align: center;
   max-width: 100%;
   overflow: hidden;
@@ -208,8 +210,8 @@
 
 .add-variant-name-input {
   width: 100%;
-  padding: 4px 8px;
-  font-size: 12px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
   background: var(--overlay-40);
   border: 1px solid var(--accent-variant);
   border-radius: var(--radius-sm);
@@ -219,7 +221,7 @@
 }
 
 .add-variant-count {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 
@@ -232,7 +234,7 @@
   border-radius: 50%;
   background: var(--accent-variant);
   color: var(--white);
-  font-size: 12px;
+  font-size: var(--text-xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -241,12 +243,12 @@
 .variant-type-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
 }
 
 .variant-type-option {
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   background: var(--white-05);
   border: 1px solid var(--white-10);
   border-radius: var(--radius-pill);
@@ -254,7 +256,7 @@
   transition: all var(--transition-base);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .variant-type-option:hover {
@@ -278,32 +280,33 @@
 
 .variant-type-option .check {
   color: var(--accent-variant);
-  font-weight: bold;
+  font-weight: var(--weight-bold);
 }
 
 .add-variant-actions {
   display: flex;
   justify-content: flex-end;
-  padding-top: 16px;
+  padding-top: var(--space-4);
   border-top: 1px solid var(--white-10);
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .add-variant-confirm-btn {
-  padding: 10px 24px;
+  padding: var(--space-2-5) var(--space-6);
   background: linear-gradient(135deg, var(--accent-variant) 0%, var(--accent-variant) 100%);
   border: none;
   border-radius: var(--radius-md);
   color: var(--white);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-base);
 }
 
 .add-variant-confirm-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);}
+  box-shadow: var(--shadow-variant-lift);
+}
 
 .add-variant-confirm-btn:disabled {
   opacity: 0.5;
@@ -318,20 +321,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1001;
+  z-index: var(--z-modal-nested);
 }
 
 .delete-confirm-modal {
   background: linear-gradient(135deg, var(--modal-gradient-danger-a) 0%, var(--modal-gradient-a) 100%);
   border-radius: var(--radius-lg);
   border: 1px solid var(--accent-danger-30);
-  box-shadow: 0 8px 32px rgba(239, 68, 68, 0.2);  width: 400px;
+  box-shadow: var(--shadow-danger);
+  width: 400px;
   max-width: 90vw;
   overflow: hidden;
 }
 
 .delete-confirm-header {
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--accent-danger-20);
 }
 
@@ -342,37 +346,37 @@
 }
 
 .delete-confirm-content {
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 .delete-confirm-content p {
-  margin: 0 0 12px 0;
+  margin: 0 0 var(--space-3) 0;
   color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .delete-confirm-warning {
   color: var(--accent-danger) !important;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .delete-confirm-undo {
   color: var(--text-muted) !important;
-  font-size: 12px !important;
+  font-size: var(--text-xs) !important;
 }
 
 .delete-confirm-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--white-10);
   background: var(--overlay-20);
 }
 
 .delete-confirm-actions .cancel-btn {
-  padding: 8px 20px;
+  padding: var(--space-2) var(--space-5);
   background: var(--white-10);
   border: 1px solid var(--white-20);
   border-radius: var(--radius-base);
@@ -387,13 +391,13 @@
 }
 
 .delete-confirm-actions .delete-btn {
-  padding: 8px 20px;
+  padding: var(--space-2) var(--space-5);
   background: var(--accent-danger);
   border: none;
   border-radius: var(--radius-base);
   color: var(--white);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-base);
 }

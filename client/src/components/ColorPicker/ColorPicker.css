@@ -5,9 +5,9 @@
 /* Color History */
 .color-history {
   display: flex;
-  gap: 3px;
-  margin-bottom: 10px;
-  padding: 4px;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2-5);
+  padding: var(--space-1);
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
 }
@@ -26,19 +26,19 @@
 .color-history-swatch:hover {
   transform: scale(1.15);
   border-color: var(--accent-primary);
-  z-index: 1;
+  z-index: var(--z-hover-lift);
 }
 
 /* Rainbow Picker Area */
 .color-picker-area {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .sv-picker-container {
   position: relative;
   width: 100%;
   height: 120px;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
@@ -56,7 +56,8 @@
   height: 12px;
   border: 2px solid white;
   border-radius: 50%;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3);  transform: translate(-50%, -50%);
+  box-shadow: var(--shadow-swatch);
+  transform: translate(-50%, -50%);
   pointer-events: none;
 }
 
@@ -83,15 +84,16 @@
   background: var(--white);
   border: 1px solid var(--overlay-40);
   border-radius: var(--radius-xs);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);  transform: translate(-50%, -50%);
+  box-shadow: var(--shadow-sm);
+  transform: translate(-50%, -50%);
   pointer-events: none;
 }
 
 /* Color Preview */
 .color-preview-row {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
   align-items: center;
 }
 
@@ -108,7 +110,7 @@
 .transparency-grid {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: var(--z-behind);
   background-image:
     linear-gradient(45deg, var(--swatch-border) 25%, transparent 25%),
     linear-gradient(-45deg, var(--swatch-border) 25%, transparent 25%),
@@ -124,13 +126,13 @@
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 6px 8px;
+  padding: var(--space-1-5) var(--space-2);
 }
 
 /* Slider Sections */
 .slider-section {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--border-primary);
 }
 
@@ -142,18 +144,18 @@
 
 .slider-section-label {
   font-size: 0.65rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 /* Compact Slider Rows */
 .slider-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
   height: 22px;
 }
 
@@ -161,7 +163,7 @@
   width: 14px;
   font-family: var(--font-mono);
   font-size: 0.65rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   text-align: center;
   flex-shrink: 0;
 }
@@ -196,7 +198,8 @@
   background: var(--text-primary);
   cursor: pointer;
   border: 1px solid var(--border-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);}
+  box-shadow: var(--shadow-sm);
+}
 
 .compact-slider::-moz-range-thumb {
   width: 10px;
@@ -205,7 +208,8 @@
   background: var(--text-primary);
   cursor: pointer;
   border: 1px solid var(--border-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);}
+  box-shadow: var(--shadow-sm);
+}
 
 /* Channel-specific slider backgrounds */
 /* dynamic: channel-{r|g|b} built at ColorPicker.tsx:621. Do not delete as dead. */
@@ -267,7 +271,7 @@
 /* Slider input */
 .slider-input {
   width: 42px;
-  padding: 2px 4px;
+  padding: var(--space-0-5) var(--space-1);
   font-family: var(--font-mono);
   font-size: 0.65rem;
   text-align: right;

@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: var(--z-modal);
   backdrop-filter: blur(2px);
 }
 
@@ -13,7 +13,8 @@
   background: linear-gradient(135deg, var(--modal-gradient-a) 0%, var(--modal-gradient-b) 100%);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 217, 255, 0.1);  min-width: 300px;
+  box-shadow: var(--shadow-lg-ring);
+  min-width: 300px;
   max-width: 400px;
   overflow: hidden;
 }
@@ -22,15 +23,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-primary);
   background: var(--overlay-20);
 }
 
 .resize-modal-header h4 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 
@@ -45,7 +46,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: var(--text-lg);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -57,34 +58,34 @@
 }
 
 .resize-modal-content {
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 .resize-modal-inputs {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .resize-modal-field {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 .resize-modal-field label {
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .resize-modal-field input {
-  padding: 10px 12px;
-  font-size: 1rem;
+  padding: var(--space-2-5) var(--space-3);
+  font-size: var(--text-base);
   font-family: var(--font-mono);
   text-align: center;
   background: var(--bg-tertiary);
@@ -97,24 +98,25 @@
 .resize-modal-field input:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.2);}
+  box-shadow: var(--ring-accent);
+}
 
 .resize-modal-separator {
   font-size: 1.2rem;
   color: var(--text-muted);
-  padding-bottom: 10px;
+  padding-bottom: var(--space-2-5);
 }
 
 .resize-modal-anchor {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .resize-modal-anchor-label {
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -123,16 +125,16 @@
 .resize-modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--border-primary);
   background: var(--overlay-20);
 }
 
 .resize-modal-cancel {
-  padding: 10px 20px;
-  font-size: 0.875rem;
-  font-weight: 500;
+  padding: var(--space-2-5) var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
@@ -148,9 +150,9 @@
 }
 
 .resize-modal-apply {
-  padding: 10px 24px;
-  font-size: 0.875rem;
-  font-weight: 600;
+  padding: var(--space-2-5) var(--space-6);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
   background: var(--accent-primary);
   border: none;
   border-radius: var(--radius-md);
@@ -161,5 +163,6 @@
 
 .resize-modal-apply:hover {
   filter: brightness(1.15);
-  box-shadow: 0 0 12px rgba(0, 217, 255, 0.4);}
+  box-shadow: var(--glow-accent-12-40);
+}
 
