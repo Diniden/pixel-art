@@ -19,7 +19,7 @@
 
 .loading-content {
   text-align: center;
-  animation: fadeIn 0.5s ease;
+  animation: app-fade-in 0.5s ease;
 }
 
 .loading-spinner {
@@ -29,10 +29,10 @@
   border-top-color: var(--accent-primary);
   border-radius: 50%;
   margin: 0 auto 20px;
-  animation: spin 1s linear infinite;
+  animation: app-spin 1s linear infinite;
 }
 
-@keyframes spin {
+@keyframes app-spin {
   to { transform: rotate(360deg); }
 }
 
@@ -74,11 +74,6 @@
   min-width: 320px;
 }
 
-.left-panel.collapsed {
-  width: 32px;
-  min-width: 32px;
-}
-
 .right-panel {
   border-left: 1px solid var(--border-primary);
 }
@@ -86,11 +81,6 @@
 .right-panel.open {
   width: 320px;
   min-width: 320px;
-}
-
-.right-panel.collapsed {
-  width: 32px;
-  min-width: 32px;
 }
 
 .panel-scroll {
@@ -102,49 +92,6 @@
   flex-direction: column;
   gap: 12px;
 }
-
-/* Panel Toggle Buttons */
-.panel-toggle {
-  position: absolute;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  z-index: 20;
-  font-size: 10px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-fast);
-}
-
-.panel-toggle:hover {
-  background: var(--bg-hover);
-  color: var(--accent-primary);
-  border-color: var(--accent-primary);
-}
-
-.left-toggle {
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 48px;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  border-left: none;
-}
-
-.right-toggle {
-  left: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 48px;
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
-  border-right: none;
-}
-
 
 /* Canvas Area */
 .canvas-area {
@@ -201,11 +148,6 @@
     transform: translateX(0);
   }
 
-  .left-panel.collapsed {
-    width: 320px;
-    transform: translateX(-100%);
-  }
-
   .right-panel {
     right: 0;
     border-left: 1px solid var(--border-primary);
@@ -215,25 +157,6 @@
     width: 320px;
     transform: translateX(0);
   }
-
-  .right-panel.collapsed {
-    width: 280px;
-    transform: translateX(100%);
-  }
-
-  .left-toggle {
-    right: -32px;
-  }
-
-  .right-toggle {
-    left: -32px;
-  }
-
-  .left-panel.collapsed .left-toggle,
-  .right-panel.collapsed .right-toggle {
-    opacity: 1;
-  }
-
 
   .canvas-area {
     position: relative;

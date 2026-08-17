@@ -214,7 +214,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  animation: fadeIn 0.2s ease;
+  animation: app-fade-in 0.2s ease;
 }
 
 .resize-anchor-section {

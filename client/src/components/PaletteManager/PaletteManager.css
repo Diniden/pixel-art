@@ -82,7 +82,7 @@
 .palette-content {
   padding: 12px;
   border-top: 1px solid var(--border-primary);
-  animation: fadeIn 0.2s ease;
+  animation: app-fade-in 0.2s ease;
 }
 
 .color-swatches {

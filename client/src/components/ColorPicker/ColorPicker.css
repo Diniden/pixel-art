@@ -169,6 +169,9 @@
 }
 
 /* Channel colors */
+/* dynamic: channel-{r|g|b} built at ColorPicker.tsx:616,621
+   (`slider-label channel-${channel}` / `compact-slider channel-slider
+   channel-${channel}`) — never a literal. Do not delete as dead. */
 .channel-r, .hsl-h { color: #ff6b6b; }
 .channel-g, .hsl-s { color: #69db7c; }
 .channel-b, .hsl-l { color: #74c0fc; }
@@ -209,6 +212,7 @@
 }
 
 /* Channel-specific slider backgrounds */
+/* dynamic: channel-{r|g|b} built at ColorPicker.tsx:621. Do not delete as dead. */
 .channel-slider.channel-r {
   background: linear-gradient(to right,
     rgb(0, var(--g, 0), var(--b, 0)),

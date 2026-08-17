@@ -64,6 +64,9 @@
 }
 
 /* Position arrows based on anchor location and direction */
+/* dynamic: arrow-{up|down|left|right} built at AnchorGrid.tsx:116
+   (`anchor-arrow arrow-${direction} ...`) — the full class name never appears
+   as a literal, so a class audit cannot see it. Do not delete as dead. */
 .anchor-arrow.arrow-up {
   top: calc(-4px - 16px);
   left: calc(4px + var(--anchor-col) * (24px + 2px) + 4px);
@@ -85,6 +88,8 @@
 }
 
 /* Arrow colors based on expanding/shrinking */
+/* dynamic: expanding|shrinking built at AnchorGrid.tsx:116
+   (`... ${expanding ? 'expanding' : 'shrinking'}`). Do not delete as dead. */
 .anchor-arrow.expanding {
   color: #22c55e; /* Green for expansion */
   animation: pulse-expand 1.2s ease-in-out infinite;

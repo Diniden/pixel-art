@@ -55,41 +55,9 @@
   z-index: 10;
 }
 
-/* Reference Canvas Styles */
-.reference-canvas-container {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.reference-label {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--accent-primary);
-  background: var(--bg-elevated);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--accent-primary);
-}
-
 .reference-canvas-wrapper {
   position: relative;
   display: inline-block;
-}
-
-.reference-canvas {
-  display: block;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  border: 2px solid var(--accent-secondary);
-  border-radius: var(--radius-sm);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.5),
-    var(--shadow-md),
-    0 0 20px rgba(123, 45, 255, 0.15);
-  opacity: 0.9;
 }
 
 /* Reference box adjustment buttons */
@@ -212,12 +180,6 @@
 
 .ref-box-btn-right:last-of-type:active {
   transform: translateY(-50%) translateY(16px) scale(0.9);
-}
-
-.reference-info {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  color: var(--text-muted);
 }
 
 .reference-navigation {
