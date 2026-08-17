@@ -112,7 +112,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W5** | 07, 08, 09 | W4 | ⚠️ | `53cc953` | `bunx vitest run` · `bunx vite build` · `node scripts/check-classes.mjs --dead` · no undefined custom property in the bundle · **3 agents** |
 | **W6** | 10, 11 | W5 | ⚠️ | `3e81bc4` | `bunx storybook build && test -d storybook-static` · `diff -r` on export goldens produces no output · **2 agents** |
 | **W7** | 12, 13 | W6 | ⚠️ | `989f754` | `bunx stylelint "src/**/*.css"` · zero numeric `z-index` · `bunx vitest run src/types/__tests__/` · `bunx tsc --noEmit` · **2 agents** |
-| **W8** | 14 | W7 | ⬜ | — | `bunx vitest run && bunx tsc --noEmit && bun run build` · lighting settings persist across a reload |
+| **W8** | 14 | W7 | ⚠️ | `d97e5fb` | `bunx vitest run && bunx tsc --noEmit && bun run build` · lighting settings persist across a reload |
 | **W9** | 15 | W8 | ⬜ | — | `bunx vitest run src/api` · exactly one `fetch(` call site in the codebase |
 | **W10** | 16 | W9 | ⬜ | — | a failed load produces **zero** `POST /api/project` · corpus snapshots unchanged |
 | **W11** | 17, 18 | W10 | ⬜ | — | `bunx vitest run src/store/__tests__/` passes **unchanged** · the five CSS block-extraction greps return 0 · **2 agents** |
