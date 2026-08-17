@@ -8,7 +8,7 @@ dotenv.config({ path: resolve(__dirname, '../../.env') });
 import express from 'express';
 import cors from 'cors';
 import { projectRouter } from './routes/project.js';
-import { exportRouter, DEFAULT_EXPORT_FOLDER } from './routes/export.js';
+import { exportRouter, DEFAULT_EXPORT_FOLDER } from './export/exportRouter.js';
 import { aiRouter } from './routes/ai.js';
 
 const app = express();

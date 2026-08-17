@@ -1,0 +1,19 @@
+<!--
+  Web fonts — requirement 5 of the 8 things a story needs to not lie.
+
+  ⚠️ These <link> tags live in `client/index.html`, which Storybook NEVER reads.
+  `--font-sans` names 'Outfit' and `--font-mono` names 'JetBrains Mono', and 44
+  declarations across the stylesheets use `var(--font-mono)`. Without this file
+  every one of them silently falls back to `system-ui` / `monospace` and the
+  story looks subtly but pervasively wrong. This is the single easiest of the 8
+  requirements to miss.
+
+  Kept byte-for-byte identical to client/index.html:9-11 — if that file's font
+  set changes, change it here too.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap"
+  rel="stylesheet"
+/>

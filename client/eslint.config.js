@@ -4,6 +4,7 @@ import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import prettier from "eslint-config-prettier";
+import storybook from "eslint-plugin-storybook";
 
 export default tseslint.config(
   {
@@ -28,7 +29,20 @@ export default tseslint.config(
           // `tsconfig.json` includes only `src` and `lib`, so the workspace-root
           // config files (vite.config.ts, eslint.config.js) are outside the
           // project service and would otherwise be a hard parse error.
-          allowDefaultProject: ["*.ts", "*.js"],
+          //
+          // ⚠️ `.storybook/**` (task 10) is listed HERE rather than in its own
+          // later block. `parserOptions` REPLACES, exactly like rule options do
+          // (see the ARCHITECTURAL BOUNDARIES note below): a separate
+          // `.storybook/**` block carrying its own `projectService` dropped
+          // `["*.ts", "*.js"]` and turned aliases.ts, vite.config.ts and
+          // vitest.config.ts into 3 hard parse errors. Measured, not guessed.
+          allowDefaultProject: [
+            "*.ts",
+            "*.js",
+            ".storybook/*.ts",
+            ".storybook/*.tsx",
+            ".storybook/decorators/*.tsx",
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -261,6 +275,64 @@ export default tseslint.config(
           ],
         },
       ],
+    },
+  },
+
+  // ── Storybook (task 10) ───────────────────────────────────────────────────
+  //
+  // ⚠️ A SEPARATE BLOCK, deliberately placed AFTER the boundary blocks and
+  // NOT merged into them. Same reason the boundary blocks are ordered the way
+  // they are: in flat config a later block REPLACES a rule's entire options
+  // object. Editing a boundary block to bolt story globs on would silently drop
+  // whichever `paths`/`patterns` set it did not restate.
+  //
+  // Placing this AFTER them is safe because `storybook.configs["flat/recommended"]`
+  // sets NO `no-restricted-imports` at all — verified against the installed
+  // 9.1.20: its three blocks set only the `storybook/*` rules plus
+  // `react-hooks/rules-of-hooks` and `import/no-anonymous-default-export`.
+  // It therefore cannot clobber the ui/ purity or observer() options.
+  //
+  // The boundary probe was re-run after adding this block and BOTH probes
+  // still FAIL lint, which is the required outcome.
+  //
+  // Note the story glob is `**/*.stories.@(ts|tsx|...)`, so `Button.stories.tsx`
+  // living under `src/ui/primitives/` is ALSO still matched by the primitives
+  // boundary block above — a story may not import a store or a domain type
+  // either, which is exactly right: a story that needs a store is evidence the
+  // component is not pure.
+  ...storybook.configs["flat/recommended"],
+
+  {
+    // `import/no-anonymous-default-export` comes from the `import` plugin, which
+    // is NOT installed here (task 05 chose typescript-eslint + react-hooks +
+    // react-refresh only). ESLint errors on a configured-but-undefined rule, so
+    // switch it off rather than adding a plugin this repo does not otherwise use.
+    files: [
+      "**/*.stories.@(ts|tsx|js|jsx|mjs|cjs)",
+      "**/*.story.@(ts|tsx|js|jsx|mjs|cjs)",
+    ],
+    rules: {
+      "import/no-anonymous-default-export": "off",
+      // A story file's default export is CSF `meta`, not a component, and its
+      // named exports are stories, not components. react-refresh's rule is
+      // structurally inapplicable to CSF.
+      "react-refresh/only-export-components": "off",
+    },
+  },
+
+  // `.storybook/` is Storybook's own build/preview configuration, not app code
+  // that Vite ever hot-reloads. `react-refresh/only-export-components` is
+  // structurally inapplicable there: `decorators/modalHost.tsx` exports a
+  // decorator plus the `modalHostStyle` object it shares, and `preview.tsx`
+  // default-exports a config object.
+  //
+  // NOTE the parser settings for these files are NOT here — they live in the
+  // `allowDefaultProject` list of the main `**/*.{ts,tsx}` block above, because
+  // `parserOptions` replaces rather than merges. Only rules are set here.
+  {
+    files: [".storybook/**/*.{ts,tsx}"],
+    rules: {
+      "react-refresh/only-export-components": "off",
     },
   },
 

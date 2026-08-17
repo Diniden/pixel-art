@@ -1,0 +1,94 @@
+/*
+ * Minimal proof-of-harness button.
+ *
+ * ⚠️ TASK 12 OWNS THE REAL PRIMITIVE. This file exists so task 10 has ONE story
+ * that proves the Storybook harness renders with the app's real tokens, reset
+ * and fonts. It is deliberately small and deliberately not comprehensive.
+ *
+ * Everything visual here comes from `styles/tokens.css` via `var()` and from
+ * the global `button { ... }` rule in `styles/reset.css`. That is the point:
+ * if the harness fails to load either file, this button renders as a native OS
+ * button and the failure is obvious at a glance rather than subtle.
+ *
+ * `btn` is a NEW class name (no bare `btn` existed in the codebase before this;
+ * the 25+ existing button classes are all `<something>-btn`). Task 12 formalises
+ * the BEM naming; do not rename existing classes to match this one.
+ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  white-space: nowrap;
+  /* background, border, radius, padding, colour, cursor and transition all come
+     from the global `button` rule in reset.css — not restated here, so a
+     missing reset.css is visible rather than masked. */
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-primary);
+}
+
+/* ── Variants ───────────────────────────────────────────────────────────── */
+
+.btn--primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn--danger {
+  background: var(--accent-danger);
+  border-color: var(--accent-danger);
+  color: var(--text-primary);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-secondary);
+  color: var(--text-primary);
+}
+
+/* ── Sizes ──────────────────────────────────────────────────────────────── */
+
+.btn--sm {
+  padding: 4px 10px;
+  font-size: 0.8125rem;
+}
+
+.btn--lg {
+  padding: 10px 20px;
+  font-size: 1rem;
+}
+
+/*
+ * The font proof. `--font-mono` names 'JetBrains Mono', loaded ONLY by
+ * .storybook/preview-head.html (in the app it is a <link> in index.html, which
+ * Storybook never reads). If the Monospace story renders in fallback
+ * `monospace` rather than JetBrains Mono, preview-head.html is not being
+ * applied — that is requirement 5 of the harness and the easiest to miss.
+ */
+.btn--mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
