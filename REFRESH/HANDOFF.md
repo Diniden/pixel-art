@@ -8,40 +8,29 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
-> **Next wave: W7 — tasks 12, 13 (TWO AGENTS, parallel)**
+> **Next wave: W8 — task 14 (fix 3 store defects; install MobX; SessionStore + bridge Phase A)**
 >
-> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ · W4 ✅ · W5 ⚠️ · W6 ⚠️ merged.
-> **Last commit on `main`:** `3e81bc4` — *Merge W6: Storybook + export decomposition*
+> **Status:** W0 ✅ · W1 ⚠️ · W2a ⚠️ · W2b ⚠️ · W3 ✅ · W4 ✅ · W5 ⚠️ · W6 ⚠️ · W7 ⚠️ merged.
+> **Last commit on `main`:** `989f754` — *Merge W7: CSS tokens + types split*
 > **Working tree at last handoff:** clean.
 >
 > ### Current stack
-> React **19.2.8** · Vite **7.3.6** · TypeScript **5.9.3** · Express **5.2.1** ·
-> sharp **0.33.5** (deferred, Q45) · zustand 4.5.2 · ESLint 9 flat · Prettier ·
-> Vitest 3.2.7 (**640 client + 48 server tests**) · **Storybook 9.1.20 (7 stories)**.
-> Both workspaces: tsc **0**, eslint **0**. Build emits `dist/`. Coverage thresholds all met.
-> `server/src/routes/export.ts` is **gone** — 12 modules under `server/src/export/`.
+> React 19.2.8 · Vite 7.3.6 · TS 5.9.3 · Express 5.2.1 · sharp 0.33.5 (Q45) ·
+> zustand 4.5.2 · ESLint 9 · Prettier · stylelint 17 · Vitest (640 client + 48 server) ·
+> Storybook 9 (7 stories). tsc 0 / eslint 0 / stylelint 0 in both workspaces.
+> `types/index.ts` is a 20-line barrel over 8 modules; CSS is fully tokenised with a
+> semantic z-index scale; corpus digests byte-identical throughout.
 >
-> ### 🛑 STOP AND READ BEFORE DISPATCHING W7
+> ### ⛓️ W8 BEGINS THE MOBX CHAIN — tasks 14–29 are strictly sequential
+> Task 14: fix the 3 measured store defects (the 8 lighting setters that never autosave
+> among them), install MobX, create `ApplicationStore` + `SessionStore`, stand up bridge
+> Phase A. **The bridge's two field lists become the migration's progress ledger from here
+> to task 38** (R6): the task that flips a field moves it between lists in the same change,
+> and a dev-mode assertion fails if a field appears in both.
 >
-> **Task 12 is the refresh's highest visual-regression risk** (R8): it substitutes **585
-> colour literals**, plus radius and transition literals, and deliberately collapses several
-> near-identical values. `MASTER.md` §9.10 says Storybook lands FIRST precisely so there is
-> a real baseline to compare against.
->
-> **That baseline now exists but NOBODY HAS LOOKED AT IT.** Running task 12 before a human
-> reviews the Storybook forfeits the entire reason Storybook was scheduled first.
->
-> **Recommended: the owner runs `bun run storybook`, opens the 7 stories, and confirms the
-> 5 checks in "Manual checks owed" — BEFORE W7 is dispatched.**
->
-> **Next action (after that review):** dispatch two parallel subagents — task 12 (CSS tokens
-> + z-index scale) and task 13 (split `types/index.ts`, complete `CompactUIState`). Branch
-> `refresh/w7-tokens-types`. Collision matrix proven empty: 12 is CSS-only, 13 is
-> TypeScript-only, and **12 is explicitly forbidden from renaming any class**.
->
-> ⚠️ **Task 13 edits `client/src/types/index.ts` — the serialization layer.** The corpus
-> digests are the gate. Code must move **VERBATIM**; a digest change means a real
-> regression. **Never `vitest -u`.**
+> ⚠️ Task 08's store suite is the equivalence baseline — it must pass UNCHANGED after every
+> slice. R14: clipboards and colorHistory live on `SessionStore` BY CONSTRUCTION so they
+> survive a project switch; that cross-document lifetime is load-bearing.
 >
 > **After any `bun install` or `bunx`, sweep regenerated lockfiles:**
 > `rm -f server/bun.lock client/bun.lock bun.lock bun.lockb` — confirmed every install.
@@ -122,7 +111,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W4** | 06 | W3 | ✅ | `47c14bb` | `bunx vitest run --reporter=json \| grep -q '"numPassedTests":[1-9]'` · `--project unit` and `--project dom` both exit 0 |
 | **W5** | 07, 08, 09 | W4 | ⚠️ | `53cc953` | `bunx vitest run` · `bunx vite build` · `node scripts/check-classes.mjs --dead` · no undefined custom property in the bundle · **3 agents** |
 | **W6** | 10, 11 | W5 | ⚠️ | `3e81bc4` | `bunx storybook build && test -d storybook-static` · `diff -r` on export goldens produces no output · **2 agents** |
-| **W7** | 12, 13 | W6 | ⬜ | — | `bunx stylelint "src/**/*.css"` · zero numeric `z-index` · `bunx vitest run src/types/__tests__/` · `bunx tsc --noEmit` · **2 agents** |
+| **W7** | 12, 13 | W6 | ⚠️ | `989f754` | `bunx stylelint "src/**/*.css"` · zero numeric `z-index` · `bunx vitest run src/types/__tests__/` · `bunx tsc --noEmit` · **2 agents** |
 | **W8** | 14 | W7 | ⬜ | — | `bunx vitest run && bunx tsc --noEmit && bun run build` · lighting settings persist across a reload |
 | **W9** | 15 | W8 | ⬜ | — | `bunx vitest run src/api` · exactly one `fetch(` call site in the codebase |
 | **W10** | 16 | W9 | ⬜ | — | a failed load produces **zero** `POST /api/project` · corpus snapshots unchanged |
@@ -157,6 +146,9 @@ never `✅ DONE`. **Work through this before trusting any PARTIAL wave.**
 | Wave | Task | Unperformed check | Risk left unverified |
 | --- | --- | --- | --- |
 | ~~W6~~ | ~~10~~ | ~~**Open the Storybook and look at it.**~~ ✅ **CLEARED BY THE OWNER (2026-08-16)** — reviewed before W7 was dispatched, per §9.10's ordering. The baseline is now human-captured; task 12's substitution can be compared against it. | — |
+| W7 | 12 | ⭐⭐ **The R9 manual stacking pass.** Open every one of the 14 modals, both nested confirms (VariantSelect resize, BrowseBackups restore), all three tooltips, the view-mode dropdown, and **the AI-config popover while a modal is open** (the one real ordering bug this wave fixes — it moved from 1000 to `--z-popover`). | All 49 z-index sites moved onto the semantic scale and **no automated check covers stacking**. The full old→new table is in the family-3 commit message (`9892e85`) and the task 12 report. |
+| W7 | 12 | ⭐ **Visual pass against the reviewed Storybook baseline + the app itself.** The biggest deliberate shifts: AnchorGrid's expand/shrink semantic colours, AddVariantModal's confirm-button gradient flattening to one violet, the gray-ramp collapses (`#d0d0d0`/`#888`, up to 48/channel — the spec understated these as "1–6"), two `'Courier New'` → JetBrains Mono sites, and `FrameReferencePanel:117`'s greenish label mapped to `--text-tertiary` (the weakest fit in the whole substitution). | 585+ declarations changed value. Every collapse is listed with per-channel deltas in the task 12 report; `roundtrip-final.txt` (scratchpad) has the per-selector inventory. |
+| W7 | 12 | **Font-size mapping decision.** ~24 non-scale sizes (0.7/0.8/0.85/0.9rem, 13px, …) were left literal. | The spec says "30 sizes → 7 tokens" but gives no mapping, and e.g. 0.8rem is equidistant between two tokens. Collapsing app-wide text sizes without an owner mapping would be a bigger visual change than everything else in W7 combined. Needs an owner decision; not lint-enforced, so the gate stays green. |
 | W6 | 11 | **Visually inspect exported sprites**, and run the generated `index.ts` against real downstream game code. | Byte-identity is proven (`diff -r` exit 0, verified twice), so this is confirmation rather than a test. The agent compiled the generated code under `--strict` against `exports/lib/` but did not execute it in a consuming project. |
 | W5 | 07 | ⭐ **Review the 11 committed SHA-256 digests and sign off.** They are the frozen contract afterwards — every later wave that touches serialization is checked against them. | The agent reviewed them and verified the snapshot counts (50+18+10+41+12+6+2+6+4 = 149 ✓), but task 07's spec requires owner review before they are treated as canonical. |
 | W5 | 09 | ⭐ **Visual review of the 6 newly-defined tokens** — see the table below. **76 declarations change appearance by design**, since these properties were referenced but never defined. | Three of the six values are the agent's judgement calls, not spec-supplied. Each is a one-line change in `client/src/styles/tokens.css`. |
