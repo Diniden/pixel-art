@@ -4,8 +4,12 @@
 // (REFRESH task 07) — the order the migrations run in and their side effects,
 // not the individual transforms (those are in `types/__tests__/migrations.test.ts`).
 //
-// ⚠️ Assertions here are OBSERVED behaviour, bugs included. L2 and L6 pin real
-// defects. L6 in particular pins the highest-severity bug in the repo.
+// ⚠️ Assertions here are OBSERVED behaviour, bugs included. L2 pins a real
+// defect (the best-effort backup). L6 — which used to pin the highest-severity
+// bug in the repo, the fabricated blank project — was FLIPPED by REFRESH task
+// 15, exactly as its spec authorises: failures now THROW a typed ApiError
+// instead of returning `createDefaultProject()`. L7's 404→default first-run
+// path is deliberately retained and still pinned.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -14,6 +18,7 @@ import {
   syntheticProject,
   syntheticUIState,
 } from "@test/__fixtures__/projects";
+import { isKind } from "@/api";
 import { loadProject } from "@/services/api";
 import { createDefaultProject, type CompactProject } from "@/types";
 
@@ -259,51 +264,43 @@ describe("L5 — nothing to migrate", () => {
   });
 });
 
-describe("L6 — fetch throws", () => {
-  it("returns a BLANK createDefaultProject() and only logs", async () => {
-    // BUG: HIGHEST-SEVERITY DEFECT IN THE REPO.
+describe("L6 — fetch throws (FLIPPED by task 15 — R5, first half)", () => {
+  it("THROWS a typed 'network' ApiError instead of fabricating a blank project", async () => {
+    // Until task 15 this pinned the HIGHEST-SEVERITY DEFECT IN THE REPO:
+    // `loadProject` swallowed EVERY failure and returned
+    // `createDefaultProject()`, which the auto-save chain then wrote over the
+    // user's real 1.1 MB file. A transient network blip was enough.
     //
-    // `loadProject`'s outer try/catch (`api.ts:234-238`) swallows EVERY failure
-    // — network error, malformed JSON, a throw from any migration — and returns
-    // `createDefaultProject()`: a blank one-object, one-frame project. The store
-    // accepts that as the loaded project, and the auto-save chain then writes it
-    // back over the user's real file. A transient network blip can therefore
-    // replace 1.1 MB of real artwork with an empty default, with nothing in the
-    // UI to indicate anything went wrong.
-    //
-    // Task 14 fixes this. Until then it is pinned so the behaviour is
-    // verifiable rather than merely suspected.
+    // Task 15's spec authorises this flip: the API layer may never fabricate
+    // a success value. The store-side half of the fix — the load-state gate
+    // that blocks auto-save after a failed load — is task 16.
     stubFetch(() => {
       throw new Error("network down");
     });
 
-    const result = await loadProject();
-
-    expect(result).toEqual(createDefaultProject());
-    expect(result.objects).toHaveLength(1);
-    expect(result.objects[0].frames).toHaveLength(1);
-    expect(consoleError).toHaveBeenCalledWith(
-      "Error loading project:",
-      expect.any(Error),
+    const error = await loadProject().then(
+      () => null,
+      (e: unknown) => e,
     );
-    // Nothing signals the failure to the caller — no throw, no error field.
-    expect(result.version).toBe("1.1.0");
+
+    expect(isKind(error, "network")).toBe(true);
+    // The layer neither logs nor invents: the failure reaches the caller.
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it("also swallows a non-404 HTTP error the same way", async () => {
-    // BUG: same defect via a different route — a 500 becomes a blank project.
-    // Task 14 fixes it.
+  it("throws kind 'server' for a non-404 HTTP error", async () => {
     stubFetch(() => errorResponse(500));
 
-    const result = await loadProject();
+    const error = await loadProject().then(
+      () => null,
+      (e: unknown) => e,
+    );
 
-    expect(result).toEqual(createDefaultProject());
-    expect(consoleError).toHaveBeenCalled();
+    expect(isKind(error, "server")).toBe(true);
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it("swallows malformed JSON the same way", async () => {
-    // BUG: same defect. A truncated or corrupt project file yields a blank
-    // default rather than an error. Task 14 fixes it.
+  it("throws kind 'unknown' for malformed JSON — a corrupt project file is an ERROR, not a blank default", async () => {
     stubFetch(() => ({
       ok: true,
       status: 200,
@@ -313,10 +310,13 @@ describe("L6 — fetch throws", () => {
       },
     }));
 
-    const result = await loadProject();
+    const error = await loadProject().then(
+      () => null,
+      (e: unknown) => e,
+    );
 
-    expect(result).toEqual(createDefaultProject());
-    expect(consoleError).toHaveBeenCalled();
+    expect(isKind(error, "unknown")).toBe(true);
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });
 

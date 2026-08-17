@@ -1,15 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useEditorStore } from '../../store';
-import { listBackups } from '../../services/api';
+import { backupApi, isApiError, type BackupEntry } from '../../api';
 import { Icon } from '../Icon/Icon';
 import { Clock, X } from 'lucide-react';
 import './BrowseBackupsModal.css';
-
-interface BackupEntry {
-  date: string;
-  time: string;
-  filename: string;
-}
 
 interface BrowseBackupsModalProps {
   onClose: () => void;
@@ -46,29 +40,32 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
   const [selectedBackup, setSelectedBackup] = useState<BackupEntry | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  // Task 15: the API layer no longer returns `[]` when the server is down, so
+  // a load failure is now an EXPLICIT error state — never "no backups", which
+  // read as "your backups are gone".
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
-    async function fetchBackups() {
+    async function loadBackups() {
       setIsLoading(true);
-      setError(null);
+      setLoadError(null);
       try {
-        const results = await listBackups(projectName);
-        if (!cancelled) {
-          setBackups(results);
-          setIsLoading(false);
-        }
-      } catch {
-        if (!cancelled) {
-          setError('Failed to load backups');
-          setIsLoading(false);
-        }
+        const results = await backupApi.list(projectName, controller.signal);
+        setBackups(results);
+        setIsLoading(false);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setLoadError(
+          isApiError(err) ? err.message : 'Could not load the backup list',
+        );
+        setIsLoading(false);
       }
     }
 
-    fetchBackups();
-    return () => { cancelled = true; };
+    loadBackups();
+    return () => controller.abort();
   }, [projectName]);
 
   const groupedBackups = backups.reduce<Record<string, BackupEntry[]>>(
@@ -132,6 +129,11 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
         <div className="modal-content">
           {isLoading ? (
             <div className="backups-loading">Loading backups...</div>
+          ) : loadError ? (
+            <div className="error-message" style={{ margin: '12px 0' }}>
+              Could not load backups — {loadError}. Your backups are NOT gone;
+              check that the server is running and reopen this dialog.
+            </div>
           ) : backups.length === 0 ? (
             <div className="backups-empty">
               No unzipped backups found for this project.

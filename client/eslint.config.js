@@ -278,6 +278,45 @@ export default tseslint.config(
     },
   },
 
+  // ── The API layer imports no app state and no UI (task 15) ────────────────
+  //
+  // `src/api/` is pure transport: it may import types, but never a store
+  // (either the legacy Zustand `store/` or the MobX `stores/`) and never a
+  // component. Same flat-config hazard as above: this narrower block REPLACES
+  // the broadest block's options for api files, so the mobx-react-lite ban is
+  // re-stated.
+  {
+    files: ["src/api/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "**/stores",
+                "**/stores/**",
+                "**/store",
+                "**/store/**",
+                "**/components/**",
+              ],
+              message:
+                "The API layer is pure transport: no store, no components. " +
+                "Callers pass data in; typed results and ApiErrors come out.",
+            },
+          ],
+          paths: [
+            // Re-stated: this block replaces the observer() block's options.
+            {
+              name: "mobx-react-lite",
+              message: "observer() belongs in src/containers/ only.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // ── Storybook (task 10) ───────────────────────────────────────────────────
   //
   // ⚠️ A SEPARATE BLOCK, deliberately placed AFTER the boundary blocks and

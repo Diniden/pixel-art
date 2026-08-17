@@ -377,7 +377,12 @@ describe.each(HARNESSES)("%s — history", (_name, makeHarness) => {
     it("ALL 5 paletteActions mutations are NON-tracking", () => {
       const grew = historyGrowth(() => {
         harness.dispatch("addPalette", "New Palette");
-        const created = harness.getProject()!.palettes.at(-1)!;
+        // `.at(-1)` → index arithmetic: `Array.prototype.at` is lib-ES2022 and
+        // this workspace compiles with lib ES2020. It used to slip through via
+        // an @types/node compat shim that a transitive re-resolve (no-lockfile
+        // policy) removed. Same value, type-only change (task 15, in passing).
+        const palettes = harness.getProject()!.palettes;
+        const created = palettes[palettes.length - 1]!;
         harness.dispatch("addColorToPalette", created.id, BLUE);
         harness.dispatch("removeColorFromPalette", created.id, 0);
         harness.dispatch("renamePalette", created.id, "Renamed");

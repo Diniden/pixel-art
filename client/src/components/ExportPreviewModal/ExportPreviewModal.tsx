@@ -12,6 +12,7 @@ import type {
   ExportedVariantLayer,
   ExportedVariant,
 } from "../../../lib/parse-pixel-project";
+import { exportApi } from "../../api";
 import { Icon } from "../Icon/Icon";
 import { AlertTriangle, X } from "lucide-react";
 import "./ExportPreviewModal.css";
@@ -401,14 +402,14 @@ export function ExportPreviewModal({
     }
 
     let cancelled = false;
+    const controller = new AbortController();
 
     (async () => {
       try {
         const basePath = `/exports/${kebabName}`;
-        const res = await fetch(`${basePath}/frames.json`);
-        if (!res.ok)
-          throw new Error(`Failed to fetch frames.json (${res.status})`);
-        const raw = await res.json();
+        // Task 15: through the typed API layer (timeout + abort), replacing
+        // the inline fetch that had neither.
+        const raw = await exportApi.fetchFramesJson(kebabName, controller.signal);
 
         const projectData = parsePixelProject(raw);
         const tex = await loadTextures(projectData, basePath);
@@ -417,7 +418,7 @@ export function ExportPreviewModal({
           setLoaded({ project: projectData, textures: tex });
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && !controller.signal.aborted) {
           setError(err instanceof Error ? err.message : "Unknown error");
         }
       }
@@ -425,6 +426,7 @@ export function ExportPreviewModal({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [isOpen, kebabName]);
 

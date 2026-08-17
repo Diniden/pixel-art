@@ -1,3 +1,30 @@
+/**
+ * The project load/save path — and the home of the MIGRATION CHAIN.
+ *
+ * REFRESH task 15 removed all transport from this module: every HTTP request
+ * now goes through the typed API layer (`src/api/`), which is the only place
+ * in the client that calls `fetch`. What remains here is deliberate:
+ *
+ *  - the three migration functions and the load-time chain that applies them.
+ *    ⚠️ Task 16 moves them VERBATIM into the store's load path
+ *    (`DomainStore.loadProject`) — per MASTER.md §9.6 they may not move (or be
+ *    rewritten) before that task, because that is where a store exists to
+ *    receive them. The 8 schema migrations protect the owner's real data;
+ *    `services/__tests__/loadProject.test.ts` and the corpus digests pin them.
+ *  - thin, name-stable wrappers (`getConfig`, `listProjects`, …) so the store
+ *    (`store/projectActions.ts`, `services/autoSave.ts`) and its 336-test
+ *    behaviour suite — which mocks THIS module wholesale — keep a single,
+ *    stable seam until task 16 rebuilds the load path on the store side.
+ *
+ * ⚠️ NOTHING here fabricates a success value any more (R5, first half):
+ *  - `loadProject` used to swallow EVERY failure and return
+ *    `createDefaultProject()`, which auto-save then wrote over the user's real
+ *    1.1 MB file. It now THROWS the typed `ApiError`. The only remaining
+ *    default is the 404 "no project file exists yet" first-run path, which is
+ *    pinned behaviour (loadProject.test.ts L7), not error masking.
+ *  - `getConfig` / `listProjects` no longer return `{currentProject:"project"}`
+ *    / `[]` on failure — they throw, and the caller decides.
+ */
 import {
   Project,
   createDefaultProject,
@@ -8,8 +35,7 @@ import {
   migrateLegacyLayer,
   CompactProject,
 } from "../types";
-
-export const API_BASE = import.meta.env.VITE_API_URL || "/api";
+import { backupApi, configApi, isKind, projectApi } from "../api";
 
 // Check if project has variants on objects (needs migration to project-level)
 function needsVariantMigration(data: CompactProject): boolean {
@@ -144,127 +170,85 @@ function migrateVariantsToProjectLevel(data: CompactProject): CompactProject {
 
 // Get server configuration (includes current project name)
 export async function getConfig(): Promise<{ currentProject: string }> {
-  try {
-    const response = await fetch(`${API_BASE}/config`);
-    if (!response.ok) {
-      throw new Error(`Failed to get config: ${response.statusText}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error("Error getting config:", error);
-    return { currentProject: "project" };
-  }
+  return configApi.get();
 }
 
 // List all available projects
 export async function listProjects(): Promise<string[]> {
-  try {
-    const response = await fetch(`${API_BASE}/projects`);
-    if (!response.ok) {
-      throw new Error(`Failed to list projects: ${response.statusText}`);
-    }
-    const data = await response.json();
-    return data.projects || [];
-  } catch (error) {
-    console.error("Error listing projects:", error);
-    return [];
-  }
+  return projectApi.list();
 }
 
-// Load a project by name (or current project if not specified)
+/**
+ * Load a project by name (or current project if not specified), applying the
+ * migration chain to the raw payload `projectApi.get` returns.
+ *
+ * FAILURES THROW (task 15 / R5 first half). The single surviving default is
+ * the 404 path: no project file exists yet, so a fresh default is the correct
+ * first-run behaviour (pinned by loadProject.test.ts L7), not error masking.
+ */
 export async function loadProject(projectName?: string): Promise<Project> {
+  let data: unknown;
   try {
-    const url = projectName
-      ? `${API_BASE}/project?name=${encodeURIComponent(projectName)}`
-      : `${API_BASE}/project`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      if (response.status === 404) {
-        // No project exists yet, return default
-        return createDefaultProject();
-      }
-      throw new Error(`Failed to load project: ${response.statusText}`);
-    }
-    const data = await response.json();
-
-    // Handle both compact (new) and expanded (legacy) formats
-    if (isCompactFormat(data)) {
-      let compactData = data as CompactProject;
-      let needsMigration = false;
-
-      // Check if this is the old compact format (before lighting studio)
-      if (isLegacyCompactFormat(compactData)) {
-        needsMigration = true;
-      }
-
-      // Check if variants need to be migrated from objects to project level
-      if (needsVariantMigration(compactData)) {
-        needsMigration = true;
-      }
-
-      // Create backup before any migration
-      if (needsMigration) {
-        try {
-          await fetch(`${API_BASE}/project/backup`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(compactData),
-          });
-          console.log("Created backup of project before migration");
-        } catch (backupError) {
-          console.warn("Could not create backup:", backupError);
-        }
-      }
-
-      // Apply migrations in order
-      if (isLegacyCompactFormat(compactData)) {
-        // This migration handles both pixel format AND variant migration
-        compactData = migrateLegacyProject(compactData);
-      } else if (needsVariantMigration(compactData)) {
-        // Only migrate variants if pixel format is already new
-        compactData = migrateVariantsToProjectLevel(compactData);
-      }
-
-      return compactToProject(compactData);
-    }
-
-    // Legacy format - return as-is
-    return data as Project;
+    data = await projectApi.get(projectName);
   } catch (error) {
-    console.error("Error loading project:", error);
-    // Return default project if server is unavailable
-    return createDefaultProject();
+    if (isKind(error, "notFound")) {
+      // No project exists yet, return default
+      return createDefaultProject();
+    }
+    throw error;
   }
+
+  // Handle both compact (new) and expanded (legacy) formats
+  if (isCompactFormat(data)) {
+    let compactData = data as CompactProject;
+    let needsMigration = false;
+
+    // Check if this is the old compact format (before lighting studio)
+    if (isLegacyCompactFormat(compactData)) {
+      needsMigration = true;
+    }
+
+    // Check if variants need to be migrated from objects to project level
+    if (needsVariantMigration(compactData)) {
+      needsMigration = true;
+    }
+
+    // Create backup before any migration
+    if (needsMigration) {
+      try {
+        await backupApi.createMigrationBackup(compactData);
+        console.log("Created backup of project before migration");
+      } catch (backupError) {
+        // Best-effort BY PINNED DESIGN (loadProject.test.ts L2): making the
+        // backup blocking is a product decision needing owner sign-off.
+        console.warn("Could not create backup:", backupError);
+      }
+    }
+
+    // Apply migrations in order
+    if (isLegacyCompactFormat(compactData)) {
+      // This migration handles both pixel format AND variant migration
+      compactData = migrateLegacyProject(compactData);
+    } else if (needsVariantMigration(compactData)) {
+      // Only migrate variants if pixel format is already new
+      compactData = migrateVariantsToProjectLevel(compactData);
+    }
+
+    return compactToProject(compactData);
+  }
+
+  // Legacy format - return as-is
+  return data as Project;
 }
 
-// Save a project with optional name (uses current project if not specified)
+// Save a project with optional name (uses current project if not specified).
+// Always saves in compact format to reduce file size. Failures throw.
 export async function saveProject(
   project: Project,
   projectName?: string,
 ): Promise<void> {
-  try {
-    // Always save in compact format to reduce file size
-    const compactProject = projectToCompact(project);
-
-    const url = projectName
-      ? `${API_BASE}/project?name=${encodeURIComponent(projectName)}`
-      : `${API_BASE}/project`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(compactProject),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to save project: ${response.statusText}`);
-    }
-  } catch (error) {
-    console.error("Error saving project:", error);
-    throw error;
-  }
+  const compactProject = projectToCompact(project);
+  await projectApi.save(compactProject, projectName);
 }
 
 // Create a new project
@@ -272,29 +256,10 @@ export async function createProject(
   name: string,
   projectData?: Project,
 ): Promise<void> {
-  try {
-    const body: { name: string; projectData?: unknown } = { name };
-
-    if (projectData) {
-      body.projectData = projectToCompact(projectData);
-    }
-
-    const response = await fetch(`${API_BASE}/project/create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(
-        data.error || `Failed to create project: ${response.statusText}`,
-      );
-    }
-  } catch (error) {
-    console.error("Error creating project:", error);
-    throw error;
-  }
+  await projectApi.create(
+    name,
+    projectData ? projectToCompact(projectData) : undefined,
+  );
 }
 
 // Rename a project
@@ -302,87 +267,17 @@ export async function renameProject(
   oldName: string,
   newName: string,
 ): Promise<void> {
-  try {
-    const response = await fetch(`${API_BASE}/project/rename`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ oldName, newName }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(
-        data.error || `Failed to rename project: ${response.statusText}`,
-      );
-    }
-  } catch (error) {
-    console.error("Error renaming project:", error);
-    throw error;
-  }
+  await projectApi.rename(oldName, newName);
 }
 
 // Delete a project
 export async function deleteProject(name: string): Promise<void> {
-  try {
-    const response = await fetch(
-      `${API_BASE}/project?name=${encodeURIComponent(name)}`,
-      {
-        method: "DELETE",
-      },
-    );
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(
-        data.error || `Failed to delete project: ${response.statusText}`,
-      );
-    }
-  } catch (error) {
-    console.error("Error deleting project:", error);
-    throw error;
-  }
+  await projectApi.remove(name);
 }
 
 // Switch to a different project (just updates server config)
 export async function switchProject(name: string): Promise<void> {
-  try {
-    const response = await fetch(`${API_BASE}/project/switch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(
-        data.error || `Failed to switch project: ${response.statusText}`,
-      );
-    }
-  } catch (error) {
-    console.error("Error switching project:", error);
-    throw error;
-  }
-}
-
-// List unzipped backups for a project
-export async function listBackups(
-  projectName?: string,
-): Promise<{ date: string; time: string; filename: string }[]> {
-  try {
-    const url = projectName
-      ? `${API_BASE}/project/backups?name=${encodeURIComponent(projectName)}`
-      : `${API_BASE}/project/backups`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to list backups: ${response.statusText}`);
-    }
-    const data = await response.json();
-    return data.backups || [];
-  } catch (error) {
-    console.error("Error listing backups:", error);
-    return [];
-  }
+  await projectApi.switchTo(name);
 }
 
 // Restore a project from a backup file
@@ -391,35 +286,5 @@ export async function restoreBackup(
   filename: string,
   projectName?: string,
 ): Promise<void> {
-  const url = projectName
-    ? `${API_BASE}/project/restore-backup?name=${encodeURIComponent(projectName)}`
-    : `${API_BASE}/project/restore-backup`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ date, filename }),
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(
-      data.error || `Failed to restore backup: ${response.statusText}`,
-    );
-  }
-}
-
-// Export the current or specified project to server export folder (EXPORT_FOLDER/<projectName>/)
-export async function exportProject(
-  projectName?: string,
-): Promise<{ success: true; path: string; kebabName: string }> {
-  const url = projectName
-    ? `${API_BASE}/project/export?name=${encodeURIComponent(projectName)}`
-    : `${API_BASE}/project/export`;
-  const response = await fetch(url, { method: "POST" });
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || `Export failed: ${response.statusText}`);
-  }
-  return response.json();
+  await backupApi.restore(date, filename, projectName);
 }

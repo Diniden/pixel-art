@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
 import type { SaveStatus } from '../../store/storeTypes';
-import { exportProject } from '../../services/export';
-import { checkAiHealth, getAiConfig } from '../../services/aiService';
+import { aiApi, exportApi } from '../../api';
 import { ProjectSelectModal } from '../ProjectSelectModal/ProjectSelectModal';
 import { ExportPreviewModal } from '../ExportPreviewModal/ExportPreviewModal';
 import { BrowseBackupsModal } from '../BrowseBackupsModal/BrowseBackupsModal';
@@ -36,27 +35,56 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
   const [aiUrlInput, setAiUrlInput] = useState(aiServiceUrl || '');
   const [aiHealthStatus, setAiHealthStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
   const [aiHealthDetail, setAiHealthDetail] = useState<string | null>(null);
-  const [serverDefaultUrl, setServerDefaultUrl] = useState('http://localhost:8100');
+  // `null` = the server default is UNKNOWN (the request failed or has not
+  // resolved). Task 15: the API layer no longer fabricates
+  // `http://localhost:8100` when the server is down, so the UI must say
+  // "unknown" instead of presenting an invented URL as "the server default".
+  const [serverDefaultUrl, setServerDefaultUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const aiConfigRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getAiConfig().then((cfg) => {
-      setServerDefaultUrl(cfg.effectiveAiServiceUrl || 'http://localhost:8100');
-    });
+    const controller = new AbortController();
+    aiApi
+      .getConfig(controller.signal)
+      .then((cfg) => {
+        setServerDefaultUrl(cfg.effectiveAiServiceUrl || null);
+      })
+      .catch(() => {
+        // Explicit unknown state — never a fabricated default.
+        setServerDefaultUrl(null);
+      });
+    return () => controller.abort();
   }, []);
 
   const pollAiHealth = useCallback(() => {
     const url = aiServiceUrl || undefined;
-    checkAiHealth(url).then((result) => {
-      if (result.status === 'ok') {
-        setAiHealthStatus('ok');
-        setAiHealthDetail(null);
-      } else {
+    aiApi
+      .health(url)
+      .then((result) => {
+        if (result.status === 'ok' && result.remote_configured === false) {
+          // The health that can lie: the proxy is up but has no remote AI
+          // service configured, so every job would fail. Not "Connected".
+          setAiHealthStatus('error');
+          setAiHealthDetail(
+            'AI proxy is running but no remote service is configured (AI_REMOTE_URL unset)',
+          );
+        } else if (result.status === 'ok') {
+          setAiHealthStatus('ok');
+          setAiHealthDetail(null);
+        } else {
+          setAiHealthStatus('error');
+          setAiHealthDetail(result.detail || 'AI service is not reachable');
+        }
+      })
+      .catch((err: unknown) => {
+        // A THROW here means the Express server itself is unreachable
+        // (health always answers HTTP 200 when the server is up).
         setAiHealthStatus('error');
-        setAiHealthDetail(result.detail || 'AI service is not reachable');
-      }
-    });
+        setAiHealthDetail(
+          err instanceof Error ? err.message : 'Cannot reach the server',
+        );
+      });
   }, [aiServiceUrl]);
 
   useEffect(() => {
@@ -104,7 +132,7 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
     setExportStatus('exporting');
     setExportMessage(null);
     try {
-      const result = await exportProject(projectName);
+      const result = await exportApi.run(projectName);
       setExportStatus('success');
       setExportMessage(`Exported to ${result.path}`);
       setExportKebabName(result.kebabName);
@@ -238,7 +266,7 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
           <button
             className={`ai-config-btn ${aiHealthStatus === 'error' ? 'ai-error' : aiHealthStatus === 'ok' ? 'configured' : ''}`}
             onClick={() => {
-              setAiUrlInput(aiServiceUrl || serverDefaultUrl);
+              setAiUrlInput(aiServiceUrl || serverDefaultUrl || '');
               setShowAiConfig(!showAiConfig);
             }}
             title={aiHealthStatus === 'error' ? `AI Error: ${aiHealthDetail}` : 'AI Service Settings'}
@@ -267,7 +295,7 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
                       setShowAiConfig(false);
                     }
                   }}
-                  placeholder={serverDefaultUrl}
+                  placeholder={serverDefaultUrl ?? 'Server default unavailable'}
                   autoFocus
                 />
                 <button
@@ -284,7 +312,10 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
               <span className="ai-config-hint">
                 {aiHealthStatus === 'ok' ? `Connected to ${aiServiceUrl || serverDefaultUrl}` :
                  aiHealthStatus === 'error' ? 'Service has errors' :
-                 aiServiceUrl || `Using default: ${serverDefaultUrl}`}
+                 aiServiceUrl ||
+                   (serverDefaultUrl
+                     ? `Using default: ${serverDefaultUrl}`
+                     : 'Server default unknown — is the server running?')}
               </span>
             </div>
           )}

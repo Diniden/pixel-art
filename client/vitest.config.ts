@@ -23,7 +23,10 @@ export default defineConfig({
           name: "unit",
           globals: true,
           environment: "node",
-          setupFiles: ["./src/test/setup.unit.ts"],
+          // setup.msw.ts (task 15) starts the MSW server for the whole lane
+          // with `onUnhandledRequest: "error"` — no unit test may hit a real
+          // network. Tests that stub `fetch` themselves simply bypass it.
+          setupFiles: ["./src/test/setup.unit.ts", "./src/test/setup.msw.ts"],
           include: [
             "src/**/__tests__/**/*.test.{ts,tsx}",
             "src/**/*.test.{ts,tsx}",
