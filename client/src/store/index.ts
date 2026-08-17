@@ -170,6 +170,11 @@ export const useEditorStore = create<EditorState>((set, get) => {
     // History action (delegates to closure)
     saveCurrentStateToHistory: () => saveCurrentStateToHistory(),
 
+    // The single commit path, exposed as an action (task 14, defect 2) so the
+    // AI interpolate flow commits with the MAX_HISTORY cap and the normal
+    // save path instead of reimplementing both.
+    updateProjectAndSave,
+
     // Spread all module actions
     ...helpers,
     ...projectActions,

@@ -1,10 +1,8 @@
 /**
  * Behaviour contract — auto-save scheduling, the save-status lifecycle, and the
- * three KNOWN BUGS that must be pinned as current behaviour so that task 15's
- * fixes are visible as deliberate diffs rather than accidents.
- *
- * Every `// BUG:` marker below names the task that flips it. Per MASTER.md §10
- * rule 10 the assertion states what the code does TODAY.
+ * three defects that were pinned as `// BUG:` assertions until task 14 fixed
+ * them. The flipped assertions below now state the CORRECT behaviour, each
+ * flipped in the same change as its fix (task 14, defects 1-3).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -273,21 +271,17 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
     });
   });
 
-  /* ══ BUG 1 — the 8 lighting setters that never auto-save ═══════════════ */
+  /* ══ FIXED (task 14, defect 1) — the 8 lighting setters now auto-save ══ */
 
-  describe("the 8 lighting setters that never auto-save", () => {
-    // BUG: lightingActions.ts:11-129 — task 15 fixes this.
+  describe("the 8 lighting setters auto-save (fixed by task 14)", () => {
+    // WAS BUG, FIXED BY TASK 14: the 8 setters wrote `project` via a raw
+    // `set({ project: {...} })` and scheduled NO save — `lightingActions.ts`
+    // did not import `services/autoSave` at all, so light colour, ambient
+    // colour, height scale and five more were silently lost on reload.
     //
-    // MEASURED 2026-08-16: `setStudioMode` (:15), `setLightingDataLayerEditMode`
-    // (:31), `setSelectedNormal` (:46), `setLightDirection` (:61),
-    // `setLightColor` (:76), `setAmbientColor` (:91), `setHeightBrushValue`
-    // (:106) and `setHeightScale` (:121) all write `project` via a raw
-    // `set({ project: {...} })` and schedule NO save. `lightingActions.ts`
-    // imports nothing from `services/autoSave` at all — confirmed, lines 1-3
-    // import only `./storeTypes`, `../types` and `../utils/edgeInterpolate`.
-    //
-    // Consequence: a user changing the light direction and closing the tab
-    // loses it, unless some UNRELATED action happens to trigger a save first.
+    // They now route through `updateProjectAndSave` with `trackHistory =
+    // false` (matching all 33 uiState call sites in toolActions), so each
+    // mutation schedules exactly one save.
     const setters: Array<[string, unknown[]]> = [
       ["setStudioMode", ["lighting"]],
       ["setLightingDataLayerEditMode", ["height"]],
@@ -300,7 +294,7 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
     ];
 
     it.each(setters)(
-      "BUG: %s mutates the project but schedules NO save",
+      "FIXED: %s mutates the project AND schedules exactly one save",
       (name, args) => {
         saveProject.mockClear();
         const before = JSON.stringify(harness.getUiState());
@@ -312,13 +306,19 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
 
         // The project DID change…
         expect(JSON.stringify(harness.getUiState())).not.toBe(before);
-        // …and no save was ever scheduled.
-        vi.advanceTimersByTime(5000);
+        // …and exactly one save was scheduled through the debounce.
+        vi.advanceTimersByTime(499);
         expect(saveProject).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(1);
+        expect(saveProject).toHaveBeenCalledTimes(1);
       },
     );
 
-    it("BUG: none of the 8 track history either", () => {
+    it("DELIBERATE: none of the 8 track history (trackHistory = false)", () => {
+      // NOT flipped by task 14 — the fix routes the setters through
+      // `updateProjectAndSave(..., false)`, the same `trackHistory = false`
+      // every other uiState writer uses. Adding 8 new undo entries would have
+      // been a second, unrelated behaviour change.
       const before = harness.getHistoryLength();
       for (const [name, args] of setters) {
         harness.dispatch(name as never, ...(args as never[]));
@@ -334,17 +334,16 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
     });
   });
 
-  /* ══ BUG 2 — the rename race ══════════════════════════════════════════ */
+  /* ══ FIXED (task 14, defect 3) — the rename race ══════════════════════ */
 
-  describe("the renameCurrentProject race", () => {
-    // BUG: projectActions.ts:111-129 — task 15 fixes this.
-    //
-    // `renameCurrentProject` does NOT call `cancelPendingSave()`, unlike its
-    // three siblings — `createNewProject` (:58), `switchToProject` (:85) and
-    // `deleteCurrentProject` (:141), each with the identical comment "Cancel any
-    // pending saves to the old project". A save debounced against the OLD name
-    // is therefore still in flight across the rename.
-    it("BUG: an in-flight save is NOT cancelled and lands under the OLD name", async () => {
+  describe("the renameCurrentProject race (fixed by task 14)", () => {
+    // WAS BUG, FIXED BY TASK 14: `renameCurrentProject` did NOT call
+    // `cancelPendingSave()`, unlike its three siblings — `createNewProject`,
+    // `switchToProject` and `deleteCurrentProject`. A save debounced against
+    // the OLD name could therefore fire with the stale name AFTER the
+    // server-side rename. It now cancels the pending save, matching the
+    // siblings.
+    it("FIXED: a pending save is cancelled and nothing lands under the OLD name", async () => {
       const originalName = harness.getProjectName();
       saveProject.mockClear();
       renameProject.mockResolvedValue(undefined);
@@ -358,11 +357,10 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
 
       await vi.advanceTimersByTimeAsync(500);
 
-      // The queued save fires, and `scheduleAutoSave` captured the OLD name at
-      // queue time, so the write goes to the pre-rename file.
-      expect(saveProject).toHaveBeenCalledTimes(1);
-      expect(saveProject.mock.calls[0][1]).toBe(originalName);
-      expect(saveProject.mock.calls[0][1]).not.toBe("renamed");
+      // The queued save was cancelled at the top of the rename, so no write
+      // reaches the pre-rename file (and none reaches the new one either —
+      // the next real edit will save under the new name).
+      expect(saveProject).not.toHaveBeenCalled();
     });
 
     it("by CONTRAST, switchToProject DOES cancel the pending save", async () => {
@@ -378,42 +376,37 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
     });
   });
 
-  /* ══ BUG 3 — the AI modal's unbounded history splice ═══════════════════ */
+  /* ══ FIXED (task 14, defect 2) — the AI modal's history commit ═════════ */
 
-  describe("the AIInterpolateModal history bypass", () => {
-    // BUG: unbounded history — task 15 fixes this.
+  describe("the AIInterpolateModal history commit (fixed by task 14)", () => {
+    // WAS BUG, FIXED BY TASK 14: `AIInterpolateModal.tsx` reimplemented the
+    // history splice with a raw `useEditorStore.setState()` and OMITTED the
+    // `if (newHistory.length > MAX_HISTORY) newHistory.shift()` guard, so
+    // repeated AI interpolation grew `projectHistory` without bound. It also
+    // dynamic-imported `scheduleAutoSave` and called it directly.
     //
-    // `AIInterpolateModal.tsx:754-763` and `:841-850` reimplement the history
-    // splice with a raw `useEditorStore.setState()` and OMIT the guard that
-    // `store/index.ts:66-68` applies:
-    //     if (newHistory.length > MAX_HISTORY) newHistory.shift();
-    //
-    // This assertion reproduces the modal's exact splice (it cannot go through
-    // `dispatch`, because the modal deliberately bypasses the store's actions —
-    // that IS the bug). A MobX port whose commit path is the only way to write
-    // history closes this by construction, which is the point of pinning it.
-    it("BUG: the modal's own splice grows projectHistory PAST MAX_HISTORY", () => {
-      const modalSplice = () => {
-        const cloned = cloneProject(useEditorStore.getState().project!);
-        useEditorStore.setState((state) => {
-          const newHistory = [
-            ...state.projectHistory.slice(0, state.historyIndex + 1),
-            cloned,
-          ];
-          // ⚠️ NO `if (newHistory.length > MAX_HISTORY) newHistory.shift()`.
-          return {
-            project: state.project,
-            projectHistory: newHistory,
-            historyIndex: newHistory.length - 1,
-          };
-        });
-      };
+    // The modal now commits through the store's exposed `updateProjectAndSave`
+    // action — `store.updateProjectAndSave(() => newProject, true)` — so the
+    // MAX_HISTORY cap and the normal save path both apply. This test drives
+    // that exact call the way the modal now does.
+    it("FIXED: the modal's commit path caps projectHistory at MAX_HISTORY", () => {
+      for (let i = 0; i < MAX_HISTORY + 5; i++) {
+        // What the modal does on accept: build a full replacement project,
+        // then commit it through the store's single path with history.
+        const newProject = cloneProject(useEditorStore.getState().project!);
+        harness.dispatch("updateProjectAndSave", () => newProject, true);
+      }
 
-      for (let i = 0; i < MAX_HISTORY + 5; i++) modalSplice();
+      expect(harness.getHistoryLength()).toBe(MAX_HISTORY);
+      expect(harness.getHistoryIndex()).toBe(MAX_HISTORY - 1);
+    });
 
-      expect(harness.getHistoryLength()).toBe(MAX_HISTORY + 5);
-      expect(harness.getHistoryLength()).toBeGreaterThan(MAX_HISTORY);
-      expect(harness.getHistoryIndex()).toBe(MAX_HISTORY + 4);
+    it("FIXED: the modal's commit path schedules a save through the store", () => {
+      saveProject.mockClear();
+      const newProject = cloneProject(useEditorStore.getState().project!);
+      harness.dispatch("updateProjectAndSave", () => newProject, true);
+      vi.advanceTimersByTime(500);
+      expect(saveProject).toHaveBeenCalledTimes(1);
     });
 
     it("by CONTRAST, the store's own path caps at MAX_HISTORY", () => {

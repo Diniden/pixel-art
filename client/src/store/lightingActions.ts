@@ -4,16 +4,24 @@ import { computeEdgeInterpolatedNormals } from "../utils/edgeInterpolate";
 
 export function createLightingActions(
   get: StoreGet,
-  set: StoreSet,
+  // Unused since task 14: every setter now routes through updateProjectAndSave.
+  // Kept in the signature so store/index.ts's wiring is untouched.
+  _set: StoreSet,
   updateProjectAndSave: UpdateProjectAndSave,
 ) {
   return {
+    // ── The 8 uiState setters ──────────────────────────────────────────────
+    //
+    // Task 14 (defect 1): these previously wrote `project` via a raw
+    // `set({ project: {...} })` and scheduled NO save — lighting settings were
+    // silently lost on reload unless an unrelated action happened to save
+    // first. They now route through `updateProjectAndSave` like every other
+    // uiState writer. `trackHistory = false` is deliberate: all 33 uiState
+    // call sites in toolActions use `false`, and `true` would add 8 new undo
+    // entries — a different behaviour change from the one being fixed.
     setStudioMode: (mode: StudioMode) => {
-      const { project } = get();
-      if (!project) return;
-
-      set({
-        project: {
+      updateProjectAndSave(
+        (project) => ({
           ...project,
           uiState: {
             ...project.uiState,
@@ -21,112 +29,101 @@ export function createLightingActions(
             // Reset tool to appropriate default when switching modes
             selectedTool: mode === "lighting" ? "normal-pencil" : "pixel",
           },
-        },
-      });
+        }),
+        false,
+      );
     },
 
     setLightingDataLayerEditMode: (mode: "normals" | "height") => {
-      const { project } = get();
-      if (!project) return;
-      set({
-        project: {
+      updateProjectAndSave(
+        (project) => ({
           ...project,
           uiState: {
             ...project.uiState,
             lightingDataLayerEditMode: mode,
           },
-        },
-      });
+        }),
+        false,
+      );
     },
 
     setSelectedNormal: (normal: Normal) => {
-      const { project } = get();
-      if (!project) return;
-
-      set({
-        project: {
+      updateProjectAndSave(
+        (project) => ({
           ...project,
           uiState: {
             ...project.uiState,
             selectedNormal: normal,
           },
-        },
-      });
+        }),
+        false,
+      );
     },
 
     setLightDirection: (normal: Normal) => {
-      const { project } = get();
-      if (!project) return;
-
-      set({
-        project: {
+      updateProjectAndSave(
+        (project) => ({
           ...project,
           uiState: {
             ...project.uiState,
             lightDirection: normal,
           },
-        },
-      });
+        }),
+        false,
+      );
     },
 
     setLightColor: (color: Color) => {
-      const { project } = get();
-      if (!project) return;
-
-      set({
-        project: {
+      updateProjectAndSave(
+        (project) => ({
           ...project,
           uiState: {
             ...project.uiState,
             lightColor: color,
           },
-        },
-      });
+        }),
+        false,
+      );
     },
 
     setAmbientColor: (color: Color) => {
-      const { project } = get();
-      if (!project) return;
-
-      set({
-        project: {
+      updateProjectAndSave(
+        (project) => ({
           ...project,
           uiState: {
             ...project.uiState,
             ambientColor: color,
           },
-        },
-      });
+        }),
+        false,
+      );
     },
 
     setHeightBrushValue: (value: number) => {
-      const { project } = get();
-      if (!project) return;
       const clamped = Math.max(0, Math.min(255, Math.round(value)));
-      set({
-        project: {
+      updateProjectAndSave(
+        (project) => ({
           ...project,
           uiState: {
             ...project.uiState,
             heightBrushValue: clamped,
           },
-        },
-      });
+        }),
+        false,
+      );
     },
 
     setHeightScale: (scale: number) => {
-      const { project } = get();
-      if (!project) return;
-
-      set({
-        project: {
+      updateProjectAndSave(
+        (project) => ({
           ...project,
           uiState: {
             ...project.uiState,
             heightScale: Math.max(1, Math.min(500, scale)), // Clamp between 1 and 500
           },
-        },
-      });
+        }),
+        false,
+      );
     },
 
     setNormalPixel: (x: number, y: number, normal: Normal | 0) => {

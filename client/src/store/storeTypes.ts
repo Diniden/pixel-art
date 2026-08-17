@@ -323,6 +323,16 @@ export interface EditorState {
   adjustColor: (newColor: Color, trackHistory?: boolean) => void;
   saveCurrentStateToHistory: () => void;
 
+  /**
+   * The store's single commit path: applies `updater` to the live project,
+   * optionally pushes the pre-change state onto the capped undo history, and
+   * schedules an auto-save. Exposed as an action by task 14 (defect 2) so that
+   * AIInterpolateModal commits through the store instead of hand-rolling the
+   * history splice (which omitted the MAX_HISTORY cap) and calling
+   * scheduleAutoSave directly.
+   */
+  updateProjectAndSave: UpdateProjectAndSave;
+
   // Variant actions
   makeVariant: (layerId: string) => void;
   addVariant: (variantGroupId: string, copyFromVariantId?: string) => void;
