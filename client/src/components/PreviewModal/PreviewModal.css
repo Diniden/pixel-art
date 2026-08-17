@@ -154,7 +154,7 @@
   -webkit-appearance: none;
   appearance: none;
   background: var(--bg-tertiary);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   outline: none;
   cursor: pointer;
 }

@@ -178,7 +178,7 @@
   width: 3px;
   margin-left: -1.5px;
   background: var(--accent-primary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   pointer-events: none;
   z-index: 10;
   box-shadow: 0 0 6px var(--accent-primary);}
@@ -412,7 +412,7 @@
 .base-frame-thumbnail {
   width: 32px;
   height: 32px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
   border: 1px solid var(--border-primary);
 }
@@ -585,7 +585,7 @@
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid var(--border-primary);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -939,7 +939,7 @@
   width: 20px;
   height: 20px;
   image-rendering: pixelated;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--overlay-30);
 }
 

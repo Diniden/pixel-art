@@ -11,7 +11,7 @@
 
 .add-variant-modal {
   background: linear-gradient(135deg, var(--modal-gradient-a) 0%, var(--modal-gradient-b) 100%);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--white-10);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);  width: 520px;
   max-width: 90vw;
@@ -46,7 +46,7 @@
   cursor: pointer;
   padding: 0;
   line-height: 1;
-  transition: color 0.2s;
+  transition: color var(--transition-base);
 }
 
 .add-variant-modal-header .close-btn:hover {
@@ -78,7 +78,7 @@
   margin-bottom: 20px;
   padding: 12px 16px;
   background: var(--white-05);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--white-08);
 }
 
@@ -118,10 +118,10 @@
   position: relative;
   background: var(--white-03);
   border: 1px solid var(--white-08);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-base);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -156,7 +156,7 @@
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
   z-index: 2;
 }
 
@@ -173,7 +173,7 @@
   width: 64px;
   height: 64px;
   background: var(--overlay-30);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -212,7 +212,7 @@
   font-size: 12px;
   background: var(--overlay-40);
   border: 1px solid var(--accent-variant);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--white);
   text-align: center;
   outline: none;
@@ -249,9 +249,9 @@
   padding: 8px 16px;
   background: var(--white-05);
   border: 1px solid var(--white-10);
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -293,12 +293,12 @@
   padding: 10px 24px;
   background: linear-gradient(135deg, var(--accent-variant) 0%, var(--accent-variant) 100%);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--white);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
 }
 
 .add-variant-confirm-btn:hover:not(:disabled) {
@@ -323,7 +323,7 @@
 
 .delete-confirm-modal {
   background: linear-gradient(135deg, var(--modal-gradient-danger-a) 0%, var(--modal-gradient-a) 100%);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--accent-danger-30);
   box-shadow: 0 8px 32px rgba(239, 68, 68, 0.2);  width: 400px;
   max-width: 90vw;
@@ -375,11 +375,11 @@
   padding: 8px 20px;
   background: var(--white-10);
   border: 1px solid var(--white-20);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
 }
 
 .delete-confirm-actions .cancel-btn:hover {
@@ -390,12 +390,12 @@
   padding: 8px 20px;
   background: var(--accent-danger);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--white);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
 }
 
 .delete-confirm-actions .delete-btn:hover {

@@ -254,7 +254,7 @@
 
 .delete-confirm-modal {
   background: linear-gradient(135deg, var(--modal-gradient-danger-a) 0%, var(--modal-gradient-a) 100%);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--accent-danger-30);
   box-shadow: 0 8px 32px rgba(239, 68, 68, 0.2);  width: 400px;
   max-width: 90vw;
@@ -306,11 +306,11 @@
   padding: 8px 20px;
   background: var(--white-10);
   border: 1px solid var(--white-20);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
 }
 
 .delete-confirm-actions .cancel-btn:hover {
@@ -321,12 +321,12 @@
   padding: 8px 20px;
   background: var(--accent-danger);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--white);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
 }
 
 .delete-confirm-actions .delete-btn:hover {
@@ -364,7 +364,7 @@
 .object-thumbnail-small {
   width: 20px;
   height: 20px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
   flex-shrink: 0;
 }

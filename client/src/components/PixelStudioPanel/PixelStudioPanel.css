@@ -90,7 +90,7 @@
   color: var(--text-secondary);
   font-size: 0.75rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
 }
 
 .eraser-controls .shape-btn:hover {

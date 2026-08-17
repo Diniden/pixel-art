@@ -222,7 +222,7 @@
   padding: 1px 5px;
   font-size: 0.6rem;
   background: var(--accent-variant-30);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--accent-variant-light);
   font-weight: 500;
   text-transform: uppercase;
@@ -235,7 +235,7 @@
   padding: 1px 4px;
   font-size: 0.6rem;
   background: var(--accent-variant-30);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--accent-variant-light);
 }
 
