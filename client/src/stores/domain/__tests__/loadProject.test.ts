@@ -1,8 +1,17 @@
 // DO NOT run `vitest -u` on this file. Every diff here is a change to real user data.
 //
-// Characterisation tests for the migration CHAIN in `services/api.ts:175-239`
-// (REFRESH task 07) — the order the migrations run in and their side effects,
-// not the individual transforms (those are in `types/__tests__/migrations.test.ts`).
+// Characterisation tests for the migration CHAIN's load path (REFRESH task
+// 07) — the order the migrations run in and their side effects, not the
+// individual transforms (those are in `types/__tests__/migrations.test.ts`).
+//
+// HOME: originally `services/__tests__/`, testing `services/api.ts`'s
+// `loadProject`. Task 16 moved the chain VERBATIM into
+// `DomainStore.loadProject` (via `services/migrations/`), so this suite moved
+// with it and now drives the store flow — every L-assertion below is
+// unchanged, which is half the proof the move preserved behaviour (the corpus
+// digests are the other half). New in task 16: the L6 block additionally pins
+// `loadState === "failed"`, the gate that keeps auto-save shut after a failed
+// load (R5).
 //
 // ⚠️ Assertions here are OBSERVED behaviour, bugs included. L2 pins a real
 // defect (the best-effort backup). L6 — which used to pin the highest-severity
@@ -11,6 +20,7 @@
 // instead of returning `createDefaultProject()`. L7's 404→default first-run
 // path is deliberately retained and still pinned.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flowResult } from "mobx";
 
 import {
   MODERN_PIXELS,
@@ -19,8 +29,34 @@ import {
   syntheticUIState,
 } from "@test/__fixtures__/projects";
 import { isKind } from "@/api";
-import { loadProject } from "@/services/api";
-import { createDefaultProject, type CompactProject } from "@/types";
+import { DomainStore, type ProjectHost } from "@/stores/domain/DomainStore";
+import { SessionStore } from "@/stores/session/SessionStore";
+import {
+  createDefaultProject,
+  type CompactProject,
+  type Project,
+} from "@/types";
+
+/** A fresh DomainStore over an in-memory host — no Zustand, no bridge. */
+function makeDomain(): DomainStore {
+  let current: Project | null = null;
+  const host: ProjectHost = {
+    getProject: () => current,
+    installProject: (p) => {
+      current = p;
+    },
+    replaceProject: (p) => {
+      current = p;
+    },
+    snapshotToHistory: () => {},
+  };
+  return new DomainStore({ session: new SessionStore(), host });
+}
+
+/** Drives the flow the way the old facade function was driven. */
+function loadProject(name?: string): Promise<Project> {
+  return flowResult(makeDomain().loadProject(name));
+}
 
 /** A fetch stub that records every call in order. */
 interface Call {
@@ -278,7 +314,8 @@ describe("L6 — fetch throws (FLIPPED by task 15 — R5, first half)", () => {
       throw new Error("network down");
     });
 
-    const error = await loadProject().then(
+    const domain = makeDomain();
+    const error = await flowResult(domain.loadProject()).then(
       () => null,
       (e: unknown) => e,
     );
@@ -286,6 +323,12 @@ describe("L6 — fetch throws (FLIPPED by task 15 — R5, first half)", () => {
     expect(isKind(error, "network")).toBe(true);
     // The layer neither logs nor invents: the failure reaches the caller.
     expect(consoleError).not.toHaveBeenCalled();
+    // NEW IN TASK 16 — the store half of R5: the failure is RECORDED, and the
+    // auto-save trigger gates on `loadState === "loaded"`, so no POST can
+    // ever follow this state. (The zero-POST integration test lives in
+    // stores/session/__tests__/.)
+    expect(domain.loadState).toBe("failed");
+    expect(domain.loadError).toBe(error);
   });
 
   it("throws kind 'server' for a non-404 HTTP error", async () => {

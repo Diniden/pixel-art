@@ -17,7 +17,7 @@
  *    time, as an if/return ladder using a TRUTHINESS check rather than `??` —
  *    a real divergence from `helpers.ts:73`. Pinned below.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BLUE,
   GREEN,
@@ -31,7 +31,9 @@ import {
 import type { AnchorPosition } from "@/components/AnchorGrid/AnchorGrid";
 import type { Color, Layer, PixelData, Project, Variant } from "@/types";
 
-vi.mock("@/services/api", async () => (await import("./mockApi")).apiMockFactory());
+// Task 16: the store no longer imports services/api (deleted) — dispatching
+// actions can no longer reach the network, so the defensive module mock that
+// used to live here is gone with it.
 
 /* ── fixtures ────────────────────────────────────────────────────────────── */
 

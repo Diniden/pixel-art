@@ -77,6 +77,13 @@ export interface EditorState {
   projectName: string;
   projectList: string[];
   isLoading: boolean;
+  /**
+   * Phase B mirrors of `DomainStore.loadState` / `loadError` (task 16) —
+   * MobX owns them; the bridge is the only Zustand writer. They exist here so
+   * the not-yet-migrated `App` can render the FAILED state without observer().
+   */
+  loadState: "idle" | "loading" | "loaded" | "failed";
+  loadErrorMessage: string | null;
   saveStatus: SaveStatus;
 
   // History for undo (only for pixel/layer/frame/object edits)

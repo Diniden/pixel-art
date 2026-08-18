@@ -86,6 +86,8 @@ export class SessionStore {
       isSaving: computed,
       canPaste: computed,
       setSaveStatus: action,
+      markSaved: action,
+      idleIfStillSaved: action,
       setSaveError: action,
       setSaveSuspended: action,
       setAiServiceUrl: action,
@@ -107,6 +109,28 @@ export class SessionStore {
   setSaveStatus(status: SaveStatus): void {
     this.saveStatus = status;
   }
+
+  /**
+   * `saved`, then `idle` 2 s later — written only by `AutoSaveController`
+   * (task 16). Matches the deleted `store/index.ts:32-42` wiring EXACTLY,
+   * including its pinned quirk: the timeout is GUARDED, never cancelled — a
+   * newer status simply makes the stale timer a no-op, and a second save
+   * completing inside the window still goes idle when the FIRST timer fires
+   * (observed behaviour, `autoSave.test.ts` "cancels the pending idle reset").
+   */
+  markSaved(): void {
+    this.saveStatus = "saved";
+    setTimeout(() => this.idleIfStillSaved(), SessionStore.SAVED_TO_IDLE_MS);
+  }
+
+  /** The guarded half of {@link markSaved}. An action so the read is legal. */
+  idleIfStillSaved(): void {
+    if (this.saveStatus === "saved") {
+      this.saveStatus = "idle";
+    }
+  }
+
+  static readonly SAVED_TO_IDLE_MS = 2000;
 
   setSaveError(error: ApiError | null): void {
     this.lastSaveError = error;

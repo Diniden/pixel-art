@@ -14,7 +14,7 @@
  *
  * MASTER.md §10 rule 10 throughout: observed, never desired.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   HARNESSES,
   mkLayer,
@@ -23,7 +23,9 @@ import {
 } from "./storeContract";
 import type { Layer, Project, VariantGroup } from "@/types";
 
-vi.mock("@/services/api", async () => (await import("./mockApi")).apiMockFactory());
+// Task 16: the store no longer imports services/api (deleted) — dispatching
+// actions can no longer reach the network, so the defensive module mock that
+// used to live here is gone with it.
 
 /* ── a variant-bearing fixture ───────────────────────────────────────────── */
 

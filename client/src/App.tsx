@@ -27,7 +27,10 @@ import "./App.css";
 function App() {
   const {
     project,
-    isLoading,
+    // Phase B mirrors of DomainStore.loadState/loadError (task 16): App is not
+    // a container, so it reads the mirrored copies the bridge maintains.
+    loadState,
+    loadErrorMessage,
     initProject,
     setTool,
     resetReferenceOverlay,
@@ -65,6 +68,11 @@ function App() {
   );
 
   useEffect(() => {
+    // React 19 StrictMode fires this twice (W2a R11, site 1). The DomainStore
+    // load-state machine makes that harmless: a second initProject() while
+    // `loading` (or after `loaded`) is a synchronous no-op, so there is no
+    // second racing load — and a FAILED load renders the error state below
+    // instead of installing a blank default (R5).
     initProject();
   }, [initProject]);
 
@@ -153,7 +161,28 @@ function App() {
     project?.uiState.studioMode,
   ]);
 
-  if (isLoading || !project) {
+  if (loadState === "failed") {
+    // R5: a failed load is an ERROR, never an empty editor. No project is
+    // installed, the auto-save gate stays shut, and nothing can be written
+    // over the real file. Retry re-runs the full init flow.
+    return (
+      <div className="loading-screen">
+        <div className="loading-content">
+          <h2>Project failed to load</h2>
+          <p>
+            {loadErrorMessage ??
+              "The server could not be reached or the project could not be read."}
+          </p>
+          <p>
+            Nothing has been changed on disk — your project file is untouched.
+          </p>
+          <button onClick={() => initProject()}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadState !== "loaded" || !project) {
     return (
       <div className="loading-screen">
         <div className="loading-content">

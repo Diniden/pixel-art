@@ -16,7 +16,7 @@
  *
  * Mask indexing is `idx = y * width + x` throughout (selectionActions.ts:14-16).
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BLUE,
   GREEN,
@@ -31,7 +31,9 @@ import {
 import type { Project, SelectionBehavior } from "@/types";
 import { useEditorStore } from "@/store";
 
-vi.mock("@/services/api", async () => (await import("./mockApi")).apiMockFactory());
+// Task 16: the store no longer imports services/api (deleted) — dispatching
+// actions can no longer reach the network, so the defensive module mock that
+// used to live here is gone with it.
 
 /* ── selection readers ───────────────────────────────────────────────────── */
 

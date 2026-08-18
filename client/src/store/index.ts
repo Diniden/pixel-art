@@ -1,9 +1,5 @@
 import { create } from "zustand";
 import { projectToCompact, compactToProject } from "../types";
-import {
-  scheduleAutoSave,
-  setOnSaveStatusChange,
-} from "../services/autoSave";
 import { MAX_HISTORY } from "./storeTypes";
 import type { EditorState } from "./storeTypes";
 
@@ -28,25 +24,17 @@ import { createVariantActions } from "./variantActions";
 import { createLightingActions } from "./lightingActions";
 
 export const useEditorStore = create<EditorState>((set, get) => {
-  // Set up save status callback
-  setOnSaveStatusChange((status) => {
-    set({ saveStatus: status });
-    if (status === "saved") {
-      setTimeout(() => {
-        const currentStatus = get().saveStatus;
-        if (currentStatus === "saved") {
-          set({ saveStatus: "idle" });
-        }
-      }, 2000);
-    }
-  });
+  // Task 16: auto-save no longer lives here. The single commit path below
+  // only WRITES the project; the bridge bumps `DomainStore.domainVersion` on
+  // every `project` reference change and `AutoSaveController`'s reaction owns
+  // the debounce/save. `saveStatus` is a Phase B mirror written by the bridge.
 
   // Update project and save - with optional history tracking
   const updateProjectAndSave = (
     updater: (project: import("../types").Project) => import("../types").Project,
     trackHistory: boolean = false,
   ) => {
-    const { project, projectHistory, historyIndex, projectName } = get();
+    const { project, projectHistory, historyIndex } = get();
     if (!project) return;
 
     const newProject = updater(project);
@@ -74,8 +62,6 @@ export const useEditorStore = create<EditorState>((set, get) => {
     } else {
       set({ project: newProject });
     }
-
-    scheduleAutoSave(newProject, projectName);
   };
 
   // Save current project state to history without making changes
@@ -149,6 +135,8 @@ export const useEditorStore = create<EditorState>((set, get) => {
     projectName: "project",
     projectList: [],
     isLoading: true,
+    loadState: "idle",
+    loadErrorMessage: null,
     saveStatus: "idle",
     projectHistory: [],
     historyIndex: -1,

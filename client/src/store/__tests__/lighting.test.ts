@@ -9,7 +9,7 @@
  * The eight setters that never auto-save are pinned in `autoSave.test.ts`; this
  * file covers their VALUE semantics (clamping, coupled writes) instead.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BLUE,
   GREEN,
@@ -22,7 +22,9 @@ import {
 import { createBuffer, hashBuffer } from "@test/canvasStub";
 import type { Normal, PixelData, Project } from "@/types";
 
-vi.mock("@/services/api", async () => (await import("./mockApi")).apiMockFactory());
+// Task 16: the store no longer imports services/api (deleted) — dispatching
+// actions can no longer reach the network, so the defensive module mock that
+// used to live here is gone with it.
 
 /* ── an ASYMMETRIC fixture ───────────────────────────────────────────────── */
 
