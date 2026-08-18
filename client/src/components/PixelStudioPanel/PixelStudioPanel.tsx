@@ -28,8 +28,8 @@ function OriginColorPicker() {
 
   return (
     <div className="panel origin-controls-panel">
-      <div className="panel-header">Origin</div>
-      <div className="panel-content">
+      <div className="panel__header">Origin</div>
+      <div className="panel__body">
         <div className="origin-controls">
           <div className="origin-color-control">
             <label>Color</label>
@@ -83,8 +83,8 @@ export function PixelStudioPanel() {
       {showOriginControls && <OriginColorPicker />}
       {showPencilControls && (
         <div className="panel eraser-controls-panel">
-          <div className="panel-header">Pencil</div>
-          <div className="panel-content">
+          <div className="panel__header panel__header--compact">Pencil</div>
+          <div className="panel__body panel__body--dense">
             <div className="eraser-controls">
               <div className="brush-size-control">
                 <label>Size</label>
@@ -143,8 +143,8 @@ export function PixelStudioPanel() {
       )}
       {showEraserControls && (
         <div className="panel eraser-controls-panel">
-          <div className="panel-header">Eraser</div>
-          <div className="panel-content">
+          <div className="panel__header panel__header--compact">Eraser</div>
+          <div className="panel__body panel__body--dense">
             <div className="eraser-controls">
               <div className="brush-size-control">
                 <label>Size</label>

@@ -1,30 +1,12 @@
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-80);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-  animation: reference-image-modal-fade-in 0.15s ease;
-}
-
-@keyframes reference-image-modal-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* Modal chrome (overlay, header, close, body, footer, actions) comes from
+   styles/blocks/modal.css (task 18). This sheet keeps only what is specific
+   to the reference-image editor. */
 
 .reference-modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
   width: 90vw;
   max-width: 900px;
   height: 80vh;
   max-height: 700px;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-modal);
   animation: reference-image-modal-slide-up 0.2s ease;
 }
 
@@ -37,50 +19,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--border-primary);
-}
-
-.modal-header h2 {
-  margin: 0;
-  font-size: var(--text-xl);
-  font-weight: var(--weight-semibold);
-  color: var(--text-primary);
-}
-
-.close-btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-size: var(--text-xl);
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-fast);
-}
-
-.close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--accent-danger);
-}
-
-.modal-body {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-5);
 }
 
 /* Upload Zone */
@@ -254,80 +192,19 @@
   line-height: var(--leading-normal);
 }
 
-/* Modal Footer */
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--border-primary);
-  background: var(--bg-tertiary);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-}
-
 .selection-info {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--accent-primary);
 }
 
-.modal-actions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.cancel-btn,
-.confirm-btn {
-  padding: var(--space-2-5) var(--space-5);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.cancel-btn {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  color: var(--text-secondary);
-}
-
-.cancel-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.confirm-btn {
-  background: var(--accent-primary);
-  border: none;
-  color: var(--black);
-  font-weight: var(--weight-semibold);
-}
-
-.confirm-btn:hover:not(:disabled) {
-  background: var(--accent-secondary);
-  box-shadow: var(--glow-accent-12-40);
-}
-
-.confirm-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Responsive */
+/* Responsive. The shared-chrome squeeze (header/body/footer/actions and the
+   full-width footer buttons) moved to styles/blocks/modal.css. */
 @media (max-width: 768px) {
   .reference-modal {
     width: 95vw;
     height: 90vh;
     border-radius: var(--radius-md);
-  }
-
-  .modal-header {
-    padding: var(--space-3) var(--space-4);
-  }
-
-  .modal-body {
-    padding: var(--space-3);
   }
 
   .editor-toolbar {
@@ -342,23 +219,7 @@
     font-size: 0.7rem;
   }
 
-  .modal-footer {
-    flex-direction: column;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-  }
-
   .selection-info {
     order: 2;
-  }
-
-  .modal-actions {
-    order: 1;
-    width: 100%;
-  }
-
-  .cancel-btn,
-  .confirm-btn {
-    flex: 1;
   }
 }

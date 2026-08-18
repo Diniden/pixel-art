@@ -209,7 +209,10 @@
   padding-top: var(--space-4);
 }
 
-.add-variant-btn {
+/* Scoped under .add-variant-section (task 18): the bare selector leaked this
+   full-width dashed CTA onto LayerPanel's `.header-btn.add-variant-btn`, whose
+   compound rule only partially fought it off. */
+.add-variant-section .add-variant-btn {
   width: 100%;
   padding: var(--space-3);
   background: linear-gradient(135deg, var(--accent-variant-20) 0%, var(--accent-primary-10) 100%);
@@ -221,7 +224,7 @@
   transition: all var(--transition-fast);
 }
 
-.add-variant-btn:hover {
+.add-variant-section .add-variant-btn:hover {
   border-color: var(--accent-variant);
   background: linear-gradient(135deg, var(--accent-variant-30) 0%, var(--accent-primary-15) 100%);
 }

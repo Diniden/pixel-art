@@ -1,34 +1,9 @@
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-70);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-  animation: project-select-modal-fade-in 0.15s ease-out;
-}
-
-@keyframes project-select-modal-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
+/* Modal chrome (overlay, header, close, body, footer) comes from
+   styles/blocks/modal.css (task 18) — its overlay keeps the blur this sheet
+   introduced. This sheet keeps only what is specific to project selection. */
 
 .project-select-modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
   width: 420px;
-  max-width: 90vw;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-modal);
   animation: project-select-modal-slide-in 0.2s ease-out;
 }
 
@@ -43,39 +18,6 @@
   }
 }
 
-.project-select-modal .modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--border-secondary);
-}
-
-.project-select-modal .modal-header h2 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: var(--weight-semibold);
-  color: var(--text-primary);
-}
-
-.project-select-modal .close-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: var(--text-2xl);
-  line-height: var(--leading-none);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-}
-
-.project-select-modal .close-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
 .project-select-modal .error-message {
   margin: var(--space-3) var(--space-5) 0;
   padding: var(--space-2-5) var(--space-4);
@@ -84,12 +26,6 @@
   border-radius: var(--radius-md);
   color: var(--accent-danger);
   font-size: 0.85rem;
-}
-
-.project-select-modal .modal-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-4) var(--space-5);
 }
 
 .project-list {
@@ -223,60 +159,8 @@
   transition: all var(--transition-fast);
 }
 
-.cancel-btn {
-  background: transparent;
-  border: 1px solid var(--border-secondary);
-  color: var(--text-secondary);
-}
-
-.cancel-btn:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.create-btn {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
-  border: none;
-  color: var(--white);
-}
-
-.create-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-accent);
-}
-
-.create-btn:disabled,
-.cancel-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.project-select-modal .modal-footer {
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--border-secondary);
-  display: flex;
-  justify-content: flex-end;
-}
-
-.delete-btn {
-  padding: var(--space-2) var(--space-4);
-  background: transparent;
-  border: 1px solid var(--accent-danger);
-  border-radius: var(--radius-md);
-  color: var(--accent-danger);
-  font-size: 0.85rem;
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.delete-btn:hover:not(:disabled) {
-  background: var(--accent-danger-10);
-}
-
-.delete-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+/* The form's cancel / create buttons and the footer delete button are
+   blocks/btn.css modifiers now (btn--ghost / btn--gradient /
+   btn--danger-outline); `.form-buttons button` above still supplies their
+   in-form geometry. */
 

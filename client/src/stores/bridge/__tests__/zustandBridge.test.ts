@@ -40,12 +40,18 @@ describe("the R6 ledger", () => {
     ]);
   });
 
-  it("PHASE_B holds the DomainStore lifecycle slice + saveStatus (task 16, the first flip)", () => {
+  it("PHASE_B holds the lifecycle slice + saveStatus (task 16) + the history mirror (task 17)", () => {
+    // `projectHistory`/`historyIndex` flipped in task 17: `HistoryStore` owns
+    // undo history; the Zustand fields are mirrors written by the history glue
+    // in store/index.ts (synchronously, bridge-independent — see the bridge
+    // module header, item 5).
     expect([...PHASE_B_FIELDS]).toEqual([
       "loadState",
       "projectName",
       "projectList",
       "saveStatus",
+      "projectHistory",
+      "historyIndex",
     ]);
   });
 

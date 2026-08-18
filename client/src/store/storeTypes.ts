@@ -19,6 +19,13 @@ import type {
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
+/**
+ * Bridge-era undo count cap (task 17). History is owned by `HistoryStore`,
+ * whose primary bound is the 64 MB `MAX_HISTORY_BYTES` byte budget — but the
+ * task 08 characterisation suite (the R4 acceptance baseline) pins this
+ * 100-entry front-shifting cap, so it remains enforced alongside the budget
+ * until the baseline's cap tests are re-pinned (task 26+).
+ */
 export const MAX_HISTORY = 100;
 export const MAX_COLOR_HISTORY = 10;
 
@@ -127,6 +134,8 @@ export interface EditorState {
   // Actions
   initProject: () => Promise<void>;
   undo: () => void;
+  /** NEW (task 17): redo, backed by `HistoryStore`. */
+  redo: () => void;
 
   // Project management actions
   createNewProject: (name: string) => Promise<boolean>;
@@ -328,7 +337,12 @@ export interface EditorState {
   startColorAdjustment: (color: Color, allFrames: boolean) => void;
   clearColorAdjustment: () => void;
   adjustColor: (newColor: Color, trackHistory?: boolean) => void;
-  saveCurrentStateToHistory: () => void;
+  /**
+   * The history snapshot call (task 17): records a full-clone
+   * `SnapshotCommand` via `HistoryStore.snapshot(label)` without mutating the
+   * project. The label names the entry ("Adjust color", …); default "Edit".
+   */
+  saveCurrentStateToHistory: (label?: string) => void;
 
   /**
    * The store's single commit path: applies `updater` to the live project,

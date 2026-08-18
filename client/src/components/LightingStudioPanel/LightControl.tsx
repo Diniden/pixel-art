@@ -147,10 +147,10 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
       </div>
 
       <div className="color-slider-row">
-        <label className="slider-label">H</label>
+        <label className="slider__label slider__label--muted">H</label>
         <input
           type="range"
-          className="compact-slider hue-slider"
+          className="slider slider--thick slider__hue"
           min="0"
           max="360"
           value={hsl.h}
@@ -158,7 +158,7 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
         />
         <input
           type="number"
-          className="slider-input"
+          className="slider__input slider__input--boxed"
           min="0"
           max="360"
           value={hsl.h}
@@ -167,10 +167,10 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
       </div>
 
       <div className="color-slider-row">
-        <label className="slider-label">S</label>
+        <label className="slider__label slider__label--muted">S</label>
         <input
           type="range"
-          className="compact-slider"
+          className="slider slider--thick"
           min="0"
           max="100"
           value={hsl.s}
@@ -183,7 +183,7 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
         />
         <input
           type="number"
-          className="slider-input"
+          className="slider__input slider__input--boxed"
           min="0"
           max="100"
           value={hsl.s}
@@ -192,10 +192,10 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
       </div>
 
       <div className="color-slider-row">
-        <label className="slider-label">L</label>
+        <label className="slider__label slider__label--muted">L</label>
         <input
           type="range"
-          className="compact-slider"
+          className="slider slider--thick"
           min="0"
           max="100"
           value={hsl.l}
@@ -209,7 +209,7 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
         />
         <input
           type="number"
-          className="slider-input"
+          className="slider__input slider__input--boxed"
           min="0"
           max="100"
           value={hsl.l}
@@ -255,10 +255,10 @@ export function LightControl() {
             <span className="color-slider-label">Shadow Height Scale</span>
           </div>
           <div className="color-slider-row">
-            <label className="slider-label">Scale</label>
+            <label className="slider__label slider__label--muted">Scale</label>
             <input
               type="range"
-              className="compact-slider"
+              className="slider slider--thick"
               min="1"
               max="500"
               value={heightScale}
@@ -266,7 +266,7 @@ export function LightControl() {
             />
             <input
               type="number"
-              className="slider-input"
+              className="slider__input slider__input--boxed"
               min="1"
               max="500"
               value={heightScale}

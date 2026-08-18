@@ -151,21 +151,16 @@
   margin-bottom: var(--space-1);
 }
 
-/* Compact Slider Rows */
+/* Compact Slider Rows.
+   The slider family (track, thumb, label, number input and the hue rainbow)
+   is styles/blocks/slider.css now (task 18); this component's markup keeps
+   the legacy names, which that block declares as aliases, until task 20's G3
+   converts it. Only .slider-row and the channel-specific rules remain here. */
 .slider-row {
   display: flex;
   align-items: center;
   gap: var(--space-1-5);
   height: 22px;
-}
-
-.slider-label {
-  width: 14px;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  font-weight: var(--weight-semibold);
-  text-align: center;
-  flex-shrink: 0;
 }
 
 /* Channel colors */
@@ -176,40 +171,6 @@
 .channel-g, .hsl-s { color: var(--channel-g); }
 .channel-b, .hsl-l { color: var(--channel-b); }
 .channel-a { color: var(--text-secondary); }
-
-/* Compact Sliders */
-.compact-slider {
-  flex: 1;
-  height: 4px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-xs);
-  outline: none;
-  cursor: pointer;
-}
-
-.compact-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--text-primary);
-  cursor: pointer;
-  border: 1px solid var(--border-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.compact-slider::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--text-primary);
-  cursor: pointer;
-  border: 1px solid var(--border-primary);
-  box-shadow: var(--shadow-sm);
-}
 
 /* Channel-specific slider backgrounds */
 /* dynamic: channel-{r|g|b} built at ColorPicker.tsx:621. Do not delete as dead. */
@@ -229,18 +190,6 @@
   background: linear-gradient(to right,
     rgb(var(--r, 0), var(--g, 0), 0),
     rgb(var(--r, 0), var(--g, 0), 255));
-}
-
-/* Hue slider rainbow gradient */
-.hue-slider {
-  background: linear-gradient(to right,
-    hsl(0, 100%, 50%),
-    hsl(60, 100%, 50%),
-    hsl(120, 100%, 50%),
-    hsl(180, 100%, 50%),
-    hsl(240, 100%, 50%),
-    hsl(300, 100%, 50%),
-    hsl(360, 100%, 50%)) !important;
 }
 
 /* Channel slider thumbs */
@@ -268,44 +217,10 @@
   background: var(--channel-b);
 }
 
-/* Slider input */
-.slider-input {
-  width: 42px;
-  padding: var(--space-0-5) var(--space-1);
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  text-align: right;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  flex-shrink: 0;
-}
-
-.slider-input:focus {
-  border-color: var(--accent-primary);
-  outline: none;
-}
-
-/* Remove spinner buttons from number inputs */
-.slider-input::-webkit-outer-spin-button,
-.slider-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.slider-input[type=number] {
-  -moz-appearance: textfield;
-}
-
 @media (max-width: 768px) {
   .color-preview {
     width: 32px;
     height: 32px;
-  }
-
-  .slider-input {
-    width: 36px;
   }
 
   .sv-picker-container {

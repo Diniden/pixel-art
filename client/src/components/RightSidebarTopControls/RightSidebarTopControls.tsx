@@ -97,8 +97,8 @@ export function RightSidebarTopControls() {
   return (
     <div className="right-sidebar-top-controls">
       <div className="panel compact-panel">
-        <div className="panel-header">Zoom</div>
-        <div className="panel-content compact-panel-content">
+        <div className="panel__header panel__header--compact">Zoom</div>
+        <div className="panel__body compact-panel-content">
           <div className="compact-row">
             <button
               className="compact-btn"
@@ -125,14 +125,14 @@ export function RightSidebarTopControls() {
 
       {showToolOptions && (
         <div className="panel compact-panel">
-          <div className="panel-header">Tool Options</div>
-          <div className="panel-content compact-panel-content">
+          <div className="panel__header panel__header--compact">Tool Options</div>
+          <div className="panel__body compact-panel-content">
             {showBrushSize && (
               <div className="compact-control">
                 <label className="compact-label">Size</label>
-                <div className="compact-slider-row">
+                <div className="compact-row">
                   <input
-                    className="compact-slider"
+                    className="slider"
                     type="range"
                     min="1"
                     max="16"
@@ -148,9 +148,9 @@ export function RightSidebarTopControls() {
               <>
                 <div className="compact-control">
                   <label className="compact-label">Trace size</label>
-                  <div className="compact-slider-row">
+                  <div className="compact-row">
                     <input
-                      className="compact-slider"
+                      className="slider"
                       type="range"
                       min="1"
                       max={traceMax}
@@ -201,9 +201,9 @@ export function RightSidebarTopControls() {
               <>
                 <div className="compact-control">
                   <label className="compact-label">Smoothing</label>
-                  <div className="compact-slider-row">
+                  <div className="compact-row">
                     <input
-                      className="compact-slider"
+                      className="slider"
                       type="range"
                       min="0.1"
                       max="5.0"
@@ -225,9 +225,9 @@ export function RightSidebarTopControls() {
 
                 <div className="compact-control">
                   <label className="compact-label">Radius</label>
-                  <div className="compact-slider-row">
+                  <div className="compact-row">
                     <input
-                      className="compact-slider"
+                      className="slider"
                       type="range"
                       min="0.5"
                       max={gaussianRadiusMax}
@@ -291,9 +291,9 @@ export function RightSidebarTopControls() {
             {showBorderRadius && (
               <div className="compact-control">
                 <label className="compact-label">Radius</label>
-                <div className="compact-slider-row">
+                <div className="compact-row">
                   <input
-                    className="compact-slider"
+                    className="slider"
                     type="range"
                     min="0"
                     max="16"

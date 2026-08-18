@@ -1,53 +1,10 @@
+/* Modal chrome (overlay, header, close, body, footer) comes from
+   styles/blocks/modal.css; the restore confirmation is
+   styles/blocks/confirm-dialog.css (task 18). */
+
 .browse-backups-modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
   width: 500px;
-  max-width: 90vw;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-modal);
   animation: app-slide-in 0.2s ease-out;
-}
-
-.browse-backups-modal .modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--border-secondary);
-}
-
-.browse-backups-modal .modal-header h2 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: var(--weight-semibold);
-  color: var(--text-primary);
-}
-
-.browse-backups-modal .close-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: var(--text-2xl);
-  line-height: var(--leading-none);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-}
-
-.browse-backups-modal .close-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.browse-backups-modal .modal-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-4) var(--space-5);
 }
 
 .browse-backups-modal .error-message {
@@ -151,14 +108,6 @@
   white-space: nowrap;
 }
 
-.browse-backups-modal .modal-footer {
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--border-secondary);
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2-5);
-}
-
 .browse-backups-modal .restore-btn {
   padding: var(--space-2) var(--space-4);
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
@@ -182,91 +131,3 @@
   transform: none;
 }
 
-/* Confirmation overlay */
-.confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-60);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal-nested);
-  animation: app-fade-in 0.1s ease-out;
-}
-
-.confirm-dialog {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  width: 380px;
-  max-width: 90vw;
-  padding: var(--space-6);
-  box-shadow: var(--shadow-modal);
-  animation: app-slide-in 0.15s ease-out;
-}
-
-.confirm-dialog h3 {
-  margin: 0 0 var(--space-3);
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
-  color: var(--text-primary);
-}
-
-.confirm-dialog p {
-  margin: 0 0 var(--space-2);
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  line-height: var(--leading-normal);
-}
-
-.confirm-undo-hint {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  margin-bottom: var(--space-5);
-  font-style: italic;
-}
-
-.confirm-buttons {
-  display: flex;
-  gap: var(--space-2-5);
-  justify-content: flex-end;
-}
-
-.confirm-buttons button {
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-md);
-  font-size: 0.85rem;
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.confirm-cancel-btn {
-  background: transparent;
-  border: 1px solid var(--border-secondary);
-  color: var(--text-secondary);
-}
-
-.confirm-cancel-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.confirm-restore-btn {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
-  border: none;
-  color: var(--white);
-  font-weight: var(--weight-semibold);
-}
-
-.confirm-restore-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-accent);
-}
-
-.confirm-restore-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}

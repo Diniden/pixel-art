@@ -16,12 +16,8 @@
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
-.lighting-panel-section .panel-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-4);
-}
+/* The centered column body is blocks/panel.css's `panel__body--stack`
+   modifier now (task 18). */
 
 .normal-brush-controls {
   display: flex;

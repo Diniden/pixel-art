@@ -1,0 +1,80 @@
+/*
+ * panel — shared sidebar panel primitive (task 18).
+ *
+ * `.panel` / `.panel-header` / `.panel-content` lived in index.css (moved to
+ * reset.css by task 09) and were narrowed by LayerPanel, PixelStudioPanel,
+ * RightSidebarTopControls and LightingStudioPanel via higher-specificity
+ * selectors in their own sheets. Those narrowings are now modifiers here and
+ * the four consumers carry the modifier classes.
+ *
+ * `.panel-header` / `.panel-content` remain declared as LEGACY ALIASES of
+ * `.panel__header` / `.panel__body`: ColorPicker.tsx (frozen until task 20's
+ * G3), PaletteManager.tsx and ObjectLibrary.tsx still render the old names.
+ * Tasks 20-22 retire the aliases. `.panel` itself is both the legacy and the
+ * BEM block name.
+ *
+ * Vocabulary (task 19 builds Panel.tsx against these exact names):
+ *   panel
+ *   panel__header              (legacy alias: .panel-header)
+ *   panel__header--stacked     column layout with full-width title (LayerPanel)
+ *   panel__header--compact     tighter padding, smaller type (RSTC, PixelStudio)
+ *   panel__title               title element inside the header
+ *   panel__body                (legacy alias: .panel-content)
+ *   panel__body--stack         centered column, wide gap (LightingStudioPanel)
+ *   panel__body--dense         centered column, tight gap + padding (PixelStudio)
+ */
+
+.panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+}
+
+.panel__header,
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel__header--stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.panel__header--stacked .panel__title {
+  width: 100%;
+}
+
+.panel__header--compact {
+  padding: var(--space-1-5) var(--space-2-5);
+  font-size: 0.7rem;
+}
+
+.panel__body,
+.panel-content {
+  padding: 12px;
+}
+
+.panel__body--stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.panel__body--dense {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-1-5);
+}

@@ -1,0 +1,167 @@
+/*
+ * confirm-dialog — shared nested-confirmation dialog (task 18).
+ *
+ * Sources, unified here:
+ *   1. The 7 byte-identical `.delete-confirm-*` classes duplicated between
+ *      AddVariantModal.css:317-374 and ObjectLibrary.css:245-302 (the danger
+ *      skin — now the `--danger` modifier).
+ *   2. BrowseBackupsModal.css's `.confirm-*` family (the neutral base).
+ *   3. LayerPanel.css's dead-but-complete confirm dialog, recorded by task 09
+ *      before deletion — see the record at the bottom of this file.
+ *
+ * The base is BrowseBackupsModal's neutral padded dialog, verbatim (including
+ * its animations and the quirk that `.confirm-dialog p`, at (0,1,1), outranks
+ * `.confirm-dialog__undo` at (0,1,0) — exactly as it did before this task).
+ * The `--danger` modifier is the structured gradient dialog: it zeroes the
+ * base padding, suppresses the entry animation the old danger dialogs never
+ * had, and re-colors the chrome.
+ *
+ * The old `!important` on `.delete-confirm-warning` / `.delete-confirm-undo`
+ * is GONE: `.confirm-dialog__body .confirm-dialog__warning` at (0,2,0) now
+ * outranks `.confirm-dialog__body p` at (0,1,1) structurally. (4 of the
+ * pre-existing declaration-no-important warnings disappear with this.)
+ *
+ * Buttons inside `__actions` are `btn` modifiers (btn--muted / btn--danger /
+ * btn--ghost / btn--gradient), not dialog-specific classes.
+ *
+ * Vocabulary (task 19 builds ConfirmDialog.tsx against these exact names):
+ *   confirm-dialog__backdrop
+ *   confirm-dialog             (+ confirm-dialog--danger)
+ *   confirm-dialog__header     (structured dialogs; h4 inside)
+ *   confirm-dialog__body       (structured dialogs; p inside)
+ *   confirm-dialog__warning    emphasized warning line inside the body
+ *   confirm-dialog__undo       de-emphasized "you can undo" line
+ *   confirm-dialog__actions    footer button cluster
+ */
+
+.confirm-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-60);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal-nested);
+  animation: app-fade-in 0.1s ease-out;
+}
+
+.confirm-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  width: 380px;
+  max-width: 90vw;
+  padding: var(--space-6);
+  box-shadow: var(--shadow-modal);
+  animation: app-slide-in 0.15s ease-out;
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.confirm-dialog p {
+  margin: 0 0 var(--space-2);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+}
+
+.confirm-dialog__undo {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-5);
+  font-style: italic;
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  gap: var(--space-2-5);
+  justify-content: flex-end;
+}
+
+/* ── Structured elements (used by the danger skin; available to any) ───── */
+
+.confirm-dialog__header {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.confirm-dialog__header h4 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.confirm-dialog__body {
+  padding: var(--space-5);
+}
+
+.confirm-dialog__body p {
+  margin: 0 0 var(--space-3) 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.confirm-dialog__body .confirm-dialog__warning {
+  color: var(--accent-danger);
+  font-weight: var(--weight-medium);
+}
+
+.confirm-dialog__body .confirm-dialog__undo {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-style: normal;
+  margin-bottom: var(--space-3);
+}
+
+/* ── Danger skin (the old delete-confirm twins) ────────────────────────── */
+
+.confirm-dialog--danger {
+  background: linear-gradient(135deg, var(--modal-gradient-danger-a) 0%, var(--modal-gradient-a) 100%);
+  border: 1px solid var(--accent-danger-30);
+  box-shadow: var(--shadow-danger);
+  width: 400px;
+  padding: 0;
+  overflow: hidden;
+  animation: none;
+}
+
+.confirm-dialog--danger .confirm-dialog__header {
+  border-bottom-color: var(--accent-danger-20);
+}
+
+.confirm-dialog--danger .confirm-dialog__actions {
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--white-10);
+  background: var(--overlay-20);
+}
+
+/* ------------------------------------------------------------------------ *
+ * RECORD — LayerPanel.css's dead confirm dialog (deleted by task 09, rules
+ * recorded for this extraction; previously parked in LayerPanel.css).
+ *
+ * Considered and resolved as follows:
+ *  - box / header / header-h3 / body / body-p  -> equivalent styling already
+ *    exists above (base box, __header, __body); nothing further folded.
+ *  - its footer bar (padding + border-top + bg-tertiary + bottom radius) is
+ *    the same idea as --danger's __actions bar; a neutral structured dialog in
+ *    task 19 can add `__actions--bar` from it.
+ *  - its amber warning callout is the one styling with no live consumer:
+ *      color: var(--status-warn); background: var(--status-warn-10);
+ *      padding: var(--space-2-5) var(--space-4);
+ *      border-radius: var(--radius-sm);
+ *      border: 1px solid var(--status-warn-30);
+ *    NOT declared as a class here because a class with zero consumers fails
+ *    the dead-class gate; task 19 should surface it as
+ *    `confirm-dialog__warning--callout`.
+ *  - its buttons (neutral cancel / solid danger delete, 8x16, radius-sm,
+ *    text-sm, weight-medium) are exactly blocks/btn.css's `.btn--neutral` and
+ *    `.btn--danger` and informed those definitions.
+ * ------------------------------------------------------------------------ */

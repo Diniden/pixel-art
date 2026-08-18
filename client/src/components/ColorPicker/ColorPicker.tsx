@@ -203,7 +203,7 @@ export function ColorPicker() {
       if (colorAdjustment && hasSavedInitialStateRef.current) {
         // Save the final state to history
         // This ensures we can redo after undoing
-        saveCurrentStateToHistory();
+        saveCurrentStateToHistory("Adjust color");
         hasSavedInitialStateRef.current = false;
         historySaveTimeoutRef.current = null;
       }

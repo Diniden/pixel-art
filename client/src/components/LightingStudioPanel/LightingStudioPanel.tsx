@@ -16,10 +16,10 @@ export function LightingStudioPanel() {
   return (
     <div className="lighting-studio-panel">
       <div className="panel lighting-panel-section">
-        <div className="panel-header">
+        <div className="panel__header">
           {editMode === "height" ? "Height Brush" : "Normal Brush"}
         </div>
-        <div className="panel-content">
+        <div className="panel__body panel__body--stack">
           {editMode === "height" ? (
             <div className="normal-brush-controls" style={{ paddingTop: 8 }}>
               <div className="brush-size-control">
@@ -80,8 +80,8 @@ export function LightingStudioPanel() {
       </div>
 
       <div className="panel lighting-panel-section">
-        <div className="panel-header">Light Settings</div>
-        <div className="panel-content">
+        <div className="panel__header">Light Settings</div>
+        <div className="panel__body panel__body--stack">
           <LightControl />
         </div>
       </div>

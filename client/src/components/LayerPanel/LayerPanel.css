@@ -2,15 +2,8 @@
   flex-shrink: 0;
 }
 
-.layer-panel .panel-header {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-}
-
-.layer-panel .panel-header-title {
-  width: 100%;
-}
+/* The stacked header layout is blocks/panel.css's `panel__header--stacked`
+   modifier now (task 18). */
 
 .layer-panel .header-actions {
   display: flex;
@@ -352,68 +345,7 @@
   background: var(--accent-primary-10);
 }
 
-/* ------------------------------------------------------------------------ *
- * RECORD FOR TASK 12 — deleted confirm-dialog block (task 09).
- *
- * The rules below were verified dead (no .confirm-modal* or .modal-backdrop
- * reference exists in any .tsx; the only greps that hit were the DIFFERENT
- * classes .delete-confirm-modal and .ai-modal-backdrop). They are preserved
- * here verbatim because task 12 extracts a `confirm-dialog` primitive and
- * should not have to re-invent a complete, coherent dialog.
- *
- * .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0;
- *   background: var(--overlay-70); display: flex; align-items: center;
- *   justify-content: center; z-index: var(--z-modal); }
- * .confirm-modal { background: var(--bg-secondary);
- *   border: 1px solid var(--border-primary); border-radius: var(--radius-lg);
- *   min-width: 360px; max-width: 420px;
- *   box-shadow: var(--shadow-modal);
-}
- * .confirm-modal-header { padding: var(--space-4) var(--space-5);
- *   border-bottom: 1px solid var(--border-primary); }
- * .confirm-modal-header h3 { margin: 0; font-size: var(--text-base); font-weight: var(--weight-semibold);
- *   color: var(--text-primary); }
- * .confirm-modal-content { padding: var(--space-5); }
- * .confirm-modal-content p { margin: 0 0 var(--space-3) 0; font-size: 0.9rem;
- *   color: var(--text-secondary); line-height: var(--leading-normal); }
- * .confirm-modal-content p:last-child { margin-bottom: 0; }
- * .confirm-warning { color: var(--status-warn) !important;
- *   background: var(--status-warn-10); padding: var(--space-2-5) var(--space-4);
- *   border-radius: var(--radius-sm); border: 1px solid var(--status-warn-30); }
- * .confirm-modal-actions { display: flex; gap: var(--space-2-5);
- *   justify-content: flex-end; padding: var(--space-4) var(--space-5);
- *   border-top: 1px solid var(--border-primary); background: var(--bg-tertiary);
- *   border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
- * ------------------------------------------------------------------------ */
-
-.confirm-btn {
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.confirm-btn.cancel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  color: var(--text-secondary);
-}
-
-.confirm-btn.cancel:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent-primary);
-  color: var(--text-primary);
-}
-
-.confirm-btn.delete {
-  background: var(--accent-danger-hover);
-  border: 1px solid var(--accent-danger-hover);
-  color: var(--white);
-}
-
-.confirm-btn.delete:hover {
-  background: var(--accent-danger);
-  border-color: var(--accent-danger);
-}
+/* Task 09's recorded confirm-dialog rules were consumed by task 18: the
+   record now lives at the bottom of styles/blocks/confirm-dialog.css, and the
+   dead confirm-button family that remained here (no .tsx ever referenced it —
+   its styling is btn--neutral / btn--danger in blocks/btn.css) was deleted. */
