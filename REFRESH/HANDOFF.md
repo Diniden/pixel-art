@@ -121,7 +121,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W9** | 15 | W8 | ⚠️ | `a023531` | `bunx vitest run src/api` · exactly one `fetch(` call site in the codebase |
 | **W10** | 16 | W9 | ⚠️ | `47ca6bf` | a failed load produces **zero** `POST /api/project` · corpus snapshots unchanged |
 | **W11** | 17, 18 | W10 | ⚠️ | `95adfa8` | `bunx vitest run src/store/__tests__/` passes **unchanged** · the five CSS block-extraction greps return 0 · **2 agents** |
-| **W12** | 19 | W11 | ⬜ | — | `bunx storybook build` · 18 primitives report 0 a11y violations (**advisory only**) · the boundary probe fails ESLint |
+| **W12** | 19 | W11 | ⚠️ | `e512d60` | `bunx storybook build` · 18 primitives report 0 a11y violations (**advisory only**) · the boundary probe fails ESLint |
 | **W13** | 20 | W12 | ⬜ | — | `node scripts/check-classes.mjs` 0/0 · every class in the 7 converted sheets matches the BEM regex |
 | **W14** | 21, 22 | W13 | ⬜ | — | `bunx stylelint` on the converted sheets · zero `!important` in `Toolbar.css` · every class matches the regex · **2 agents** |
 | **W15** | 23 | W14 | ⬜ | — | 100-pixel drag under 16 ms/frame · corpus snapshots unchanged |
