@@ -13,7 +13,7 @@
  * OOM the worker. Every fixture here is `tinyProject()` — 1 object × 1 frame ×
  * 1 layer × **4×4** grid. Do not enlarge it.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BLUE,
   GREEN,
@@ -26,7 +26,9 @@ import {
 } from "./storeContract";
 import { MAX_HISTORY } from "@/store/storeTypes";
 
-vi.mock("@/services/api", async () => (await import("./mockApi")).apiMockFactory());
+// Task 16: the store no longer imports services/api (deleted) — dispatching
+// actions can no longer reach the network, so the defensive module mock that
+// used to live here is gone with it.
 
 describe.each(HARNESSES)("%s — history", (_name, makeHarness) => {
   let harness: StoreHarness;

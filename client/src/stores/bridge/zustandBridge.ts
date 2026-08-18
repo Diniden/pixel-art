@@ -13,8 +13,8 @@
  *             writer of the MobX copy is this bridge.
  *   Phase B — Zustand mirrors MobX for not-yet-migrated consumers. MobX is
  *             the source of truth; the only writer of the Zustand copy is
- *             this bridge. (Machinery arrives with the first flipped slice,
- *             task 16.)
+ *             this bridge. First flipped by task 16 (the DomainStore
+ *             lifecycle slice + `saveStatus`).
  *
  * Every bridge write is wrapped in `runInAction`: `enforceActions: "always"`
  * makes an unwrapped write throw, and Zustand's `subscribe` callback runs
@@ -23,15 +23,30 @@
  * Values are mirrored BY REFERENCE, never cloned — the clipboards contain
  * pixel grids, and `SessionStore` annotates them `observable.ref` so MobX
  * never proxies their contents.
+ *
+ * ── Task 16 additions ──────────────────────────────────────────────────────
+ *
+ *  1. The Phase B reaction: `loadState` (+ its `isLoading` computed and the
+ *     `loadError` message), `projectName`, `projectList` and `saveStatus` are
+ *     now MobX-owned and mirrored INTO Zustand for unmigrated consumers
+ *     (`App`, `Header`, `ProjectSelectModal`, `BrowseBackupsModal`).
+ *  2. The project-lifecycle DELEGATES: the Zustand actions (`initProject`,
+ *     `switchToProject`, …) are replaced at install time with calls into the
+ *     `DomainStore` flows, so unmigrated components keep their seam.
+ *  3. The `domainVersion` bump: the subscribe callback watches the Zustand
+ *     `project` REFERENCE and bumps `DomainStore.domainVersion` once per
+ *     committed mutation — the auto-save reaction observes the counter, never
+ *     the 300k-cell tree. Bumps are gated on `loadState === "loaded"` and
+ *     `!saveSuspended`, so hydration installs and lifecycle flows never
+ *     schedule a save of their own.
  */
-import { runInAction } from "mobx";
+import { compareStructural, flowResult, reaction, runInAction } from "mobx";
 import { useEditorStore } from "../../store";
 import type { EditorState } from "../../store/storeTypes";
 import type { ApplicationStore } from "../ApplicationStore";
 
 /* ── Phase A: Zustand → MobX. Fields whose slice has NOT yet flipped. ────── */
 export const PHASE_A_FIELDS = [
-  "saveStatus", //             EditorState.saveStatus        → session.saveStatus
   "aiServiceUrl", //           project.uiState.aiServiceUrl  → session.aiServiceUrl
   "layerClipboard", //         EditorState.layerClipboard    → session.layerClipboard
   "timelineCellClipboard", //  EditorState.timelineCellClipboard → session.timelineCellClipboard
@@ -39,8 +54,16 @@ export const PHASE_A_FIELDS = [
 ] as const;
 
 /* ── Phase B: MobX → Zustand. Fields whose ownership HAS flipped. ────────── */
-// Empty in task 14 — the first flip is task 16's DomainStore slice.
-export const PHASE_B_FIELDS = [] as const;
+// Flipped by task 16 — the DomainStore lifecycle slice, plus `saveStatus`
+// (now written only by `AutoSaveController` onto `SessionStore`).
+// `loadState` mirrors as BOTH `loadState`/`loadErrorMessage` and the legacy
+// `isLoading` boolean (a computed on `DomainStore`).
+export const PHASE_B_FIELDS = [
+  "loadState", //     domain.loadState    → EditorState.loadState (+ isLoading, loadErrorMessage)
+  "projectName", //   domain.projectName  → EditorState.projectName
+  "projectList", //   domain.projectList  → EditorState.projectList
+  "saveStatus", //    session.saveStatus  → EditorState.saveStatus
+] as const;
 
 /**
  * R6 dev-mode assertion: one field, one direction, one writer. Exported so
@@ -65,12 +88,23 @@ export function assertDisjointPhases(
  */
 function syncPhaseA(app: ApplicationStore, s: EditorState): void {
   runInAction(() => {
-    app.session.saveStatus = s.saveStatus;
     app.session.aiServiceUrl = s.project?.uiState.aiServiceUrl ?? null;
     app.session.layerClipboard = s.layerClipboard;
     app.session.timelineCellClipboard = s.timelineCellClipboard;
     app.session.colorHistory = s.colorHistory;
   });
+}
+
+/** The Phase B snapshot Zustand receives. */
+function phaseBSnapshot(app: ApplicationStore): Partial<EditorState> {
+  return {
+    loadState: app.domain.loadState,
+    loadErrorMessage: app.domain.loadError?.message ?? null,
+    isLoading: app.domain.isLoading,
+    projectName: app.domain.projectName,
+    projectList: app.domain.projectList.slice(),
+    saveStatus: app.session.saveStatus,
+  };
 }
 
 /**
@@ -86,14 +120,60 @@ export function installBridge(app: ApplicationStore): () => void {
   // immediately so the MobX tree never starts stale.
   syncPhaseA(app, useEditorStore.getState());
 
-  const disposeZ = useEditorStore.subscribe((s) => syncPhaseA(app, s));
+  // The `domainVersion` bump — see item 3 in the module header.
+  let lastProject = useEditorStore.getState().project;
 
-  // Phase B (a later task): Zustand mirrors MobX for not-yet-migrated
-  // consumers, e.g.
-  //   const disposeM = reaction(() => app.migratedSnapshot(),
-  //     (snap) => useEditorStore.setState(snap, false));
+  const disposeZ = useEditorStore.subscribe((s) => {
+    syncPhaseA(app, s);
+    if (s.project !== lastProject) {
+      lastProject = s.project;
+      runInAction(() => {
+        if (
+          s.project !== null &&
+          app.domain.loadState === "loaded" &&
+          !app.session.saveSuspended
+        ) {
+          app.domain.bumpDomainVersion();
+        }
+      });
+    }
+  });
+
+  // Phase B: Zustand mirrors MobX for not-yet-migrated consumers. MobX's
+  // `reaction` is already an action-safe context; the Zustand write is plain.
+  const disposeB = reaction(
+    () => phaseBSnapshot(app),
+    (snap) => useEditorStore.setState(snap),
+    { equals: compareStructural },
+  );
+
+  // The lifecycle DELEGATES — see item 2 in the module header. The previous
+  // (throwing-stub) actions are captured and restored on dispose so tests can
+  // wire and unwire repeatedly.
+  const previousActions = {
+    initProject: useEditorStore.getState().initProject,
+    createNewProject: useEditorStore.getState().createNewProject,
+    switchToProject: useEditorStore.getState().switchToProject,
+    renameCurrentProject: useEditorStore.getState().renameCurrentProject,
+    deleteCurrentProject: useEditorStore.getState().deleteCurrentProject,
+    refreshProjectList: useEditorStore.getState().refreshProjectList,
+    restoreFromBackup: useEditorStore.getState().restoreFromBackup,
+  };
+  useEditorStore.setState({
+    initProject: () => flowResult(app.domain.initProject()),
+    createNewProject: (name) => flowResult(app.domain.createProject(name)),
+    switchToProject: (name) => flowResult(app.domain.switchProject(name)),
+    renameCurrentProject: (newName) =>
+      flowResult(app.domain.renameProject(newName)),
+    deleteCurrentProject: () => flowResult(app.domain.deleteProject()),
+    refreshProjectList: () => flowResult(app.domain.refreshProjectList()),
+    restoreFromBackup: (date, filename) =>
+      flowResult(app.domain.restoreFromBackup(date, filename)),
+  });
 
   return () => {
     disposeZ();
+    disposeB();
+    useEditorStore.setState(previousActions);
   };
 }

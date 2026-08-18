@@ -6,9 +6,9 @@
  * provider is mounted so a mis-wired tree fails loudly instead of reading
  * stale state.
  *
- * Per-child hooks (`useDomainStore`, `useUIStore`, `useHistoryStore`) are
- * added by the tasks that create those children (16, 24, 17). Only `session`
- * exists today.
+ * Per-child hooks are added by the tasks that create those children:
+ * `session` (task 14), `domain` (task 16); `useUIStore` / `useHistoryStore`
+ * arrive with tasks 24 and 17.
  *
  * NOTE: this file is `context.tsx` (the task spec names it `context.ts`)
  * because `StoreProvider` renders JSX.
@@ -19,6 +19,7 @@
    the store instance lives in main.tsx, not here. */
 import { createContext, useContext, type ReactNode } from "react";
 import type { ApplicationStore } from "./ApplicationStore";
+import type { DomainStore } from "./domain/DomainStore";
 import type { SessionStore } from "./session/SessionStore";
 
 const StoreContext = createContext<ApplicationStore | null>(null);
@@ -43,3 +44,5 @@ export function useStores(): ApplicationStore {
 }
 
 export const useSessionStore = (): SessionStore => useStores().session;
+
+export const useDomainStore = (): DomainStore => useStores().domain;

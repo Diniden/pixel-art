@@ -1,8 +1,24 @@
 /**
  * Behaviour contract — auto-save scheduling, the save-status lifecycle, and the
- * three defects that were pinned as `// BUG:` assertions until task 14 fixed
- * them. The flipped assertions below now state the CORRECT behaviour, each
- * flipped in the same change as its fix (task 14, defects 1-3).
+ * defects task 14 fixed.
+ *
+ * REWIRED BY TASK 16 (the seam changed, the behaviour contract did not):
+ * auto-save no longer lives in the Zustand store — `updateProjectAndSave` only
+ * commits, the bridge bumps `DomainStore.domainVersion` per commit, and
+ * `AutoSaveController`'s reaction owns debounce/save/status. Each test
+ * therefore wires the full bridge-era stack via `wireAutoSave()` and observes
+ * the transport at the NEW seam: `projectApi.save` (which now receives the
+ * COMPACT payload — the same bytes the old facade produced).
+ *
+ * Three assertions flipped, each authorised by the task 16 spec and marked
+ * `FLIPPED (task 16)` below:
+ *  1. `cancelPendingSave()` is gone — suspension DEFERS a pending edit instead
+ *     of silently discarding it (rename keeps the edit, under the new name).
+ *  2. A failed save no longer self-heals invisibly at 2 Hz forever — retry is
+ *     debounced backoff with an attempt cap (the cap itself is pinned in
+ *     `stores/session/__tests__/autoSaveController.test.ts`).
+ *  3. The save-status writer is `SessionStore` (mirrored to Zustand by the
+ *     bridge), not a module-level callback slot.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -11,55 +27,58 @@ import {
   RED,
   cloneProject,
   tinyProject,
+  wireAutoSave,
   type StoreHarness,
+  type WiredApp,
 } from "./storeContract";
 import { MAX_HISTORY } from "@/store/storeTypes";
-
-vi.mock("@/services/api", async () => (await import("./mockApi")).apiMockFactory());
-
-import * as api from "@/services/api";
-import { cancelPendingSave } from "@/services/autoSave";
+import { projectApi } from "@/api";
+import { compactToProject, projectToCompact } from "@/types";
 import { useEditorStore } from "@/store";
 
-const saveProject = vi.mocked(api.saveProject);
-const renameProject = vi.mocked(api.renameProject);
-const listProjects = vi.mocked(api.listProjects);
+const spyOnSave = () => vi.spyOn(projectApi, "save");
 
 describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
   let harness: StoreHarness;
+  let wired: WiredApp;
+  let save: ReturnType<typeof spyOnSave>;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    // The autoSave module holds `saveTimeout` / `pendingProject` at module
-    // scope; without this a timer scheduled by one test fires inside the next.
-    cancelPendingSave();
-    saveProject.mockClear();
-    saveProject.mockResolvedValue(undefined);
+    save = spyOnSave();
+    save.mockResolvedValue({ success: true, backupCreated: false });
     harness = makeHarness();
     harness.reset();
+    // Install the project BEFORE the gate opens: hydration must never count
+    // as an edit (the controller adopts the counters as its clean baseline
+    // when `loadGeneration` bumps).
     harness.load(tinyProject());
+    wired = wireAutoSave();
+    wired.openGate("test");
+    save.mockClear();
   });
 
   afterEach(() => {
-    cancelPendingSave();
+    wired.dispose();
     harness.dispatch("endStroke");
     harness.reset();
     vi.clearAllTimers();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
-  /* ── the 500 ms debounce (services/autoSave.ts:10, :53-56) ─────────────── */
+  /* ── the 500 ms debounce (AutoSaveController.DEBOUNCE_MS) ──────────────── */
 
   describe("debounce", () => {
     it("does NOT save synchronously — the 500 ms timer must elapse", () => {
       harness.dispatch("setPixel", 0, 0, RED);
-      expect(saveProject).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(499);
-      expect(saveProject).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(1);
-      expect(saveProject).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
     });
 
     it("COALESCES N rapid edits into exactly ONE save", () => {
@@ -72,10 +91,10 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
         });
         vi.advanceTimersByTime(50); // well inside the window
       }
-      expect(saveProject).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(500);
-      expect(saveProject).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
     });
 
     it("saves the LATEST project, not the first one queued", () => {
@@ -83,8 +102,9 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
       harness.dispatch("setPixel", 1, 1, BLUE);
       vi.advanceTimersByTime(500);
 
-      expect(saveProject).toHaveBeenCalledTimes(1);
-      const saved = saveProject.mock.calls[0][0];
+      expect(save).toHaveBeenCalledTimes(1);
+      // The seam now carries the COMPACT wire format; decode to assert.
+      const saved = compactToProject(save.mock.calls[0][0]);
       expect(saved.objects[0].frames[0].layers[0].pixels[1][1].color).toEqual(
         BLUE,
       );
@@ -92,44 +112,50 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
 
     it("edits SEPARATED by more than the window produce separate saves", async () => {
       harness.dispatch("setPixel", 0, 0, RED);
-      // `advanceTimersByTimeAsync`, not the sync form: `performSave` awaits
-      // `saveProject` and only clears its `isSaving` guard in a `finally`. With
-      // the sync form the second save is silently swallowed by that guard —
-      // which is itself real, observed behaviour, asserted separately below.
+      // `advanceTimersByTimeAsync`, not the sync form: the controller awaits
+      // the transport and only releases its in-flight slot afterwards.
       await vi.advanceTimersByTimeAsync(500);
-      expect(saveProject).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
 
       harness.dispatch("setPixel", 1, 1, BLUE);
       await vi.advanceTimersByTimeAsync(500);
-      expect(saveProject).toHaveBeenCalledTimes(2);
+      expect(save).toHaveBeenCalledTimes(2);
     });
 
-    it("OBSERVED: a save scheduled while one is IN FLIGHT is deferred, not dropped", () => {
-      // `performSave` returns early when `isSaving` is true (autoSave.ts:17),
-      // and re-invokes itself from the `finally` block if a project is pending
-      // (autoSave.ts:39-41). Advancing timers synchronously never lets the
-      // in-flight promise settle, so the second call is still queued here.
+    it("a save scheduled while one is IN FLIGHT is deferred, not dropped", () => {
+      // The controller holds a single in-flight promise; a save requested
+      // mid-flight sets the dirty flag and runs once afterwards. Advancing
+      // timers synchronously never lets the in-flight promise settle, so the
+      // second request is still queued here.
       harness.dispatch("setPixel", 0, 0, RED);
       vi.advanceTimersByTime(500);
-      expect(saveProject).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
 
       harness.dispatch("setPixel", 1, 1, BLUE);
       vi.advanceTimersByTime(500);
       // Still 1: the first save has not resolved, so the second is deferred.
-      expect(saveProject).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
     });
 
     it("passes the current project NAME through to the API", () => {
       harness.dispatch("setPixel", 0, 0, RED);
       vi.advanceTimersByTime(500);
-      expect(saveProject.mock.calls[0][1]).toBe(harness.getProjectName());
+      expect(save.mock.calls[0][1]).toBe(harness.getProjectName());
     });
 
-    it("cancelPendingSave drops a queued save entirely", () => {
+    it("FLIPPED (task 16): suspension DEFERS a pending edit instead of discarding it", () => {
+      // The old `cancelPendingSave()` dropped the queued project outright —
+      // the edit was silently lost. Suspension (what the DomainStore flows
+      // now set) closes the gate for its duration and the edit saves when it
+      // lifts. Strictly less data loss; pinned as the new contract.
       harness.dispatch("setPixel", 0, 0, RED);
-      cancelPendingSave();
+      wired.app.session.setSaveSuspended(true);
       vi.advanceTimersByTime(2000);
-      expect(saveProject).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled(); // gate shut: nothing fires
+
+      wired.app.session.setSaveSuspended(false);
+      vi.advanceTimersByTime(500);
+      expect(save).toHaveBeenCalledTimes(1); // the edit survived the suspend
     });
 
     it("a whole 50-pixel stroke still coalesces to ONE save", () => {
@@ -144,7 +170,7 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
       }
       harness.dispatch("endStroke");
       vi.advanceTimersByTime(500);
-      expect(saveProject).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
       expect(harness.getHistoryLength()).toBe(1);
     });
   });
@@ -154,10 +180,10 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
   describe("every mutating action schedules a save", () => {
     const expectsOneSave = (name: string, run: () => void) => {
       it(`${name} schedules exactly one save`, async () => {
-        saveProject.mockClear();
+        save.mockClear();
         run();
         await vi.advanceTimersByTimeAsync(500);
-        expect(saveProject).toHaveBeenCalledTimes(1);
+        expect(save).toHaveBeenCalledTimes(1);
       });
     };
 
@@ -176,32 +202,32 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
 
     it("a NO-OP setPixel schedules NO save", () => {
       // The same-colour early return happens BEFORE updateProjectAndSave.
-      saveProject.mockClear();
+      save.mockClear();
       harness.dispatch("setPixel", 0, 0, 0); // already empty
       vi.advanceTimersByTime(500);
-      expect(saveProject).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
     });
 
     it("saveCurrentStateToHistory does NOT schedule a save (history only)", () => {
-      saveProject.mockClear();
+      save.mockClear();
       harness.dispatch("saveCurrentStateToHistory");
       vi.advanceTimersByTime(500);
-      expect(saveProject).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
       expect(harness.getHistoryLength()).toBe(1);
     });
 
-    it("undo DOES schedule a save (projectActions.ts:224)", async () => {
+    it("undo DOES schedule a save (the project commit bumps domainVersion)", async () => {
       harness.dispatch("setPixel", 0, 0, RED);
       await vi.advanceTimersByTimeAsync(500);
-      saveProject.mockClear();
+      save.mockClear();
 
       harness.dispatch("undo");
       await vi.advanceTimersByTimeAsync(500);
-      expect(saveProject).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
     });
   });
 
-  /* ── the save-status lifecycle (store/index.ts:32-42) ──────────────────── */
+  /* ── the save-status lifecycle (SessionStore.markSaved) ────────────────── */
 
   describe("save-status lifecycle", () => {
     it("goes saving -> saved -> idle with a 2 s timeout", async () => {
@@ -210,7 +236,7 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
       harness.dispatch("setPixel", 0, 0, RED);
       await vi.advanceTimersByTimeAsync(500);
 
-      // `performSave` awaits `saveProject` then fires 'saved'.
+      // The controller awaits the transport then marks saved.
       expect(harness.getSaveStatus()).toBe("saved");
 
       await vi.advanceTimersByTimeAsync(1999);
@@ -220,37 +246,31 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
       expect(harness.getSaveStatus()).toBe("idle");
     });
 
-    it("reports 'error' when the API rejects", async () => {
-      // `mockImplementationOnce`, not `mockRejectedValueOnce`: the module-level
-      // `isSaving` / `pendingProject` state in autoSave.ts can leave an earlier
-      // test's in-flight promise unsettled, and that stray call would otherwise
-      // consume the one-shot rejection before this test's own save reaches it.
-      // Rejecting by call ARGUMENT is immune to the ordering.
+    it("FLIPPED (task 16): a failing save retries with BACKOFF, not at 2 Hz forever", async () => {
+      // The old loop re-queued instantly on every failure (status flickered
+      // 'error' and self-healed invisibly). The controller keeps status
+      // 'saving' while a bounded retry chain runs: 500 ms × 2ⁿ, max 6
+      // attempts, THEN 'error' (cap pinned in the controller suite).
       let rejected = false;
-      saveProject.mockImplementation(async () => {
+      save.mockImplementation(async () => {
         if (!rejected) {
           rejected = true;
           throw new Error("network down");
         }
+        return { success: true, backupCreated: false };
       });
 
       harness.dispatch("setPixel", 0, 0, RED);
       await vi.advanceTimersByTimeAsync(500);
       expect(rejected).toBe(true);
+      expect(save).toHaveBeenCalledTimes(1);
+      // First failure: still retrying, not yet an error.
+      expect(harness.getSaveStatus()).toBe("saving");
 
-      // OBSERVED: 'error' is TRANSIENT and self-heals within the SAME 500 ms
-      // window. `performSave`'s catch sets 'error' AND re-queues via
-      // `scheduleAutoSave` (autoSave.ts:29-34), which schedules a fresh 500 ms
-      // timer; because that retry is also inside this advance, it succeeds and
-      // overwrites the status with 'saved' before control returns here. The user
-      // therefore never sees the error indicator for a failure that recovers on
-      // the first retry. Recorded, not fixed.
+      // First backoff step is 500 ms; the retry succeeds.
+      await vi.advanceTimersByTimeAsync(500);
+      expect(save).toHaveBeenCalledTimes(2);
       expect(harness.getSaveStatus()).toBe("saved");
-      expect(saveProject).toHaveBeenCalledTimes(2);
-
-      cancelPendingSave();
-      saveProject.mockReset();
-      saveProject.mockResolvedValue(undefined);
     });
 
     it("a NEW save while status is 'saved' cancels the pending idle reset", async () => {
@@ -263,25 +283,23 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
       await vi.advanceTimersByTimeAsync(500);
       expect(harness.getSaveStatus()).toBe("saved");
 
-      // The FIRST timer fires here but the guard `if (currentStatus ===
-      // "saved")` still holds, so it flips to idle even though a second save
-      // just completed. OBSERVED — the timeouts are not cancelled, only guarded.
+      // The FIRST timer fires here but the guard `if (still saved)` holds, so
+      // it flips to idle even though a second save just completed. OBSERVED
+      // behaviour carried over verbatim into SessionStore.markSaved — the
+      // timeouts are GUARDED, not cancelled.
       await vi.advanceTimersByTimeAsync(1000);
       expect(harness.getSaveStatus()).toBe("idle");
     });
   });
 
-  /* ══ FIXED (task 14, defect 1) — the 8 lighting setters now auto-save ══ */
+  /* ══ FIXED (task 14, defect 1) — the 8 lighting setters auto-save ══ */
 
   describe("the 8 lighting setters auto-save (fixed by task 14)", () => {
     // WAS BUG, FIXED BY TASK 14: the 8 setters wrote `project` via a raw
-    // `set({ project: {...} })` and scheduled NO save — `lightingActions.ts`
-    // did not import `services/autoSave` at all, so light colour, ambient
-    // colour, height scale and five more were silently lost on reload.
-    //
-    // They now route through `updateProjectAndSave` with `trackHistory =
-    // false` (matching all 33 uiState call sites in toolActions), so each
-    // mutation schedules exactly one save.
+    // `set({ project: {...} })` and scheduled NO save. They now route through
+    // `updateProjectAndSave` — and under task 16 the fix is STRUCTURAL: any
+    // committed project reference bumps `domainVersion`, so no setter can
+    // opt out of saving again.
     const setters: Array<[string, unknown[]]> = [
       ["setStudioMode", ["lighting"]],
       ["setLightingDataLayerEditMode", ["height"]],
@@ -296,7 +314,7 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
     it.each(setters)(
       "FIXED: %s mutates the project AND schedules exactly one save",
       (name, args) => {
-        saveProject.mockClear();
+        save.mockClear();
         const before = JSON.stringify(harness.getUiState());
 
         harness.dispatch(
@@ -308,17 +326,13 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
         expect(JSON.stringify(harness.getUiState())).not.toBe(before);
         // …and exactly one save was scheduled through the debounce.
         vi.advanceTimersByTime(499);
-        expect(saveProject).not.toHaveBeenCalled();
+        expect(save).not.toHaveBeenCalled();
         vi.advanceTimersByTime(1);
-        expect(saveProject).toHaveBeenCalledTimes(1);
+        expect(save).toHaveBeenCalledTimes(1);
       },
     );
 
     it("DELIBERATE: none of the 8 track history (trackHistory = false)", () => {
-      // NOT flipped by task 14 — the fix routes the setters through
-      // `updateProjectAndSave(..., false)`, the same `trackHistory = false`
-      // every other uiState writer uses. Adding 8 new undo entries would have
-      // been a second, unrelated behaviour change.
       const before = harness.getHistoryLength();
       for (const [name, args] of setters) {
         harness.dispatch(name as never, ...(args as never[]));
@@ -327,27 +341,29 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
     });
 
     it("by CONTRAST, a lighting action that goes through updateProjectAndSave DOES save", () => {
-      saveProject.mockClear();
+      save.mockClear();
       harness.dispatch("setHeightPixels", [{ x: 0, y: 0, height: 100 }]);
       vi.advanceTimersByTime(500);
-      expect(saveProject).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
     });
   });
 
-  /* ══ FIXED (task 14, defect 3) — the rename race ══════════════════════ */
+  /* ══ the renameCurrentProject race (fixed by task 14, hardened by 16) ══ */
 
-  describe("the renameCurrentProject race (fixed by task 14)", () => {
-    // WAS BUG, FIXED BY TASK 14: `renameCurrentProject` did NOT call
-    // `cancelPendingSave()`, unlike its three siblings — `createNewProject`,
-    // `switchToProject` and `deleteCurrentProject`. A save debounced against
-    // the OLD name could therefore fire with the stale name AFTER the
-    // server-side rename. It now cancels the pending save, matching the
-    // siblings.
-    it("FIXED: a pending save is cancelled and nothing lands under the OLD name", async () => {
+  describe("the renameCurrentProject race", () => {
+    it("FLIPPED (task 16): nothing lands under the OLD name — and the edit SURVIVES under the new one", async () => {
+      // Task 14 fixed the race by cancelling the pending save — the edit was
+      // DROPPED. Task 16's suspension covers rename structurally (the flow
+      // sets `saveSuspended` for its duration) and the deferred edit saves
+      // under the NEW name once the rename completes. The defect being
+      // guarded — a write to the pre-rename file — stays impossible.
       const originalName = harness.getProjectName();
-      saveProject.mockClear();
-      renameProject.mockResolvedValue(undefined);
-      listProjects.mockResolvedValue([originalName, "renamed"]);
+      save.mockClear();
+      vi.spyOn(projectApi, "rename").mockResolvedValue(undefined);
+      vi.spyOn(projectApi, "list").mockResolvedValue([
+        originalName,
+        "renamed",
+      ]);
 
       // Queue a save against the current name…
       harness.dispatch("setPixel", 0, 0, RED);
@@ -357,42 +373,38 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
 
       await vi.advanceTimersByTimeAsync(500);
 
-      // The queued save was cancelled at the top of the rename, so no write
-      // reaches the pre-rename file (and none reaches the new one either —
-      // the next real edit will save under the new name).
-      expect(saveProject).not.toHaveBeenCalled();
+      // THE INVARIANT: no write ever reaches the pre-rename file.
+      expect(
+        save.mock.calls.filter((c) => c[1] === originalName),
+      ).toHaveLength(0);
+      // NEW: the queued edit is deferred, not discarded — one save, new name.
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save.mock.calls[0][1]).toBe("renamed");
     });
 
-    it("by CONTRAST, switchToProject DOES cancel the pending save", async () => {
-      saveProject.mockClear();
-      vi.mocked(api.switchProject).mockResolvedValue(undefined);
-      vi.mocked(api.loadProject).mockResolvedValue(tinyProject());
+    it("switchToProject cancels the pending save outright (fresh-load baseline)", async () => {
+      save.mockClear();
+      vi.spyOn(projectApi, "switchTo").mockResolvedValue(undefined);
+      vi.spyOn(projectApi, "get").mockResolvedValue(
+        projectToCompact(tinyProject()),
+      );
 
       harness.dispatch("setPixel", 0, 0, RED);
       await harness.dispatch("switchToProject", "other");
       await vi.advanceTimersByTimeAsync(500);
 
-      expect(saveProject).not.toHaveBeenCalled();
+      // The pre-switch edit belonged to the REPLACED project; the fresh
+      // install adopts a clean baseline, so nothing is saved — exactly the
+      // old `cancelPendingSave()` outcome.
+      expect(save).not.toHaveBeenCalled();
     });
   });
 
   /* ══ FIXED (task 14, defect 2) — the AI modal's history commit ═════════ */
 
   describe("the AIInterpolateModal history commit (fixed by task 14)", () => {
-    // WAS BUG, FIXED BY TASK 14: `AIInterpolateModal.tsx` reimplemented the
-    // history splice with a raw `useEditorStore.setState()` and OMITTED the
-    // `if (newHistory.length > MAX_HISTORY) newHistory.shift()` guard, so
-    // repeated AI interpolation grew `projectHistory` without bound. It also
-    // dynamic-imported `scheduleAutoSave` and called it directly.
-    //
-    // The modal now commits through the store's exposed `updateProjectAndSave`
-    // action — `store.updateProjectAndSave(() => newProject, true)` — so the
-    // MAX_HISTORY cap and the normal save path both apply. This test drives
-    // that exact call the way the modal now does.
     it("FIXED: the modal's commit path caps projectHistory at MAX_HISTORY", () => {
       for (let i = 0; i < MAX_HISTORY + 5; i++) {
-        // What the modal does on accept: build a full replacement project,
-        // then commit it through the store's single path with history.
         const newProject = cloneProject(useEditorStore.getState().project!);
         harness.dispatch("updateProjectAndSave", () => newProject, true);
       }
@@ -402,11 +414,11 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
     });
 
     it("FIXED: the modal's commit path schedules a save through the store", () => {
-      saveProject.mockClear();
+      save.mockClear();
       const newProject = cloneProject(useEditorStore.getState().project!);
       harness.dispatch("updateProjectAndSave", () => newProject, true);
       vi.advanceTimersByTime(500);
-      expect(saveProject).toHaveBeenCalledTimes(1);
+      expect(save).toHaveBeenCalledTimes(1);
     });
 
     it("by CONTRAST, the store's own path caps at MAX_HISTORY", () => {

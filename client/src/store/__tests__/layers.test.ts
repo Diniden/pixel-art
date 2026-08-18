@@ -36,14 +36,15 @@ import {
   layerOf,
   mkLayer,
   tinyProject,
+  wireAutoSave,
   type StoreHarness,
 } from "./storeContract";
+import { projectToCompact } from "@/types";
 import type { Color, Layer, PixelData, Project } from "@/types";
 import { useEditorStore } from "@/store";
-
-vi.mock("@/services/api", async () => (await import("./mockApi")).apiMockFactory());
-
-import * as api from "@/services/api";
+// Task 16: the lifecycle actions are DomainStore flows behind bridge-installed
+// delegates; the cross-project tests wire the stack and stub the typed API.
+import { projectApi } from "@/api";
 
 /* ── fixtures ────────────────────────────────────────────────────────────── */
 
@@ -837,11 +838,18 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
       harness.dispatch("copyLayerToClipboard", "from-A");
       expect(readClipboard()).not.toBeNull();
 
-      // Genuinely switch projects through the real action, not by re-loading.
+      // Genuinely switch projects through the real action (the bridge-installed
+      // delegate into DomainStore.switchProject), not by re-loading.
       const projectB = tinyProject({ layers: [filledLayer("in-B", BLUE)] });
-      vi.mocked(api.switchProject).mockResolvedValue(undefined);
-      vi.mocked(api.loadProject).mockResolvedValue(projectB);
-      await harness.dispatch("switchToProject", "project-B");
+      const wired = wireAutoSave();
+      vi.spyOn(projectApi, "switchTo").mockResolvedValue(undefined);
+      vi.spyOn(projectApi, "get").mockResolvedValue(projectToCompact(projectB));
+      try {
+        await harness.dispatch("switchToProject", "project-B");
+      } finally {
+        wired.dispose();
+        vi.restoreAllMocks();
+      }
 
       // The switch cleared history but NOT the clipboard.
       expect(harness.getHistoryLength()).toBe(0);
@@ -856,9 +864,18 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
       harness.load(tinyProject({ layers: [filledLayer("from-A", GREEN)] }));
       harness.dispatch("copyLayerToClipboard", "from-A");
 
-      vi.mocked(api.createProject).mockResolvedValue(undefined);
-      vi.mocked(api.listProjects).mockResolvedValue(["a", "b"]);
-      await harness.dispatch("createNewProject", "fresh");
+      const wired = wireAutoSave();
+      vi.spyOn(projectApi, "create").mockResolvedValue({
+        success: true,
+        projectName: "fresh",
+      });
+      vi.spyOn(projectApi, "list").mockResolvedValue(["a", "b"]);
+      try {
+        await harness.dispatch("createNewProject", "fresh");
+      } finally {
+        wired.dispose();
+        vi.restoreAllMocks();
+      }
 
       expect(readClipboard()).not.toBeNull();
     });

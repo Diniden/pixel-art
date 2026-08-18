@@ -1,220 +1,60 @@
-import {
-  createDefaultProject,
-  projectToCompact,
-  compactToProject,
-} from "../types";
-import {
-  loadProject,
-  getConfig,
-  listProjects,
-  createProject as apiCreateProject,
-  renameProject as apiRenameProject,
-  switchProject as apiSwitchProject,
-  deleteProject as apiDeleteProject,
-  restoreBackup as apiRestoreBackup,
-} from "../services/api";
-import { scheduleAutoSave, cancelPendingSave } from "../services/autoSave";
+/**
+ * Project lifecycle — DELEGATED (REFRESH task 16).
+ *
+ * Every lifecycle action (`initProject`, `createNewProject`, `switchToProject`,
+ * `renameCurrentProject`, `deleteCurrentProject`, `refreshProjectList`,
+ * `restoreFromBackup`) now lives on `DomainStore` as a MobX flow, behind the
+ * load-state machine that closes R5 — the old `initProject` catch here
+ * installed `createDefaultProject()` on ANY failure, which auto-save then
+ * wrote over the user's real file.
+ *
+ * The entries below are THROWING STUBS: `installBridge()` replaces them with
+ * delegates into the `DomainStore` flows at app start (and restores the stubs
+ * on dispose). They throw loudly — a store used without the bridge would
+ * otherwise fail silently, which is exactly the failure mode W3's boundary
+ * probe exists to prevent.
+ *
+ * `undo` is still genuinely Zustand-owned until the HistoryStore task (17).
+ * It no longer schedules its own save: the `set({ project })` commit is
+ * observed by the bridge, which bumps `DomainStore.domainVersion`, and the
+ * `AutoSaveController` reaction owns the rest — so undo still results in
+ * exactly one debounced save, as pinned by the task 08 suite.
+ */
+import { projectToCompact, compactToProject } from "../types";
 import type { StoreGet, StoreSet } from "./storeTypes";
+
+const notWired =
+  (name: string) =>
+  (..._args: unknown[]): never => {
+    throw new Error(
+      `${name}: the project lifecycle lives on DomainStore (task 16) — ` +
+        "installBridge(app) has not been called, so the delegate is missing.",
+    );
+  };
 
 export function createProjectActions(get: StoreGet, set: StoreSet) {
   return {
-    initProject: async () => {
-      set({ isLoading: true });
-      try {
-        // Load config to get current project name
-        const config = await getConfig();
-        const projectName = config.currentProject || "project";
-
-        // Load the project list
-        const projectList = await listProjects();
-
-        // Load the project data
-        const project = await loadProject(projectName);
-
-        set({
-          project,
-          projectName,
-          projectList,
-          isLoading: false,
-          projectHistory: [],
-          historyIndex: -1,
-        });
-      } catch (error) {
-        console.error("Failed to load project:", error);
-        set({
-          project: createDefaultProject(),
-          projectName: "project",
-          projectList: ["project"],
-          isLoading: false,
-          projectHistory: [],
-          historyIndex: -1,
-        });
-      }
-    },
-
-    createNewProject: async (name: string) => {
-      try {
-        // Cancel any pending saves to the old project
-        cancelPendingSave();
-
-        // Create new project with default data
-        const newProject = createDefaultProject();
-        await apiCreateProject(name, newProject);
-
-        // Refresh project list
-        const projectList = await listProjects();
-
-        set({
-          project: newProject,
-          projectName: name,
-          projectList,
-          projectHistory: [],
-          historyIndex: -1,
-        });
-
-        return true;
-      } catch (error) {
-        console.error("Failed to create project:", error);
-        return false;
-      }
-    },
-
-    switchToProject: async (name: string) => {
-      try {
-        // Cancel any pending saves to the old project
-        cancelPendingSave();
-
-        set({ isLoading: true });
-
-        // Switch project on server
-        await apiSwitchProject(name);
-
-        // Load the new project
-        const project = await loadProject(name);
-
-        set({
-          project,
-          projectName: name,
-          isLoading: false,
-          projectHistory: [],
-          historyIndex: -1,
-        });
-
-        return true;
-      } catch (error) {
-        console.error("Failed to switch project:", error);
-        set({ isLoading: false });
-        return false;
-      }
-    },
-
-    renameCurrentProject: async (newName: string) => {
-      const { projectName } = get();
-      try {
-        // Cancel any pending saves to the old project (task 14, defect 3):
-        // a save debounced against the OLD name would otherwise fire with the
-        // stale name AFTER the server-side rename. Matches the three siblings
-        // (createNewProject, switchToProject, deleteCurrentProject).
-        cancelPendingSave();
-
-        await apiRenameProject(projectName, newName);
-
-        // Refresh project list
-        const projectList = await listProjects();
-
-        set({
-          projectName: newName,
-          projectList,
-        });
-
-        return true;
-      } catch (error) {
-        console.error("Failed to rename project:", error);
-        return false;
-      }
-    },
-
-    deleteCurrentProject: async () => {
-      const { projectName, projectList } = get();
-      try {
-        // Don't allow deleting the last project
-        if (projectList.length <= 1) {
-          console.error("Cannot delete the last project");
-          return false;
-        }
-
-        // Cancel any pending saves
-        cancelPendingSave();
-
-        await apiDeleteProject(projectName);
-
-        // Switch to another project
-        const newProjectList = await listProjects();
-        const newProjectName = newProjectList[0];
-        const project = await loadProject(newProjectName);
-
-        set({
-          project,
-          projectName: newProjectName,
-          projectList: newProjectList,
-          projectHistory: [],
-          historyIndex: -1,
-        });
-
-        return true;
-      } catch (error) {
-        console.error("Failed to delete project:", error);
-        return false;
-      }
-    },
-
-    refreshProjectList: async () => {
-      try {
-        const projectList = await listProjects();
-        set({ projectList });
-      } catch (error) {
-        console.error("Failed to refresh project list:", error);
-      }
-    },
-
-    restoreFromBackup: async (date: string, filename: string) => {
-      const { project, projectName, projectHistory, historyIndex } = get();
-
-      try {
-        cancelPendingSave();
-
-        // Push current state onto undo history so this is undoable
-        if (project) {
-          const compactSnapshot = projectToCompact(project);
-          const clonedSnapshot = compactToProject(compactSnapshot);
-          const newHistory = [
-            ...projectHistory.slice(0, historyIndex + 1),
-            clonedSnapshot,
-          ];
-          set({
-            projectHistory: newHistory,
-            historyIndex: newHistory.length - 1,
-          });
-        }
-
-        // Tell the server to overwrite the project file with the backup
-        await apiRestoreBackup(date, filename, projectName);
-
-        // Reload the project from the server (runs migrations etc.)
-        const restoredProject = await loadProject(projectName);
-
-        set({ project: restoredProject });
-
-        scheduleAutoSave(restoredProject, projectName);
-        return true;
-      } catch (error) {
-        console.error("Failed to restore backup:", error);
-        return false;
-      }
-    },
+    initProject: notWired("initProject") as () => Promise<void>,
+    createNewProject: notWired("createNewProject") as (
+      name: string,
+    ) => Promise<boolean>,
+    switchToProject: notWired("switchToProject") as (
+      name: string,
+    ) => Promise<boolean>,
+    renameCurrentProject: notWired("renameCurrentProject") as (
+      newName: string,
+    ) => Promise<boolean>,
+    deleteCurrentProject: notWired(
+      "deleteCurrentProject",
+    ) as () => Promise<boolean>,
+    refreshProjectList: notWired("refreshProjectList") as () => Promise<void>,
+    restoreFromBackup: notWired("restoreFromBackup") as (
+      date: string,
+      filename: string,
+    ) => Promise<boolean>,
 
     undo: () => {
-      const { projectHistory, historyIndex, projectName } = get();
+      const { projectHistory, historyIndex } = get();
       if (historyIndex < 0 || projectHistory.length === 0) return;
 
       const previousProject = projectHistory[historyIndex];
@@ -227,7 +67,7 @@ export function createProjectActions(get: StoreGet, set: StoreSet) {
         project: clonedProject,
         historyIndex: newIndex,
       });
-      scheduleAutoSave(clonedProject, projectName);
+      // The save: bridge bump → AutoSaveController (see the module header).
     },
   };
 }

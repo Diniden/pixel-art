@@ -28,8 +28,11 @@
  * work entirely outside React. These tests run in the fast `unit` project — no
  * jsdom, no React, no renderer.
  */
+import { runInAction } from "mobx";
 import { useEditorStore } from "@/store";
 import { MAX_HISTORY } from "@/store/storeTypes";
+import { ApplicationStore } from "@/stores/ApplicationStore";
+import { installBridge } from "@/stores/bridge/zustandBridge";
 import {
   DEFAULT_UI_STATE,
   compactToProject,
@@ -262,6 +265,8 @@ export function createZustandHarness(): StoreHarness {
         projectName: PRISTINE.projectName,
         projectList: [],
         isLoading: false,
+        loadState: "idle",
+        loadErrorMessage: null,
         saveStatus: "idle",
         projectHistory: [],
         historyIndex: -1,
@@ -310,3 +315,52 @@ export function createZustandHarness(): StoreHarness {
 export const HARNESSES: ReadonlyArray<[string, () => StoreHarness]> = [
   ["zustand", createZustandHarness],
 ];
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* Task 16: MobX auto-save wiring for the behaviour suites                    */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Auto-save is no longer a property of the Zustand store: `store/index.ts`
+ * only commits `project`, the bridge bumps `DomainStore.domainVersion` on
+ * each commit, and `AutoSaveController` owns debounce/save/status. A test
+ * that asserts SAVE behaviour therefore wires the full bridge-era stack:
+ *
+ *   ApplicationStore (autoSaveEnabled) → installBridge → open the gate.
+ *
+ * `openGate` simulates a completed load the way `DomainStore`'s flows do —
+ * project already installed in Zustand, THEN `loadGeneration` bumped and
+ * `loadState` set — so the controller adopts the counters as its clean
+ * baseline and only real edits schedule saves.
+ *
+ * Everything is instance-scoped: `dispose()` unwires the bridge (restoring
+ * the throwing lifecycle stubs) and stops the reaction, so tests cannot leak
+ * timers or saves into each other — the exact defect the module-level
+ * `services/autoSave.ts` used to force onto this suite.
+ */
+export interface WiredApp {
+  app: ApplicationStore;
+  /** Mark the CURRENT Zustand project as freshly loaded under `name`. */
+  openGate(name?: string): void;
+  dispose(): void;
+}
+
+export function wireAutoSave(): WiredApp {
+  const app = new ApplicationStore({ autoSaveEnabled: true });
+  const disposeBridge = installBridge(app);
+  return {
+    app,
+    openGate: (name = "test") => {
+      runInAction(() => {
+        app.domain.projectName = name;
+        app.domain.projectList = [name];
+        app.domain.loadGeneration += 1;
+        app.domain.loadState = "loaded";
+      });
+    },
+    dispose: () => {
+      disposeBridge();
+      app.dispose();
+    },
+  };
+}

@@ -12,7 +12,7 @@
  * 3. **Variant frame indices.** `uiState.variantFrameIndices` is read on the
  *    pixel-write path (`:73`, `:217`) and decides WHICH variant frame is hit.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BLUE,
   GREEN,
@@ -27,7 +27,9 @@ import {
 } from "./storeContract";
 import type { Layer, Project } from "@/types";
 
-vi.mock("@/services/api", async () => (await import("./mockApi")).apiMockFactory());
+// Task 16: the store no longer imports services/api (deleted) — dispatching
+// actions can no longer reach the network, so the defensive module mock that
+// used to live here is gone with it.
 
 /** A project whose single layer hosts a 2-frame variant on a 2×2 grid. */
 function variantProject(): Project {
