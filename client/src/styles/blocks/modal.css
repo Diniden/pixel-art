@@ -13,9 +13,11 @@
  * task (ProjectSelectModal's, which won on emission order). ReferenceImageModal
  * had authored `--overlay-80` without blur and was already losing.
  *
- * `.close-btn` stays declared here as a LEGACY ALIAS of `.modal__close`: eight
- * not-yet-converted modals still render `className="close-btn"` and override it
- * with their own qualified rules. Tasks 20-22 retire the alias.
+ * `.close-btn` stays declared here as a LEGACY ALIAS of `.modal__close`: the
+ * not-yet-converted modals (EdgeInterpolate, HeightMap, ObjectSelect, CopyFrom,
+ * VariantSelect, …) still render `className="close-btn"` and override it with
+ * their own qualified rules. AddVariantModal moved onto `modal__close` in
+ * task 20; tasks 21-22 retire the alias.
  *
  * Vocabulary (task 19 builds Modal.tsx against these exact names):
  *   modal__overlay

@@ -8,10 +8,10 @@
  * the four consumers carry the modifier classes.
  *
  * `.panel-header` / `.panel-content` remain declared as LEGACY ALIASES of
- * `.panel__header` / `.panel__body`: ColorPicker.tsx (frozen until task 20's
- * G3), PaletteManager.tsx and ObjectLibrary.tsx still render the old names.
- * Tasks 20-22 retire the aliases. `.panel` itself is both the legacy and the
- * BEM block name.
+ * `.panel__header` / `.panel__body`: PaletteManager.tsx still renders the old
+ * names (task 22 converts it and retires the aliases). ColorPicker and
+ * ObjectLibrary migrated onto the block names in task 20. `.panel` itself is
+ * both the legacy and the BEM block name.
  *
  * Vocabulary (task 19 builds Panel.tsx against these exact names):
  *   panel

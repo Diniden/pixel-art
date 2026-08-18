@@ -96,23 +96,23 @@ export function RightSidebarTopControls() {
 
   return (
     <div className="right-sidebar-top-controls">
-      <div className="panel compact-panel">
+      <div className="panel right-sidebar-top-controls__panel">
         <div className="panel__header panel__header--compact">Zoom</div>
-        <div className="panel__body compact-panel-content">
-          <div className="compact-row">
+        <div className="panel__body right-sidebar-top-controls__body">
+          <div className="right-sidebar-top-controls__row">
             <button
-              className="compact-btn"
+              className="right-sidebar-top-controls__btn"
               onClick={() => setZoom(Math.round(zoom) - 2)}
               disabled={zoom <= 2}
               title="Zoom out"
             >
               −
             </button>
-            <span className="compact-value" title="Current zoom">
+            <span className="right-sidebar-top-controls__value" title="Current zoom">
               {Math.round(zoom)}x
             </span>
             <button
-              className="compact-btn"
+              className="right-sidebar-top-controls__btn"
               onClick={() => setZoom(Math.round(zoom) + 2)}
               disabled={zoom >= 50}
               title="Zoom in"
@@ -124,13 +124,13 @@ export function RightSidebarTopControls() {
       </div>
 
       {showToolOptions && (
-        <div className="panel compact-panel">
+        <div className="panel right-sidebar-top-controls__panel">
           <div className="panel__header panel__header--compact">Tool Options</div>
-          <div className="panel__body compact-panel-content">
+          <div className="panel__body right-sidebar-top-controls__body">
             {showBrushSize && (
-              <div className="compact-control">
-                <label className="compact-label">Size</label>
-                <div className="compact-row">
+              <div className="right-sidebar-top-controls__control">
+                <label className="right-sidebar-top-controls__label">Size</label>
+                <div className="right-sidebar-top-controls__row">
                   <input
                     className="slider"
                     type="range"
@@ -139,16 +139,16 @@ export function RightSidebarTopControls() {
                     value={brushSize}
                     onChange={(e) => setBrushSize(parseInt(e.target.value))}
                   />
-                  <span className="compact-value">{brushSize}</span>
+                  <span className="right-sidebar-top-controls__value">{brushSize}</span>
                 </div>
               </div>
             )}
 
             {showTraceBrush && (
               <>
-                <div className="compact-control">
-                  <label className="compact-label">Trace size</label>
-                  <div className="compact-row">
+                <div className="right-sidebar-top-controls__control">
+                  <label className="right-sidebar-top-controls__label">Trace size</label>
+                  <div className="right-sidebar-top-controls__row">
                     <input
                       className="slider"
                       type="range"
@@ -157,19 +157,19 @@ export function RightSidebarTopControls() {
                       value={Math.min(brushSize, traceMax)}
                       onChange={(e) => setBrushSize(parseInt(e.target.value))}
                     />
-                    <span className="compact-value">
+                    <span className="right-sidebar-top-controls__value">
                       {Math.min(brushSize, traceMax)}
                     </span>
                   </div>
                 </div>
 
-                <div className="compact-control">
-                  <label className="compact-label">Trace max</label>
-                  <div className="compact-segmented">
+                <div className="right-sidebar-top-controls__control">
+                  <label className="right-sidebar-top-controls__label">Trace max</label>
+                  <div className="right-sidebar-top-controls__segmented">
                     {traceMaxOptions.map((opt) => (
                       <button
                         key={opt}
-                        className={`compact-segment ${traceMax === opt ? "active" : ""}`}
+                        className={`right-sidebar-top-controls__segment ${traceMax === opt ? "right-sidebar-top-controls__segment--active" : ""}`}
                         onClick={() => setPencilBrushMax(opt)}
                         title={`Set max trace size to ${opt}`}
                       >
@@ -179,13 +179,13 @@ export function RightSidebarTopControls() {
                   </div>
                 </div>
 
-                <div className="compact-control">
-                  <label className="compact-label">Trace nudge</label>
-                  <div className="compact-segmented">
+                <div className="right-sidebar-top-controls__control">
+                  <label className="right-sidebar-top-controls__label">Trace nudge</label>
+                  <div className="right-sidebar-top-controls__segmented">
                     {traceNudgeOptions.map((opt) => (
                       <button
                         key={opt}
-                        className={`compact-segment ${traceNudge === opt ? "active" : ""}`}
+                        className={`right-sidebar-top-controls__segment ${traceNudge === opt ? "right-sidebar-top-controls__segment--active" : ""}`}
                         onClick={() => setTraceNudgeAmount(opt)}
                         title={`Shift+WASD moves by ${opt}`}
                       >
@@ -199,9 +199,9 @@ export function RightSidebarTopControls() {
 
             {showGaussianFill && (
               <>
-                <div className="compact-control">
-                  <label className="compact-label">Smoothing</label>
-                  <div className="compact-row">
+                <div className="right-sidebar-top-controls__control">
+                  <label className="right-sidebar-top-controls__label">Smoothing</label>
+                  <div className="right-sidebar-top-controls__row">
                     <input
                       className="slider"
                       type="range"
@@ -217,15 +217,15 @@ export function RightSidebarTopControls() {
                         })
                       }
                     />
-                    <span className="compact-value">
+                    <span className="right-sidebar-top-controls__value">
                       {gaussianFill.smoothing.toFixed(1)}
                     </span>
                   </div>
                 </div>
 
-                <div className="compact-control">
-                  <label className="compact-label">Radius</label>
-                  <div className="compact-row">
+                <div className="right-sidebar-top-controls__control">
+                  <label className="right-sidebar-top-controls__label">Radius</label>
+                  <div className="right-sidebar-top-controls__row">
                     <input
                       className="slider"
                       type="range"
@@ -241,19 +241,19 @@ export function RightSidebarTopControls() {
                         })
                       }
                     />
-                    <span className="compact-value">
+                    <span className="right-sidebar-top-controls__value">
                       {gaussianFill.radius.toFixed(1)}
                     </span>
                   </div>
                 </div>
 
-                <div className="compact-control">
-                  <label className="compact-label">Radius Max</label>
-                  <div className="compact-segmented">
+                <div className="right-sidebar-top-controls__control">
+                  <label className="right-sidebar-top-controls__label">Radius Max</label>
+                  <div className="right-sidebar-top-controls__segmented">
                     {gaussianRadiusMaxOptions.map((opt) => (
                       <button
                         key={opt}
-                        className={`compact-segment ${gaussianRadiusMax === opt ? "active" : ""}`}
+                        className={`right-sidebar-top-controls__segment ${gaussianRadiusMax === opt ? "right-sidebar-top-controls__segment--active" : ""}`}
                         onClick={() =>
                           setGaussianFillParams({
                             smoothing: gaussianFill.smoothing,
@@ -272,13 +272,13 @@ export function RightSidebarTopControls() {
             )}
 
             {showShapeMode && (
-              <div className="compact-control">
-                <label className="compact-label">Mode</label>
-                <div className="compact-segmented">
+              <div className="right-sidebar-top-controls__control">
+                <label className="right-sidebar-top-controls__label">Mode</label>
+                <div className="right-sidebar-top-controls__segmented">
                   {shapeModes.map((mode) => (
                     <button
                       key={mode.id}
-                      className={`compact-segment ${shapeMode === mode.id ? "active" : ""}`}
+                      className={`right-sidebar-top-controls__segment ${shapeMode === mode.id ? "right-sidebar-top-controls__segment--active" : ""}`}
                       onClick={() => setShapeMode(mode.id)}
                     >
                       {mode.label}
@@ -289,9 +289,9 @@ export function RightSidebarTopControls() {
             )}
 
             {showBorderRadius && (
-              <div className="compact-control">
-                <label className="compact-label">Radius</label>
-                <div className="compact-row">
+              <div className="right-sidebar-top-controls__control">
+                <label className="right-sidebar-top-controls__label">Radius</label>
+                <div className="right-sidebar-top-controls__row">
                   <input
                     className="slider"
                     type="range"
@@ -300,34 +300,34 @@ export function RightSidebarTopControls() {
                     value={borderRadius}
                     onChange={(e) => setBorderRadius(parseInt(e.target.value))}
                   />
-                  <span className="compact-value">{borderRadius}</span>
+                  <span className="right-sidebar-top-controls__value">{borderRadius}</span>
                 </div>
               </div>
             )}
 
             {showMoveAllLayers && (
-              <div className="compact-control">
-                <label className="compact-toggle">
+              <div className="right-sidebar-top-controls__control">
+                <label className="right-sidebar-top-controls__toggle">
                   <input
                     type="checkbox"
                     checked={moveAllLayers}
                     onChange={(e) => setMoveAllLayers(e.target.checked)}
                   />
-                  <span className="compact-toggle-slider" />
-                  <span className="compact-toggle-label">Move all layers</span>
+                  <span className="right-sidebar-top-controls__toggle-slider" />
+                  <span className="right-sidebar-top-controls__toggle-label">Move all layers</span>
                 </label>
               </div>
             )}
 
             {showSelectionOptions && (
               <>
-                <div className="compact-control">
-                  <label className="compact-label">Mode</label>
-                  <div className="compact-segmented">
+                <div className="right-sidebar-top-controls__control">
+                  <label className="right-sidebar-top-controls__label">Mode</label>
+                  <div className="right-sidebar-top-controls__segmented">
                     {selectionModes.map((mode) => (
                       <button
                         key={mode.id}
-                        className={`compact-segment ${currentSelectionMode === mode.id ? "active" : ""}`}
+                        className={`right-sidebar-top-controls__segment ${currentSelectionMode === mode.id ? "right-sidebar-top-controls__segment--active" : ""}`}
                         onClick={() => setSelectionMode(mode.id)}
                         title={`Selection mode: ${mode.label}`}
                       >
@@ -337,13 +337,13 @@ export function RightSidebarTopControls() {
                   </div>
                 </div>
 
-                <div className="compact-control">
-                  <label className="compact-label">Behavior</label>
-                  <div className="compact-segmented">
+                <div className="right-sidebar-top-controls__control">
+                  <label className="right-sidebar-top-controls__label">Behavior</label>
+                  <div className="right-sidebar-top-controls__segmented">
                     {selectionBehaviors.map((b) => (
                       <button
                         key={b.id}
-                        className={`compact-segment ${currentSelectionBehavior === b.id ? "active" : ""}`}
+                        className={`right-sidebar-top-controls__segment ${currentSelectionBehavior === b.id ? "right-sidebar-top-controls__segment--active" : ""}`}
                         onClick={() => setSelectionBehavior(b.id)}
                         title={b.label}
                       >
@@ -353,11 +353,11 @@ export function RightSidebarTopControls() {
                   </div>
                 </div>
 
-                <div className="compact-control">
-                  <label className="compact-label">Selection</label>
-                  <div className="compact-row">
+                <div className="right-sidebar-top-controls__control">
+                  <label className="right-sidebar-top-controls__label">Selection</label>
+                  <div className="right-sidebar-top-controls__row">
                     <button
-                      className="compact-btn"
+                      className="right-sidebar-top-controls__btn"
                       onClick={() => shrinkSelection(1)}
                       disabled={!selection}
                       title="Shrink selection (−)"
@@ -365,7 +365,7 @@ export function RightSidebarTopControls() {
                       −
                     </button>
                     <span
-                      className="compact-value"
+                      className="right-sidebar-top-controls__value"
                       title={
                         selection
                           ? `${selection.bounds.width}×${selection.bounds.height} • ${selection.mask.size} px`
@@ -375,7 +375,7 @@ export function RightSidebarTopControls() {
                       {selection ? `${selection.mask.size}px` : "—"}
                     </span>
                     <button
-                      className="compact-btn"
+                      className="right-sidebar-top-controls__btn"
                       onClick={() => expandSelection(1)}
                       disabled={!selection}
                       title="Expand selection (+)"
@@ -383,7 +383,7 @@ export function RightSidebarTopControls() {
                       +
                     </button>
                     <button
-                      className="compact-btn"
+                      className="right-sidebar-top-controls__btn"
                       onClick={() => clearSelection()}
                       disabled={!selection}
                       title="Deselect (Esc)"

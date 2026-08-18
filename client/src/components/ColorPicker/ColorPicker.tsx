@@ -412,15 +412,15 @@ export function ColorPicker() {
 
   return (
     <div className="panel color-picker">
-      <div className="panel-header">Color</div>
-      <div className="panel-content">
+      <div className="panel__header">Color</div>
+      <div className="panel__body">
         {/* Color History */}
         {colorHistory.length > 0 && (
-          <div className="color-history">
+          <div className="color-picker__history">
             {colorHistory.map((color, index) => (
               <button
                 key={`${color.r}-${color.g}-${color.b}-${color.a}-${index}`}
-                className="color-history-swatch"
+                className="color-picker__history-swatch"
                 style={{
                   backgroundColor: `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`
                 }}
@@ -432,13 +432,13 @@ export function ColorPicker() {
         )}
 
         {/* Rainbow picker area */}
-        <div className="color-picker-area">
-          <div className="sv-picker-container">
+        <div className="color-picker__area">
+          <div className="color-picker__sv-picker">
             <canvas
               ref={svCanvasRef}
               width={180}
               height={120}
-              className="sv-canvas"
+              className="color-picker__sv-canvas"
               onMouseDown={(e) => {
                 setIsDraggingSV(true);
                 setIsDraggingSlider(true);
@@ -467,17 +467,17 @@ export function ColorPicker() {
               }}
             />
             <div
-              className="sv-picker-handle"
+              className="color-picker__sv-handle"
               style={{ left: `${svPos.x}%`, top: `${svPos.y}%` }}
             />
           </div>
 
-          <div className="hue-picker-container">
+          <div className="color-picker__hue-picker">
             <canvas
               ref={hueCanvasRef}
               width={180}
               height={12}
-              className="hue-canvas"
+              className="color-picker__hue-canvas"
               onMouseDown={(e) => {
                 setIsDraggingHue(true);
                 setIsDraggingSlider(true);
@@ -506,23 +506,23 @@ export function ColorPicker() {
               }}
             />
             <div
-              className="hue-picker-handle"
+              className="color-picker__hue-handle"
               style={{ left: `${(hsl.h / 360) * 100}%` }}
             />
           </div>
         </div>
 
         {/* Color preview and hex */}
-        <div className="color-preview-row">
+        <div className="color-picker__preview-row">
           <div
-            className="color-preview"
+            className="color-picker__preview"
             style={{ backgroundColor: getDisplayColor() }}
           >
-            <div className="transparency-grid"></div>
+            <div className="color-picker__transparency-grid"></div>
           </div>
           <input
             type="text"
-            className="hex-input"
+            className="color-picker__hex-input"
             value={getHexColor()}
             onChange={(e) => handleHexChange(e.target.value)}
             placeholder="#000000"
@@ -530,13 +530,13 @@ export function ColorPicker() {
         </div>
 
         {/* HSL Sliders */}
-        <div className="slider-section">
-          <div className="slider-section-label">HSL</div>
-          <div className="slider-row">
-            <label className="slider-label hsl-h">H</label>
+        <div className="color-picker__section">
+          <div className="color-picker__section-label">HSL</div>
+          <div className="slider__row">
+            <label className="slider__label color-picker__label--h">H</label>
             <input
               type="range"
-              className="compact-slider hue-slider"
+              className="slider slider__hue"
               min="0"
               max="360"
               value={hsl.h}
@@ -546,18 +546,18 @@ export function ColorPicker() {
             />
             <input
               type="number"
-              className="slider-input"
+              className="slider__input"
               min="0"
               max="360"
               value={hsl.h}
               onChange={(e) => updateColorFromHSL({ ...hsl, h: parseInt(e.target.value) || 0 })}
             />
           </div>
-          <div className="slider-row">
-            <label className="slider-label hsl-s">S</label>
+          <div className="slider__row">
+            <label className="slider__label color-picker__label--s">S</label>
             <input
               type="range"
-              className="compact-slider sat-slider"
+              className="slider color-picker__slider--sat"
               min="0"
               max="100"
               value={hsl.s}
@@ -572,18 +572,18 @@ export function ColorPicker() {
             />
             <input
               type="number"
-              className="slider-input"
+              className="slider__input"
               min="0"
               max="100"
               value={hsl.s}
               onChange={(e) => updateColorFromHSL({ ...hsl, s: parseInt(e.target.value) || 0 })}
             />
           </div>
-          <div className="slider-row">
-            <label className="slider-label hsl-l">L</label>
+          <div className="slider__row">
+            <label className="slider__label color-picker__label--l">L</label>
             <input
               type="range"
-              className="compact-slider light-slider"
+              className="slider color-picker__slider--light"
               min="0"
               max="100"
               value={hsl.l}
@@ -599,7 +599,7 @@ export function ColorPicker() {
             />
             <input
               type="number"
-              className="slider-input"
+              className="slider__input"
               min="0"
               max="100"
               value={hsl.l}
@@ -609,16 +609,16 @@ export function ColorPicker() {
         </div>
 
         {/* RGB Sliders */}
-        <div className="slider-section">
-          <div className="slider-section-label">RGB</div>
+        <div className="color-picker__section">
+          <div className="color-picker__section-label">RGB</div>
           {(['r', 'g', 'b'] as const).map((channel) => (
-            <div key={channel} className="slider-row">
-              <label className={`slider-label channel-${channel}`}>
+            <div key={channel} className="slider__row">
+              <label className={`slider__label color-picker__label--${channel}`}>
                 {channel.toUpperCase()}
               </label>
               <input
                 type="range"
-                className={`compact-slider channel-slider channel-${channel}`}
+                className={`slider color-picker__slider--${channel}`}
                 min="0"
                 max="255"
                 value={localColor[channel]}
@@ -628,7 +628,7 @@ export function ColorPicker() {
               />
               <input
                 type="number"
-                className="slider-input"
+                className="slider__input"
                 min="0"
                 max="255"
                 value={localColor[channel]}
@@ -639,12 +639,12 @@ export function ColorPicker() {
         </div>
 
         {/* Alpha Slider */}
-        <div className="slider-section">
-          <div className="slider-row">
-            <label className="slider-label channel-a">A</label>
+        <div className="color-picker__section">
+          <div className="slider__row">
+            <label className="slider__label color-picker__label--a">A</label>
             <input
               type="range"
-              className="compact-slider alpha-slider"
+              className="slider color-picker__slider--alpha"
               min="0"
               max="255"
               value={localColor.a}
@@ -659,7 +659,7 @@ export function ColorPicker() {
             />
             <input
               type="number"
-              className="slider-input"
+              className="slider__input"
               min="0"
               max="255"
               value={localColor.a}

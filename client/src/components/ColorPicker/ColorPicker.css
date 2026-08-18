@@ -1,9 +1,17 @@
+/* color-picker — BEM block (task 20, G3).
+   The slider family (track, thumb, label, number input, hue rainbow, row) is
+   styles/blocks/slider.css; this component renders the block names directly.
+   Only the channel-specific skins live here, as compounds on `.slider` so
+   they outrank the base track regardless of emission order (same pattern as
+   `.slider.slider--thick`, task 18). */
+
 .color-picker {
   flex-shrink: 0;
 }
 
-/* Color History */
-.color-history {
+/* elements, DOM order */
+
+.color-picker__history {
   display: flex;
   gap: var(--space-1);
   margin-bottom: var(--space-2-5);
@@ -12,7 +20,7 @@
   border-radius: var(--radius-sm);
 }
 
-.color-history-swatch {
+.color-picker__history-swatch {
   width: 14px;
   height: 14px;
   border: 1px solid var(--border-primary);
@@ -23,18 +31,18 @@
   transition: transform 0.1s ease, border-color 0.1s ease;
 }
 
-.color-history-swatch:hover {
+.color-picker__history-swatch:hover {
   transform: scale(1.15);
   border-color: var(--accent-primary);
   z-index: var(--z-hover-lift);
 }
 
 /* Rainbow Picker Area */
-.color-picker-area {
+.color-picker__area {
   margin-bottom: var(--space-3);
 }
 
-.sv-picker-container {
+.color-picker__sv-picker {
   position: relative;
   width: 100%;
   height: 120px;
@@ -43,14 +51,14 @@
   overflow: hidden;
 }
 
-.sv-canvas {
+.color-picker__sv-canvas {
   width: 100%;
   height: 100%;
   cursor: crosshair;
   display: block;
 }
 
-.sv-picker-handle {
+.color-picker__sv-handle {
   position: absolute;
   width: 12px;
   height: 12px;
@@ -61,7 +69,7 @@
   pointer-events: none;
 }
 
-.hue-picker-container {
+.color-picker__hue-picker {
   position: relative;
   width: 100%;
   height: 14px;
@@ -69,14 +77,14 @@
   overflow: hidden;
 }
 
-.hue-canvas {
+.color-picker__hue-canvas {
   width: 100%;
   height: 100%;
   cursor: crosshair;
   display: block;
 }
 
-.hue-picker-handle {
+.color-picker__hue-handle {
   position: absolute;
   top: 50%;
   width: 4px;
@@ -90,14 +98,14 @@
 }
 
 /* Color Preview */
-.color-preview-row {
+.color-picker__preview-row {
   display: flex;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
   align-items: center;
 }
 
-.color-preview {
+.color-picker__preview {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-sm);
@@ -107,7 +115,7 @@
   flex-shrink: 0;
 }
 
-.transparency-grid {
+.color-picker__transparency-grid {
   position: absolute;
   inset: 0;
   z-index: var(--z-behind);
@@ -120,7 +128,7 @@
   background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
 }
 
-.hex-input {
+.color-picker__hex-input {
   flex: 1;
   font-family: var(--font-mono);
   font-size: 0.8rem;
@@ -130,19 +138,19 @@
 }
 
 /* Slider Sections */
-.slider-section {
+.color-picker__section {
   margin-bottom: var(--space-2);
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--border-primary);
 }
 
-.slider-section:last-child {
+.color-picker__section:last-child {
   margin-bottom: 0;
   padding-bottom: 0;
   border-bottom: none;
 }
 
-.slider-section-label {
+.color-picker__section-label {
   font-size: 0.65rem;
   font-weight: var(--weight-semibold);
   color: var(--text-muted);
@@ -151,79 +159,72 @@
   margin-bottom: var(--space-1);
 }
 
-/* Compact Slider Rows.
-   The slider family (track, thumb, label, number input and the hue rainbow)
-   is styles/blocks/slider.css now (task 18); this component's markup keeps
-   the legacy names, which that block declares as aliases, until task 20's G3
-   converts it. Only .slider-row and the channel-specific rules remain here. */
-.slider-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  height: 22px;
-}
-
-/* Channel colors */
-/* dynamic: channel-{r|g|b} built at ColorPicker.tsx:616,621
-   (`slider-label channel-${channel}` / `compact-slider channel-slider
-   channel-${channel}`) — never a literal. Do not delete as dead. */
-.channel-r, .hsl-h { color: var(--channel-r); }
-.channel-g, .hsl-s { color: var(--channel-g); }
-.channel-b, .hsl-l { color: var(--channel-b); }
-.channel-a { color: var(--text-secondary); }
+/* Channel label colors */
+/* dynamic: color-picker__label--{r|g|b} built at ColorPicker.tsx:616
+   (`slider__label color-picker__label--${channel}`) — never a literal.
+   Do not delete as dead. */
+.color-picker__label--r,
+.color-picker__label--h { color: var(--channel-r); }
+.color-picker__label--g,
+.color-picker__label--s { color: var(--channel-g); }
+.color-picker__label--b,
+.color-picker__label--l { color: var(--channel-b); }
+.color-picker__label--a { color: var(--text-secondary); }
 
 /* Channel-specific slider backgrounds */
-/* dynamic: channel-{r|g|b} built at ColorPicker.tsx:621. Do not delete as dead. */
-.channel-slider.channel-r {
+/* dynamic: color-picker__slider--{r|g|b} built at ColorPicker.tsx:621
+   (`slider color-picker__slider--${channel}`) — never a literal.
+   Do not delete as dead. */
+.slider.color-picker__slider--r {
   background: linear-gradient(to right,
     rgb(0, var(--g, 0), var(--b, 0)),
     rgb(255, var(--g, 0), var(--b, 0)));
 }
 
-.channel-slider.channel-g {
+.slider.color-picker__slider--g {
   background: linear-gradient(to right,
     rgb(var(--r, 0), 0, var(--b, 0)),
     rgb(var(--r, 0), 255, var(--b, 0)));
 }
 
-.channel-slider.channel-b {
+.slider.color-picker__slider--b {
   background: linear-gradient(to right,
     rgb(var(--r, 0), var(--g, 0), 0),
     rgb(var(--r, 0), var(--g, 0), 255));
 }
 
 /* Channel slider thumbs */
-.channel-slider.channel-r::-webkit-slider-thumb {
+.slider.color-picker__slider--r::-webkit-slider-thumb {
   background: var(--channel-r);
 }
 
-.channel-slider.channel-g::-webkit-slider-thumb {
+.slider.color-picker__slider--g::-webkit-slider-thumb {
   background: var(--channel-g);
 }
 
-.channel-slider.channel-b::-webkit-slider-thumb {
+.slider.color-picker__slider--b::-webkit-slider-thumb {
   background: var(--channel-b);
 }
 
-.channel-slider.channel-r::-moz-range-thumb {
+.slider.color-picker__slider--r::-moz-range-thumb {
   background: var(--channel-r);
 }
 
-.channel-slider.channel-g::-moz-range-thumb {
+.slider.color-picker__slider--g::-moz-range-thumb {
   background: var(--channel-g);
 }
 
-.channel-slider.channel-b::-moz-range-thumb {
+.slider.color-picker__slider--b::-moz-range-thumb {
   background: var(--channel-b);
 }
 
 @media (max-width: 768px) {
-  .color-preview {
+  .color-picker__preview {
     width: 32px;
     height: 32px;
   }
 
-  .sv-picker-container {
+  .color-picker__sv-picker {
     height: 100px;
   }
 }
