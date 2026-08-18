@@ -1,7 +1,6 @@
 import { useRef, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { useEditorStore } from '../../store';
-import { PixelObject } from '../../types';
+import { PixelObject, VariantGroup } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Target, Check, X, Package } from 'lucide-react';
@@ -11,6 +10,12 @@ interface ObjectSelectModalProps {
   selectedObjectId: string | null;
   onSelect: (objectId: string | null) => void;
   onClose: () => void;
+  /** From DomainStore via ObjectSelectModalContainer (REFRESH task 23). */
+  objects: PixelObject[];
+  /** From DomainStore — the thumbnail renderer resolves variant layers. */
+  variants?: VariantGroup[];
+  /** The `uiState` selection, for the "Current" badge. */
+  currentObjectId: string | null;
 }
 
 // Optimized thumbnail component with memoization
@@ -85,13 +90,14 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
   return true;
 });
 
-export function ObjectSelectModal({ selectedObjectId, onSelect, onClose }: ObjectSelectModalProps) {
-  const { project } = useEditorStore();
-
-  if (!project) return null;
-
-  const { objects } = project;
-  const currentObjectId = project.uiState.selectedObjectId;
+export function ObjectSelectModal({
+  selectedObjectId,
+  onSelect,
+  onClose,
+  objects,
+  variants,
+  currentObjectId,
+}: ObjectSelectModalProps) {
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -147,7 +153,7 @@ export function ObjectSelectModal({ selectedObjectId, onSelect, onClose }: Objec
                   onClick={() => handleSelectObject(obj.id)}
                 >
                   <div className="object-select-modal__thumb">
-                    <ObjectThumbnail obj={obj} project={project} />
+                    <ObjectThumbnail obj={obj} project={{ variants }} />
                   </div>
 
                   <div className="object-select-modal__info">

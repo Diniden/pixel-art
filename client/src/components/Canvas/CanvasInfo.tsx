@@ -1,26 +1,33 @@
 import { useEditorStore } from "../../store";
 import { ReferenceImageData } from "../ReferenceImageModal/ReferenceImageModal";
+import type { PixelObject } from "../../types";
+import type { CurrentVariant } from "../../stores/ApplicationStore";
 import { Icon } from "../../ui/primitives/Icon/Icon";
 import { ChevronDown, ChevronUp, Hexagon, BoxSelect, Target, Camera } from "lucide-react";
 import "./Canvas.css";
 
 interface CanvasInfoProps {
   referenceImage?: ReferenceImageData | null;
+  /** Resolved computeds, from CanvasInfoContainer (REFRESH task 23). */
+  object: PixelObject | null;
+  variantData: CurrentVariant | null;
+  editingVariant: boolean;
 }
 
-export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
+export function CanvasInfo({
+  referenceImage,
+  object: obj,
+  variantData,
+  editingVariant,
+}: CanvasInfoProps) {
+  // ONE store call, not two: `setCanvasInfoHidden` used to be read from a
+  // second `useEditorStore()` mid-body (task 23 collapsed it here).
   const {
     project,
     selection,
     referenceOverlayOffset,
-    getCurrentObject,
-    getCurrentVariant,
-    isEditingVariant,
+    setCanvasInfoHidden,
   } = useEditorStore();
-
-  const obj = getCurrentObject();
-  const variantData = getCurrentVariant();
-  const editingVariant = isEditingVariant();
 
   // Get grid dimensions - use variant size if editing a variant
   const objWidth = obj?.gridSize.width ?? 32;
@@ -47,8 +54,6 @@ export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
   // Get variant offset if editing variant
   const variantOffset =
     editingVariant && variantData ? variantData.offset : { x: 0, y: 0 };
-
-  const { setCanvasInfoHidden } = useEditorStore();
 
   return (
     <div className="canvas-info">

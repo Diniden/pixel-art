@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useEditorStore } from '../../store';
 import { VariantSelectModal } from '../VariantSelectModal/VariantSelectModal';
-import { CopyFromModal } from '../CopyFromModal/CopyFromModal';
+import { CopyFromModalContainer } from '../../containers/CopyFromModalContainer';
 import { AddVariantModal } from '../AddVariantModal/AddVariantModal';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Hexagon, ArrowDownToLine, ArrowUpToLine, Eye, EyeOff, ClipboardCopy, Wand2, Plus, X, Copy, ChevronUp, ChevronDown } from 'lucide-react';
@@ -487,7 +487,7 @@ export function LayerPanel() {
 
       {/* Copy From Modal */}
       {showCopyFromModal && (
-        <CopyFromModal onClose={() => setShowCopyFromModal(false)} />
+        <CopyFromModalContainer onClose={() => setShowCopyFromModal(false)} />
       )}
 
       {/* Add Variant Modal */}

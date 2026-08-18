@@ -126,6 +126,64 @@ export default tseslint.config(
     },
   },
 
+  // ══ R2: NEVER DEEP-OBSERVE A PIXEL GRID ═══════════════════════════════════
+  //
+  // The single largest performance risk in this refresh (MASTER.md R2). The
+  // owner's real project holds 300,249 `PixelData` cells, each
+  // `{color: Pixel|0, normal: Normal|0, height: number}`. `makeAutoObservable`
+  // is DEEP, so calling it on a pixel type builds ~1M proxies — and it
+  // presents as "MobX is slow" rather than as the modelling error it is.
+  //
+  // `layer.pixels` is `observableRef`, ALWAYS. This rule makes the most
+  // likely way to break that a lint error instead of a mystery.
+  //
+  // NOTE this is its own block with its own rule, so it cannot collide with
+  // the `no-restricted-imports` options juggling below — different rule, no
+  // replace-not-merge hazard between them. `no-restricted-syntax` is not set
+  // anywhere else in this file (verified), so nothing here overrides.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          // The realistic shape of the mistake: a class NAMED for a pixel
+          // type calling makeAutoObservable(this) in its constructor.
+          //
+          // ⚠️ Selector verified by probe, not assumed. An earlier attempt
+          // matched `CallExpression[callee.name=...] > Identifier[name=...]`,
+          // which tests the ARGUMENT VARIABLE's name (`cell`), not its type —
+          // so it silently matched nothing. A rule that matches nothing looks
+          // exactly like a rule that passes; both selectors here were
+          // confirmed to FAIL lint on a probe file before landing.
+          selector:
+            "ClassDeclaration[id.name=/Pixel(Data)?$|Normal$/] CallExpression[callee.name=/^makeAutoObservable$|^makeObservable$/]",
+          message:
+            "R2: never makeAutoObservable a PixelData/Pixel/Normal. The real project has " +
+            "300,249 cells; deep observation creates ~1M proxies and presents as 'MobX is " +
+            "slow'. Pixel grids are `observableRef` and are replaced wholesale; anything " +
+            "deriving from pixel CONTENT must read `domain.pixelVersion` instead.",
+        },
+        {
+          // A variable/param whose own name says it holds pixel data.
+          selector:
+            "CallExpression[callee.name=/^makeAutoObservable$|^makeObservable$/] > Identifier[name=/^(pixel|pixelData|pixels|normal|normals)$/i]",
+          message:
+            "R2: never make pixel data observable — see the rule above. Grids are " +
+            "`observableRef` and are replaced wholesale.",
+        },
+        {
+          // The same mistake spelled as a type argument:
+          // makeAutoObservable<PixelData>(...) / makeObservable<Pixel>(...)
+          selector:
+            "CallExpression[callee.name=/^makeAutoObservable$|^makeObservable$/] > TSTypeParameterInstantiation > TSTypeReference > Identifier[name=/Pixel(Data)?$|Normal$/]",
+          message:
+            "R2: never make a PixelData/Pixel/Normal observable — see the rule above.",
+        },
+      ],
+    },
+  },
+
   // ══ ARCHITECTURAL BOUNDARIES ══════════════════════════════════════════════
   //
   // ⚠️ ORDER IS LOAD-BEARING. In ESLint flat config a later block REPLACES a

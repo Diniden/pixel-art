@@ -1,7 +1,7 @@
 import { useRef, useEffect, memo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
-import { Layer, PixelObject, Variant } from '../../types';
+import { Layer, PixelObject, Variant, VariantGroup } from '../../types';
 import { renderLayerPreview, renderVariantLayerPreview } from '../../utils/previewRenderer';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Hexagon, ClipboardCopy, X } from 'lucide-react';
@@ -9,6 +9,11 @@ import './CopyFromModal.css';
 
 interface CopyFromModalProps {
   onClose: () => void;
+  /** From DomainStore via CopyFromModalContainer (REFRESH task 23). */
+  objects: PixelObject[];
+  variants?: VariantGroup[];
+  /** The `currentObject` computed, for the "(current)" row marker. */
+  currentObject: PixelObject | null;
 }
 
 // Memoized thumbnail component for a regular layer
@@ -98,7 +103,7 @@ function LayerCell({ obj, layer, variants, onCopy }: LayerCellProps) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
-  // Get variant info if this is a variant layer (now from project.variants)
+  // Get variant info if this is a variant layer (now from variants)
   const variantGroup = layer.isVariant && layer.variantGroupId
     ? variants?.find(vg => vg.id === layer.variantGroupId)
     : null;
@@ -150,12 +155,13 @@ function LayerCell({ obj, layer, variants, onCopy }: LayerCellProps) {
   );
 }
 
-export function CopyFromModal({ onClose }: CopyFromModalProps) {
-  const { project, copyLayerFromObject, getCurrentObject } = useEditorStore();
-
-  const currentObject = getCurrentObject();
-
-  if (!project) return null;
+export function CopyFromModal({
+  onClose,
+  objects,
+  variants,
+  currentObject,
+}: CopyFromModalProps) {
+  const { copyLayerFromObject } = useEditorStore();
 
   const handleCopyLayer = (sourceObj: PixelObject, layer: Layer) => {
     if (layer.isVariant && layer.variantGroupId && layer.selectedVariantId) {
@@ -189,7 +195,7 @@ export function CopyFromModal({ onClose }: CopyFromModalProps) {
 
         <div className="copy-from-modal__content">
           <div className="copy-from-modal__grid">
-            {project.objects.map(obj => {
+            {objects.map(obj => {
               // Get first frame layers
               const firstFrame = obj.frames[0];
               if (!firstFrame) return null;
@@ -211,7 +217,7 @@ export function CopyFromModal({ onClose }: CopyFromModalProps) {
                         key={layer.id}
                         obj={obj}
                         layer={layer}
-                        variants={project.variants}
+                        variants={variants}
                         onCopy={() => handleCopyLayer(obj, layer)}
                       />
                     ))}

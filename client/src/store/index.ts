@@ -229,7 +229,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
   );
   const drawingActions = createDrawingActions(get, set, updateProjectAndSave, stroke);
   const toolActions = createToolActions(get, set, updateProjectAndSave);
-  const paletteActions = createPaletteActions(updateProjectAndSave);
+  const paletteActions = createPaletteActions();
   const referenceActions = createReferenceActions(
     get,
     set,

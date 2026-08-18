@@ -216,7 +216,49 @@ export function colorAt(
  */
 const PRISTINE = useEditorStore.getState();
 
-export function createZustandHarness(): StoreHarness {
+/**
+ * ── Task 23: the harness now needs a bridge ────────────────────────────────
+ *
+ * The 11 migrated domain actions (`PaletteStore`'s 5, `ObjectStore`'s 6) no
+ * longer have Zustand implementations — `store/{paletteActions,objectActions}`
+ * hold throwing stubs, and the real ones are installed as delegates by
+ * `installBridge`. A harness that dispatches `addPalette` therefore has to
+ * have a bridge wired, exactly as `wireAutoSave()` does for save behaviour.
+ *
+ * It is installed ONCE for the module rather than per harness: `makeHarness()`
+ * runs in `beforeEach` across ~200 tests with no matching teardown (the
+ * `StoreHarness` interface has no `dispose`), so per-harness installation
+ * would leak a MobX reaction and a Zustand subscription per test.
+ *
+ * `autoSaveEnabled: false` — these suites assert history and mutation
+ * behaviour, not saving; the tests that DO assert saving build their own
+ * wired app through `wireAutoSave()`.
+ *
+ * ⚠️ This changes the harness INFRASTRUCTURE only. Not one assertion in
+ * `src/store/__tests__/` was altered — that is the task-08 baseline and the
+ * point of this file's `describe.each` design.
+ *
+ * `bridge: false` opts out, for the one suite that tests the bridge ITSELF
+ * (`stores/bridge/__tests__`) and must observe a store with no bridge
+ * installed — an ambient one would mask its disposer assertions.
+ */
+let sharedBridgeApp: ApplicationStore | null = null;
+
+function ensureBridge(): void {
+  if (sharedBridgeApp) return;
+  sharedBridgeApp = new ApplicationStore({ autoSaveEnabled: false });
+  installBridge(sharedBridgeApp);
+}
+
+export interface ZustandHarnessOptions {
+  /** Install the shared bridge so the 11 migrated actions work. Default true. */
+  bridge?: boolean;
+}
+
+export function createZustandHarness(
+  options: ZustandHarnessOptions = {},
+): StoreHarness {
+  if (options.bridge !== false) ensureBridge();
   const s = () => useEditorStore.getState();
 
   return {

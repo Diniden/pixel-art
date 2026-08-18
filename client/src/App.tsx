@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useEditorStore } from "./store";
 import { Canvas } from "./components/Canvas/Canvas";
 import { LightingCanvas } from "./components/Canvas/LightingCanvas";
-import { CanvasInfo } from "./components/Canvas/CanvasInfo";
+import { CanvasInfoContainer } from "./containers/CanvasInfoContainer";
 import { Toolbar } from "./components/Toolbar/Toolbar";
 import { PixelStudioPanel } from "./components/PixelStudioPanel/PixelStudioPanel";
 import { LightingStudioPanel } from "./components/LightingStudioPanel/LightingStudioPanel";
@@ -243,7 +243,7 @@ function App() {
               />
             </>
           )}
-          {!isLightingMode && <CanvasInfo referenceImage={referenceImage} />}
+          {!isLightingMode && <CanvasInfoContainer referenceImage={referenceImage} />}
           {!isLightingMode && <LayerColors />}
         </main>
 

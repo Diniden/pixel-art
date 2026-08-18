@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useEditorStore } from "../../store";
 import { Tool, Normal } from "../../types";
 import { EdgeInterpolateModal } from "../EdgeInterpolateModal/EdgeInterpolateModal";
-import { HeightMapModal } from "../HeightMapModal/HeightMapModal";
+import { HeightMapModalContainer } from "../../containers/HeightMapModalContainer";
 import { computeEdgeInterpolatedNormals } from "../../utils/edgeInterpolate";
 import { Pixel, PixelData } from "../../types";
 import { Icon } from "../../ui/primitives/Icon/Icon";
@@ -298,7 +298,7 @@ export function LightingStudioTools() {
         onConfirm={handleEdgeInterpolateConfirm}
       />
 
-      <HeightMapModal
+      <HeightMapModalContainer
         isOpen={showHeightMapModal}
         onClose={() => setShowHeightMapModal(false)}
         onConfirm={handleHeightMapConfirm}

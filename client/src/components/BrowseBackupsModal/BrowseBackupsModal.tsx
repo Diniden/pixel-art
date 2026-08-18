@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useEditorStore } from '../../store';
 import { backupApi, isApiError, type BackupEntry } from '../../api';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Clock, X } from 'lucide-react';
@@ -7,6 +6,9 @@ import './BrowseBackupsModal.css';
 
 interface BrowseBackupsModalProps {
   onClose: () => void;
+  /** From DomainStore via BrowseBackupsModalContainer (REFRESH task 23). */
+  projectName: string;
+  onRestoreFromBackup: (date: string, filename: string) => Promise<boolean>;
 }
 
 function formatDate(dateStr: string): string {
@@ -32,8 +34,11 @@ function formatTime(timeStr: string): string {
   return `${displayHour}:${m}:${s} ${ampm}`;
 }
 
-export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
-  const { projectName, restoreFromBackup } = useEditorStore();
+export function BrowseBackupsModal({
+  onClose,
+  projectName,
+  onRestoreFromBackup,
+}: BrowseBackupsModalProps) {
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +94,7 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
     setIsRestoring(true);
     setError(null);
 
-    const success = await restoreFromBackup(selectedBackup.date, selectedBackup.filename);
+    const success = await onRestoreFromBackup(selectedBackup.date, selectedBackup.filename);
 
     if (success) {
       onClose();
