@@ -63,6 +63,18 @@ direct measurement when this ledger was created; the rest come from the eight au
 | Undefined CSS custom properties | **6, referenced 76×** | — |
 | Tests / stories / ESLint configs / CI | **0 / 0 / 0 / 0** | — |
 
+### 🔴 RUN GATES FROM `client/`, NEVER THE REPO ROOT (coordinator error, W15)
+
+Verifying W15 from the repo root instead of `client/` produced a **completely false
+failure**: `bunx tsc` resolved a fresh **TypeScript 7.0.2 from the network** instead of the
+pinned local 5.9.3, vitest picked up the wrong config and reported *68 failures across 50
+files*, and the stray `bunx` **regenerated a lockfile**. Re-run from `client/`: tsc 0,
+eslint 0, build 0, **901/901 pass**.
+
+Two lessons: a wrong-directory `bunx` silently downloads a **major version** of a pinned
+tool, and it is the fastest way to violate the no-lockfile policy. Always `cd client`
+first, and sweep lockfiles afterwards.
+
 ### ⚠️ Measured hazard: `bunx` regenerates a lockfile despite `bunfig.toml`
 
 Observed directly while scaffolding. Running `bunx vitest run` from the **repo root**
@@ -124,7 +136,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W12** | 19 | W11 | ⚠️ | `e512d60` | `bunx storybook build` · 18 primitives report 0 a11y violations (**advisory only**) · the boundary probe fails ESLint |
 | **W13** | 20 | W12 | ⚠️ | `c1f0711` | `node scripts/check-classes.mjs` 0/0 · every class in the 7 converted sheets matches the BEM regex |
 | **W14** | 21, 22 | W13 | ⚠️ | `c333d78` | `bunx stylelint` on the converted sheets · zero `!important` in `Toolbar.css` · every class matches the regex · **2 agents** |
-| **W15** | 23 | W14 | ⬜ | — | 100-pixel drag under 16 ms/frame · corpus snapshots unchanged |
+| **W15** | 23 | W14 | ⚠️ | `e88860a` | 100-pixel drag under 16 ms/frame · corpus snapshots unchanged |
 | **W16** | 24 | W15 | ⬜ | — | the wire-format golden test · all 43 UI fields persist across a reload |
 | **W17** | 25 | W16 | ⬜ | — | timeline matrix green · cross-project clipboard survives |
 | **W18** | 26 | W17 | ⬜ | — | a 50-pixel stroke command < 5 kB · task 08's suite unchanged · 100-pixel drag under 16 ms |
