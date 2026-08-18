@@ -1,13 +1,17 @@
-/* Modal chrome (overlay, header, close, body, footer) comes from
+/* block: browse-backups-modal (task 21, G5).
+   Modal chrome (overlay, header, close, body, footer) comes from
    styles/blocks/modal.css; the restore confirmation is
-   styles/blocks/confirm-dialog.css (task 18). */
+   styles/blocks/confirm-dialog.css (task 18). The `.error-message` and
+   `.restore-btn` rules were qualified by the modal class purely to escape the
+   bare-name collision; under block names the qualifier is redundant and the
+   selectors flatten to one compound each (R5). */
 
 .browse-backups-modal {
   width: 500px;
   animation: app-slide-in 0.2s ease-out;
 }
 
-.browse-backups-modal .error-message {
+.browse-backups-modal__error {
   margin: 0 0 var(--space-3);
   padding: var(--space-2-5) var(--space-4);
   background: var(--accent-danger-10);
@@ -17,29 +21,29 @@
   font-size: 0.85rem;
 }
 
-.backups-empty {
+.browse-backups-modal__empty {
   text-align: center;
   padding: var(--space-8) var(--space-4);
   color: var(--text-tertiary);
   font-size: 0.9rem;
 }
 
-.backups-loading {
+.browse-backups-modal__loading {
   text-align: center;
   padding: var(--space-8) var(--space-4);
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
-.backup-date-group {
+.browse-backups-modal__date-group {
   margin-bottom: var(--space-4);
 }
 
-.backup-date-group:last-child {
+.browse-backups-modal__date-group:last-child {
   margin-bottom: 0;
 }
 
-.backup-date-label {
+.browse-backups-modal__date-label {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
@@ -49,13 +53,13 @@
   padding-left: var(--space-0-5);
 }
 
-.backup-list {
+.browse-backups-modal__list {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
 }
 
-.backup-item {
+.browse-backups-modal__item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -71,35 +75,30 @@
   width: 100%;
 }
 
-.backup-item:hover:not(:disabled) {
+.browse-backups-modal__item:hover:not(:disabled) {
   background: var(--bg-tertiary);
   border-color: var(--accent-primary);
 }
 
-.backup-item:disabled {
+.browse-backups-modal__item:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.backup-item.selected {
-  background: var(--accent-primary-08);
-  border-color: var(--accent-primary);
-}
-
-.backup-time-icon {
+.browse-backups-modal__time-icon {
   font-size: var(--text-base);
   color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
-.backup-time {
+.browse-backups-modal__time {
   flex: 1;
   font-family: var(--font-mono);
   font-weight: var(--weight-medium);
   font-size: 0.85rem;
 }
 
-.backup-filename {
+.browse-backups-modal__filename {
   font-size: 0.7rem;
   color: var(--text-tertiary);
   max-width: 180px;
@@ -108,7 +107,7 @@
   white-space: nowrap;
 }
 
-.browse-backups-modal .restore-btn {
+.browse-backups-modal__restore-btn {
   padding: var(--space-2) var(--space-4);
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
   border: none;
@@ -120,14 +119,22 @@
   transition: all var(--transition-fast);
 }
 
-.browse-backups-modal .restore-btn:hover:not(:disabled) {
+.browse-backups-modal__restore-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: var(--shadow-accent);
 }
 
-.browse-backups-modal .restore-btn:disabled {
+.browse-backups-modal__restore-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   transform: none;
 }
 
+/* modifiers */
+
+/* base.base--modifier compound: preserves the old `.backup-item.selected`
+   (0,2,0) win over `:hover:not(:disabled)`. */
+.browse-backups-modal__item.browse-backups-modal__item--selected {
+  background: var(--accent-primary-08);
+  border-color: var(--accent-primary);
+}

@@ -120,7 +120,7 @@ function CellThumbnail({
   return (
     <canvas
       ref={canvasRef}
-      className="timeline-cell-thumbnail"
+      className="timeline-view__cell-thumbnail"
       width={20}
       height={20}
     />
@@ -607,11 +607,11 @@ export function TimelineView({
   return (
     <div className="timeline-view">
       {/* Action bar */}
-      <div className="timeline-header-row">
+      <div className="frame-timeline__header-row">
         {viewModeDropdown}
-        <div className="timeline-action-buttons">
+        <div className="timeline-view__action-buttons">
           <button
-            className="timeline-action-btn"
+            className="timeline-view__action-btn"
             onClick={handleMoveLayerUp}
             disabled={!canMoveUp}
             title="Move layer up (all frames)"
@@ -619,24 +619,24 @@ export function TimelineView({
             <Icon icon={ChevronUp} size={12} />
           </button>
           <button
-            className="timeline-action-btn"
+            className="timeline-view__action-btn"
             onClick={handleMoveLayerDown}
             disabled={!canMoveDown}
             title="Move layer down (all frames)"
           >
             <Icon icon={ChevronDown} size={12} />
           </button>
-          <div className="timeline-new-layer">
+          <div className="timeline-view__new-layer">
             <input
               type="text"
-              className="timeline-new-layer-input"
+              className="timeline-view__new-layer-input"
               placeholder="New layer..."
               value={newLayerName}
               onChange={(e) => setNewLayerName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddLayer()}
             />
             <button
-              className="timeline-action-btn add-layer-btn"
+              className="timeline-view__action-btn timeline-view__action-btn--add-layer"
               onClick={handleAddLayer}
               title="Add layer to all frames"
             >
@@ -644,23 +644,23 @@ export function TimelineView({
             </button>
           </div>
         </div>
-        <div className="timeline-playback-controls">
+        <div className="timeline-view__playback-controls">
           <button
-            className={`timeline-toggle-btn ${showThumbnails ? 'active' : ''}`}
+            className={`timeline-view__toggle-btn ${showThumbnails ? 'timeline-view__toggle-btn--active' : ''}`}
             onClick={() => setTimelineThumbnailMode(!showThumbnails)}
             title="Toggle thumbnails"
           >
             Thumbnails
           </button>
           <button
-            className={`play-btn ${isPlaying ? 'playing' : ''}`}
+            className={`frame-timeline__play-btn ${isPlaying ? 'frame-timeline__play-btn--playing' : ''}`}
             onClick={togglePlayback}
             title={isPlaying ? 'Stop (Enter)' : 'Play (Enter)'}
           >
             {isPlaying ? <Icon icon={SquareIcon} size={14} /> : <Icon icon={Play} size={14} />}
           </button>
           <button
-            className="preview-btn"
+            className="frame-timeline__preview-btn"
             onClick={() => setShowPreview(true)}
             title="Optimized Preview"
           >
@@ -670,9 +670,9 @@ export function TimelineView({
       </div>
 
       {/* Main grid area */}
-      <div className="timeline-grid-container">
+      <div className="timeline-view__layout">
         {/* Layer headers column - positioned to align with grid rows */}
-        <div className="timeline-layer-headers">
+        <div className="timeline-view__layer-headers">
           {(() => {
             // Build a map of display row to header (for positioning)
             const rowToHeader = new Map<number, typeof layerHeaders[0]>();
@@ -716,33 +716,33 @@ export function TimelineView({
                 return (
                   <div
                     key={`${header.name}-${rowIndex}`}
-                    className={`timeline-layer-header ${hoveredLayerName === header.name ? 'hovered' : ''}`}
+                    className={`timeline-view__layer-header ${hoveredLayerName === header.name ? 'timeline-view__layer-header--hovered' : ''}`}
                     style={{ '--layer-color': header.color } as React.CSSProperties}
                     onClick={() => handleLayerHeaderClick(header.name)}
                     onMouseEnter={() => setHoveredLayerName(header.name)}
                     onMouseLeave={() => setHoveredLayerName(null)}
                   >
-                    <span className="timeline-layer-dot" style={{ backgroundColor: header.color }} />
-                    <span className="timeline-layer-name">{header.name}</span>
+                    <span className="timeline-view__layer-dot" style={{ backgroundColor: header.color }} />
+                    <span className="timeline-view__layer-name">{header.name}</span>
                   </div>
                 );
               }
               // Empty row spacer
-              return <div key={`empty-${rowIndex}`} className="timeline-layer-header empty" />;
+              return <div key={`empty-${rowIndex}`} className="timeline-view__layer-header timeline-view__layer-header--empty" />;
             });
           })()}
         </div>
 
         {/* Grid with cells and playhead */}
-        <div className="timeline-grid-scroll">
-          <div className="timeline-grid">
+        <div className="timeline-view__scroll">
+          <div className="timeline-view__grid">
             {/* Playhead */}
             {/* Playhead: account for cell width + gap (2px) */}
             {/* Normal: 24px + 2px = 26px per cell, center at 12px */}
             {/* With thumbnails: 28px + 2px = 30px per cell, center at 14px */}
             {selectedFrameIndex >= 0 && (
               <div
-                className="timeline-playhead"
+                className="timeline-view__playhead"
                 style={{ left: `${selectedFrameIndex * (showThumbnails ? 30 : 26) + (showThumbnails ? 14 : 12)}px` }}
               />
             )}
@@ -755,7 +755,7 @@ export function TimelineView({
               return (
                 <div
                   key={rowIndex}
-                  className={`timeline-grid-row ${rowIndex % 2 === 0 ? 'even' : 'odd'}`}
+                  className={`timeline-view__row ${rowIndex % 2 === 0 ? 'timeline-view__row--even' : 'timeline-view__row--odd'}`}
                 >
                   {row.map((cell, colIndex) => {
                     const frame = frames[colIndex];
@@ -766,7 +766,7 @@ export function TimelineView({
                       return (
                         <div
                           key={`${frame.id}-${rowIndex}`}
-                          className={`timeline-cell empty ${isEmptySelected ? 'empty-selected' : ''}`}
+                          className={`timeline-view__cell timeline-view__cell--empty ${isEmptySelected ? 'timeline-view__cell--empty-selected' : ''}`}
                           onClick={() => handleEmptyCellClick(frame.id, actualZOrder)}
                           onDragOver={(e) => handleDragOver(e, frame.id)}
                           onDrop={(e) => handleDrop(e, actualZOrder, frame.id)}
@@ -784,7 +784,7 @@ export function TimelineView({
                     return (
                       <div
                         key={`${cell.frameId}-${cell.layerId}`}
-                        className={`timeline-cell ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''} ${cell.isVariant ? 'variant' : ''} ${showThumbnails ? 'with-thumbnail' : ''}`}
+                        className={`timeline-view__cell ${isSelected ? 'timeline-view__cell--selected' : ''} ${isHighlighted ? 'timeline-view__cell--highlighted' : ''} ${cell.isVariant ? 'timeline-view__cell--variant' : ''} ${showThumbnails ? 'timeline-view__cell--with-thumbnail' : ''}`}
                         onClick={() => {
                           handleCellClick(cell);
                           setEmptyCellSelection(null); // Clear empty cell selection when clicking any filled cell
@@ -804,7 +804,7 @@ export function TimelineView({
                           />
                         ) : (
                           <span
-                            className="timeline-cell-dot"
+                            className="timeline-view__cell-dot"
                             style={{ backgroundColor: cell.color }}
                           />
                         )}

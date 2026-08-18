@@ -32,7 +32,7 @@ const LayerThumbnail = memo(function LayerThumbnail({
     renderLayerPreview(ctx, thumbSize, layer, gridWidth, gridHeight);
   }, [layer, gridWidth, gridHeight]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="copy-thumb-canvas" />;
+  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="copy-from-modal__thumb-canvas" />;
 }, (prevProps, nextProps) => {
   const prev = prevProps.layer;
   const next = nextProps.layer;
@@ -58,7 +58,7 @@ const VariantThumbnail = memo(function VariantThumbnail({ variant }: { variant: 
     renderVariantLayerPreview(ctx, thumbSize, variant);
   }, [variant]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="copy-thumb-canvas" />;
+  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="copy-from-modal__thumb-canvas" />;
 }, (prevProps, nextProps) => {
   const prev = prevProps.variant;
   const next = nextProps.variant;
@@ -75,7 +75,7 @@ function Tooltip({ text, x, y, visible }: { text: string; x: number; y: number; 
 
   return createPortal(
     <div
-      className="copy-tooltip"
+      className="copy-from-modal__tooltip"
       style={{
         left: x + 12,
         top: y + 12
@@ -122,7 +122,7 @@ function LayerCell({ obj, layer, variants, onCopy }: LayerCellProps) {
   return (
     <>
       <div
-        className={`copy-layer-cell ${layer.isVariant ? 'variant' : ''}`}
+        className={`copy-from-modal__cell ${layer.isVariant ? 'copy-from-modal__cell--variant' : ''}`}
         onClick={onCopy}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
@@ -137,7 +137,7 @@ function LayerCell({ obj, layer, variants, onCopy }: LayerCellProps) {
           />
         )}
         {layer.isVariant && (
-          <span className="variant-badge"><Icon icon={Hexagon} size={10} /></span>
+          <span className="copy-from-modal__badge--variant"><Icon icon={Hexagon} size={10} /></span>
         )}
       </div>
       <Tooltip
@@ -179,16 +179,16 @@ export function CopyFromModal({ onClose }: CopyFromModalProps) {
   };
 
   return createPortal(
-    <div className="copy-modal-backdrop" onClick={handleBackdropClick}>
-      <div className="copy-modal">
-        <div className="copy-modal-header">
+    <div className="copy-from-modal__backdrop" onClick={handleBackdropClick}>
+      <div className="copy-from-modal">
+        <div className="copy-from-modal__header">
           <h3><Icon icon={ClipboardCopy} size={16} /> Copy Layer From</h3>
-          <span className="copy-modal-hint">Click a layer to copy it to the current object</span>
-          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <span className="copy-from-modal__hint">Click a layer to copy it to the current object</span>
+          <button className="modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
-        <div className="copy-modal-content">
-          <div className="objects-grid">
+        <div className="copy-from-modal__content">
+          <div className="copy-from-modal__grid">
             {project.objects.map(obj => {
               // Get first frame layers
               const firstFrame = obj.frames[0];
@@ -200,12 +200,12 @@ export function CopyFromModal({ onClose }: CopyFromModalProps) {
               const isCurrentObject = currentObject?.id === obj.id;
 
               return (
-                <div key={obj.id} className={`object-row ${isCurrentObject ? 'current' : ''}`}>
-                  <div className="object-name" title={obj.name}>
+                <div key={obj.id} className={`copy-from-modal__row ${isCurrentObject ? 'copy-from-modal__row--current' : ''}`}>
+                  <div className="copy-from-modal__name" title={obj.name}>
                     {obj.name}
-                    {isCurrentObject && <span className="current-badge">(current)</span>}
+                    {isCurrentObject && <span className="copy-from-modal__badge--current">(current)</span>}
                   </div>
-                  <div className="layers-row">
+                  <div className="copy-from-modal__layers">
                     {layers.map(layer => (
                       <LayerCell
                         key={layer.id}
@@ -216,7 +216,7 @@ export function CopyFromModal({ onClose }: CopyFromModalProps) {
                       />
                     ))}
                     {layers.length === 0 && (
-                      <div className="no-layers">No layers</div>
+                      <div className="copy-from-modal__no-layers">No layers</div>
                     )}
                   </div>
                 </div>

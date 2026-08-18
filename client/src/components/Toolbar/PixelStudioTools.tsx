@@ -73,57 +73,57 @@ export function PixelStudioTools({
 
   return (
     <>
-      <div className="toolbar-section">
-        <div className="toolbar-group">
+      <div className="toolbar__section">
+        <div className="toolbar__group">
           {tools.map((tool) => (
             <button
               key={tool.id}
-              className={`tool-btn ${selectedTool === tool.id ? "active" : ""}`}
+              className={`toolbar__tool-btn ${selectedTool === tool.id ? "toolbar__tool-btn--active" : ""}`}
               onClick={() => setTool(tool.id)}
               title={`${tool.label} (${tool.hotkey})`}
             >
-              <span className="tool-icon"><Icon icon={tool.icon} /></span>
-              <span className="tool-hotkey">{tool.hotkey}</span>
+              <span className="toolbar__tool-icon"><Icon icon={tool.icon} /></span>
+              <span className="toolbar__tool-hotkey">{tool.hotkey}</span>
             </button>
           ))}
         </div>
 
-        <div className="toolbar-divider" />
+        <div className="toolbar__divider" />
 
-        <div className="toolbar-group">
+        <div className="toolbar__group">
           <button
-            className="tool-btn"
+            className="toolbar__tool-btn"
             onClick={() => flipHorizontal()}
             title="Flip Horizontal"
           >
-            <span className="tool-icon"><Icon icon={FlipHorizontal2} /></span>
+            <span className="toolbar__tool-icon"><Icon icon={FlipHorizontal2} /></span>
           </button>
           <button
-            className="tool-btn"
+            className="toolbar__tool-btn"
             onClick={() => flipVertical()}
             title="Flip Vertical"
           >
-            <span className="tool-icon"><Icon icon={FlipVertical2} /></span>
+            <span className="toolbar__tool-icon"><Icon icon={FlipVertical2} /></span>
           </button>
         </div>
 
-        <div className="toolbar-divider" />
+        <div className="toolbar__divider" />
 
-        <div className="toolbar-group reference-group">
+        <div className="toolbar__group toolbar__group--reference">
           <button
-            className={`tool-btn reference-btn ${hasReferenceImage ? "has-reference" : ""}`}
+            className={`toolbar__tool-btn ${hasReferenceImage ? "toolbar__tool-btn--has-reference" : ""}`}
             onClick={() => setIsRefModalOpen(true)}
             title="Add Reference Image"
           >
-            <span className="tool-icon"><Icon icon={Camera} /></span>
+            <span className="toolbar__tool-icon"><Icon icon={Camera} /></span>
           </button>
           {hasReferenceImage && (
             <button
-              className="tool-btn clear-reference-btn"
+              className="toolbar__tool-btn toolbar__clear-reference-btn"
               onClick={handleClearReference}
               title="Clear Reference Image"
             >
-              <span className="tool-icon"><Icon icon={X} /></span>
+              <span className="toolbar__tool-icon"><Icon icon={X} /></span>
             </button>
           )}
         </div>

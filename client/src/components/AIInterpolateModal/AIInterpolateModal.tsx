@@ -206,7 +206,7 @@ function Base64Thumbnail({ base64, size }: { base64: string; size: number }) {
     img.src = `data:image/png;base64,${base64}`;
   }, [base64, size]);
 
-  return <canvas ref={canvasRef} width={size} height={size} className="ai-thumb-canvas" />;
+  return <canvas ref={canvasRef} width={size} height={size} className="ai-interpolate-modal__thumb-canvas" />;
 }
 
 function SyncedAnimatedPreview({
@@ -276,14 +276,14 @@ function SyncedAnimatedPreview({
   }, [newFrames, oldFrames, size, fps]);
 
   return (
-    <div className="ai-synced-preview">
-      <div className="ai-synced-preview-item">
-        <span className="ai-synced-preview-label">Original</span>
-        <canvas ref={oldCanvasRef} width={size} height={size} className="ai-preview-canvas" />
+    <div className="ai-interpolate-modal__synced">
+      <div className="ai-interpolate-modal__synced-item">
+        <span className="ai-interpolate-modal__synced-label">Original</span>
+        <canvas ref={oldCanvasRef} width={size} height={size} className="ai-interpolate-modal__preview-canvas" />
       </div>
-      <div className="ai-synced-preview-item">
-        <span className="ai-synced-preview-label">Interpolated</span>
-        <canvas ref={newCanvasRef} width={size} height={size} className="ai-preview-canvas" />
+      <div className="ai-interpolate-modal__synced-item">
+        <span className="ai-interpolate-modal__synced-label">Interpolated</span>
+        <canvas ref={newCanvasRef} width={size} height={size} className="ai-interpolate-modal__preview-canvas" />
       </div>
     </div>
   );
@@ -897,51 +897,51 @@ export function AIInterpolateModal({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="ai-modal-backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick}>
-      <div className="ai-modal">
-        <div className="ai-modal-header">
-          <h2 className="ai-modal-title">
-            <span className="ai-modal-icon"><Icon icon={Wand2} size={18} /></span>
+    <div className="ai-interpolate-modal__backdrop" onMouseDown={handleBackdropMouseDown} onClick={handleBackdropClick}>
+      <div className="ai-interpolate-modal">
+        <div className="ai-interpolate-modal__header">
+          <h2 className="ai-interpolate-modal__title">
+            <span className="ai-interpolate-modal__icon"><Icon icon={Wand2} size={18} /></span>
             AI Frame Interpolation
           </h2>
           {!isGenerating && (
-            <button className="ai-modal-close" onClick={onClose}><Icon icon={X} size={14} /></button>
+            <button className="ai-interpolate-modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
           )}
         </div>
 
         {error && (
-          <div className="ai-modal-error">{error}</div>
+          <div className="ai-interpolate-modal__error">{error}</div>
         )}
 
-        <div className="ai-modal-content">
+        <div className="ai-interpolate-modal__content">
           {step === 'checking' && (
-            <div className="ai-heartbeat-checking">
-              <div className="ai-heartbeat-spinner" />
-              <p className="ai-heartbeat-text">Connecting to AI service...</p>
-              <p className="ai-heartbeat-subtext">Running a readiness check to verify the model is loaded and operational.</p>
+            <div className="ai-interpolate-modal__heartbeat">
+              <div className="ai-interpolate-modal__heartbeat-spinner" />
+              <p className="ai-interpolate-modal__heartbeat-text">Connecting to AI service...</p>
+              <p className="ai-interpolate-modal__heartbeat-subtext">Running a readiness check to verify the model is loaded and operational.</p>
             </div>
           )}
 
           {step === 'unavailable' && (
-            <div className="ai-heartbeat-unavailable">
-              <div className="ai-unavailable-icon"><Icon icon={Wand2} size={32} /></div>
-              <h3 className="ai-unavailable-title">AI Service Unavailable</h3>
-              <p className="ai-unavailable-detail">{unavailableDetail}</p>
-              <p className="ai-unavailable-hint">
+            <div className="ai-interpolate-modal__unavailable">
+              <div className="ai-interpolate-modal__unavailable-icon"><Icon icon={Wand2} size={32} /></div>
+              <h3 className="ai-interpolate-modal__unavailable-title">AI Service Unavailable</h3>
+              <p className="ai-interpolate-modal__unavailable-detail">{unavailableDetail}</p>
+              <p className="ai-interpolate-modal__unavailable-hint">
                 Make sure the AI service is running on the configured remote machine and the URL is correct.
               </p>
             </div>
           )}
 
           {step === 'select-layer' && mode === 'base' && (
-            <div className="ai-step-layer">
-              <h3 className="ai-step-title">Select Layer to Interpolate</h3>
-              <p className="ai-step-desc">Choose which layer's frames will be used for AI generation.</p>
-              <div className="ai-layer-list">
+            <div className="ai-interpolate-modal__step-layer">
+              <h3 className="ai-interpolate-modal__step-title">Select Layer to Interpolate</h3>
+              <p className="ai-interpolate-modal__step-desc">Choose which layer's frames will be used for AI generation.</p>
+              <div className="ai-interpolate-modal__layer-list">
                 {layerNames.map((name) => (
                   <button
                     key={name}
-                    className={`ai-layer-item ${selectedLayerName === name ? 'selected' : ''}`}
+                    className={`ai-interpolate-modal__layer-item ${selectedLayerName === name ? 'ai-interpolate-modal__layer-item--selected' : ''}`}
                     onClick={() => {
                       setSelectedLayerName(name);
                       setStep('configure');
@@ -952,7 +952,7 @@ export function AIInterpolateModal({
                 ))}
               </div>
               {layerNames.length === 0 && (
-                <p className="ai-empty-msg">No non-variant layers found.</p>
+                <p className="ai-interpolate-modal__empty">No non-variant layers found.</p>
               )}
             </div>
           )}
@@ -960,10 +960,10 @@ export function AIInterpolateModal({
           {(step === 'configure' || step === 'generating' || step === 'review') && (
             <>
               {mode === 'base' && selectedLayerName && (
-                <div className="ai-selected-layer-bar">
+                <div className="ai-interpolate-modal__selected-bar">
                   <span>Layer: <strong>{selectedLayerName}</strong></span>
                   <button
-                    className="ai-change-layer-btn"
+                    className="ai-interpolate-modal__change-layer-btn"
                     onClick={() => {
                       setStep('select-layer');
                       setSelectedKeyframes(new Set());
@@ -977,19 +977,19 @@ export function AIInterpolateModal({
               )}
 
               {/* Tabs */}
-              <div className="ai-config-tabs">
+              <div className="ai-interpolate-modal__tabs">
                 <button
-                  className={`ai-config-tab ${activeTab === 'keyframes' ? 'active' : ''}`}
+                  className={`ai-interpolate-modal__tab ${activeTab === 'keyframes' ? 'ai-interpolate-modal__tab--active' : ''}`}
                   onClick={() => setActiveTab('keyframes')}
                   disabled={isGenerating}
                 >
                   Keyframes
                   {sortedKeyframes.length > 0 && (
-                    <span className="ai-tab-badge">{sortedKeyframes.length}</span>
+                    <span className="ai-interpolate-modal__tab-badge">{sortedKeyframes.length}</span>
                   )}
                 </button>
                 <button
-                  className={`ai-config-tab ${activeTab === 'settings' ? 'active' : ''}`}
+                  className={`ai-interpolate-modal__tab ${activeTab === 'settings' ? 'ai-interpolate-modal__tab--active' : ''}`}
                   onClick={() => setActiveTab('settings')}
                   disabled={isGenerating}
                 >
@@ -999,37 +999,37 @@ export function AIInterpolateModal({
 
               {/* Keyframes Tab */}
               {activeTab === 'keyframes' && (
-                <div className="ai-tab-content">
-                  <div className="ai-keyframes-header">
+                <div className="ai-interpolate-modal__tab-content">
+                  <div className="ai-interpolate-modal__keyframes-header">
                     <div>
-                      <h3 className="ai-step-title">
+                      <h3 className="ai-interpolate-modal__step-title">
                         {step === 'review' ? 'Review Generated Frames' :
                          step === 'generating' ? (
                            `Processing pair ${Math.min(completedPairs + 1, totalPairs)} of ${totalPairs}...`
                          ) : 'Select Keyframes'}
                       </h3>
                       {step === 'configure' && (
-                        <p className="ai-step-desc">
+                        <p className="ai-interpolate-modal__step-desc">
                           Click frames to toggle them as keyframes. {numFrames} frame{numFrames !== 1 ? 's' : ''} will be generated between each consecutive pair.
                         </p>
                       )}
                     </div>
                     {step === 'configure' && (
-                      <label className="ai-loop-toggle">
+                      <label className="ai-interpolate-modal__loop-toggle">
                         <input
                           type="checkbox"
                           checked={loopBack}
                           onChange={(e) => setLoopBack(e.target.checked)}
                           disabled={isGenerating}
                         />
-                        <span className="ai-loop-switch" />
-                        <span className="ai-loop-label-text">Loop</span>
+                        <span className="ai-interpolate-modal__loop-switch" />
+                        <span className="ai-interpolate-modal__loop-label">Loop</span>
                       </label>
                     )}
                   </div>
 
-                  <div className="ai-frames-strip">
-                    <div className="ai-frames-row" ref={framesRowRef}>
+                  <div className="ai-interpolate-modal__frames-strip">
+                    <div className="ai-interpolate-modal__frames-row" ref={framesRowRef}>
                       {frameThumbnails.map((thumb, idx) => {
                         const isKey = selectedKeyframes.has(idx);
                         const isBetween = sortedKeyframes.length >= 2 && (() => {
@@ -1047,11 +1047,11 @@ export function AIInterpolateModal({
                           <div
                             key={idx}
                             data-frame-idx={idx}
-                            className={`ai-frame-item ${isKey ? 'keyframe' : ''} ${isBetween ? 'between' : ''}`}
+                            className={`ai-interpolate-modal__frame-item ${isKey ? 'ai-interpolate-modal__frame-item--keyframe' : ''} ${isBetween ? 'ai-interpolate-modal__frame-item--between' : ''}`}
                             onClick={() => handleFrameClick(idx)}
                           >
                             <Base64Thumbnail base64={thumb} size={48} />
-                            <span className="ai-frame-label">
+                            <span className="ai-interpolate-modal__frame-label">
                               {isKey ? `Key ${sortedKeyframes.indexOf(idx) + 1}` : `#${idx + 1}`}
                             </span>
                           </div>
@@ -1059,25 +1059,25 @@ export function AIInterpolateModal({
                       })}
                     </div>
                     {loopLineStyle && (
-                      <div className="ai-loop-line" style={loopLineStyle} />
+                      <div className="ai-interpolate-modal__loop-line" style={loopLineStyle} />
                     )}
                   </div>
 
                   {warningMessage && step === 'configure' && (
-                    <div className="ai-warning">{warningMessage}</div>
+                    <div className="ai-interpolate-modal__warning">{warningMessage}</div>
                   )}
 
                   {/* Generation progress */}
                   {step === 'generating' && pairJobs.length > 0 && (
-                    <div className="ai-gen-progress">
+                    <div className="ai-interpolate-modal__gen-progress">
                       {pairJobs.map((pj, i) => (
-                        <div key={i} className={`ai-gen-pair ${pj.status}`}>
-                          <span className="ai-gen-pair-label">
+                        <div key={i} className={`ai-interpolate-modal__gen-pair ai-interpolate-modal__gen-pair--${pj.status}`}>
+                          <span className="ai-interpolate-modal__gen-pair-label">
                             {loopBack && i === pairJobs.length - 1
                               ? `Loop: Key ${sortedKeyframes.length} → Key 1`
                               : `Pair ${i + 1}: Key ${i + 1} → Key ${i + 2}`}
                           </span>
-                          <span className={`ai-gen-pair-status ${pj.status}`}>
+                          <span className={`ai-interpolate-modal__gen-pair-status ai-interpolate-modal__gen-pair-status--${pj.status}`}>
                             {pj.status === 'pending' ? 'Waiting' :
                              pj.status === 'queued' ? 'Queued' :
                              pj.status === 'processing' ? 'Processing...' :
@@ -1093,19 +1093,19 @@ export function AIInterpolateModal({
 
               {/* Settings Tab */}
               {activeTab === 'settings' && (
-                <div className="ai-tab-content">
-                  <h3 className="ai-step-title">Interpolation Settings</h3>
-                  <p className="ai-step-desc">Adjust parameters that control the AI interpolation.</p>
+                <div className="ai-interpolate-modal__tab-content">
+                  <h3 className="ai-interpolate-modal__step-title">Interpolation Settings</h3>
+                  <p className="ai-interpolate-modal__step-desc">Adjust parameters that control the AI interpolation.</p>
 
-                  <div className="ai-settings-grid">
-                    <div className="ai-setting-row">
-                      <div className="ai-setting-info">
-                        <label className="ai-setting-label">Frames Between Keyframes</label>
-                        <span className="ai-setting-hint">Number of frames generated between each consecutive keyframe pair.</span>
+                  <div className="ai-interpolate-modal__settings-grid">
+                    <div className="ai-interpolate-modal__setting-row">
+                      <div className="ai-interpolate-modal__setting-info">
+                        <label className="ai-interpolate-modal__setting-label">Frames Between Keyframes</label>
+                        <span className="ai-interpolate-modal__setting-hint">Number of frames generated between each consecutive keyframe pair.</span>
                       </div>
                       <input
                         type="number"
-                        className="ai-setting-input"
+                        className="ai-interpolate-modal__setting-input"
                         min={1}
                         max={64}
                         value={numFrames}
@@ -1114,15 +1114,15 @@ export function AIInterpolateModal({
                       />
                     </div>
 
-                    <div className="ai-setting-row">
-                      <div className="ai-setting-info">
-                        <label className="ai-setting-label">Pixel Art Upscale</label>
-                        <span className="ai-setting-hint">Upscale factor before inference. Pixel art is small; higher values give the model more detail to work with.</span>
+                    <div className="ai-interpolate-modal__setting-row">
+                      <div className="ai-interpolate-modal__setting-info">
+                        <label className="ai-interpolate-modal__setting-label">Pixel Art Upscale</label>
+                        <span className="ai-interpolate-modal__setting-hint">Upscale factor before inference. Pixel art is small; higher values give the model more detail to work with.</span>
                       </div>
-                      <div className="ai-setting-range-group">
+                      <div className="ai-interpolate-modal__setting-range-group">
                         <input
                           type="range"
-                          className="ai-setting-range"
+                          className="ai-interpolate-modal__setting-range"
                           min={1}
                           max={16}
                           step={1}
@@ -1130,19 +1130,19 @@ export function AIInterpolateModal({
                           onChange={(e) => setScale(parseInt(e.target.value))}
                           disabled={isGenerating}
                         />
-                        <span className="ai-setting-value">{scale}x</span>
+                        <span className="ai-interpolate-modal__setting-value">{scale}x</span>
                       </div>
                     </div>
 
-                    <div className="ai-setting-row">
-                      <div className="ai-setting-info">
-                        <label className="ai-setting-label">Flow Estimation Scale</label>
-                        <span className="ai-setting-hint">Controls precision of motion estimation. Higher = finer detail but slower. Default 1.0 works well for most cases.</span>
+                    <div className="ai-interpolate-modal__setting-row">
+                      <div className="ai-interpolate-modal__setting-info">
+                        <label className="ai-interpolate-modal__setting-label">Flow Estimation Scale</label>
+                        <span className="ai-interpolate-modal__setting-hint">Controls precision of motion estimation. Higher = finer detail but slower. Default 1.0 works well for most cases.</span>
                       </div>
-                      <div className="ai-setting-range-group">
+                      <div className="ai-interpolate-modal__setting-range-group">
                         <input
                           type="range"
-                          className="ai-setting-range"
+                          className="ai-interpolate-modal__setting-range"
                           min={0.25}
                           max={4.0}
                           step={0.25}
@@ -1150,7 +1150,7 @@ export function AIInterpolateModal({
                           onChange={(e) => setFlowScale(parseFloat(e.target.value))}
                           disabled={isGenerating}
                         />
-                        <span className="ai-setting-value">{flowScale.toFixed(2)}</span>
+                        <span className="ai-interpolate-modal__setting-value">{flowScale.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -1159,19 +1159,19 @@ export function AIInterpolateModal({
 
               {/* Preview section (shown in review or generating with results) */}
               {(step === 'review' || (step === 'generating' && pairJobs.some(j => j.status === 'completed'))) && fullSequenceFrames.length > 0 && (
-                <div className="ai-preview-section">
-                  <h4 className="ai-preview-label">Generated Sequence</h4>
-                  <div className="ai-preview-strip">
+                <div className="ai-interpolate-modal__preview-section">
+                  <h4 className="ai-interpolate-modal__preview-label">Generated Sequence</h4>
+                  <div className="ai-interpolate-modal__preview-strip">
                     {fullSequenceFrames.map((item, idx) => (
-                      <div key={idx} className={`ai-preview-item ${item.type}`}>
+                      <div key={idx} className={`ai-interpolate-modal__preview-item ai-interpolate-modal__preview-item--${item.type}`}>
                         {item.base64 ? (
                           <Base64Thumbnail base64={item.base64} size={48} />
                         ) : (
-                          <div className="ai-placeholder">
-                            <div className="ai-placeholder-spinner" />
+                          <div className="ai-interpolate-modal__placeholder">
+                            <div className="ai-interpolate-modal__placeholder-spinner" />
                           </div>
                         )}
-                        <span className="ai-preview-item-label">
+                        <span className="ai-interpolate-modal__preview-item-label">
                           {item.type === 'keyframe' ? `Key ${(item.keyIdx ?? 0) + 1}` : `Gen`}
                         </span>
                       </div>
@@ -1179,10 +1179,10 @@ export function AIInterpolateModal({
                   </div>
 
                   {animationFrames.length > 1 && (
-                    <div className="ai-animation-preview">
-                      <div className="ai-animation-header">
-                        <h4 className="ai-preview-label">Animation Preview</h4>
-                        <div className="ai-fps-control">
+                    <div className="ai-interpolate-modal__animation">
+                      <div className="ai-interpolate-modal__animation-header">
+                        <h4 className="ai-interpolate-modal__preview-label">Animation Preview</h4>
+                        <div className="ai-interpolate-modal__fps-control">
                           <label>FPS:</label>
                           <input
                             type="number"
@@ -1190,7 +1190,7 @@ export function AIInterpolateModal({
                             max={120}
                             value={previewFps}
                             onChange={(e) => setPreviewFps(Math.max(1, Math.min(120, parseInt(e.target.value) || 8)))}
-                            className="ai-fps-input"
+                            className="ai-interpolate-modal__fps-input"
                           />
                         </div>
                       </div>
@@ -1208,32 +1208,32 @@ export function AIInterpolateModal({
           )}
         </div>
 
-        <div className="ai-modal-actions">
+        <div className="ai-interpolate-modal__actions">
           {step === 'unavailable' && (
-            <button className="ai-btn-cancel" onClick={onClose}>
+            <button className="ai-interpolate-modal__btn--neutral" onClick={onClose}>
               Close
             </button>
           )}
 
           {step === 'checking' && (
-            <button className="ai-btn-cancel" onClick={onClose}>
+            <button className="ai-interpolate-modal__btn--neutral" onClick={onClose}>
               Cancel
             </button>
           )}
 
           {step === 'select-layer' && (
-            <button className="ai-btn-cancel" onClick={onClose}>
+            <button className="ai-interpolate-modal__btn--neutral" onClick={onClose}>
               Cancel
             </button>
           )}
 
           {step === 'configure' && (
             <>
-              <button className="ai-btn-cancel" onClick={onClose}>
+              <button className="ai-interpolate-modal__btn--neutral" onClick={onClose}>
                 Cancel
               </button>
               <button
-                className="ai-btn-generate"
+                className="ai-interpolate-modal__btn--primary"
                 onClick={handleGenerate}
                 disabled={!canGenerate}
                 title={!canGenerate ? 'Select at least 2 keyframes' : undefined}
@@ -1244,17 +1244,17 @@ export function AIInterpolateModal({
           )}
 
           {step === 'generating' && (
-            <button className="ai-btn-generate" disabled>
+            <button className="ai-interpolate-modal__btn--primary" disabled>
               {completedPairs}/{totalPairs} pairs done...
             </button>
           )}
 
           {step === 'review' && (
             <>
-              <button className="ai-btn-cancel" onClick={onClose}>
+              <button className="ai-interpolate-modal__btn--neutral" onClick={onClose}>
                 Discard
               </button>
-              <button className="ai-btn-accept" onClick={handleAccept}>
+              <button className="ai-interpolate-modal__btn--success" onClick={handleAccept}>
                 Accept & Apply
               </button>
             </>

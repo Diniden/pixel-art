@@ -124,25 +124,25 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
           </button>
         </div>
 
-        {error && <div className="error-message" style={{ margin: '12px 20px 0' }}>{error}</div>}
+        {error && <div className="browse-backups-modal__error" style={{ margin: '12px 20px 0' }}>{error}</div>}
 
         <div className="modal__body">
           {isLoading ? (
-            <div className="backups-loading">Loading backups...</div>
+            <div className="browse-backups-modal__loading">Loading backups...</div>
           ) : loadError ? (
-            <div className="error-message" style={{ margin: '12px 0' }}>
+            <div className="browse-backups-modal__error" style={{ margin: '12px 0' }}>
               Could not load backups — {loadError}. Your backups are NOT gone;
               check that the server is running and reopen this dialog.
             </div>
           ) : backups.length === 0 ? (
-            <div className="backups-empty">
+            <div className="browse-backups-modal__empty">
               No unzipped backups found for this project.
             </div>
           ) : (
             dateKeys.map((date) => (
-              <div key={date} className="backup-date-group">
-                <div className="backup-date-label">{formatDate(date)}</div>
-                <div className="backup-list">
+              <div key={date} className="browse-backups-modal__date-group">
+                <div className="browse-backups-modal__date-label">{formatDate(date)}</div>
+                <div className="browse-backups-modal__list">
                   {groupedBackups[date].map((entry) => {
                     const isSelected =
                       selectedBackup?.date === entry.date &&
@@ -151,13 +151,13 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
                     return (
                       <button
                         key={entry.filename}
-                        className={`backup-item ${isSelected ? 'selected' : ''}`}
+                        className={`browse-backups-modal__item ${isSelected ? 'browse-backups-modal__item--selected' : ''}`}
                         onClick={() => setSelectedBackup(entry)}
                         disabled={isRestoring}
                       >
-                        <span className="backup-time-icon"><Icon icon={Clock} size={12} /></span>
-                        <span className="backup-time">{formatTime(entry.time)}</span>
-                        <span className="backup-filename">{entry.filename}</span>
+                        <span className="browse-backups-modal__time-icon"><Icon icon={Clock} size={12} /></span>
+                        <span className="browse-backups-modal__time">{formatTime(entry.time)}</span>
+                        <span className="browse-backups-modal__filename">{entry.filename}</span>
                       </button>
                     );
                   })}
@@ -169,7 +169,7 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
 
         <div className="modal__footer modal__footer--end">
           <button
-            className="restore-btn"
+            className="browse-backups-modal__restore-btn"
             onClick={handleRestore}
             disabled={!selectedBackup || isRestoring}
           >

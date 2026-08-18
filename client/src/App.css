@@ -1,3 +1,18 @@
+/* block: app (task 21, G8).
+   `.canvas-area` was declared HERE and in ReferenceImageModal.css with
+   incompatible intents. App.css is emitted LAST, so its
+   `flex-direction: column` destroyed the modal's centring while the modal's
+   checkerboard survived (App sets no background). Both are block-scoped now and
+   the modal's image is centred again — a sanctioned visual delta.
+
+   ⚠️ `canvas-area` is ALSO a runtime DOM hook: 8 `document.querySelector(
+   '.canvas-area')` sites in ReferenceImagePanel.tsx and FrameReferencePanel.tsx
+   (both OUTSIDE this task's Touches) resolve the shell's canvas viewport by
+   that literal name. App.tsx therefore renders BOTH `app__canvas-area` (styling)
+   and the bare `canvas-area` (query hook, no rule attached to it here). The hook
+   is left for the task that owns those two files; removing it now would break
+   reference-image positioning silently. */
+
 .app {
   display: flex;
   flex-direction: column;
@@ -9,7 +24,7 @@
 }
 
 /* Loading Screen */
-.loading-screen {
+.app__loading {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -17,12 +32,12 @@
   background: var(--bg-primary);
 }
 
-.loading-content {
+.app__loading-content {
   text-align: center;
   animation: app-fade-in 0.5s ease;
 }
 
-.loading-spinner {
+.app__loading-spinner {
   width: 48px;
   height: 48px;
   border: 3px solid var(--border-primary);
@@ -36,18 +51,18 @@
   to { transform: rotate(360deg); }
 }
 
-.loading-content h2 {
+.app__loading-content h2 {
   color: var(--text-primary);
   margin-bottom: var(--space-2);
   font-weight: var(--weight-semibold);
 }
 
-.loading-content p {
+.app__loading-content p {
   color: var(--text-muted);
 }
 
 /* Main Content Layout */
-.main-content {
+.app__main {
   display: flex;
   flex: 1;
   overflow: hidden;
@@ -55,7 +70,7 @@
 }
 
 /* Side Panels */
-.side-panel {
+.app__side-panel {
   position: relative;
   background: var(--bg-secondary);
   border-color: var(--border-primary);
@@ -65,25 +80,7 @@
   z-index: var(--z-shell);
 }
 
-.left-panel {
-  border-right: 1px solid var(--border-primary);
-}
-
-.left-panel.open {
-  width: 320px;
-  min-width: 320px;
-}
-
-.right-panel {
-  border-left: 1px solid var(--border-primary);
-}
-
-.right-panel.open {
-  width: 320px;
-  min-width: 320px;
-}
-
-.panel-scroll {
+.app__panel-scroll {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -94,7 +91,7 @@
 }
 
 /* Canvas Area */
-.canvas-area {
+.app__canvas-area {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -104,7 +101,7 @@
 }
 
 /* Bottom Panel */
-.bottom-panel {
+.app__bottom {
   flex: 0 0 auto;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-primary);
@@ -117,55 +114,75 @@
   overflow-x: hidden;
 }
 
+/* modifiers */
+
+.app__side-panel--left {
+  border-right: 1px solid var(--border-primary);
+}
+
+.app__side-panel--left.app__side-panel--open {
+  width: 320px;
+  min-width: 320px;
+}
+
+.app__side-panel--right {
+  border-left: 1px solid var(--border-primary);
+}
+
+.app__side-panel--right.app__side-panel--open {
+  width: 320px;
+  min-width: 320px;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
-  .left-panel.open,
-  .right-panel.open {
+  .app__side-panel--left.app__side-panel--open,
+  .app__side-panel--right.app__side-panel--open {
     width: 280px;
     min-width: 280px;
   }
 }
 
 @media (max-width: 768px) {
-  .main-content {
+  .app__main {
     flex-direction: column;
   }
 
-  .side-panel {
+  .app__side-panel {
     position: fixed;
     top: 60px;
     bottom: 140px;
     transition: transform var(--transition-normal);
   }
 
-  .left-panel {
+  .app__side-panel--left {
     left: 0;
     border-right: 1px solid var(--border-primary);
   }
 
-  .left-panel.open {
+  .app__side-panel--left.app__side-panel--open {
     width: 320px;
     transform: translateX(0);
   }
 
-  .right-panel {
+  .app__side-panel--right {
     right: 0;
     border-left: 1px solid var(--border-primary);
   }
 
-  .right-panel.open {
+  .app__side-panel--right.app__side-panel--open {
     width: 320px;
     transform: translateX(0);
   }
 
-  .canvas-area {
+  .app__canvas-area {
     position: relative;
     z-index: var(--z-hover-lift);
   }
 }
 
 @media (max-width: 480px) {
-  .side-panel.open {
+  .app__side-panel--open {
     width: 100%;
   }
 

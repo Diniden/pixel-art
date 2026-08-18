@@ -47,20 +47,20 @@ function ViewModeDropdown({
   const selectedLabel = options.find(o => o.value === value)?.label || 'Frames';
 
   return (
-    <div className="view-mode-dropdown" ref={dropdownRef}>
+    <div className="frame-timeline__dropdown" ref={dropdownRef}>
       <button
-        className={`view-mode-dropdown-trigger ${value === 'variant' ? 'variant-mode' : ''}`}
+        className={`frame-timeline__dropdown-trigger ${value === 'variant' ? 'frame-timeline__dropdown-trigger--variant' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
       >
         <span>{selectedLabel}</span>
-        <span className="view-mode-dropdown-arrow">{isOpen ? '▴' : '▾'}</span>
+        <span className="frame-timeline__dropdown-arrow">{isOpen ? '▴' : '▾'}</span>
       </button>
       {isOpen && (
-        <div className="view-mode-dropdown-menu">
+        <div className="frame-timeline__dropdown-menu">
           {options.map(option => (
             <button
               key={option.value}
-              className={`view-mode-dropdown-item ${option.value === value ? 'selected' : ''} ${option.value === 'variant' ? 'variant-option' : ''}`}
+              className={`frame-timeline__dropdown-item ${option.value === value ? 'frame-timeline__dropdown-item--selected' : ''} ${option.value === 'variant' ? 'frame-timeline__dropdown-item--variant' : ''}`}
               onClick={() => {
                 onChange(option.value);
                 setIsOpen(false);

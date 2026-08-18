@@ -31,7 +31,7 @@ const VariantFrameThumbnail = memo(function VariantFrameThumbnail({
     renderVariantFramePreview(ctx, thumbSize, variant, variantFrame);
   }, [variantFrame, variant]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="frame-thumb-canvas" />;
+  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="frame-timeline__thumb-canvas" />;
 }, (prevProps, nextProps) => {
   // Custom comparison for variant frame thumbnails
   const prev = prevProps.variantFrame;
@@ -337,28 +337,28 @@ export function VariantView({
   }, [resizeVariant, variantGroupId, variantId]);
 
   return (
-    <div className="variant-timeline">
+    <div className="variant-view">
       {/* Base Object Frames - Compact view for offset control */}
-      <div className="base-frames-section">
-        <div className="base-frames-header">
-          <span className="base-frames-title">Base Frames (WASD to adjust offset)</span>
-          <span className="base-frames-offset">Offset: ({currentOffset.x}, {currentOffset.y})</span>
+      <div className="variant-view__base-section">
+        <div className="variant-view__base-header">
+          <span className="variant-view__base-title">Base Frames (WASD to adjust offset)</span>
+          <span className="variant-view__base-offset">Offset: ({currentOffset.x}, {currentOffset.y})</span>
         </div>
         <div
-          className="base-frames-scroll"
+          className="variant-view__base-scroll"
           onDragOver={handleBaseListContainerDragOver}
           onDrop={handleBaseFrameDrop}
         >
           <div
             ref={baseListRef}
-            className="base-frames-list base-frames-list-droppable"
+            className="variant-view__base-list variant-view__base-list--droppable"
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleBaseFrameDrop}
             onDragLeave={() => setDropInsertBaseIndex(null)}
           >
             {baseIndicatorLeft != null && (
               <div
-                className="frame-drop-indicator frame-drop-indicator-base"
+                className="frame-timeline__drop-indicator frame-timeline__drop-indicator--base"
                 style={{ left: baseIndicatorLeft }}
                 aria-hidden
               />
@@ -372,7 +372,7 @@ export function VariantView({
                   ref={(el) => {
                     baseItemRefs.current[index] = el;
                   }}
-                  className={`base-frame-item ${isCurrentBaseFrame ? 'active' : ''} ${isDragging ? 'dragging' : ''}`}
+                  className={`variant-view__base-item ${isCurrentBaseFrame ? 'variant-view__base-item--active' : ''} ${isDragging ? 'variant-view__base-item--dragging' : ''}`}
                   onClick={() => selectFrame(frame.id, true)} // Always sync variant timelines
                   title={`${frame.name} - Click to edit offset for this base frame. Drag to reorder.`}
                   draggable
@@ -382,7 +382,7 @@ export function VariantView({
                   onDragLeave={() => setDropInsertBaseIndex(null)}
                   onDragEnd={handleBaseFrameDragEnd}
                 >
-                  <div className="base-frame-thumbnail">
+                  <div className="variant-view__base-thumbnail">
                     <FrameThumbnail
                       frame={frame}
                       width={obj.gridSize.width}
@@ -393,7 +393,7 @@ export function VariantView({
                       isSelected={isCurrentBaseFrame}
                     />
                   </div>
-                  <span className="base-frame-index">#{index + 1}</span>
+                  <span className="variant-view__base-index">#{index + 1}</span>
                 </div>
               );
             })}
@@ -402,11 +402,11 @@ export function VariantView({
       </div>
 
       {/* Variant Frames - For graphics editing */}
-      <div className="timeline-header-row">
+      <div className="frame-timeline__header-row">
         {viewModeDropdown}
-        <div className="frame-move-controls">
+        <div className="frame-timeline__move-controls">
           <button
-            className="frame-move-btn"
+            className="frame-timeline__move-btn"
             onClick={handleVariantMoveLeft}
             disabled={!canMoveVariantLeft}
             title="Move Frame Left"
@@ -414,7 +414,7 @@ export function VariantView({
             <Icon icon={ChevronLeft} size={12} />
           </button>
           <button
-            className="frame-move-btn"
+            className="frame-timeline__move-btn"
             onClick={handleVariantMoveRight}
             disabled={!canMoveVariantRight}
             title="Move Frame Right"
@@ -422,36 +422,36 @@ export function VariantView({
             <Icon icon={ChevronRight} size={12} />
           </button>
         </div>
-        <div className="timeline-controls">
+        <div className="frame-timeline__controls">
           <button
-            className={`play-btn ${isPlaying ? 'playing' : ''}`}
+            className={`frame-timeline__play-btn ${isPlaying ? 'frame-timeline__play-btn--playing' : ''}`}
             onClick={togglePlayback}
             title={isPlaying ? 'Stop (Enter)' : 'Play (Enter)'}
           >
             {isPlaying ? <Icon icon={SquareIcon} size={14} /> : <Icon icon={Play} size={14} />}
           </button>
           <button
-            className="preview-btn"
+            className="frame-timeline__preview-btn"
             onClick={() => setShowPreview(true)}
             title="Optimized Preview"
           >
             <Icon icon={Zap} size={14} />
           </button>
           <button
-            className="canvas-size-btn variant"
+            className="frame-timeline__size-btn frame-timeline__size-btn--variant"
             onClick={() => setShowResizeModal(true)}
             title="Edit Variant Canvas Size"
           >
             <Icon icon={Maximize} size={14} />
           </button>
           <button
-            className="ai-interpolate-btn"
+            className="frame-timeline__ai-btn"
             onClick={() => setShowAIModal(true)}
             title="AI Frame Interpolation"
           >
             <Icon icon={Wand2} size={14} />
           </button>
-          <label className="copy-previous-label" title="Copy pixels from current frame">
+          <label className="frame-timeline__copy-previous" title="Copy pixels from current frame">
             <input
               type="checkbox"
               checked={copyPrevious}
@@ -461,32 +461,32 @@ export function VariantView({
           </label>
           <input
             type="text"
-            className="new-frame-input"
+            className="frame-timeline__new-frame-input"
             placeholder="New frame..."
             value={newFrameName}
             onChange={(e) => setNewFrameName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddVariantFrame()}
           />
-          <button className="add-frame-btn" onClick={handleAddVariantFrame}>
+          <button className="frame-timeline__add-frame-btn" onClick={handleAddVariantFrame}>
             + Add
           </button>
         </div>
       </div>
       <div
-        className="variant-frames-scroll"
+        className="variant-view__scroll"
         onDragOver={handleVariantListContainerDragOver}
         onDrop={handleVariantFrameDrop}
       >
         <div
           ref={variantListRef}
-          className="variant-frames-list variant-frames-list-droppable"
+          className="variant-view__list variant-view__list--droppable"
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleVariantFrameDrop}
           onDragLeave={() => setDropInsertVariantIndex(null)}
         >
           {variantIndicatorLeft != null && (
             <div
-              className="frame-drop-indicator frame-drop-indicator-variant"
+              className="frame-timeline__drop-indicator frame-timeline__drop-indicator--variant"
               style={{ left: variantIndicatorLeft }}
               aria-hidden
             />
@@ -500,7 +500,7 @@ export function VariantView({
                 ref={(el) => {
                   variantItemRefs.current[index] = el;
                 }}
-                className={`variant-frame-item ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
+                className={`variant-view__item ${isSelected ? 'variant-view__item--selected' : ''} ${isDragging ? 'variant-view__item--dragging' : ''}`}
                 onClick={() => selectVariantFrame(variantGroupId, index)}
                 draggable
                 onDragStart={(e) => handleVariantFrameDragStart(e, vFrame.id)}
@@ -509,27 +509,27 @@ export function VariantView({
                 onDragLeave={() => setDropInsertVariantIndex(null)}
                 onDragEnd={handleVariantFrameDragEnd}
               >
-                <div className="variant-frame-thumbnail">
+                <div className="variant-view__thumbnail">
                   <VariantFrameThumbnail
                     variantFrame={vFrame}
                     variant={variantData.variant}
                   />
                 </div>
-                <div className="variant-frame-info">
-                  <span className="variant-frame-index">
+                <div className="variant-view__info">
+                  <span className="variant-view__index">
                     #{index + 1}
                     {vFrame.tags?.length ? (
                       <span
-                        className="frame-tag-dot"
+                        className="frame-timeline__tag-dot"
                         style={{ backgroundColor: tagColorForTag(vFrame.tags[0]) }}
                         title={vFrame.tags.join(', ')}
                       />
                     ) : null}
                   </span>
                 </div>
-                <div className="variant-frame-actions">
+                <div className="variant-view__actions">
                   <button
-                    className="variant-frame-action-btn variant-frame-tags-btn"
+                    className="variant-view__action-btn variant-view__action-btn--tags"
                     onClick={(e) => {
                       e.stopPropagation();
                       setTagsModalContext({
@@ -542,10 +542,10 @@ export function VariantView({
                     }}
                     title="Frame tags"
                   >
-                    <span className="frame-tags-icon"><Icon icon={Tag} size={10} /></span>
+                    <span className="frame-timeline__tags-icon"><Icon icon={Tag} size={10} /></span>
                   </button>
                   <button
-                    className="variant-frame-action-btn"
+                    className="variant-view__action-btn"
                     onClick={(e) => {
                       e.stopPropagation();
                       duplicateVariantFrame(variantGroupId, variantId, vFrame.id);
@@ -555,7 +555,7 @@ export function VariantView({
                     <Icon icon={Copy} size={10} />
                   </button>
                   <button
-                    className="variant-frame-action-btn delete"
+                    className="variant-view__action-btn variant-view__action-btn--danger"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteVariantFrame(variantGroupId, variantId, vFrame.id);

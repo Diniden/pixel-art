@@ -53,7 +53,7 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
     });
   }, [obj, project]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="object-select-thumb-canvas" />;
+  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="object-select-modal__thumb-canvas" />;
 }, (prevProps, nextProps) => {
   // Custom comparison: only re-render if object actually changed
   const prev = prevProps.obj;
@@ -105,37 +105,37 @@ export function ObjectSelectModal({ selectedObjectId, onSelect, onClose }: Objec
   };
 
   return createPortal(
-    <div className="object-select-modal-backdrop" onClick={handleBackdropClick}>
+    <div className="object-select-modal__backdrop" onClick={handleBackdropClick}>
       <div className="object-select-modal">
-        <div className="object-select-modal-header">
+        <div className="object-select-modal__header">
           <h3><Icon icon={Package} size={16} /> Select Reference Object</h3>
-          <span className="object-select-subtitle">Choose which object's frames to preview</span>
-          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <span className="object-select-modal__subtitle">Choose which object's frames to preview</span>
+          <button className="modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
-        <div className="object-select-modal-content">
+        <div className="object-select-modal__content">
           {/* Option to use current object (default behavior) */}
           <div
-            className={`object-select-card current-object-option ${selectedObjectId === null ? 'selected' : ''}`}
+            className={`object-select-modal__card object-select-modal__card--follow-current ${selectedObjectId === null ? 'object-select-modal__card--selected' : ''}`}
             onClick={() => handleSelectObject(null)}
           >
-            <div className="current-object-icon"><Icon icon={Target} size={18} /></div>
-            <div className="object-select-info">
-              <span className="object-select-name">Follow Current Object</span>
-              <span className="object-select-details">
+            <div className="object-select-modal__current-icon"><Icon icon={Target} size={18} /></div>
+            <div className="object-select-modal__info">
+              <span className="object-select-modal__name">Follow Current Object</span>
+              <span className="object-select-modal__details">
                 Always show frames from the selected object
               </span>
             </div>
             {selectedObjectId === null && (
-              <div className="selected-badge"><Icon icon={Check} size={12} /></div>
+              <div className="object-select-modal__badge--selected"><Icon icon={Check} size={12} /></div>
             )}
           </div>
 
-          <div className="object-select-divider">
+          <div className="object-select-modal__divider">
             <span>Or select a specific object</span>
           </div>
 
-          <div className="objects-grid">
+          <div className="object-select-modal__grid">
             {objects.map(obj => {
               const isCurrent = obj.id === currentObjectId;
               const isSelected = selectedObjectId === obj.id;
@@ -143,26 +143,26 @@ export function ObjectSelectModal({ selectedObjectId, onSelect, onClose }: Objec
               return (
                 <div
                   key={obj.id}
-                  className={`object-select-card ${isSelected ? 'selected' : ''} ${isCurrent ? 'current' : ''}`}
+                  className={`object-select-modal__card ${isSelected ? 'object-select-modal__card--selected' : ''} ${isCurrent ? 'object-select-modal__card--current' : ''}`}
                   onClick={() => handleSelectObject(obj.id)}
                 >
-                  <div className="object-select-thumb">
+                  <div className="object-select-modal__thumb">
                     <ObjectThumbnail obj={obj} project={project} />
                   </div>
 
-                  <div className="object-select-info">
-                    <span className="object-select-name">{obj.name}</span>
-                    <span className="object-select-details">
+                  <div className="object-select-modal__info">
+                    <span className="object-select-modal__name">{obj.name}</span>
+                    <span className="object-select-modal__details">
                       {obj.gridSize.width}×{obj.gridSize.height} • {obj.frames.length} frame{obj.frames.length !== 1 ? 's' : ''}
                     </span>
                   </div>
 
                   {isCurrent && (
-                    <div className="current-badge">Current</div>
+                    <div className="object-select-modal__badge--current">Current</div>
                   )}
 
                   {isSelected && (
-                    <div className="selected-badge"><Icon icon={Check} size={12} /></div>
+                    <div className="object-select-modal__badge--selected"><Icon icon={Check} size={12} /></div>
                   )}
                 </div>
               );
@@ -170,7 +170,7 @@ export function ObjectSelectModal({ selectedObjectId, onSelect, onClose }: Objec
           </div>
 
           {objects.length === 0 && (
-            <div className="object-select-empty">
+            <div className="object-select-modal__empty">
               No objects available
             </div>
           )}

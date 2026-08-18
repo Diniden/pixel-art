@@ -1,4 +1,16 @@
-.object-select-modal-backdrop {
+/* block: object-select-modal (task 21, G6+G7).
+   `.objects-grid`, `.current-badge` and `.selected-badge` were BARE here and,
+   winning on emission order, imposed THIS component's designs on CopyFromModal,
+   ProjectSelectModal, AddVariantModal and VariantSelectModal. Block-scoping
+   them returns each component to its own authored design.
+   Q4 DECISIONS — this component keeps BOTH of its authored badges:
+     __badge--current   the blue info pill (accent-info fill + border)
+     __badge--selected  the 20px circular GREEN check (`--status-ok`), which
+                        matches this modal's green accent (its h3 and card
+                        borders are `--status-ok`). It no longer leaks to
+                        AddVariantModal (violet) or VariantSelectModal (violet). */
+
+.object-select-modal__backdrop {
   position: fixed;
   top: 0;
   left: 0;
@@ -23,7 +35,7 @@
   box-shadow: var(--shadow-modal);
 }
 
-.object-select-modal-header {
+.object-select-modal__header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -32,42 +44,23 @@
   border-bottom: 1px solid var(--border-primary);
 }
 
-.object-select-modal-header h3 {
+.object-select-modal__header h3 {
   margin: 0;
   color: var(--status-ok);
   font-size: 1.1rem;
   font-weight: var(--weight-semibold);
 }
 
-.object-select-subtitle {
+.object-select-modal__subtitle {
   flex: 1;
   color: var(--text-muted);
   font-size: 0.85rem;
 }
 
-.object-select-modal-header .close-btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-size: var(--text-xl);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-fast);
-}
+/* The close button is blocks/modal.css's `modal__close` now; this header adds
+   no geometry of its own. */
 
-.object-select-modal-header .close-btn:hover {
-  border-color: var(--accent-danger);
-  color: var(--accent-danger);
-  background: var(--accent-danger-10);
-}
-
-.object-select-modal-content {
+.object-select-modal__content {
   flex: 1;
   overflow-y: auto;
   padding: var(--space-5);
@@ -76,7 +69,7 @@
   gap: var(--space-4);
 }
 
-.object-select-divider {
+.object-select-modal__divider {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -84,21 +77,21 @@
   font-size: 0.8rem;
 }
 
-.object-select-divider::before,
-.object-select-divider::after {
+.object-select-modal__divider::before,
+.object-select-modal__divider::after {
   content: '';
   flex: 1;
   height: 1px;
   background: var(--border-primary);
 }
 
-.objects-grid {
+.object-select-modal__grid {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.object-select-card {
+.object-select-modal__card {
   position: relative;
   background: var(--bg-tertiary);
   border: 2px solid var(--border-primary);
@@ -111,35 +104,12 @@
   gap: var(--space-3);
 }
 
-.object-select-card:hover {
+.object-select-modal__card:hover {
   border-color: var(--status-ok-50);
   background: var(--bg-hover);
 }
 
-.object-select-card.selected {
-  border-color: var(--status-ok);
-  background: var(--status-ok-15);
-  box-shadow: var(--glow-ok-15);
-}
-
-.object-select-card.current {
-  border-style: dashed;
-}
-
-.object-select-card.current-object-option {
-  background: linear-gradient(135deg, var(--status-ok-10) 0%, var(--accent-info-10) 100%);
-  border-style: dashed;
-}
-
-.object-select-card.current-object-option:hover {
-  background: linear-gradient(135deg, var(--status-ok-20) 0%, var(--accent-info-15) 100%);
-}
-
-.object-select-card.current-object-option.selected {
-  background: linear-gradient(135deg, var(--status-ok-25) 0%, var(--accent-info-20) 100%);
-}
-
-.current-object-icon {
+.object-select-modal__current-icon {
   width: 64px;
   height: 64px;
   display: flex;
@@ -151,7 +121,7 @@
   border: 1px solid var(--border-primary);
 }
 
-.object-select-thumb {
+.object-select-modal__thumb {
   width: 64px;
   height: 64px;
   border-radius: var(--radius-sm);
@@ -160,13 +130,13 @@
   flex-shrink: 0;
 }
 
-.object-select-thumb-canvas {
+.object-select-modal__thumb-canvas {
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
 
-.object-select-info {
+.object-select-modal__info {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -174,7 +144,7 @@
   min-width: 0;
 }
 
-.object-select-name {
+.object-select-modal__name {
   font-size: 0.95rem;
   color: var(--text-primary);
   font-weight: var(--weight-medium);
@@ -183,12 +153,12 @@
   text-overflow: ellipsis;
 }
 
-.object-select-details {
+.object-select-modal__details {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
 
-.current-badge {
+.object-select-modal__badge--current {
   position: absolute;
   top: 6px;
   right: 32px;
@@ -201,7 +171,7 @@
   font-weight: var(--weight-medium);
 }
 
-.selected-badge {
+.object-select-modal__badge--selected {
   position: absolute;
   top: 6px;
   right: 6px;
@@ -217,11 +187,35 @@
   font-weight: var(--weight-bold);
 }
 
-.object-select-empty {
+.object-select-modal__empty {
   text-align: center;
   color: var(--text-muted);
   padding: var(--space-8);
 }
 
+/* modifiers */
 
+/* base.base--modifier compound: the flattened modifier is (0,1,0) and would
+   otherwise lose its skin to the (0,2,0) `:hover` rule above. */
+.object-select-modal__card.object-select-modal__card--selected {
+  border-color: var(--status-ok);
+  background: var(--status-ok-15);
+  box-shadow: var(--glow-ok-15);
+}
 
+.object-select-modal__card--current {
+  border-style: dashed;
+}
+
+.object-select-modal__card--follow-current {
+  background: linear-gradient(135deg, var(--status-ok-10) 0%, var(--accent-info-10) 100%);
+  border-style: dashed;
+}
+
+.object-select-modal__card--follow-current:hover {
+  background: linear-gradient(135deg, var(--status-ok-20) 0%, var(--accent-info-15) 100%);
+}
+
+.object-select-modal__card--follow-current.object-select-modal__card--selected {
+  background: linear-gradient(135deg, var(--status-ok-25) 0%, var(--accent-info-20) 100%);
+}

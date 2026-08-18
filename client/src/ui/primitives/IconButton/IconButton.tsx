@@ -8,7 +8,7 @@ import "./IconButton.css";
  * IconButton — a square icon-only button (task 19).
  *
  * BEM block: `icon-btn` (local stylesheet). The skin is the 13-fold-duplicated
- * close button (`className="close-btn"` + `<Icon icon={X} size={14}/>`)
+ * close button (the pre-BEM bare close-button class + `<Icon icon={X} size={14}/>`)
  * measured at AddVariantModal:126, CopyFromModal:187, ObjectSelectModal:113,
  * VariantSelectModal:144, EdgeInterpolateModal:47, HeightMapModal:201,
  * BrowseBackupsModal:125, the project-select modal (:108),

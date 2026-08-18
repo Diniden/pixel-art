@@ -1,3 +1,13 @@
+/* block: toolbar (task 21, G4). The 7 remaining forced-priority declarations
+   are GONE: `.reference-group`'s three were already winning by source order over
+   `.toolbar-group`, and `.clear-reference-btn`'s four existed to outrank
+   `.tool-btn:hover` (0,2,0) — replaced below by an equal-specificity
+   `__clear-reference-btn:hover` rule that re-states the resting skin.
+   The `.brush-size-control` / `.brush-size-value` rules that used to live here
+   were dead in this component: no Toolbar markup renders them, and the panels'
+   copies (LightingStudioPanel, PixelStudioPanel) always won the collision.
+   They are deleted, not renamed. */
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -14,174 +24,10 @@
   overflow-y: hidden;
 }
 
-.toolbar-section {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.toolbar-group {
-  display: flex;
-  gap: var(--space-0-5);
-  padding: var(--space-0-5);
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-}
-
-.tool-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  position: relative;
-}
-
-.tool-btn:hover {
-  background: var(--bg-hover);
-}
-
-.tool-btn.active {
-  background: var(--accent-primary);
-  box-shadow: var(--glow-accent-8-40);
-}
-
-.tool-icon {
-  font-size: var(--text-sm);
-  line-height: var(--leading-none);
-}
-
-.tool-hotkey {
-  position: absolute;
-  bottom: 1px;
-  right: 1px;
-  font-size: 8px;
-  font-weight: var(--weight-semibold);
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  background: var(--overlay-40);
-  padding: var(--space-px) var(--space-1);
-  border-radius: var(--radius-xs);
-  line-height: var(--leading-none);
-  opacity: 0.7;
-}
-
-.tool-btn:hover .tool-hotkey {
-  opacity: 1;
-}
-
-.tool-btn.active .tool-hotkey {
-  color: var(--white-80);
-  background: var(--overlay-30);
-}
-
-.tool-btn.light-grid-active {
-  background: var(--tool-lightgrid);
-  box-shadow: var(--glow-lightgrid);
-}
-
-.tool-btn.light-grid-active .tool-icon {
-  filter: brightness(0);
-}
-
-.toolbar-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border-primary);
-  margin: 0 var(--space-1);
-}
-
-.reference-group {
-  background: transparent !important;
-  padding: 0 !important;
-  gap: var(--space-1) !important;
-}
-
-.reference-btn.has-reference {
-  background: var(--accent-primary-20);
-  border: 1px solid var(--accent-primary);
-}
-
-.clear-reference-btn {
-  background: var(--bg-tertiary) !important;
-  border: 1px solid var(--border-primary) !important;
-  border-radius: var(--radius-sm) !important;
-}
-
-.clear-reference-btn:hover {
-  border-color: var(--accent-danger) !important;
-  color: var(--accent-danger);
-}
-
-.brush-size-control {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.brush-size-control input[type="range"] {
-  width: 80px;
-}
-
-.brush-size-value {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  min-width: 24px;
-  text-align: center;
-}
-
-/* Studio Mode Toggle */
-.studio-mode-section {
-  flex-shrink: 0;
-}
-
-.studio-mode-toggle {
-  display: flex;
-  gap: var(--space-0-5);
-  padding: var(--space-0-5);
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-primary);
-}
-
-.studio-mode-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  padding: var(--space-1) var(--space-2-5);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  color: var(--text-secondary);
-  position: relative;
-}
-
-.studio-mode-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.studio-mode-btn.active {
-  background: var(--accent-primary);
-  color: var(--white);
-  box-shadow: var(--glow-accent-8-30);
-}
-
-.studio-mode-btn .tool-icon {
-  font-size: var(--text-sm);
-}
+/* elements, DOM order */
 
 /* Fixed tooltip to avoid clipping/stacking-context issues. */
-.toolbar-fixed-tooltip {
+.toolbar__fixed-tooltip {
   position: fixed;
   transform: translateX(-50%);
   background: var(--overlay-90);
@@ -196,8 +42,158 @@
   z-index: var(--z-tooltip);
 }
 
+.toolbar__section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.toolbar__group {
+  display: flex;
+  gap: var(--space-0-5);
+  padding: var(--space-0-5);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+}
+
+.toolbar__tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.toolbar__tool-btn:hover {
+  background: var(--bg-hover);
+}
+
+.toolbar__tool-icon {
+  font-size: var(--text-sm);
+  line-height: var(--leading-none);
+}
+
+.toolbar__tool-hotkey {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  font-size: 8px;
+  font-weight: var(--weight-semibold);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--overlay-40);
+  padding: var(--space-px) var(--space-1);
+  border-radius: var(--radius-xs);
+  line-height: var(--leading-none);
+  opacity: 0.7;
+}
+
+.toolbar__tool-btn:hover .toolbar__tool-hotkey {
+  opacity: 1;
+}
+
+.toolbar__divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-primary);
+  margin: 0 var(--space-1);
+}
+
+.toolbar__clear-reference-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+}
+
+/* Equal specificity with `.toolbar__tool-btn:hover` but later in the sheet, so
+   the resting background survives hover without forcing priority. */
+.toolbar__clear-reference-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
+
+.toolbar__studio-mode-toggle {
+  display: flex;
+  gap: var(--space-0-5);
+  padding: var(--space-0-5);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+}
+
+.toolbar__studio-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-1) var(--space-2-5);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--text-secondary);
+  position: relative;
+}
+
+.toolbar__studio-mode-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* modifiers */
+
+/* base.base--modifier compounds: the flattened modifier alone is (0,1,0) and
+   would lose its skin to the (0,2,0) :hover rules above (task 18/20 precedent). */
+.toolbar__tool-btn.toolbar__tool-btn--active {
+  background: var(--accent-primary);
+  box-shadow: var(--glow-accent-8-40);
+}
+
+.toolbar__tool-btn--active .toolbar__tool-hotkey {
+  color: var(--white-80);
+  background: var(--overlay-30);
+}
+
+.toolbar__tool-btn.toolbar__tool-btn--light-grid {
+  background: var(--tool-lightgrid);
+  box-shadow: var(--glow-lightgrid);
+}
+
+.toolbar__tool-btn--light-grid .toolbar__tool-icon {
+  filter: brightness(0);
+}
+
+.toolbar__tool-btn.toolbar__tool-btn--has-reference {
+  background: var(--accent-primary-20);
+  border: 1px solid var(--accent-primary);
+}
+
+.toolbar__group--reference {
+  background: transparent;
+  padding: 0;
+  gap: var(--space-1);
+}
+
+.toolbar__section--studio-mode {
+  flex-shrink: 0;
+}
+
+.toolbar__studio-mode-btn.toolbar__studio-mode-btn--active {
+  background: var(--accent-primary);
+  color: var(--white);
+  box-shadow: var(--glow-accent-8-30);
+}
+
 /* Lighting mode indicator */
-.studio-mode-btn[aria-label="Lighting Studio"].active {
+.toolbar__studio-mode-btn--active[aria-label="Lighting Studio"] {
   background: linear-gradient(135deg, var(--status-warn) 0%, var(--status-warn-deep) 100%);
   box-shadow: var(--glow-warn-12);
 }
@@ -208,20 +204,16 @@
     gap: var(--space-2);
   }
 
-  .tool-btn {
+  .toolbar__tool-btn {
     width: 26px;
     height: 26px;
   }
 
-  .tool-icon {
+  .toolbar__tool-icon {
     font-size: 13px;
   }
 
-  .tool-hotkey {
+  .toolbar__tool-hotkey {
     display: none;
-  }
-
-  .brush-size-control input[type="range"] {
-    width: 60px;
   }
 }

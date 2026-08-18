@@ -37,7 +37,7 @@ export function Toolbar({
     <div className="toolbar">
       {tooltip?.visible && (
         <div
-          className="toolbar-fixed-tooltip"
+          className="toolbar__fixed-tooltip"
           style={{ left: tooltip.x, top: tooltip.y }}
         >
           {tooltip.text}
@@ -45,10 +45,10 @@ export function Toolbar({
       )}
 
       {/* Focus Mode Toggle */}
-      <div className="toolbar-section focus-mode-section">
-        <div className="toolbar-group">
+      <div className="toolbar__section toolbar__section--focus-mode">
+        <div className="toolbar__group">
           <button
-            className={`tool-btn ${isFocusMode ? "active" : ""}`}
+            className={`toolbar__tool-btn ${isFocusMode ? "toolbar__tool-btn--active" : ""}`}
             onClick={toggleFocusMode}
             aria-label="Focus Mode"
             onMouseEnter={(e) => {
@@ -62,11 +62,11 @@ export function Toolbar({
             }}
             onMouseLeave={() => setTooltip(null)}
           >
-            <span className="tool-icon"><Icon icon={Maximize2} /></span>
-            <span className="tool-hotkey">`</span>
+            <span className="toolbar__tool-icon"><Icon icon={Maximize2} /></span>
+            <span className="toolbar__tool-hotkey">`</span>
           </button>
           <button
-            className={`tool-btn ${isLightGrid ? "active light-grid-active" : ""}`}
+            className={`toolbar__tool-btn ${isLightGrid ? "toolbar__tool-btn--active toolbar__tool-btn--light-grid" : ""}`}
             onClick={toggleLightGridMode}
             aria-label="Light Grid Background"
             onMouseEnter={(e) => {
@@ -82,11 +82,11 @@ export function Toolbar({
             }}
             onMouseLeave={() => setTooltip(null)}
           >
-            <span className="tool-icon"><Icon icon={isLightGrid ? Sun : Moon} /></span>
+            <span className="toolbar__tool-icon"><Icon icon={isLightGrid ? Sun : Moon} /></span>
           </button>
           {!isLightingMode && (
             <button
-              className={`tool-btn ${isFrameReferenceVisible ? "active" : ""}`}
+              className={`toolbar__tool-btn ${isFrameReferenceVisible ? "toolbar__tool-btn--active" : ""}`}
               onClick={toggleFrameReferencePanelVisible}
               aria-label="Frame Reference"
               onMouseEnter={(e) => {
@@ -102,19 +102,19 @@ export function Toolbar({
               }}
               onMouseLeave={() => setTooltip(null)}
             >
-              <span className="tool-icon"><Icon icon={Film} /></span>
+              <span className="toolbar__tool-icon"><Icon icon={Film} /></span>
             </button>
           )}
         </div>
       </div>
 
-      <div className="toolbar-divider" />
+      <div className="toolbar__divider" />
 
       {/* Studio Mode Toggle */}
-      <div className="toolbar-section studio-mode-section">
-        <div className="studio-mode-toggle">
+      <div className="toolbar__section toolbar__section--studio-mode">
+        <div className="toolbar__studio-mode-toggle">
           <button
-            className={`studio-mode-btn ${!isLightingMode ? "active" : ""}`}
+            className={`toolbar__studio-mode-btn ${!isLightingMode ? "toolbar__studio-mode-btn--active" : ""}`}
             onClick={() => setStudioMode("pixel")}
             aria-label="Pixel Studio"
             onMouseEnter={(e) => {
@@ -128,10 +128,10 @@ export function Toolbar({
             }}
             onMouseLeave={() => setTooltip(null)}
           >
-            <span className="tool-icon"><Icon icon={Palette} /></span>
+            <span className="toolbar__tool-icon"><Icon icon={Palette} /></span>
           </button>
           <button
-            className={`studio-mode-btn ${isLightingMode ? "active" : ""}`}
+            className={`toolbar__studio-mode-btn ${isLightingMode ? "toolbar__studio-mode-btn--active" : ""}`}
             onClick={() => setStudioMode("lighting")}
             aria-label="Lighting Studio"
             onMouseEnter={(e) => {
@@ -145,12 +145,12 @@ export function Toolbar({
             }}
             onMouseLeave={() => setTooltip(null)}
           >
-            <span className="tool-icon"><Icon icon={Lightbulb} /></span>
+            <span className="toolbar__tool-icon"><Icon icon={Lightbulb} /></span>
           </button>
         </div>
       </div>
 
-      <div className="toolbar-divider" />
+      <div className="toolbar__divider" />
 
       {/* Conditional Tools based on Studio Mode */}
       {isLightingMode ? (

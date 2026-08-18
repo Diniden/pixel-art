@@ -1,4 +1,17 @@
-.variant-modal-backdrop {
+/* block: variant-select-modal (task 21, G6+G7).
+   `.variant-thumb`, `.resize-actions`, `.resize-anchor-section` and
+   `.selected-badge` were BARE here. ObjectLibrary's bare copies (converted in
+   task 20) used to shrink this modal's resize buttons and override its anchor
+   spacing; this sheet's `.variant-thumb` in turn shrank ExportPreviewModal's
+   thumbnails from their authored 64px down to 44px. All block-scoped now.
+   Q4 DECISION — this component's `--selected` badge keeps its OWN authored
+   colour: VIOLET (`--accent-variant`), matching the variant accent used by its
+   h3, card borders and glow. It previously rendered GREEN because
+   ObjectSelectModal's bare `.selected-badge` won on emission order.
+   The `.add-variant-section` / `.resize-anchor-section` qualifiers existed only
+   to escape those bare collisions and flatten to one compound each (R5). */
+
+.variant-select-modal__backdrop {
   position: fixed;
   top: 0;
   left: 0;
@@ -11,7 +24,7 @@
   z-index: var(--z-modal);
 }
 
-.variant-modal {
+.variant-select-modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
@@ -23,7 +36,7 @@
   box-shadow: var(--shadow-modal);
 }
 
-.variant-modal-header {
+.variant-select-modal__header {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -31,55 +44,38 @@
   border-bottom: 1px solid var(--border-primary);
 }
 
-.variant-modal-header h3 {
+.variant-select-modal__header h3 {
   margin: 0;
   color: var(--accent-variant);
   font-size: 1.1rem;
   font-weight: var(--weight-semibold);
 }
 
-.variant-group-name {
+.variant-select-modal__group-name {
   color: var(--text-muted);
   font-size: 0.9rem;
 }
 
-.variant-modal-header .close-btn {
+/* The close button is blocks/modal.css's `modal__close` now; only the
+   push-to-the-right placement is local to this header. */
+.variant-select-modal__header .modal__close {
   margin-left: auto;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-size: var(--text-xl);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-fast);
 }
 
-.variant-modal-header .close-btn:hover {
-  border-color: var(--accent-danger);
-  color: var(--accent-danger);
-  background: var(--accent-danger-10);
-}
-
-.variant-modal-content {
+.variant-select-modal__content {
   flex: 1;
   overflow-y: auto;
   padding: var(--space-5);
 }
 
-.variants-grid {
+.variant-select-modal__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-5);
 }
 
-.variant-card {
+.variant-select-modal__card {
   position: relative;
   background: var(--bg-tertiary);
   border: 2px solid var(--border-primary);
@@ -93,18 +89,12 @@
   gap: var(--space-2);
 }
 
-.variant-card:hover {
+.variant-select-modal__card:hover {
   border-color: var(--accent-variant-50);
   background: var(--bg-hover);
 }
 
-.variant-card.selected {
-  border-color: var(--accent-variant);
-  background: var(--accent-variant-15);
-  box-shadow: var(--glow-variant-15);
-}
-
-.variant-thumb {
+.variant-select-modal__thumb {
   width: 64px;
   height: 64px;
   border-radius: var(--radius-sm);
@@ -112,11 +102,11 @@
   border: 1px solid var(--border-primary);
 }
 
-.variant-thumb-canvas {
+.variant-select-modal__thumb-canvas {
   display: block;
 }
 
-.variant-info {
+.variant-select-modal__info {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -124,7 +114,7 @@
   width: 100%;
 }
 
-.variant-name {
+.variant-select-modal__name {
   font-size: 0.85rem;
   color: var(--text-primary);
   text-align: center;
@@ -134,30 +124,30 @@
   max-width: 100%;
 }
 
-.variant-name-input {
+.variant-select-modal__name-input {
   width: 100%;
   padding: var(--space-1) var(--space-2);
   font-size: 0.85rem;
   text-align: center;
 }
 
-.variant-size {
+.variant-select-modal__size {
   font-size: 0.7rem;
   color: var(--text-muted);
 }
 
-.variant-actions {
+.variant-select-modal__actions {
   display: flex;
   gap: var(--space-1);
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
 
-.variant-card:hover .variant-actions {
+.variant-select-modal__card:hover .variant-select-modal__actions {
   opacity: 1;
 }
 
-.variant-action-btn {
+.variant-select-modal__action-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -173,22 +163,17 @@
   transition: all var(--transition-fast);
 }
 
-.variant-action-btn:hover:not(:disabled) {
+.variant-select-modal__action-btn:hover:not(:disabled) {
   border-color: var(--accent-primary);
   color: var(--text-primary);
 }
 
-.variant-action-btn.delete:hover:not(:disabled) {
-  border-color: var(--accent-danger);
-  color: var(--accent-danger);
-}
-
-.variant-action-btn:disabled {
+.variant-select-modal__action-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
 
-.selected-badge {
+.variant-select-modal__badge--selected {
   position: absolute;
   top: 6px;
   right: 6px;
@@ -204,15 +189,15 @@
   font-weight: var(--weight-bold);
 }
 
-.add-variant-section {
+.variant-select-modal__add-section {
   border-top: 1px solid var(--border-primary);
   padding-top: var(--space-4);
 }
 
-/* Scoped under .add-variant-section (task 18): the bare selector leaked this
-   full-width dashed CTA onto LayerPanel's `.header-btn.add-variant-btn`, whose
+/* Scoped under .variant-select-modal__add-section (task 18): the bare selector leaked this
+   full-width dashed CTA onto LayerPanel's `.header-btn.variant-select-modal__add-btn`, whose
    compound rule only partially fought it off. */
-.add-variant-section .add-variant-btn {
+.variant-select-modal__add-btn {
   width: 100%;
   padding: var(--space-3);
   background: linear-gradient(135deg, var(--accent-variant-20) 0%, var(--accent-primary-10) 100%);
@@ -224,17 +209,17 @@
   transition: all var(--transition-fast);
 }
 
-.add-variant-section .add-variant-btn:hover {
+.variant-select-modal__add-btn:hover {
   border-color: var(--accent-variant);
   background: linear-gradient(135deg, var(--accent-variant-30) 0%, var(--accent-primary-15) 100%);
 }
 
-.add-options {
+.variant-select-modal__add-options {
   display: flex;
   gap: var(--space-3);
 }
 
-.add-options button {
+.variant-select-modal__add-options button {
   flex: 1;
   padding: var(--space-2-5);
   border-radius: var(--radius-sm);
@@ -242,29 +227,29 @@
   transition: all var(--transition-fast);
 }
 
-.add-options button:first-child {
+.variant-select-modal__add-options button:first-child {
   background: var(--accent-variant-20);
   border: 1px solid var(--accent-variant-40);
   color: var(--accent-variant-light);
 }
 
-.add-options button:first-child:hover {
+.variant-select-modal__add-options button:first-child:hover {
   background: var(--accent-variant-30);
   border-color: var(--accent-variant);
 }
 
-.add-options button:last-child {
+.variant-select-modal__add-options button:last-child {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
   color: var(--text-muted);
 }
 
-.add-options button:last-child:hover {
+.variant-select-modal__add-options button:last-child:hover {
   border-color: var(--text-muted);
 }
 
 /* Resize dialog */
-.resize-dialog-backdrop {
+.variant-select-modal__resize-backdrop {
   position: fixed;
   top: 0;
   left: 0;
@@ -277,7 +262,7 @@
   z-index: var(--z-modal-nested);
 }
 
-.resize-dialog {
+.variant-select-modal__resize-dialog {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
@@ -285,19 +270,19 @@
   min-width: 250px;
 }
 
-.resize-dialog h4 {
+.variant-select-modal__resize-dialog h4 {
   margin: 0 0 var(--space-4) 0;
   color: var(--text-primary);
 }
 
-.resize-inputs {
+.variant-select-modal__resize-inputs {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
 
-.resize-inputs label {
+.variant-select-modal__resize-inputs label {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -305,54 +290,68 @@
   font-size: 0.9rem;
 }
 
-.resize-inputs input {
+.variant-select-modal__resize-inputs input {
   flex: 1;
   padding: var(--space-2) var(--space-3);
   max-width: 100px;
 }
 
-.resize-actions {
+.variant-select-modal__resize-actions {
   display: flex;
   gap: var(--space-3);
   justify-content: flex-end;
 }
 
-.resize-actions button {
+.variant-select-modal__resize-actions button {
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
-.resize-actions button:first-child {
+.variant-select-modal__resize-actions button:first-child {
   background: var(--accent-primary);
   border: 1px solid var(--accent-primary);
   color: var(--bg-primary);
 }
 
-.resize-actions button:first-child:hover {
+.variant-select-modal__resize-actions button:first-child:hover {
   filter: brightness(1.1);
 }
 
-.resize-actions button:last-child {
+.variant-select-modal__resize-actions button:last-child {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
   color: var(--text-muted);
 }
 
-.resize-actions button:last-child:hover {
+.variant-select-modal__resize-actions button:last-child:hover {
   border-color: var(--text-muted);
 }
 
 /* Resize anchor section */
-.resize-anchor-section {
+.variant-select-modal__resize-anchor {
   margin-bottom: var(--space-4);
 }
 
-.resize-anchor-section .anchor-label {
+.variant-select-modal__anchor-label {
   display: block;
   color: var(--text-secondary);
   font-size: 0.9rem;
   margin-bottom: var(--space-2);
 }
 
+/* modifiers */
+
+/* base.base--modifier compound: preserves the old `.variant-card.selected`
+   (0,2,0) win over the base `:hover` rule. */
+.variant-select-modal__card.variant-select-modal__card--selected {
+  border-color: var(--accent-variant);
+  background: var(--accent-variant-15);
+  box-shadow: var(--glow-variant-15);
+}
+
+.variant-select-modal__action-btn--danger:hover:not(:disabled) {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}

@@ -92,19 +92,19 @@ export const AnchorGrid = memo(function AnchorGrid({
   const anchorCol = anchor.includes('left') ? 0 : anchor.includes('center') ? 1 : 2;
 
   return (
-    <div className="anchor-grid-container">
-      <div className="anchor-grid">
+    <div className="anchor-grid">
+      <div className="anchor-grid__grid">
         {POSITIONS.map((pos) => {
           const isAnchor = pos === anchor;
 
           return (
             <button
               key={pos}
-              className={`anchor-cell ${isAnchor ? 'active' : ''}`}
+              className={`anchor-grid__cell ${isAnchor ? 'anchor-grid__cell--active' : ''}`}
               onClick={() => onChange(pos)}
               title={pos.replace('-', ' ')}
             >
-              {isAnchor && <span className="anchor-dot" />}
+              {isAnchor && <span className="anchor-grid__dot" />}
             </button>
           );
         })}
@@ -113,7 +113,7 @@ export const AnchorGrid = memo(function AnchorGrid({
         {arrows.map(({ direction, expanding }, idx) => (
           <div
             key={`${direction}-${idx}`}
-            className={`anchor-arrow arrow-${direction} ${expanding ? 'expanding' : 'shrinking'}`}
+            className={`anchor-grid__arrow anchor-grid__arrow--${direction} ${expanding ? 'anchor-grid__arrow--expanding' : 'anchor-grid__arrow--shrinking'}`}
             style={{
               // Position arrow relative to anchor cell
               '--anchor-row': anchorRow,
@@ -138,13 +138,13 @@ export const AnchorGrid = memo(function AnchorGrid({
         ))}
       </div>
 
-      <div className="anchor-info">
+      <div className="anchor-grid__info">
         {widthDiff !== 0 || heightDiff !== 0 ? (
-          <span className={`size-change ${widthDiff > 0 || heightDiff > 0 ? 'expanding' : 'shrinking'}`}>
+          <span className={`anchor-grid__size-change ${widthDiff > 0 || heightDiff > 0 ? 'anchor-grid__size-change--expanding' : 'anchor-grid__size-change--shrinking'}`}>
             {widthDiff > 0 ? '+' : ''}{widthDiff}w, {heightDiff > 0 ? '+' : ''}{heightDiff}h
           </span>
         ) : (
-          <span className="no-change">No size change</span>
+          <span className="anchor-grid__no-change">No size change</span>
         )}
       </div>
     </div>

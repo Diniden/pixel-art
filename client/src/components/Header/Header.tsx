@@ -210,30 +210,30 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
 
   const getStatusClass = () => {
     switch (saveStatus) {
-      case 'saving': return 'status-saving';
-      case 'saved': return 'status-saved';
-      case 'error': return 'status-error';
+      case 'saving': return 'header__save-status--saving';
+      case 'saved': return 'header__save-status--saved';
+      case 'error': return 'header__save-status--error';
       default: return '';
     }
   };
 
   return (
     <header className="header">
-      <div className="header-left">
-        <div className="logo">
-          <span className="logo-icon"><Icon icon={Diamond} size={16} /></span>
-          <span className="logo-text">Pixel Studio</span>
+      <div className="header__left">
+        <div className="header__logo">
+          <span className="header__logo-icon"><Icon icon={Diamond} size={16} /></span>
+          <span className="header__logo-text">Pixel Studio</span>
         </div>
       </div>
 
-      <div className="header-center">
-        <div className="project-title-container">
+      <div className="header__center">
+        <div className="header__project-group">
           {isEditing ? (
-            <div className="project-edit-wrapper">
+            <div className="header__project-edit">
               <input
                 ref={inputRef}
                 type="text"
-                className={`project-title-input ${error ? 'has-error' : ''}`}
+                className={`header__project-input ${error ? 'header__project-input--error' : ''}`}
                 value={editValue}
                 onChange={(e) => {
                   setEditValue(e.target.value);
@@ -243,47 +243,47 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
                 onKeyDown={handleKeyDown}
                 placeholder="Project name..."
               />
-              {error && <span className="edit-error">{error}</span>}
+              {error && <span className="header__edit-error">{error}</span>}
             </div>
           ) : (
-            <button className="project-title-btn" onClick={handleStartEdit} title="Click to rename project">
-              <span className="project-name">{projectName}</span>
-              <span className="edit-hint"><Icon icon={PenLine} size={12} /></span>
+            <button className="header__project-btn" onClick={handleStartEdit} title="Click to rename project">
+              <span className="header__project-name">{projectName}</span>
+              <span className="header__edit-hint"><Icon icon={PenLine} size={12} /></span>
             </button>
           )}
         </div>
 
         {saveStatus !== 'idle' && (
-          <div className={`save-status ${getStatusClass()}`}>
-            <span className="status-dot"></span>
+          <div className={`header__save-status ${getStatusClass()}`}>
+            <span className="header__status-dot"></span>
             {getStatusText()}
           </div>
         )}
       </div>
 
-      <div className="header-right">
-        <div className="ai-config-wrapper" ref={aiConfigRef}>
+      <div className="header__right">
+        <div className="header__ai-config" ref={aiConfigRef}>
           <button
-            className={`ai-config-btn ${aiHealthStatus === 'error' ? 'ai-error' : aiHealthStatus === 'ok' ? 'configured' : ''}`}
+            className={`header__ai-btn ${aiHealthStatus === 'error' ? 'header__ai-btn--error' : aiHealthStatus === 'ok' ? 'header__ai-btn--configured' : ''}`}
             onClick={() => {
               setAiUrlInput(aiServiceUrl || serverDefaultUrl || '');
               setShowAiConfig(!showAiConfig);
             }}
             title={aiHealthStatus === 'error' ? `AI Error: ${aiHealthDetail}` : 'AI Service Settings'}
           >
-            <span className="ai-icon"><Icon icon={Wand2} size={14} /></span>
+            <span className="header__ai-icon"><Icon icon={Wand2} size={14} /></span>
             AI
           </button>
           {showAiConfig && (
-            <div className="ai-config-popover">
+            <div className="header__ai-popover">
               {aiHealthStatus === 'error' && aiHealthDetail && (
-                <div className="ai-config-error">{aiHealthDetail}</div>
+                <div className="header__ai-alert">{aiHealthDetail}</div>
               )}
-              <label className="ai-config-label">AI Service URL</label>
-              <div className="ai-config-row">
+              <label className="header__ai-label">AI Service URL</label>
+              <div className="header__ai-row">
                 <input
                   type="text"
-                  className="ai-config-input"
+                  className="header__ai-input"
                   value={aiUrlInput}
                   onChange={(e) => setAiUrlInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -299,7 +299,7 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
                   autoFocus
                 />
                 <button
-                  className="ai-config-save-btn"
+                  className="header__ai-save-btn"
                   onClick={() => {
                     setAiServiceUrl(aiUrlInput.trim());
                     setShowAiConfig(false);
@@ -309,7 +309,7 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
                   Save
                 </button>
               </div>
-              <span className="ai-config-hint">
+              <span className="header__ai-hint">
                 {aiHealthStatus === 'ok' ? `Connected to ${aiServiceUrl || serverDefaultUrl}` :
                  aiHealthStatus === 'error' ? 'Service has errors' :
                  aiServiceUrl ||
@@ -320,25 +320,25 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
             </div>
           )}
         </div>
-        <button className="browse-backups-btn" onClick={() => setShowBackupsModal(true)} title="Browse Backups">
-          <span className="backups-icon"><Icon icon={History} size={14} /></span>
+        <button className="header__backups-btn" onClick={() => setShowBackupsModal(true)} title="Browse Backups">
+          <span className="header__backups-icon"><Icon icon={History} size={14} /></span>
           Backups
         </button>
-        <button className="switch-project-btn" onClick={() => setShowProjectModal(true)} title="Switch Projects">
-          <span className="folder-icon"><Icon icon={FolderOpen} size={14} /></span>
+        <button className="header__switch-btn" onClick={() => setShowProjectModal(true)} title="Switch Projects">
+          <span className="header__folder-icon"><Icon icon={FolderOpen} size={14} /></span>
           Projects
         </button>
         <button
-          className="export-btn"
+          className="header__export-btn"
           onClick={handleExport}
           disabled={exportStatus === 'exporting'}
           title={exportMessage ?? 'Export project to server folder'}
         >
-          <span className="export-icon"><Icon icon={ExternalLink} size={14} /></span>
+          <span className="header__export-icon"><Icon icon={ExternalLink} size={14} /></span>
           {exportStatus === 'exporting' ? 'Exporting...' : 'Export'}
         </button>
         {exportStatus !== 'idle' && exportMessage && (
-          <span className={`export-status export-status-${exportStatus}`}>{exportMessage}</span>
+          <span className={`header__export-status header__export-status--${exportStatus}`}>{exportMessage}</span>
         )}
       </div>
 

@@ -68,7 +68,7 @@ export const FrameThumbnail = memo(function FrameThumbnail({
     });
   }, [frame, width, height, variants, project, frameIndex, isSelected]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="frame-thumb-canvas" />;
+  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="frame-timeline__thumb-canvas" />;
 }, (prevProps, nextProps) => {
   // Custom comparison: only re-render if frame content actually changed
   if (prevProps.width !== nextProps.width || prevProps.height !== nextProps.height) {
@@ -227,7 +227,7 @@ const FrameItem = memo(function FrameItem({
   return (
     <div
       ref={setRef}
-      className={`frame-item ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`frames-view__item ${isSelected ? 'frames-view__item--selected' : ''} ${isDragging ? 'frames-view__item--dragging' : ''}`}
       onClick={() => onSelect(frame.id)}
       draggable={onDragStart != null}
       onDragStart={onDragStart ? (e) => onDragStart(e, frame.id) : undefined}
@@ -243,7 +243,7 @@ const FrameItem = memo(function FrameItem({
       onDragLeave={onDragLeave}
       onDragEnd={onDragEnd}
     >
-      <div className="frame-thumbnail">
+      <div className="frames-view__thumbnail">
         <FrameThumbnail
           frame={frame}
           width={gridWidth}
@@ -255,11 +255,11 @@ const FrameItem = memo(function FrameItem({
         />
       </div>
 
-      <div className="frame-info">
+      <div className="frames-view__info">
         {editingId === frame.id ? (
           <input
             type="text"
-            className="frame-name-input"
+            className="frames-view__name-input"
             value={editingName}
             onChange={(e) => onEditingNameChange(e.target.value)}
             onBlur={() => onFinishRename(frame.id)}
@@ -269,7 +269,7 @@ const FrameItem = memo(function FrameItem({
           />
         ) : (
           <span
-            className="frame-name"
+            className="frames-view__name"
             onDoubleClick={(e) => {
               e.stopPropagation();
               onStartRename(frame.id, frame.name);
@@ -278,11 +278,11 @@ const FrameItem = memo(function FrameItem({
             {frame.name}
           </span>
         )}
-        <span className="frame-index">
+        <span className="frames-view__index">
           #{index + 1}
           {frame.tags?.length ? (
             <span
-              className="frame-tag-dot"
+              className="frame-timeline__tag-dot"
               style={{ backgroundColor: tagColorForTag(frame.tags[0]) }}
               title={frame.tags.join(', ')}
             />
@@ -290,19 +290,19 @@ const FrameItem = memo(function FrameItem({
         </span>
       </div>
 
-      <div className="frame-actions">
+      <div className="frames-view__actions">
         <button
-          className="frame-action-btn frame-tags-btn"
+          className="frames-view__action-btn frames-view__action-btn--tags"
           onClick={(e) => {
             e.stopPropagation();
             onOpenTags({ type: 'object', frameId: frame.id, frameName: frame.name });
           }}
           title="Frame tags"
         >
-          <span className="frame-tags-icon"><Icon icon={Tag} size={10} /></span>
+          <span className="frame-timeline__tags-icon"><Icon icon={Tag} size={10} /></span>
         </button>
         <button
-          className="frame-action-btn"
+          className="frames-view__action-btn"
           onClick={(e) => {
             e.stopPropagation();
             onDuplicate(frame.id);
@@ -312,7 +312,7 @@ const FrameItem = memo(function FrameItem({
           <Icon icon={Copy} size={10} />
         </button>
         <button
-          className="frame-action-btn delete"
+          className="frames-view__action-btn frames-view__action-btn--danger"
           onClick={(e) => {
             e.stopPropagation();
             onDelete(frame.id);
@@ -517,11 +517,11 @@ export function FramesView({
   // Normal frames timeline
   return (
     <>
-      <div className="timeline-header-row">
+      <div className="frame-timeline__header-row">
         {viewModeDropdown}
-        <div className="frame-move-controls">
+        <div className="frame-timeline__move-controls">
           <button
-            className="frame-move-btn"
+            className="frame-timeline__move-btn"
             onClick={handleMoveLeft}
             disabled={!canMoveLeft}
             title="Move Frame Left"
@@ -529,7 +529,7 @@ export function FramesView({
             <Icon icon={ChevronLeft} size={12} />
           </button>
           <button
-            className="frame-move-btn"
+            className="frame-timeline__move-btn"
             onClick={handleMoveRight}
             disabled={!canMoveRight}
             title="Move Frame Right"
@@ -537,36 +537,36 @@ export function FramesView({
             <Icon icon={ChevronRight} size={12} />
           </button>
         </div>
-        <div className="timeline-controls">
+        <div className="frame-timeline__controls">
           <button
-            className={`play-btn ${isPlaying ? 'playing' : ''}`}
+            className={`frame-timeline__play-btn ${isPlaying ? 'frame-timeline__play-btn--playing' : ''}`}
             onClick={togglePlayback}
             title={isPlaying ? 'Stop (Enter)' : 'Play (Enter)'}
           >
             {isPlaying ? <Icon icon={SquareIcon} size={14} /> : <Icon icon={Play} size={14} />}
           </button>
           <button
-            className="preview-btn"
+            className="frame-timeline__preview-btn"
             onClick={() => setShowPreview(true)}
             title="Optimized Preview"
           >
             <Icon icon={Zap} size={14} />
           </button>
           <button
-            className="canvas-size-btn"
+            className="frame-timeline__size-btn"
             onClick={() => setShowResizeModal(true)}
             title="Edit Canvas Size"
           >
             <Icon icon={Maximize} size={14} />
           </button>
           <button
-            className="ai-interpolate-btn"
+            className="frame-timeline__ai-btn"
             onClick={() => setShowAIModal(true)}
             title="AI Frame Interpolation"
           >
             <Icon icon={Wand2} size={14} />
           </button>
-          <label className="copy-previous-label" title="Copy pixels from current frame">
+          <label className="frame-timeline__copy-previous" title="Copy pixels from current frame">
             <input
               type="checkbox"
               checked={copyPrevious}
@@ -576,33 +576,33 @@ export function FramesView({
           </label>
           <input
             type="text"
-            className="new-frame-input"
+            className="frame-timeline__new-frame-input"
             placeholder="New frame..."
             value={newFrameName}
             onChange={(e) => setNewFrameName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddFrame()}
           />
-          <button className="add-frame-btn" onClick={handleAddFrame}>
+          <button className="frame-timeline__add-frame-btn" onClick={handleAddFrame}>
             + Add
           </button>
         </div>
       </div>
 
       <div
-        className="frames-scroll"
+        className="frames-view__scroll"
         onDragOver={handleListContainerDragOver}
         onDrop={handleFrameDrop}
       >
         <div
           ref={listRef}
-          className="frames-list frames-list-droppable"
+          className="frames-view__list frames-view__list--droppable"
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleFrameDrop}
           onDragLeave={handleFrameDragLeave}
         >
           {indicatorLeft != null && (
             <div
-              className="frame-drop-indicator"
+              className="frame-timeline__drop-indicator"
               style={{ left: indicatorLeft }}
               aria-hidden
             />

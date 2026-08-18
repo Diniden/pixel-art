@@ -13,17 +13,16 @@
  * task (ProjectSelectModal's, which won on emission order). ReferenceImageModal
  * had authored `--overlay-80` without blur and was already losing.
  *
- * `.close-btn` stays declared here as a LEGACY ALIAS of `.modal__close`: the
- * not-yet-converted modals (EdgeInterpolate, HeightMap, ObjectSelect, CopyFrom,
- * VariantSelect, …) still render `className="close-btn"` and override it with
- * their own qualified rules. AddVariantModal moved onto `modal__close` in
- * task 20; tasks 21-22 retire the alias.
+ * The `.close-btn` LEGACY ALIAS is GONE (retired by the coordinator at the W14
+ * merge): tasks 20-22 migrated all 13 render sites onto `modal__close`, leaving
+ * the alias with no consumers. Neither W14 agent owned this file, so each
+ * flagged it rather than editing outside its Touches.
  *
  * Vocabulary (task 19 builds Modal.tsx against these exact names):
  *   modal__overlay
  *   modal                      the dialog box (component class adds width/animation)
  *   modal__header              (+ its h2)
- *   modal__close               (legacy alias: .close-btn)
+ *   modal__close
  *   modal__body                scrolling content area
  *   modal__body--fill          non-scrolling flex column (canvas-hosting modals)
  *   modal__footer              (+ modal__footer--end for right-aligned actions)
@@ -73,8 +72,7 @@
   color: var(--text-primary);
 }
 
-.modal__close,
-.close-btn {
+.modal__close {
   width: 32px;
   height: 32px;
   padding: 0;
@@ -90,8 +88,7 @@
   transition: all var(--transition-fast);
 }
 
-.modal__close:hover,
-.close-btn:hover {
+.modal__close:hover {
   background: var(--bg-hover);
   color: var(--accent-danger);
 }

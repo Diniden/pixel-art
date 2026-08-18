@@ -1,4 +1,6 @@
-.anchor-grid-container {
+/* anchor-grid — BEM block (task 22). */
+
+.anchor-grid {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -6,7 +8,9 @@
   margin: var(--space-3) 0;
 }
 
-.anchor-grid {
+/* elements, DOM order */
+
+.anchor-grid__grid {
   display: grid;
   grid-template-columns: repeat(3, 24px);
   grid-template-rows: repeat(3, 24px);
@@ -18,7 +22,7 @@
   border: 1px solid var(--border-primary);
 }
 
-.anchor-cell {
+.anchor-grid__cell {
   width: 24px;
   height: 24px;
   background: var(--bg-secondary);
@@ -32,18 +36,12 @@
   padding: 0;
 }
 
-.anchor-cell:hover {
+.anchor-grid__cell:hover {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
 }
 
-.anchor-cell.active {
-  background: var(--accent-primary-20);
-  border-color: var(--accent-primary);
-  box-shadow: var(--glow-accent-8-40);
-}
-
-.anchor-dot {
+.anchor-grid__dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -52,55 +50,87 @@
 }
 
 /* Arrow positioning */
-.anchor-arrow {
+.anchor-grid__arrow {
   position: absolute;
   pointer-events: none;
   z-index: var(--z-canvas-overlay);
   transition: all var(--transition-fast);
 }
 
-.anchor-arrow svg {
+.anchor-grid__arrow svg {
   display: block;
 }
 
+/* Info text */
+.anchor-grid__info {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+.anchor-grid__size-change {
+  font-weight: var(--weight-medium);
+}
+
+.anchor-grid__no-change {
+  color: var(--text-muted);
+}
+
+/* modifiers */
+
+.anchor-grid__cell--active {
+  background: var(--accent-primary-20);
+  border-color: var(--accent-primary);
+  box-shadow: var(--glow-accent-8-40);
+}
+
 /* Position arrows based on anchor location and direction */
-/* dynamic: arrow-{up|down|left|right} built at AnchorGrid.tsx:116
-   (`anchor-arrow arrow-${direction} ...`) — the full class name never appears
-   as a literal, so a class audit cannot see it. Do not delete as dead. */
-.anchor-arrow.arrow-up {
+/* dynamic: anchor-grid__arrow--{up|down|left|right} built at AnchorGrid.tsx:116 —
+   the full class name never appears as a literal, so a class audit cannot see
+   it. Do not delete as dead. */
+.anchor-grid__arrow--up {
   top: calc(-4px - 16px);
   left: calc(4px + var(--anchor-col) * (24px + 2px) + 4px);
 }
 
-.anchor-arrow.arrow-down {
+.anchor-grid__arrow--down {
   bottom: calc(-4px - 16px);
   left: calc(4px + var(--anchor-col) * (24px + 2px) + 4px);
 }
 
-.anchor-arrow.arrow-left {
+.anchor-grid__arrow--left {
   left: calc(-4px - 16px);
   top: calc(4px + var(--anchor-row) * (24px + 2px) + 4px);
 }
 
-.anchor-arrow.arrow-right {
+.anchor-grid__arrow--right {
   right: calc(-4px - 16px);
   top: calc(4px + var(--anchor-row) * (24px + 2px) + 4px);
 }
 
 /* Arrow colors based on expanding/shrinking */
-/* dynamic: expanding|shrinking built at AnchorGrid.tsx:116
-   (`... ${expanding ? 'expanding' : 'shrinking'}`). Do not delete as dead. */
-.anchor-arrow.expanding {
+/* dynamic: anchor-grid__arrow--{expanding|shrinking} built at AnchorGrid.tsx:116.
+   Do not delete as dead. */
+.anchor-grid__arrow--expanding {
   color: var(--status-ok); /* Green for expansion */
-  animation: pulse-expand 1.2s ease-in-out infinite;
+  animation: anchor-grid-pulse-expand 1.2s ease-in-out infinite;
 }
 
-.anchor-arrow.shrinking {
+.anchor-grid__arrow--shrinking {
   color: var(--status-warn); /* Orange for shrinking */
-  animation: pulse-shrink 1.2s ease-in-out infinite;
+  animation: anchor-grid-pulse-shrink 1.2s ease-in-out infinite;
 }
 
-@keyframes pulse-expand {
+/* dynamic: anchor-grid__size-change--{expanding|shrinking} built at AnchorGrid.tsx:143.
+   Do not delete as dead. */
+.anchor-grid__size-change--expanding {
+  color: var(--status-ok);
+}
+
+.anchor-grid__size-change--shrinking {
+  color: var(--status-warn);
+}
+
+@keyframes anchor-grid-pulse-expand {
   0%, 100% {
     opacity: 0.6;
     transform: scale(1);
@@ -111,7 +141,7 @@
   }
 }
 
-@keyframes pulse-shrink {
+@keyframes anchor-grid-pulse-shrink {
   0%, 100% {
     opacity: 0.6;
     transform: scale(1);
@@ -121,26 +151,3 @@
     transform: scale(0.85);
   }
 }
-
-/* Info text */
-.anchor-info {
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-}
-
-.anchor-info .size-change {
-  font-weight: var(--weight-medium);
-}
-
-.anchor-info .size-change.expanding {
-  color: var(--status-ok);
-}
-
-.anchor-info .size-change.shrinking {
-  color: var(--status-warn);
-}
-
-.anchor-info .no-change {
-  color: var(--text-muted);
-}
-

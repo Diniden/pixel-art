@@ -827,7 +827,7 @@ export function LightingCanvas() {
   ]);
 
   const handlePreviewHeaderMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest(".lighting-preview-minimize")) return;
+    if ((e.target as HTMLElement).closest(".lighting-canvas__preview-minimize")) return;
     setIsPreviewDragging(true);
     const rect = previewPanelRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -836,8 +836,8 @@ export function LightingCanvas() {
 
   if (!project || !frame || !obj) {
     return (
-      <div className="lighting-canvas-container">
-        <div className="lighting-canvas-empty">
+      <div className="lighting-canvas">
+        <div className="lighting-canvas__empty">
           Select an object and frame to edit lighting
         </div>
       </div>
@@ -845,24 +845,24 @@ export function LightingCanvas() {
   }
 
   return (
-    <div className="lighting-canvas-container" ref={rootRef}>
-      <div className="lighting-editor-outer">
+    <div className="lighting-canvas" ref={rootRef}>
+      <div className="lighting-canvas__layout">
         <div
-          className="lighting-editor-container"
+          className="lighting-canvas__viewport"
           ref={editorContainerRef}
           tabIndex={0}
         >
           <div
-            className="lighting-editor-wrapper"
+            className="lighting-canvas__surface"
             style={{
               transform: `translate(${viewPanOffset.x}px, ${viewPanOffset.y}px) scale(${viewZoom})`,
               transformOrigin: "0 0",
             }}
           >
-            <div className="lighting-editor-stack">
+            <div className="lighting-canvas__stack">
               <canvas
                 ref={editCanvasRef}
-                className="lighting-edit-canvas"
+                className="lighting-canvas__edit-canvas"
                 width={canvasWidth}
                 height={canvasHeight}
                 onMouseDown={handleMouseDown}
@@ -875,7 +875,7 @@ export function LightingCanvas() {
               />
               <canvas
                 ref={overlayCanvasRef}
-                className="lighting-edit-overlay"
+                className="lighting-canvas__overlay"
                 width={canvasWidth}
                 height={canvasHeight}
               />
@@ -884,14 +884,14 @@ export function LightingCanvas() {
         </div>
       </div>
 
-      <div className="lighting-canvas-info">
+      <div className="lighting-canvas__info">
         <span>
           {editMode === "height" ? "Height" : "Normals"} • {gridWidth} ×{" "}
           {gridHeight}
         </span>
-        <span className="separator">|</span>
+        <span className="lighting-canvas__separator">|</span>
         <span>Zoom: {zoom}x</span>
-        <span className="separator">|</span>
+        <span className="lighting-canvas__separator">|</span>
         <span>
           Two-finger scroll to pan • Pinch to zoom • Shift = erase (height)
         </span>
@@ -899,20 +899,20 @@ export function LightingCanvas() {
 
       <div
         ref={previewPanelRef}
-        className={`lighting-preview-panel ${previewMinimized ? "minimized" : ""} ${isPreviewDragging ? "dragging" : ""}`}
+        className={`lighting-canvas__preview ${previewMinimized ? "lighting-canvas__preview--minimized" : ""} ${isPreviewDragging ? "lighting-canvas__preview--dragging" : ""}`}
         style={{
           top: `${previewPosition.top}px`,
           left: `${previewPosition.left}px`,
         }}
       >
         <div
-          className="lighting-preview-header"
+          className="lighting-canvas__preview-header"
           onMouseDown={handlePreviewHeaderMouseDown}
           style={{ cursor: isPreviewDragging ? "grabbing" : "grab" }}
         >
-          <span className="lighting-preview-title"><Icon icon={Lightbulb} size={12} /> Lighting Preview</span>
+          <span className="lighting-canvas__preview-title"><Icon icon={Lightbulb} size={12} /> Lighting Preview</span>
           <button
-            className="lighting-preview-minimize"
+            className="lighting-canvas__preview-minimize"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
@@ -927,7 +927,7 @@ export function LightingCanvas() {
         </div>
 
         {!previewMinimized && (
-          <div className="lighting-preview-content">
+          <div className="lighting-canvas__preview-content">
             <canvas ref={previewCanvasRef} width={200} height={200} />
           </div>
         )}

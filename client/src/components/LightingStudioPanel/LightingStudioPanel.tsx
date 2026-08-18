@@ -15,14 +15,14 @@ export function LightingStudioPanel() {
 
   return (
     <div className="lighting-studio-panel">
-      <div className="panel lighting-panel-section">
+      <div className="panel lighting-studio-panel__section">
         <div className="panel__header">
           {editMode === "height" ? "Height Brush" : "Normal Brush"}
         </div>
         <div className="panel__body panel__body--stack">
           {editMode === "height" ? (
-            <div className="normal-brush-controls" style={{ paddingTop: 8 }}>
-              <div className="brush-size-control">
+            <div className="lighting-studio-panel__brush-controls" style={{ paddingTop: 8 }}>
+              <div className="lighting-studio-panel__size-control">
                 <label>Value</label>
                 <input
                   type="range"
@@ -33,9 +33,9 @@ export function LightingStudioPanel() {
                     setHeightBrushValue(parseInt(e.target.value))
                   }
                 />
-                <span className="brush-size-value">{heightBrushValue}</span>
+                <span className="lighting-studio-panel__size-value">{heightBrushValue}</span>
               </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              <div className="lighting-studio-panel__hint">
                 Tip: hold Shift to erase (set height to 0).
               </div>
             </div>
@@ -43,8 +43,8 @@ export function LightingStudioPanel() {
             <NormalPicker enableScrollControl={true} />
           )}
 
-          <div className="normal-brush-controls">
-            <div className="brush-size-control">
+          <div className="lighting-studio-panel__brush-controls">
+            <div className="lighting-studio-panel__size-control">
               <label>Size</label>
               <input
                 type="range"
@@ -53,21 +53,21 @@ export function LightingStudioPanel() {
                 value={brushSize}
                 onChange={(e) => setBrushSize(parseInt(e.target.value))}
               />
-              <span className="brush-size-value">{brushSize}</span>
+              <span className="lighting-studio-panel__size-value">{brushSize}</span>
             </div>
 
-            <div className="brush-shape-control">
+            <div className="lighting-studio-panel__shape-control">
               <label>Shape</label>
-              <div className="shape-buttons">
+              <div className="lighting-studio-panel__shape-buttons">
                 <button
-                  className={`shape-btn ${normalBrushShape === "circle" ? "active" : ""}`}
+                  className={`lighting-studio-panel__shape-btn ${normalBrushShape === "circle" ? "lighting-studio-panel__shape-btn--active" : ""}`}
                   onClick={() => setNormalBrushShape("circle")}
                   title="Circle"
                 >
                   ⭕
                 </button>
                 <button
-                  className={`shape-btn ${normalBrushShape === "square" ? "active" : ""}`}
+                  className={`lighting-studio-panel__shape-btn ${normalBrushShape === "square" ? "lighting-studio-panel__shape-btn--active" : ""}`}
                   onClick={() => setNormalBrushShape("square")}
                   title="Square"
                 >
@@ -79,7 +79,7 @@ export function LightingStudioPanel() {
         </div>
       </div>
 
-      <div className="panel lighting-panel-section">
+      <div className="panel lighting-studio-panel__section">
         <div className="panel__header">Light Settings</div>
         <div className="panel__body panel__body--stack">
           <LightControl />
