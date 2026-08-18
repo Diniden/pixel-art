@@ -123,7 +123,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W11** | 17, 18 | W10 | ⚠️ | `95adfa8` | `bunx vitest run src/store/__tests__/` passes **unchanged** · the five CSS block-extraction greps return 0 · **2 agents** |
 | **W12** | 19 | W11 | ⚠️ | `e512d60` | `bunx storybook build` · 18 primitives report 0 a11y violations (**advisory only**) · the boundary probe fails ESLint |
 | **W13** | 20 | W12 | ⚠️ | `c1f0711` | `node scripts/check-classes.mjs` 0/0 · every class in the 7 converted sheets matches the BEM regex |
-| **W14** | 21, 22 | W13 | ⬜ | — | `bunx stylelint` on the converted sheets · zero `!important` in `Toolbar.css` · every class matches the regex · **2 agents** |
+| **W14** | 21, 22 | W13 | ⚠️ | `c333d78` | `bunx stylelint` on the converted sheets · zero `!important` in `Toolbar.css` · every class matches the regex · **2 agents** |
 | **W15** | 23 | W14 | ⬜ | — | 100-pixel drag under 16 ms/frame · corpus snapshots unchanged |
 | **W16** | 24 | W15 | ⬜ | — | the wire-format golden test · all 43 UI fields persist across a reload |
 | **W17** | 25 | W16 | ⬜ | — | timeline matrix green · cross-project clipboard survives |
