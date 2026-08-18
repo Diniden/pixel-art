@@ -233,25 +233,25 @@ export function NormalPicker({ isLightDirection = false, enableScrollControl = f
 
   return (
     <div className="normal-picker" ref={containerRef}>
-      <div className="normal-picker-header">
+      <div className="normal-picker__header">
         {isLightDirection ? 'Light Direction' : 'Normal Direction'}
       </div>
-      <div className="normal-picker-canvas-container">
+      <div className="normal-picker__canvas-frame">
         <canvas
           ref={canvasRef}
           width={sphereSize}
           height={sphereSize}
-          className="normal-picker-canvas"
+          className="normal-picker__canvas"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
         />
       </div>
-      <div className="normal-picker-value">
+      <div className="normal-picker__value">
         {formatNormal(normal)}
       </div>
       {enableScrollControl && (
-        <div className="normal-picker-hint">
+        <div className="normal-picker__hint">
           Scroll to adjust
         </div>
       )}

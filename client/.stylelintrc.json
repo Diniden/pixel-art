@@ -38,8 +38,7 @@
     "declaration-no-important": [
       true,
       {
-        "severity": "warning",
-        "message": "23 pre-existing !important declarations compensate for collisions task 16 fixes; promote this rule to error in task 21"
+        "message": "Forced priority is banned (R7). Task 21 removed the last of them: the 7 remaining in Toolbar.css existed only to beat LightingStudioPanel.css's bare .brush-size-control / .shape-btn, and BEM block-scoping removed that collision by construction. Win with a compound selector or source order, never with force."
       }
     ],
     "color-hex-length": "short",

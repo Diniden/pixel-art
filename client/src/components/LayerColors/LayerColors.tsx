@@ -150,13 +150,13 @@ export function LayerColors() {
   if (!layer) {
     return (
       <div className="layer-colors">
-        <div className="layer-colors-left">
-          <div className="layer-colors-label">Layer Colors</div>
+        <div className="layer-colors__left">
+          <div className="layer-colors__label">Layer Colors</div>
         </div>
-        <div className="layer-colors-center">
-          <div className="layer-colors-empty">No layer selected</div>
+        <div className="layer-colors__center">
+          <div className="layer-colors__empty">No layer selected</div>
         </div>
-        <div className="layer-colors-right"></div>
+        <div className="layer-colors__right"></div>
       </div>
     );
   }
@@ -164,27 +164,27 @@ export function LayerColors() {
   if (uniqueColorsData.exceeded) {
     return (
       <div className="layer-colors">
-        <div className="layer-colors-left">
-          <div className="layer-colors-label">Layer Colors</div>
+        <div className="layer-colors__left">
+          <div className="layer-colors__label">Layer Colors</div>
           <div
-            className="layer-colors-toggle"
+            className="layer-colors__toggle"
             onClick={() => setAllFramesMode(!allFramesMode)}
           >
             <input
               type="checkbox"
               checked={allFramesMode}
               onChange={() => {}}
-              className="layer-colors-checkbox"
+              className="layer-colors__checkbox"
             />
-            <span className="layer-colors-toggle-label">All Frames</span>
+            <span className="layer-colors__toggle-label">All Frames</span>
           </div>
         </div>
-        <div className="layer-colors-center">
-          <div className="layer-colors-empty">
+        <div className="layer-colors__center">
+          <div className="layer-colors__empty">
             Too many colors to display ({uniqueColorsData.count}+)
           </div>
         </div>
-        <div className="layer-colors-right"></div>
+        <div className="layer-colors__right"></div>
       </div>
     );
   }
@@ -192,25 +192,25 @@ export function LayerColors() {
   if (uniqueColorsData.colors.length === 0) {
     return (
       <div className="layer-colors">
-        <div className="layer-colors-left">
-          <div className="layer-colors-label">Layer Colors</div>
+        <div className="layer-colors__left">
+          <div className="layer-colors__label">Layer Colors</div>
           <div
-            className="layer-colors-toggle"
+            className="layer-colors__toggle"
             onClick={() => setAllFramesMode(!allFramesMode)}
           >
             <input
               type="checkbox"
               checked={allFramesMode}
               onChange={() => {}}
-              className="layer-colors-checkbox"
+              className="layer-colors__checkbox"
             />
-            <span className="layer-colors-toggle-label">All Frames</span>
+            <span className="layer-colors__toggle-label">All Frames</span>
           </div>
         </div>
-        <div className="layer-colors-center">
-          <div className="layer-colors-empty">No colors in this layer</div>
+        <div className="layer-colors__center">
+          <div className="layer-colors__empty">No colors in this layer</div>
         </div>
-        <div className="layer-colors-right"></div>
+        <div className="layer-colors__right"></div>
       </div>
     );
   }
@@ -247,20 +247,20 @@ export function LayerColors() {
 
   return (
     <div className="layer-colors">
-      <div className="layer-colors-left">
-        <div className="layer-colors-label">Layer Colors</div>
-        <div className="layer-colors-toggle" onClick={handleToggleChange}>
+      <div className="layer-colors__left">
+        <div className="layer-colors__label">Layer Colors</div>
+        <div className="layer-colors__toggle" onClick={handleToggleChange}>
           <input
             type="checkbox"
             checked={allFramesMode}
             onChange={() => {}}
-            className="layer-colors-checkbox"
+            className="layer-colors__checkbox"
           />
-          <span className="layer-colors-toggle-label">All Frames</span>
+          <span className="layer-colors__toggle-label">All Frames</span>
         </div>
       </div>
-      <div className="layer-colors-center">
-        <div className="layer-colors-swatches">
+      <div className="layer-colors__center">
+        <div className="layer-colors__swatches">
           {uniqueColorsData.colors.map((color, index) => {
             const key = colorKey(color);
             // A swatch is selected if we're in adjustment mode AND the current picker color matches this swatch
@@ -269,7 +269,7 @@ export function LayerColors() {
             return (
               <button
                 key={key}
-                className={`layer-color-swatch ${isSelected ? "selected" : ""}`}
+                className={`layer-colors__swatch ${isSelected ? "layer-colors__swatch--selected" : ""}`}
                 style={{
                   backgroundColor: `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`,
                 }}
@@ -280,9 +280,9 @@ export function LayerColors() {
           })}
         </div>
       </div>
-      <div className="layer-colors-right">
+      <div className="layer-colors__right">
         {colorAdjustment && (
-          <div className="layer-colors-hint">
+          <div className="layer-colors__hint">
             {colorAdjustment.allFrames
               ? "Adjusting all frames"
               : "Adjusting color"}{" "}

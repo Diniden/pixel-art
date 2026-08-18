@@ -1,6 +1,13 @@
-/* ─── Export Preview Modal ─────────────────────────────────────────────────── */
+/* block: export-preview-modal (task 21, G7).
+   `.variant-thumb` was BARE here and in VariantSelectModal.css. MEASURED in the
+   pre-change bundle: this sheet is emitted LAST, so ITS 44×44 rule won at both
+   sites — the opposite of the task spec's claim. The real victim was
+   VariantSelectModal, whose authored 64×64 thumb rendered at 44×44.
+   This component's 44px is correct and load-bearing: `THUMB_SIZE = 44` in
+   ExportPreviewModal.tsx:90 sizes the canvas element itself. Both sheets keep
+   their authored values under block names; see the report's visual deltas. */
 
-.export-preview-overlay {
+.export-preview-modal__overlay {
   position: fixed;
   inset: 0;
   background: var(--overlay-88);
@@ -47,7 +54,7 @@
 
 /* ─── Header ──────────────────────────────────────────────────────────────── */
 
-.export-preview-header {
+.export-preview-modal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -57,26 +64,26 @@
   flex-shrink: 0;
 }
 
-.export-preview-header-left {
+.export-preview-modal__header-left {
   display: flex;
   align-items: center;
   gap: var(--space-3);
 }
 
-.export-preview-title {
+.export-preview-modal__title {
   margin: 0;
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
   color: var(--accent-primary);
 }
 
-.export-preview-subtitle {
+.export-preview-modal__subtitle {
   font-size: 0.8rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
 
-.export-preview-close {
+.export-preview-modal__close {
   width: 32px;
   height: 32px;
   border: none;
@@ -91,14 +98,14 @@
   justify-content: center;
 }
 
-.export-preview-close:hover {
+.export-preview-modal__close:hover {
   background: var(--bg-hover);
   color: var(--accent-danger);
 }
 
 /* ─── Loading / Error ─────────────────────────────────────────────────────── */
 
-.export-preview-loading {
+.export-preview-modal__loading {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -110,7 +117,7 @@
   font-size: 0.9rem;
 }
 
-.export-preview-spinner {
+.export-preview-modal__spinner {
   width: 40px;
   height: 40px;
   border: 3px solid var(--border-primary);
@@ -125,7 +132,7 @@
   }
 }
 
-.export-preview-error {
+.export-preview-modal__error {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -136,11 +143,11 @@
   color: var(--accent-danger);
 }
 
-.export-preview-error-icon {
+.export-preview-modal__error-icon {
   font-size: 2rem;
 }
 
-.export-preview-error-msg {
+.export-preview-modal__error-msg {
   font-size: 0.9rem;
   text-align: center;
   max-width: 400px;
@@ -148,14 +155,14 @@
 
 /* ─── Content (scrollable list) ───────────────────────────────────────────── */
 
-.export-preview-content {
+.export-preview-modal__content {
   flex: 1;
   overflow: auto;
   padding: var(--space-4) var(--space-5);
   background: var(--bg-tertiary);
 }
 
-.export-preview-list {
+.export-preview-modal__list {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -163,7 +170,7 @@
 
 /* ─── Object Row ──────────────────────────────────────────────────────────── */
 
-.export-object-row {
+.export-preview-modal__object-row {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
@@ -174,12 +181,12 @@
   transition: border-color var(--transition-fast);
 }
 
-.export-object-row:hover {
+.export-preview-modal__object-row:hover {
   border-color: var(--accent-primary);
 }
 
 /* Left: canvas + info */
-.export-object-row-left {
+.export-preview-modal__object-col {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -187,7 +194,7 @@
   border-right: 1px solid var(--border-primary);
 }
 
-.export-object-canvas-wrap {
+.export-preview-modal__object-canvas {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -197,12 +204,12 @@
   flex: 1;
 }
 
-.export-object-canvas-wrap canvas {
+.export-preview-modal__object-canvas canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
 
-.export-object-info {
+.export-preview-modal__object-info {
   padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--border-primary);
   display: flex;
@@ -211,7 +218,7 @@
   background: var(--bg-secondary);
 }
 
-.export-object-name {
+.export-preview-modal__object-name {
   font-size: 0.8rem;
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
@@ -220,7 +227,7 @@
   text-overflow: ellipsis;
 }
 
-.export-object-meta {
+.export-preview-modal__object-meta {
   font-size: 0.7rem;
   font-family: var(--font-mono);
   color: var(--text-muted);
@@ -228,21 +235,21 @@
   gap: var(--space-2);
 }
 
-.export-object-frame-counter {
+.export-preview-modal__object-frames {
   font-size: 0.65rem;
   font-family: var(--font-mono);
   color: var(--accent-primary);
   opacity: 0.7;
 }
 
-.export-object-origin {
+.export-preview-modal__object-origin {
   font-size: 0.65rem;
   font-family: var(--font-mono);
   color: var(--accent-danger);
   opacity: 0.85;
 }
 
-.export-object-max-canvas {
+.export-preview-modal__object-max-canvas {
   font-size: 0.65rem;
   font-family: var(--font-mono);
   color: var(--status-warn);
@@ -251,7 +258,7 @@
 
 /* ─── Variant Panel (right side of row) ───────────────────────────────────── */
 
-.export-variant-panel {
+.export-preview-modal__variant-panel {
   flex: 1;
   min-width: 0;
   padding: var(--space-2-5) var(--space-4);
@@ -263,13 +270,13 @@
   max-height: 260px;
 }
 
-.export-variant-row {
+.export-preview-modal__variant-row {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
 }
 
-.export-variant-layer-name {
+.export-preview-modal__variant-layer-name {
   font-size: 0.7rem;
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
@@ -277,7 +284,7 @@
   letter-spacing: 0.04em;
 }
 
-.export-variant-thumbs {
+.export-preview-modal__variant-thumbs {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
@@ -285,7 +292,7 @@
 
 /* ─── Variant Thumbnail ───────────────────────────────────────────────────── */
 
-.variant-thumb {
+.export-preview-modal__thumb {
   width: 44px;
   height: 44px;
   padding: 0;
@@ -302,28 +309,30 @@
   overflow: hidden;
 }
 
-.variant-thumb canvas {
+.export-preview-modal__thumb canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   display: block;
 }
 
-.variant-thumb:hover {
+.export-preview-modal__thumb:hover {
   border-color: var(--text-secondary);
 }
 
-.variant-thumb-selected {
+/* modifiers */
+
+.export-preview-modal__thumb--selected {
   border-color: var(--accent-primary);
   box-shadow: var(--glow-accent-6-35);
 }
 
-.variant-thumb-selected:hover {
+.export-preview-modal__thumb--selected:hover {
   border-color: var(--accent-primary);
 }
 
 /* ─── Controls Footer ─────────────────────────────────────────────────────── */
 
-.export-preview-controls {
+.export-preview-modal__controls {
   padding: var(--space-3) var(--space-5);
   border-top: 1px solid var(--border-primary);
   background: var(--bg-secondary);
@@ -335,13 +344,13 @@
   flex-shrink: 0;
 }
 
-.export-preview-fps {
+.export-preview-modal__fps {
   display: flex;
   align-items: center;
   gap: var(--space-2-5);
 }
 
-.export-preview-fps-label {
+.export-preview-modal__fps-label {
   font-size: 0.8rem;
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
@@ -349,7 +358,7 @@
   letter-spacing: 0.05em;
 }
 
-.export-preview-fps-slider {
+.export-preview-modal__fps-slider {
   width: 120px;
   height: 6px;
   -webkit-appearance: none;
@@ -360,7 +369,7 @@
   cursor: pointer;
 }
 
-.export-preview-fps-slider::-webkit-slider-thumb {
+.export-preview-modal__fps-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 16px;
@@ -372,11 +381,11 @@
   transition: transform var(--transition-fast);
 }
 
-.export-preview-fps-slider::-webkit-slider-thumb:hover {
+.export-preview-modal__fps-slider::-webkit-slider-thumb:hover {
   transform: scale(1.15);
 }
 
-.export-preview-fps-slider::-moz-range-thumb {
+.export-preview-modal__fps-slider::-moz-range-thumb {
   width: 16px;
   height: 16px;
   background: var(--accent-primary);
@@ -386,7 +395,7 @@
   box-shadow: var(--shadow-accent-sm);
 }
 
-.export-preview-fps-value {
+.export-preview-modal__fps-value {
   width: 50px;
   padding: var(--space-1) var(--space-1-5);
   font-size: 0.8rem;
@@ -398,13 +407,13 @@
   color: var(--text-primary);
 }
 
-.export-preview-fps-value:focus {
+.export-preview-modal__fps-value:focus {
   outline: none;
   border-color: var(--accent-primary);
   box-shadow: var(--ring-accent);
 }
 
-.export-preview-stats {
+.export-preview-modal__stats {
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -413,13 +422,13 @@
   font-family: var(--font-mono);
 }
 
-.export-preview-stat {
+.export-preview-modal__stat {
   display: flex;
   align-items: center;
   gap: var(--space-1);
 }
 
-.export-preview-stat-value {
+.export-preview-modal__stat-value {
   color: var(--accent-primary);
 }
 
@@ -431,17 +440,17 @@
     max-height: 95vh;
   }
 
-  .export-object-row {
+  .export-preview-modal__object-row {
     flex-direction: column;
   }
 
-  .export-object-row-left {
+  .export-preview-modal__object-col {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--border-primary);
   }
 
-  .export-preview-controls {
+  .export-preview-modal__controls {
     flex-direction: column;
     gap: var(--space-2-5);
     padding: var(--space-2-5) var(--space-4);

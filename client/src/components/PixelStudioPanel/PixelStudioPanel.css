@@ -1,21 +1,32 @@
+/* block: pixel-studio-panel (task 21, G4).
+   Before this task the pencil/eraser shape buttons were styled by
+   LightingStudioPanel.css's BARE `.shape-btn` family, with this sheet only
+   NARROWING them via `.eraser-controls .shape-btn` (0,2,0) compounds. Both
+   sides now carry their own block names, so the measured cross-component
+   dependency is gone by construction and the compounds flatten to elements.
+   The `--brush-max-control` / `--origin-controls-panel` gaps are NOT filled
+   here (spec constraint): the classNames convert, no rule is added. */
+
 .pixel-studio-panel {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-.eraser-controls-panel {
+/* elements, DOM order */
+
+.pixel-studio-panel__section {
   border-radius: 0;
 }
 
-.eraser-controls-panel:first-child {
+.pixel-studio-panel__section:first-child {
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 /* The compact header and dense body are blocks/panel.css's
    `panel__header--compact` / `panel__body--dense` modifiers now (task 18). */
 
-.eraser-controls {
+.pixel-studio-panel__controls {
   display: flex;
   flex-direction: column;
   gap: var(--space-1-5);
@@ -23,7 +34,7 @@
   padding: 0 var(--space-1);
 }
 
-.eraser-controls label {
+.pixel-studio-panel__controls label {
   font-size: 0.65rem;
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
@@ -32,38 +43,38 @@
   margin-bottom: var(--space-0-5);
 }
 
-.eraser-controls .brush-size-control {
+.pixel-studio-panel__size-control {
   display: flex;
   flex-direction: column;
   gap: var(--space-0-5);
   width: 100%;
 }
 
-.brush-size-input-group {
+.pixel-studio-panel__size-input-group {
   display: flex;
   align-items: center;
   gap: var(--space-1);
 }
 
-.brush-size-input-group input[type="range"] {
+.pixel-studio-panel__size-input-group input[type="range"] {
   flex: 1;
   width: 100%;
 }
 
-.brush-size-input-group .brush-size-value {
+.pixel-studio-panel__size-value {
   font-size: 0.7rem;
   min-width: 20px;
   text-align: right;
 }
 
-.eraser-controls .brush-shape-control {
+.pixel-studio-panel__shape-control {
   display: flex;
   flex-direction: column;
   gap: var(--space-0-5);
   width: 100%;
 }
 
-.eraser-controls .shape-buttons {
+.pixel-studio-panel__shape-buttons {
   display: flex;
   gap: var(--space-px);
   padding: var(--space-px);
@@ -71,7 +82,7 @@
   border-radius: var(--radius-sm);
 }
 
-.eraser-controls .shape-btn {
+.pixel-studio-panel__shape-btn {
   flex: 1;
   padding: var(--space-1) var(--space-1-5);
   background: transparent;
@@ -83,36 +94,31 @@
   transition: all var(--transition-base);
 }
 
-.eraser-controls .shape-btn:hover {
+.pixel-studio-panel__shape-btn:hover {
   background: var(--bg-secondary);
   color: var(--text-primary);
 }
 
-.eraser-controls .shape-btn.active {
-  background: var(--accent-primary);
-  color: var(--text-on-accent);
-}
-
 /* Origin controls */
-.origin-controls {
+.pixel-studio-panel__origin-controls {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-.origin-color-control {
+.pixel-studio-panel__origin-color-control {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.origin-color-control label {
+.pixel-studio-panel__origin-color-control label {
   font-size: var(--text-xs);
   color: var(--text-secondary);
   min-width: 40px;
 }
 
-.origin-color-input {
+.pixel-studio-panel__origin-color-input {
   width: 32px;
   height: 24px;
   padding: 0;
@@ -122,19 +128,19 @@
   cursor: pointer;
 }
 
-.origin-position-display {
+.pixel-studio-panel__origin-position {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.origin-position-display label {
+.pixel-studio-panel__origin-position label {
   font-size: var(--text-xs);
   color: var(--text-secondary);
   min-width: 40px;
 }
 
-.origin-position-value {
+.pixel-studio-panel__origin-position-value {
   font-size: var(--text-xs);
   color: var(--text-primary);
   font-family: var(--font-mono);
@@ -143,9 +149,18 @@
   border-radius: var(--radius-sm);
 }
 
-.origin-hint {
+.pixel-studio-panel__origin-hint {
   font-size: 0.65rem;
   color: var(--text-tertiary);
   margin: 0;
   line-height: var(--leading-snug);
+}
+
+/* modifiers */
+
+/* base.base--modifier compound: matches the old `.eraser-controls
+   .shape-btn.active` (0,3,0) winning over the (0,2,0) hover rule. */
+.pixel-studio-panel__shape-btn.pixel-studio-panel__shape-btn--active {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
 }

@@ -409,41 +409,41 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
   const canvasHeight = gridHeight * zoom;
 
   return createPortal(
-    <div className="preview-modal-overlay" onClick={onClose}>
+    <div className="preview-modal__overlay" onClick={onClose}>
       <div className="preview-modal" onClick={e => e.stopPropagation()}>
-        <div className="preview-modal-header">
-          <h3 className="preview-modal-title"><Icon icon={Zap} size={16} /> Optimized Preview</h3>
-          <button className="preview-modal-close" onClick={onClose}><Icon icon={X} size={14} /></button>
+        <div className="preview-modal__header">
+          <h3 className="preview-modal__title"><Icon icon={Zap} size={16} /> Optimized Preview</h3>
+          <button className="preview-modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
-        <div className="preview-modal-content">
+        <div className="preview-modal__content">
           {isLoading ? (
-            <div className="preview-loading">
-              <div className="preview-loading-spinner"></div>
+            <div className="preview-modal__loading">
+              <div className="preview-modal__spinner"></div>
               <span>Rasterizing frames...</span>
             </div>
           ) : (
-            <div className="preview-canvas-container">
+            <div className="preview-modal__canvas-frame">
               <canvas
                 ref={canvasRef}
                 width={canvasWidth}
                 height={canvasHeight}
-                className="preview-canvas"
+                className="preview-modal__canvas"
               />
             </div>
           )}
         </div>
 
-        <div className="preview-modal-controls">
-          <div className="preview-fps-control">
-            <label className="preview-fps-label">FPS:</label>
+        <div className="preview-modal__controls">
+          <div className="preview-modal__fps-control">
+            <label className="preview-modal__fps-label">FPS:</label>
             <input
               type="range"
               min="1"
               max="60"
               value={fps}
               onChange={e => setFps(Number(e.target.value))}
-              className="preview-fps-slider"
+              className="preview-modal__fps-slider"
             />
             <input
               type="number"
@@ -451,15 +451,15 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
               max="60"
               value={fps}
               onChange={e => setFps(Math.max(1, Math.min(60, Number(e.target.value) || 1)))}
-              className="preview-fps-input"
+              className="preview-modal__fps-input"
             />
           </div>
 
-          <div className="preview-info">
-            <span className="preview-frame-counter">
+          <div className="preview-modal__info">
+            <span className="preview-modal__frame-counter">
               Frame {currentFrame + 1} / {frames.length}
             </span>
-            <span className="preview-size">
+            <span className="preview-modal__size">
               {gridWidth} × {gridHeight} @ {zoom}x
             </span>
           </div>

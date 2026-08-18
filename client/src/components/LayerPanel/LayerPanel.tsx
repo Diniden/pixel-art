@@ -143,9 +143,9 @@ export function LayerPanel() {
     <div className="panel layer-panel">
       <div className="panel__header panel__header--stacked">
         <div className="panel__title">Layers</div>
-        <div className="header-actions">
+        <div className="layer-panel__header-actions">
           <button
-            className="header-btn move-all-frames-btn"
+            className="layer-panel__header-btn layer-panel__header-btn--move-all"
             onClick={(e) => {
               e.stopPropagation();
               if (selectedLayerId) {
@@ -158,7 +158,7 @@ export function LayerPanel() {
             <Icon icon={ChevronUp} size={12} />
           </button>
           <button
-            className="header-btn move-all-frames-btn"
+            className="layer-panel__header-btn layer-panel__header-btn--move-all"
             onClick={(e) => {
               e.stopPropagation();
               if (selectedLayerId) {
@@ -171,7 +171,7 @@ export function LayerPanel() {
             <Icon icon={ChevronDown} size={12} />
           </button>
           <button
-            className="header-btn squash-all-frames-btn"
+            className="layer-panel__header-btn layer-panel__header-btn--squash-all"
             onClick={(e) => {
               e.stopPropagation();
               if (selectedLayerId) {
@@ -184,7 +184,7 @@ export function LayerPanel() {
             <Icon icon={ArrowDownToLine} size={12} />
           </button>
           <button
-            className="header-btn squash-all-frames-btn"
+            className="layer-panel__header-btn layer-panel__header-btn--squash-all"
             onClick={(e) => {
               e.stopPropagation();
               if (selectedLayerId) {
@@ -197,32 +197,32 @@ export function LayerPanel() {
             <Icon icon={ArrowUpToLine} size={12} />
           </button>
           <button
-            className={`header-btn visibility-toggle ${allVisible ? 'all-visible' : ''}`}
+            className={`layer-panel__header-btn layer-panel__header-btn--visibility ${allVisible ? "layer-panel__header-btn--all-visible" : ""}`}
             onClick={() => toggleAllLayersVisibility(!allVisible)}
             title={allVisible ? 'Hide all layers' : 'Show all layers'}
           >
             <Icon icon={allVisible ? Eye : EyeOff} size={12} />
           </button>
           <button
-            className="header-btn copy-from-btn"
+            className="layer-panel__header-btn layer-panel__header-btn--copy-from"
             onClick={() => setShowCopyFromModal(true)}
             title="Copy layer from another object"
           >
             <Icon icon={ClipboardCopy} size={12} />
           </button>
           <button
-            className={`header-btn add-variant-btn ${hasVariants ? '' : 'disabled'}`}
+            className={`layer-panel__header-btn layer-panel__header-btn--add-variant ${hasVariants ? "" : "layer-panel__header-btn--disabled"}`}
             onClick={() => hasVariants && setShowAddVariantModal(true)}
             disabled={!hasVariants}
             title={hasVariants ? "Add existing variant as layer" : "No variants exist yet"}
           >
             <Icon icon={Wand2} size={12} />
           </button>
-          <button className="header-btn" onClick={handleAddLayer} title="New Layer">
+          <button className="layer-panel__header-btn" onClick={handleAddLayer} title="New Layer">
             <Icon icon={Plus} size={12} />
           </button>
           <button
-            className="header-btn delete-all-frames-btn"
+            className="layer-panel__header-btn layer-panel__header-btn--delete-all"
             onClick={(e) => {
               e.stopPropagation();
               if (selectedLayerId && frame.layers.length > 1) {
@@ -239,7 +239,7 @@ export function LayerPanel() {
         </div>
       </div>
       <div className="panel__body">
-        <div className="new-layer-form">
+        <div className="layer-panel__new-form">
           <input
             type="text"
             placeholder="New layer name..."
@@ -249,7 +249,7 @@ export function LayerPanel() {
           />
         </div>
 
-        <div className="layer-list">
+        <div className="layer-panel__list">
           {layers.map((layer, displayIndex) => {
             // Get variant info if this is a variant layer (now from project.variants)
             const variantGroup = layer.isVariant && layer.variantGroupId
@@ -260,17 +260,17 @@ export function LayerPanel() {
             return (
               <div
                 key={layer.id}
-                className={`layer-item ${selectedLayerId === layer.id ? 'selected' : ''} ${dragIndex === displayIndex ? 'dragging' : ''} ${layer.isVariant ? 'variant-layer' : ''}`}
+                className={`layer-panel__item ${selectedLayerId === layer.id ? 'layer-panel__item--selected' : ''} ${dragIndex === displayIndex ? 'layer-panel__item--dragging' : ''} ${layer.isVariant ? 'layer-panel__item--variant' : ''}`}
                 onClick={() => selectLayer(layer.id)}
                 draggable
                 onDragStart={() => handleDragStart(displayIndex)}
                 onDragOver={(e) => handleDragOver(e, displayIndex)}
                 onDragEnd={handleDragEnd}
               >
-                <div className="layer-content-row">
-                  <div className="layer-visibility-column">
+                <div className="layer-panel__content-row">
+                  <div className="layer-panel__visibility-col">
                     <button
-                      className={`visibility-btn ${layer.visible ? 'visible' : ''}`}
+                      className={`layer-panel__visibility-btn ${layer.visible ? 'layer-panel__visibility-btn--visible' : ''}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleLayerVisibility(layer.id);
@@ -282,7 +282,7 @@ export function LayerPanel() {
                     {/* Variant select button for variant layers - always visible */}
                     {layer.isVariant && (
                       <button
-                        className="layer-action-btn variant-select-btn variant-select-in-column"
+                        className="layer-panel__action-btn layer-panel__action-btn--variant-select layer-panel__action-btn--in-column"
                         onClick={(e) => {
                           e.stopPropagation();
                           setVariantModalLayerId(layer.id);
@@ -293,16 +293,16 @@ export function LayerPanel() {
                       </button>
                     )}
                   </div>
-                  <div className="layer-main-column">
-                    <div className="layer-label-row">
+                  <div className="layer-panel__main-col">
+                    <div className="layer-panel__label-row">
                       {layer.isVariant && (
-                        <span className="variant-icon" title="Variant Layer"><Icon icon={Hexagon} size={10} /></span>
+                        <span className="layer-panel__variant-icon" title="Variant Layer"><Icon icon={Hexagon} size={10} /></span>
                       )}
 
                       {editingId === layer.id ? (
                         <input
                           type="text"
-                          className="layer-name-input"
+                          className="layer-panel__name-input"
                           value={editingName}
                           onChange={(e) => setEditingName(e.target.value)}
                           onBlur={() => handleFinishRename(layer.id)}
@@ -312,7 +312,7 @@ export function LayerPanel() {
                         />
                       ) : (
                         <span
-                          className="layer-name"
+                          className="layer-panel__name"
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             handleStartRename(layer.id, layer.name);
@@ -320,12 +320,12 @@ export function LayerPanel() {
                         >
                           {layer.name}
                           {layer.isVariant && variantGroup && (
-                            <span className="variant-group-badge" title={`Variant: ${variantGroup.name}`}>
+                            <span className="layer-panel__group-badge" title={`Variant: ${variantGroup.name}`}>
                               {variantGroup.name}
                             </span>
                           )}
                           {layer.isVariant && selectedVariant && (
-                            <span className="variant-type-badge" title={`Type: ${selectedVariant.name}`}>
+                            <span className="layer-panel__type-badge" title={`Type: ${selectedVariant.name}`}>
                               {selectedVariant.name}
                             </span>
                           )}
@@ -333,10 +333,10 @@ export function LayerPanel() {
                       )}
                     </div>
 
-                    <div className="layer-actions">
+                    <div className="layer-panel__actions">
                       {/* Copy layer button */}
                       <button
-                        className="layer-action-btn copy-layer-btn"
+                        className="layer-panel__action-btn layer-panel__action-btn--copy"
                         onClick={(e) => {
                           e.stopPropagation();
                           copyLayerToClipboard(layer.id);
@@ -347,7 +347,7 @@ export function LayerPanel() {
                       </button>
                       {!layer.isVariant && (
                         <button
-                          className="layer-action-btn make-variant-btn"
+                          className="layer-panel__action-btn layer-panel__action-btn--make-variant"
                           onClick={(e) => {
                             e.stopPropagation();
                             makeVariant(layer.id);
@@ -358,7 +358,7 @@ export function LayerPanel() {
                         </button>
                       )}
                       <button
-                        className="layer-action-btn"
+                        className="layer-panel__action-btn"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleMoveLayerUp(displayIndex);
@@ -369,7 +369,7 @@ export function LayerPanel() {
                         <Icon icon={ChevronUp} size={10} />
                       </button>
                       <button
-                        className="layer-action-btn"
+                        className="layer-panel__action-btn"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleMoveLayerDown(displayIndex);
@@ -393,7 +393,7 @@ export function LayerPanel() {
                             return (
                               <>
                                 <button
-                                  className="layer-action-btn squash-btn"
+                                  className="layer-panel__action-btn layer-panel__action-btn--squash"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     squashLayerDown(layer.id);
@@ -404,7 +404,7 @@ export function LayerPanel() {
                                   <Icon icon={ArrowDownToLine} size={10} />
                                 </button>
                                 <button
-                                  className="layer-action-btn squash-btn"
+                                  className="layer-panel__action-btn layer-panel__action-btn--squash"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     squashLayerUp(layer.id);
@@ -418,7 +418,7 @@ export function LayerPanel() {
                             );
                           })()}
                           <button
-                            className="layer-action-btn"
+                            className="layer-panel__action-btn"
                             onClick={(e) => {
                               e.stopPropagation();
                               duplicateLayer(layer.id);
@@ -428,7 +428,7 @@ export function LayerPanel() {
                             <Icon icon={Copy} size={10} />
                           </button>
                           <button
-                            className="layer-action-btn delete"
+                            className="layer-panel__action-btn layer-panel__action-btn--danger"
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteLayer(layer.id);
@@ -442,7 +442,7 @@ export function LayerPanel() {
                       )}
                       {layer.isVariant && (
                         <button
-                          className="layer-action-btn delete"
+                          className="layer-panel__action-btn layer-panel__action-btn--danger"
                           onClick={(e) => {
                             e.stopPropagation();
                             removeVariantLayer(layer.id);
@@ -461,7 +461,7 @@ export function LayerPanel() {
         </div>
 
         {layers.length === 0 && (
-          <div className="empty-state">
+          <div className="layer-panel__empty">
             No layers. Add one to start drawing.
           </div>
         )}

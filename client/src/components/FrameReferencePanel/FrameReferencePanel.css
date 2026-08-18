@@ -12,17 +12,17 @@
   user-select: none;
 }
 
-.frame-reference-panel.dragging {
+.frame-reference-panel--dragging {
   transition: none;
   box-shadow: var(--shadow-xl);
   cursor: grabbing;
 }
 
-.frame-reference-panel.minimized {
+.frame-reference-panel--minimized {
   padding: var(--space-2) var(--space-3);
 }
 
-.frame-reference-header {
+.frame-reference-panel__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -35,15 +35,15 @@
   transition: background-color var(--transition-base);
 }
 
-.frame-reference-header:hover {
+.frame-reference-panel__header:hover {
   background-color: var(--white-05);
 }
 
-.frame-reference-panel.minimized .frame-reference-header {
+.frame-reference-panel--minimized .frame-reference-panel__header {
   margin-bottom: 0;
 }
 
-.frame-reference-title {
+.frame-reference-panel__title {
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -52,7 +52,7 @@
   user-select: none;
 }
 
-.frame-reference-object-btn {
+.frame-reference-panel__object-btn {
   background: var(--white-05);
   border: 1px solid var(--white-10);
   color: var(--text-secondary);
@@ -63,19 +63,19 @@
   transition: all var(--transition-base);
 }
 
-.frame-reference-object-btn:hover {
+.frame-reference-panel__object-btn:hover {
   background: var(--status-ok-20);
   border-color: var(--status-ok-40);
   color: var(--status-ok);
 }
 
-.frame-reference-panel.different-object .frame-reference-object-btn {
+.frame-reference-panel--foreign-object .frame-reference-panel__object-btn {
   background: var(--status-ok-20);
   border-color: var(--status-ok-40);
   color: var(--status-ok);
 }
 
-.frame-reference-minimize {
+.frame-reference-panel__minimize {
   background: var(--white-05);
   border: 1px solid var(--white-10);
   color: var(--text-secondary);
@@ -86,23 +86,23 @@
   transition: all var(--transition-base);
 }
 
-.frame-reference-minimize:hover {
+.frame-reference-panel__minimize:hover {
   background: var(--white-10);
   color: var(--text-primary);
 }
 
-.frame-reference-content {
+.frame-reference-panel__content {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
 /* Different object indicator */
-.frame-reference-panel.different-object {
+.frame-reference-panel--foreign-object {
   border-color: var(--status-ok-50);
 }
 
-.frame-reference-object-info {
+.frame-reference-panel__object-info {
   display: flex;
   align-items: center;
   gap: var(--space-1-5);
@@ -113,11 +113,11 @@
   font-size: var(--text-xs);
 }
 
-.frame-reference-object-label {
+.frame-reference-panel__object-label {
   color: var(--text-tertiary);
 }
 
-.frame-reference-object-name {
+.frame-reference-panel__object-name {
   color: var(--status-ok);
   font-weight: var(--weight-semibold);
   white-space: nowrap;
@@ -125,13 +125,13 @@
   text-overflow: ellipsis;
 }
 
-.frame-reference-controls {
+.frame-reference-panel__controls {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.frame-reference-btn {
+.frame-reference-panel__btn {
   background: linear-gradient(135deg, #4a4a5a 0%, var(--bg-active) 100%);
   border: 1px solid #5a5a6a;
   color: var(--text-primary);
@@ -144,19 +144,19 @@
   flex-shrink: 0;
 }
 
-.frame-reference-btn:hover:not(:disabled) {
+.frame-reference-panel__btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #5a5a6a 0%, #4a4a5a 100%);
   border-color: var(--text-muted);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
 
-.frame-reference-btn:disabled {
+.frame-reference-panel__btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
 
-.frame-reference-info {
+.frame-reference-panel__info {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -164,7 +164,7 @@
   min-width: 0;
 }
 
-.frame-reference-number {
+.frame-reference-panel__number {
   font-weight: var(--weight-bold);
   color: var(--text-primary);
   font-size: var(--text-base);
@@ -172,7 +172,7 @@
   margin-bottom: var(--space-0-5);
 }
 
-.frame-reference-name {
+.frame-reference-panel__name {
   font-weight: var(--weight-normal);
   color: var(--text-tertiary);
   font-size: 11px;
@@ -183,18 +183,18 @@
   margin-bottom: var(--space-0-5);
 }
 
-.frame-reference-index {
+.frame-reference-panel__index {
   font-size: var(--text-2xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
 
-.frame-reference-invalid {
+.frame-reference-panel__invalid {
   color: var(--text-tertiary);
   font-size: 13px;
 }
 
-.frame-reference-sync-row {
+.frame-reference-panel__sync-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -202,13 +202,13 @@
   flex-wrap: wrap;
 }
 
-.frame-reference-ahead-behind {
+.frame-reference-panel__ahead-behind {
   font-size: 11px;
   color: var(--text-tertiary);
   font-style: italic;
 }
 
-.frame-reference-go-current-btn {
+.frame-reference-panel__go-current-btn {
   background: var(--status-ok-15);
   border: 1px solid var(--status-ok-35);
   color: var(--status-ok);
@@ -220,17 +220,17 @@
   transition: all var(--transition-base);
 }
 
-.frame-reference-go-current-btn:hover:not(:disabled) {
+.frame-reference-panel__go-current-btn:hover:not(:disabled) {
   background: var(--status-ok-25);
   border-color: var(--status-ok-50);
 }
 
-.frame-reference-go-current-btn:disabled {
+.frame-reference-panel__go-current-btn:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-.frame-reference-preview {
+.frame-reference-panel__preview {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -242,7 +242,7 @@
   min-height: 200px;
 }
 
-.frame-reference-preview canvas {
+.frame-reference-panel__preview canvas {
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
@@ -253,7 +253,7 @@
   max-height: 200px;
 }
 
-.frame-reference-overlay-btn {
+.frame-reference-panel__overlay-btn {
   background: linear-gradient(135deg, var(--accent-variant) 0%, var(--accent-variant-deep) 100%);
   border: 2px solid var(--accent-variant-light);
   color: var(--white);
@@ -270,23 +270,23 @@
   gap: var(--space-1-5);
 }
 
-.frame-reference-overlay-btn:hover {
+.frame-reference-panel__overlay-btn:hover {
   background: linear-gradient(135deg, var(--accent-variant-light) 0%, var(--accent-variant) 100%);
   transform: translateY(-2px);
   box-shadow: var(--shadow-variant);
 }
 
-.frame-reference-overlay-btn.active {
+.frame-reference-panel__overlay-btn--active {
   background: linear-gradient(135deg, var(--status-ok) 0%, var(--status-ok-deep) 100%);
   border-color: var(--status-ok-light);
 }
 
-.frame-reference-overlay-btn.active:hover {
+.frame-reference-panel__overlay-btn--active:hover {
   background: linear-gradient(135deg, var(--status-ok-light) 0%, var(--status-ok) 100%);
   box-shadow: var(--shadow-ok);
 }
 
-.frame-reference-trace-btn {
+.frame-reference-panel__trace-btn {
   background: linear-gradient(135deg, var(--accent-variant) 0%, var(--accent-variant-deep) 100%);
   border: 2px solid var(--accent-variant-light);
   color: var(--white);
@@ -301,18 +301,18 @@
   justify-content: center;
 }
 
-.frame-reference-trace-btn:hover {
+.frame-reference-panel__trace-btn:hover {
   background: linear-gradient(135deg, var(--accent-variant-light) 0%, var(--accent-variant) 100%);
   transform: translateY(-2px);
   box-shadow: var(--shadow-variant);
 }
 
-.frame-reference-trace-btn.active {
+.frame-reference-panel__trace-btn--active {
   background: linear-gradient(135deg, var(--status-warn) 0%, var(--status-warn-deep) 100%);
   border-color: var(--status-warn-light);
 }
 
-.frame-reference-trace-btn.active:hover {
+.frame-reference-panel__trace-btn--active:hover {
   background: linear-gradient(135deg, var(--status-warn-light) 0%, var(--status-warn) 100%);
   box-shadow: var(--shadow-warn);
 }
@@ -329,7 +329,7 @@
     max-width: calc(100vw - 40px);
   }
 
-  .frame-reference-panel.minimized {
+  .frame-reference-panel--minimized {
     max-width: 200px;
   }
 }

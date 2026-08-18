@@ -53,16 +53,16 @@ export function ResizeModal({
   };
 
   return createPortal(
-    <div className="resize-modal-backdrop" onClick={handleBackdropClick}>
+    <div className="resize-modal__backdrop" onClick={handleBackdropClick}>
       <div className="resize-modal" onClick={e => e.stopPropagation()}>
-        <div className="resize-modal-header">
+        <div className="resize-modal__header">
           <h4>{title}</h4>
-          <button className="resize-modal-close" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <button className="resize-modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
-        <div className="resize-modal-content">
-          <div className="resize-modal-inputs">
-            <div className="resize-modal-field">
+        <div className="resize-modal__content">
+          <div className="resize-modal__inputs">
+            <div className="resize-modal__field">
               <label>Width</label>
               <input
                 type="number"
@@ -72,8 +72,8 @@ export function ResizeModal({
                 max={maxSize}
               />
             </div>
-            <span className="resize-modal-separator">×</span>
-            <div className="resize-modal-field">
+            <span className="resize-modal__separator">×</span>
+            <div className="resize-modal__field">
               <label>Height</label>
               <input
                 type="number"
@@ -85,8 +85,8 @@ export function ResizeModal({
             </div>
           </div>
 
-          <div className="resize-modal-anchor">
-            <label className="resize-modal-anchor-label">Anchor Point</label>
+          <div className="resize-modal__anchor">
+            <label className="resize-modal__anchor-label">Anchor Point</label>
             <AnchorGrid
               anchor={anchor}
               onChange={setAnchor}
@@ -98,9 +98,9 @@ export function ResizeModal({
           </div>
         </div>
 
-        <div className="resize-modal-actions">
-          <button className="resize-modal-cancel" onClick={onClose}>Cancel</button>
-          <button className="resize-modal-apply" onClick={handleApply}>Apply</button>
+        <div className="resize-modal__actions">
+          <button className="resize-modal__cancel" onClick={onClose}>Cancel</button>
+          <button className="resize-modal__apply" onClick={handleApply}>Apply</button>
         </div>
       </div>
     </div>,

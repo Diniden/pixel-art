@@ -54,14 +54,14 @@ export function PaletteManager() {
 
   return (
     <div className="panel palette-manager">
-      <div className="panel-header">
+      <div className="panel__header">
         Palettes
-        <button className="header-btn" onClick={handleAddPalette} title="New Palette">
+        <button className="palette-manager__header-btn" onClick={handleAddPalette} title="New Palette">
           +
         </button>
       </div>
-      <div className="panel-content">
-        <div className="new-palette-form">
+      <div className="panel__body">
+        <div className="palette-manager__new-form">
           <input
             type="text"
             placeholder="New palette name..."
@@ -71,21 +71,21 @@ export function PaletteManager() {
           />
         </div>
 
-        <div className="palette-list">
+        <div className="palette-manager__list">
           {palettes.map((palette) => (
             <div
               key={palette.id}
-              className={`palette-item ${expandedId === palette.id ? 'expanded' : ''}`}
+              className={`palette-manager__item ${expandedId === palette.id ? 'palette-manager__item--expanded' : ''}`}
             >
               <div
-                className="palette-header"
+                className="palette-manager__item-header"
                 onClick={() => setExpandedId(expandedId === palette.id ? null : palette.id)}
               >
-                <span className="expand-icon"><Icon icon={expandedId === palette.id ? ChevronDown : ChevronRight} size={12} /></span>
+                <span className="palette-manager__expand-icon"><Icon icon={expandedId === palette.id ? ChevronDown : ChevronRight} size={12} /></span>
                 {editingId === palette.id ? (
                   <input
                     type="text"
-                    className="palette-name-input"
+                    className="palette-manager__name-input"
                     value={editingName}
                     onChange={(e) => setEditingName(e.target.value)}
                     onBlur={() => handleFinishRename(palette.id)}
@@ -95,7 +95,7 @@ export function PaletteManager() {
                   />
                 ) : (
                   <span
-                    className="palette-name"
+                    className="palette-manager__name"
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       handleStartRename(palette.id, palette.name);
@@ -104,27 +104,27 @@ export function PaletteManager() {
                     {palette.name}
                   </span>
                 )}
-                <span className="palette-count">{palette.colors.length}</span>
+                <span className="palette-manager__count">{palette.colors.length}</span>
               </div>
 
               {expandedId === palette.id && (
-                <div className="palette-content">
-                  <div className="color-swatches">
+                <div className="palette-manager__item-content">
+                  <div className="palette-manager__swatches">
                     {palette.colors.map((color, index) => (
                       <div
                         key={index}
-                        className="swatch-wrapper"
+                        className="palette-manager__swatch-group"
                       >
                         <button
-                          className="color-swatch"
+                          className="palette-manager__swatch"
                           style={{ backgroundColor: getColorStyle(color) }}
                           onClick={() => setColor(color)}
                           title={`R:${color.r} G:${color.g} B:${color.b} A:${color.a}`}
                         >
-                          <div className="swatch-bg"></div>
+                          <div className="palette-manager__swatch-bg"></div>
                         </button>
                         <button
-                          className="swatch-remove"
+                          className="palette-manager__swatch-remove"
                           onClick={() => removeColorFromPalette(palette.id, index)}
                           title="Remove color"
                         >
@@ -133,7 +133,7 @@ export function PaletteManager() {
                       </div>
                     ))}
                     <button
-                      className="add-color-btn"
+                      className="palette-manager__add-color-btn"
                       onClick={() => handleAddCurrentColor(palette.id)}
                       title="Add current color"
                     >
@@ -141,9 +141,9 @@ export function PaletteManager() {
                     </button>
                   </div>
 
-                  <div className="palette-actions">
+                  <div className="palette-manager__actions">
                     <button
-                      className="delete-palette-btn"
+                      className="palette-manager__delete-btn"
                       onClick={() => deletePalette(palette.id)}
                     >
                       Delete Palette
@@ -156,7 +156,7 @@ export function PaletteManager() {
         </div>
 
         {palettes.length === 0 && (
-          <div className="empty-state">
+          <div className="palette-manager__empty">
             No palettes yet. Create one to save colors.
           </div>
         )}

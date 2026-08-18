@@ -253,8 +253,8 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
   // Drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     // Don't start drag if clicking on the minimize button or object select button
-    if ((e.target as HTMLElement).closest('.frame-reference-minimize') ||
-        (e.target as HTMLElement).closest('.frame-reference-object-btn')) {
+    if ((e.target as HTMLElement).closest('.frame-reference-panel__minimize') ||
+        (e.target as HTMLElement).closest('.frame-reference-panel__object-btn')) {
       return;
     }
 
@@ -340,19 +340,19 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
     <>
       <div
         ref={panelRef}
-        className={`frame-reference-panel ${isMinimized ? 'minimized' : ''} ${isDragging ? 'dragging' : ''} ${isReferencingDifferentObject ? 'different-object' : ''}`}
+        className={`frame-reference-panel ${isMinimized ? 'frame-reference-panel--minimized' : ''} ${isDragging ? 'frame-reference-panel--dragging' : ''} ${isReferencingDifferentObject ? 'frame-reference-panel--foreign-object' : ''}`}
         style={{ top: `${position.top}px`, left: `${position.left}px` }}
       >
         <div
-          className="frame-reference-header"
+          className="frame-reference-panel__header"
           onMouseDown={handleMouseDown}
           style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         >
-          <span className="frame-reference-title">
+          <span className="frame-reference-panel__title">
             <Icon icon={Film} size={12} /> Frame Reference
           </span>
           <button
-            className="frame-reference-object-btn"
+            className="frame-reference-panel__object-btn"
             onClick={(e) => {
               e.stopPropagation();
               setShowObjectSelect(true);
@@ -363,7 +363,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
             <Icon icon={Package} size={12} />
           </button>
           <button
-            className="frame-reference-minimize"
+            className="frame-reference-panel__minimize"
             onClick={(e) => {
               e.stopPropagation();
               const newMinimized = !isMinimized;
@@ -379,39 +379,39 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
         </div>
 
         {!isMinimized && (
-          <div className="frame-reference-content">
+          <div className="frame-reference-panel__content">
             {/* Show which object we're referencing */}
             {isReferencingDifferentObject && (
-              <div className="frame-reference-object-info">
-                <span className="frame-reference-object-label">Viewing:</span>
-                <span className="frame-reference-object-name">{displayObj.name}</span>
+              <div className="frame-reference-panel__object-info">
+                <span className="frame-reference-panel__object-label">Viewing:</span>
+                <span className="frame-reference-panel__object-name">{displayObj.name}</span>
               </div>
             )}
 
-            <div className="frame-reference-controls">
+            <div className="frame-reference-panel__controls">
               <button
-                className="frame-reference-btn"
+                className="frame-reference-panel__btn"
                 onClick={handlePrevious}
                 disabled={referenceFrameIndex <= 0}
                 title="Previous frame"
               >
                 <Icon icon={ChevronLeft} size={14} />
               </button>
-              <div className="frame-reference-info">
+              <div className="frame-reference-panel__info">
                 {isValidReference ? (
                   <>
-                    <span className="frame-reference-number">Frame {referenceFrameIndex + 1}</span>
-                    <span className="frame-reference-name">{referenceFrame?.name || 'Unnamed'}</span>
-                    <span className="frame-reference-index">
+                    <span className="frame-reference-panel__number">Frame {referenceFrameIndex + 1}</span>
+                    <span className="frame-reference-panel__name">{referenceFrame?.name || 'Unnamed'}</span>
+                    <span className="frame-reference-panel__index">
                       {displayObj.frames.length} total
                     </span>
                   </>
                 ) : (
-                  <span className="frame-reference-invalid">No frame</span>
+                  <span className="frame-reference-panel__invalid">No frame</span>
                 )}
               </div>
               <button
-                className="frame-reference-btn"
+                className="frame-reference-panel__btn"
                 onClick={handleNext}
                 disabled={referenceFrameIndex + 1 >= displayObj.frames.length}
                 title="Next frame"
@@ -421,12 +421,12 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
             </div>
 
             {/* Frames ahead/behind indicator and Go to current frame */}
-            <div className="frame-reference-sync-row">
-              <span className="frame-reference-ahead-behind" title="Relative to timeline">
+            <div className="frame-reference-panel__sync-row">
+              <span className="frame-reference-panel__ahead-behind" title="Relative to timeline">
                 {framesAheadBehindLabel}
               </span>
               <button
-                className="frame-reference-go-current-btn"
+                className="frame-reference-panel__go-current-btn"
                 onClick={handleGoToCurrentFrame}
                 disabled={frameDelta === 0}
                 title="Sync to current frame"
@@ -437,13 +437,13 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
 
             {isValidReference && referenceFrame && (
               <>
-                <div className="frame-reference-preview">
+                <div className="frame-reference-panel__preview">
                   <canvas ref={canvasRef} width={thumbSize} height={thumbSize} />
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
                   <button
-                    className={`frame-reference-overlay-btn ${isOverlayActive ? 'active' : ''}`}
+                    className={`frame-reference-panel__overlay-btn ${isOverlayActive ? 'frame-reference-panel__overlay-btn--active' : ''}`}
                     onClick={handleToggleOverlay}
                     title={isOverlayActive ? 'Hide overlay' : 'Show overlay on canvas'}
                     style={{ flex: 1 }}
@@ -451,7 +451,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
                     <Icon icon={isOverlayActive ? EyeOff : Eye} size={14} /> {isOverlayActive ? 'Hide Overlay' : 'Show Overlay'}
                   </button>
                   <button
-                    className={`frame-reference-trace-btn ${isTraceActive ? 'active' : ''}`}
+                    className={`frame-reference-panel__trace-btn ${isTraceActive ? 'frame-reference-panel__trace-btn--active' : ''}`}
                     onClick={handleToggleTrace}
                     title={isTraceActive ? 'Exit trace mode (ESC)' : 'Trace mode (WASD to align, click to copy)'}
                     style={{ flex: '0 0 auto', padding: '10px 16px' }}

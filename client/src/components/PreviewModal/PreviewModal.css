@@ -1,4 +1,4 @@
-.preview-modal-overlay {
+.preview-modal__overlay {
   position: fixed;
   inset: 0;
   background: var(--overlay-85);
@@ -38,7 +38,7 @@
   }
 }
 
-.preview-modal-header {
+.preview-modal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -47,7 +47,7 @@
   background: var(--bg-secondary);
 }
 
-.preview-modal-title {
+.preview-modal__title {
   margin: 0;
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
@@ -57,7 +57,7 @@
   gap: var(--space-2);
 }
 
-.preview-modal-close {
+.preview-modal__close {
   width: 32px;
   height: 32px;
   border: none;
@@ -72,12 +72,12 @@
   justify-content: center;
 }
 
-.preview-modal-close:hover {
+.preview-modal__close:hover {
   background: var(--bg-hover);
   color: var(--accent-danger);
 }
 
-.preview-modal-content {
+.preview-modal__content {
   flex: 1;
   display: flex;
   align-items: center;
@@ -88,7 +88,7 @@
   overflow: auto;
 }
 
-.preview-loading {
+.preview-modal__loading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -97,7 +97,7 @@
   font-size: 0.9rem;
 }
 
-.preview-loading-spinner {
+.preview-modal__spinner {
   width: 40px;
   height: 40px;
   border: 3px solid var(--border-primary);
@@ -110,14 +110,14 @@
   to { transform: rotate(360deg); }
 }
 
-.preview-canvas-container {
+.preview-modal__canvas-frame {
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
 }
 
-.preview-canvas {
+.preview-modal__canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   border: 2px solid var(--border-secondary);
@@ -125,7 +125,7 @@
   box-shadow: var(--shadow-glow);
 }
 
-.preview-modal-controls {
+.preview-modal__controls {
   padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--border-primary);
   background: var(--bg-secondary);
@@ -136,13 +136,13 @@
   flex-wrap: wrap;
 }
 
-.preview-fps-control {
+.preview-modal__fps-control {
   display: flex;
   align-items: center;
   gap: var(--space-3);
 }
 
-.preview-fps-label {
+.preview-modal__fps-label {
   font-size: 0.85rem;
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
@@ -150,7 +150,7 @@
   letter-spacing: 0.05em;
 }
 
-.preview-fps-slider {
+.preview-modal__fps-slider {
   width: 150px;
   height: 6px;
   -webkit-appearance: none;
@@ -161,7 +161,7 @@
   cursor: pointer;
 }
 
-.preview-fps-slider::-webkit-slider-thumb {
+.preview-modal__fps-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 18px;
@@ -173,11 +173,11 @@
   transition: transform var(--transition-fast);
 }
 
-.preview-fps-slider::-webkit-slider-thumb:hover {
+.preview-modal__fps-slider::-webkit-slider-thumb:hover {
   transform: scale(1.15);
 }
 
-.preview-fps-slider::-moz-range-thumb {
+.preview-modal__fps-slider::-moz-range-thumb {
   width: 18px;
   height: 18px;
   background: var(--accent-primary);
@@ -187,7 +187,7 @@
   box-shadow: var(--shadow-accent-sm);
 }
 
-.preview-fps-input {
+.preview-modal__fps-input {
   width: 60px;
   padding: var(--space-1-5) var(--space-2);
   font-size: 0.85rem;
@@ -199,19 +199,19 @@
   color: var(--text-primary);
 }
 
-.preview-fps-input:focus {
+.preview-modal__fps-input:focus {
   outline: none;
   border-color: var(--accent-primary);
   box-shadow: var(--ring-accent);
 }
 
-.preview-info {
+.preview-modal__info {
   display: flex;
   align-items: center;
   gap: var(--space-4);
 }
 
-.preview-frame-counter {
+.preview-modal__frame-counter {
   font-size: 0.85rem;
   font-family: var(--font-mono);
   color: var(--accent-primary);
@@ -221,7 +221,7 @@
   border: 1px solid var(--accent-primary-20);
 }
 
-.preview-size {
+.preview-modal__size {
   font-size: 0.8rem;
   font-family: var(--font-mono);
   color: var(--text-muted);
@@ -234,31 +234,31 @@
     max-height: 95vh;
   }
 
-  .preview-modal-header {
+  .preview-modal__header {
     padding: var(--space-3) var(--space-4);
   }
 
-  .preview-modal-content {
+  .preview-modal__content {
     padding: var(--space-4);
   }
 
-  .preview-modal-controls {
+  .preview-modal__controls {
     flex-direction: column;
     gap: var(--space-3);
     padding: var(--space-3) var(--space-4);
   }
 
-  .preview-fps-control {
+  .preview-modal__fps-control {
     width: 100%;
     justify-content: center;
   }
 
-  .preview-fps-slider {
+  .preview-modal__fps-slider {
     flex: 1;
     max-width: 200px;
   }
 
-  .preview-info {
+  .preview-modal__info {
     width: 100%;
     justify-content: center;
   }

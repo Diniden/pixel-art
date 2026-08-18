@@ -109,27 +109,27 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
         </div>
 
         {error && (
-          <div className="error-message">{error}</div>
+          <div className="project-select-modal__error">{error}</div>
         )}
 
         <div className="modal__body">
-          <div className="project-list">
+          <div className="project-select-modal__list">
             {projectList.map((name) => (
               <button
                 key={name}
-                className={`project-item ${name === projectName ? 'current' : ''}`}
+                className={`project-select-modal__item ${name === projectName ? 'project-select-modal__item--current' : ''}`}
                 onClick={() => handleSwitchProject(name)}
                 disabled={isLoading}
               >
-                <span className="project-icon"><Icon icon={FolderOpen} size={14} /></span>
-                <span className="project-name">{name}</span>
-                {name === projectName && <span className="current-badge">Current</span>}
+                <span className="project-select-modal__icon"><Icon icon={FolderOpen} size={14} /></span>
+                <span className="project-select-modal__name">{name}</span>
+                {name === projectName && <span className="project-select-modal__badge--current">Current</span>}
               </button>
             ))}
           </div>
 
           {isCreating ? (
-            <div className="create-project-form">
+            <div className="project-select-modal__form">
               <input
                 type="text"
                 value={newProjectName}
@@ -138,7 +138,7 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
                 autoFocus
                 disabled={isLoading}
               />
-              <div className="form-buttons">
+              <div className="project-select-modal__form-actions">
                 <button
                   className="btn btn--ghost"
                   onClick={() => {
@@ -161,11 +161,11 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
             </div>
           ) : (
             <button
-              className="new-project-btn"
+              className="project-select-modal__new-btn"
               onClick={() => setIsCreating(true)}
               disabled={isLoading}
             >
-              <span className="plus-icon"><Icon icon={Plus} size={14} /></span>
+              <span className="project-select-modal__plus-icon"><Icon icon={Plus} size={14} /></span>
               New Project
             </button>
           )}

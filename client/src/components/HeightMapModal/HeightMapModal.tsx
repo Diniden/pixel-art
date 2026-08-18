@@ -193,16 +193,16 @@ export function HeightMapModal({ isOpen, onClose, onConfirm }: HeightMapModalPro
   };
 
   return createPortal(
-    <div className="height-map-modal-backdrop" onClick={handleBackdropClick}>
+    <div className="height-map-modal__backdrop" onClick={handleBackdropClick}>
       <div className="height-map-modal" onClick={e => e.stopPropagation()}>
-        <div className="height-map-modal-header">
+        <div className="height-map-modal__header">
           <h3><Icon icon={Mountain} size={16} /> Height Map Generator</h3>
-          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <button className="modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
-        <div className="height-map-modal-content">
+        <div className="height-map-modal__content">
           {/* Preview Canvas */}
-          <div className="height-map-preview">
+          <div className="height-map-modal__preview">
             <canvas
               ref={canvasRef}
               style={{
@@ -217,74 +217,74 @@ export function HeightMapModal({ isOpen, onClose, onConfirm }: HeightMapModalPro
           </div>
 
           {/* Channel Selection */}
-          <div className="height-map-control">
-            <label className="height-map-label">
-              <span className="label-text">Channel</span>
+          <div className="height-map-modal__control">
+            <label className="height-map-modal__label">
+              <span className="height-map-modal__label-text">Channel</span>
             </label>
-            <div className="height-map-channel-buttons">
+            <div className="height-map-modal__channel-buttons">
               {(['R', 'G', 'B', 'H', 'S', 'L'] as ChannelType[]).map((ch) => (
                 <button
                   key={ch}
-                  className={`channel-btn ${channel === ch ? 'active' : ''}`}
+                  className={`height-map-modal__channel-btn ${channel === ch ? "height-map-modal__channel-btn--active" : ""}`}
                   onClick={() => setChannel(ch)}
                 >
                   {ch}
                 </button>
               ))}
             </div>
-            <div className="height-map-description">
+            <div className="height-map-modal__description">
               Select which channel to use for grayscale conversion. R, G, B are RGB channels. H, S, L are HSL channels.
             </div>
           </div>
 
           {/* Min Slider */}
-          <div className="height-map-control">
-            <label className="height-map-label">
-              <span className="label-text">Min Value</span>
-              <span className="label-value">0x{min.toString(16).toUpperCase().padStart(2, '0')} ({min})</span>
+          <div className="height-map-modal__control">
+            <label className="height-map-modal__label">
+              <span className="height-map-modal__label-text">Min Value</span>
+              <span className="height-map-modal__label-value">0x{min.toString(16).toUpperCase().padStart(2, '0')} ({min})</span>
             </label>
-            <div className="height-map-slider-container">
+            <div className="height-map-modal__slider-group">
               <input
                 type="range"
                 min="0"
                 max="255"
                 value={min}
                 onChange={(e) => setMin(Number(e.target.value))}
-                className="height-map-slider"
+                className="height-map-modal__slider"
               />
             </div>
-            <div className="height-map-description">
+            <div className="height-map-modal__description">
               Minimum value for grayscale normalization. Can be greater than max to invert.
             </div>
           </div>
 
           {/* Max Slider */}
-          <div className="height-map-control">
-            <label className="height-map-label">
-              <span className="label-text">Max Value</span>
-              <span className="label-value">0x{max.toString(16).toUpperCase().padStart(2, '0')} ({max})</span>
+          <div className="height-map-modal__control">
+            <label className="height-map-modal__label">
+              <span className="height-map-modal__label-text">Max Value</span>
+              <span className="height-map-modal__label-value">0x{max.toString(16).toUpperCase().padStart(2, '0')} ({max})</span>
             </label>
-            <div className="height-map-slider-container">
+            <div className="height-map-modal__slider-group">
               <input
                 type="range"
                 min="0"
                 max="255"
                 value={max}
                 onChange={(e) => setMax(Number(e.target.value))}
-                className="height-map-slider"
+                className="height-map-modal__slider"
               />
             </div>
-            <div className="height-map-description">
+            <div className="height-map-modal__description">
               Maximum value for grayscale normalization. Can be less than min to invert.
             </div>
           </div>
         </div>
 
-        <div className="height-map-modal-actions">
-          <button className="height-map-btn cancel" onClick={onClose}>
+        <div className="height-map-modal__actions">
+          <button className="height-map-modal__btn height-map-modal__btn--neutral" onClick={onClose}>
             Cancel
           </button>
-          <button className="height-map-btn confirm" onClick={handleConfirm}>
+          <button className="height-map-modal__btn height-map-modal__btn--primary" onClick={handleConfirm}>
             Apply
           </button>
         </div>

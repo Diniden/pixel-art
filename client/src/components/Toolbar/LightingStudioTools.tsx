@@ -255,38 +255,38 @@ export function LightingStudioTools() {
   return (
     <>
       {/* Lighting data layer edit target */}
-      <div className="toolbar-section studio-mode-section">
-        <div className="studio-mode-toggle" title="Lighting edit target">
+      <div className="toolbar__section toolbar__section--studio-mode">
+        <div className="toolbar__studio-mode-toggle" title="Lighting edit target">
           <button
-            className={`studio-mode-btn ${editMode === "normals" ? "active" : ""}`}
+            className={`toolbar__studio-mode-btn ${editMode === "normals" ? "toolbar__studio-mode-btn--active" : ""}`}
             onClick={() => setLightingDataLayerEditMode("normals")}
             aria-label="Edit Normals"
             title="Edit Normals"
           >
-            <span className="tool-icon"><Icon icon={Sun} /></span>
+            <span className="toolbar__tool-icon"><Icon icon={Sun} /></span>
           </button>
           <button
-            className={`studio-mode-btn ${editMode === "height" ? "active" : ""}`}
+            className={`toolbar__studio-mode-btn ${editMode === "height" ? "toolbar__studio-mode-btn--active" : ""}`}
             onClick={() => setLightingDataLayerEditMode("height")}
             aria-label="Edit Height Map"
             title="Edit Height Map"
           >
-            <span className="tool-icon"><Icon icon={Mountain} /></span>
+            <span className="toolbar__tool-icon"><Icon icon={Mountain} /></span>
           </button>
         </div>
       </div>
 
-      <div className="toolbar-section">
-        <div className="toolbar-group">
+      <div className="toolbar__section">
+        <div className="toolbar__group">
           {lightingTools.map((tool) => (
             <button
               key={tool.id}
-              className={`tool-btn ${selectedTool === tool.id ? "active" : ""}`}
+              className={`toolbar__tool-btn ${selectedTool === tool.id ? "toolbar__tool-btn--active" : ""}`}
               onClick={() => handleToolClick(tool.id)}
               title={`${tool.label} (${tool.hotkey})`}
             >
-              <span className="tool-icon"><Icon icon={tool.icon} /></span>
-              <span className="tool-hotkey">{tool.hotkey}</span>
+              <span className="toolbar__tool-icon"><Icon icon={tool.icon} /></span>
+              <span className="toolbar__tool-hotkey">{tool.hotkey}</span>
             </button>
           ))}
         </div>

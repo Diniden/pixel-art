@@ -8,7 +8,7 @@
   border: 1px solid var(--border-primary);
 }
 
-.normal-picker-header {
+.normal-picker__header {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
@@ -17,24 +17,24 @@
   margin-bottom: var(--space-2);
 }
 
-.normal-picker-canvas-container {
+.normal-picker__canvas-frame {
   position: relative;
   border-radius: 50%;
   overflow: hidden;
   box-shadow: var(--inset-well);
 }
 
-.normal-picker-canvas {
+.normal-picker__canvas {
   display: block;
   cursor: crosshair;
   border-radius: 50%;
 }
 
-.normal-picker-canvas:active {
+.normal-picker__canvas:active {
   cursor: grabbing;
 }
 
-.normal-picker-value {
+.normal-picker__value {
   margin-top: var(--space-2);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -45,7 +45,7 @@
   border: 1px solid var(--border-primary);
 }
 
-.normal-picker-hint {
+.normal-picker__hint {
   margin-top: var(--space-1-5);
   font-size: 0.65rem;
   color: var(--text-muted);

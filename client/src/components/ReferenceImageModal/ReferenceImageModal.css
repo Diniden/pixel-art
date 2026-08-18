@@ -1,8 +1,14 @@
-/* Modal chrome (overlay, header, close, body, footer, actions) comes from
+/* block: reference-image-modal (task 21, G5+G8).
+   Modal chrome (overlay, header, close, body, footer, actions) comes from
    styles/blocks/modal.css (task 18). This sheet keeps only what is specific
-   to the reference-image editor. */
+   to the reference-image editor.
+   G8: `.canvas-area` was BARE here and collided with App.css's shell class,
+   which is emitted LAST and forced `flex-direction: column` onto this modal's
+   image area — destroying its centring while its checkerboard survived. Under
+   the block name the modal's `align-items/justify-content: center` finally
+   applies, so THE IMAGE IS NOW CENTRED (a sanctioned visual delta). */
 
-.reference-modal {
+.reference-image-modal {
   width: 90vw;
   max-width: 900px;
   height: 80vh;
@@ -22,7 +28,7 @@
 }
 
 /* Upload Zone */
-.upload-zone {
+.reference-image-modal__upload-zone {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -35,31 +41,25 @@
   transition: all var(--transition-fast);
 }
 
-.upload-zone:hover,
-.upload-zone.dragging {
-  border-color: var(--accent-primary);
-  background: var(--accent-primary-05);
-}
-
-.upload-icon {
+.reference-image-modal__upload-icon {
   font-size: 64px;
   margin-bottom: var(--space-4);
   opacity: 0.8;
 }
 
-.upload-text {
+.reference-image-modal__upload-text {
   font-size: var(--text-lg);
   color: var(--text-primary);
   margin-bottom: var(--space-2);
 }
 
-.upload-hint {
+.reference-image-modal__upload-hint {
   font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 /* Image Editor */
-.image-editor {
+.reference-image-modal__editor {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -67,7 +67,7 @@
   overflow: hidden;
 }
 
-.editor-toolbar {
+.reference-image-modal__toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -75,7 +75,7 @@
   flex-wrap: wrap;
 }
 
-.image-info {
+.reference-image-modal__image-info {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--text-muted);
@@ -84,7 +84,7 @@
   border-radius: var(--radius-sm);
 }
 
-.zoom-controls {
+.reference-image-modal__zoom-controls {
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -93,7 +93,7 @@
   padding: var(--space-0-5);
 }
 
-.toolbar-btn {
+.reference-image-modal__toolbar-btn {
   width: 28px;
   height: 28px;
   padding: 0;
@@ -109,16 +109,12 @@
   transition: all var(--transition-fast);
 }
 
-.toolbar-btn:hover {
+.reference-image-modal__toolbar-btn:hover {
   background: var(--bg-hover);
   color: var(--accent-primary);
 }
 
-.toolbar-btn.reset-btn {
-  font-size: 1.1rem;
-}
-
-.zoom-level {
+.reference-image-modal__zoom-level {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-muted);
@@ -126,9 +122,9 @@
   text-align: center;
 }
 
-.select-all-btn,
-.change-image-btn,
-.clear-image-btn {
+.reference-image-modal__select-all-btn,
+.reference-image-modal__change-image-btn,
+.reference-image-modal__clear-image-btn {
   padding: var(--space-1-5) var(--space-3);
   font-size: var(--text-sm);
   background: var(--bg-tertiary);
@@ -139,24 +135,24 @@
   transition: all var(--transition-fast);
 }
 
-.select-all-btn:hover,
-.change-image-btn:hover {
+.reference-image-modal__select-all-btn:hover,
+.reference-image-modal__change-image-btn:hover {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
 }
 
-.clear-image-btn {
+.reference-image-modal__clear-image-btn {
   background: var(--accent-danger-10);
   border-color: var(--accent-danger-30);
   color: var(--accent-danger);
 }
 
-.clear-image-btn:hover {
+.reference-image-modal__clear-image-btn:hover {
   background: var(--accent-danger-20);
   border-color: var(--accent-danger);
 }
 
-.canvas-area {
+.reference-image-modal__canvas-area {
   flex: 1;
   display: flex;
   align-items: center;
@@ -169,21 +165,21 @@
 }
 
 
-.canvas-pan-container {
+.reference-image-modal__pan {
   display: flex;
   align-items: center;
   justify-content: center;
   transition: none;
 }
 
-.canvas-area canvas {
+.reference-image-modal__canvas-area canvas {
   max-width: none;
   max-height: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.selection-hint {
+.reference-image-modal__selection-hint {
   font-size: 0.8rem;
   color: var(--text-muted);
   text-align: center;
@@ -192,34 +188,46 @@
   line-height: var(--leading-normal);
 }
 
-.selection-info {
+.reference-image-modal__selection-info {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--accent-primary);
 }
 
+/* modifiers */
+
+.reference-image-modal__upload-zone:hover,
+.reference-image-modal__upload-zone--dragging {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-05);
+}
+
+.reference-image-modal__toolbar-btn--reset {
+  font-size: 1.1rem;
+}
+
 /* Responsive. The shared-chrome squeeze (header/body/footer/actions and the
    full-width footer buttons) moved to styles/blocks/modal.css. */
 @media (max-width: 768px) {
-  .reference-modal {
+  .reference-image-modal {
     width: 95vw;
     height: 90vh;
     border-radius: var(--radius-md);
   }
 
-  .editor-toolbar {
+  .reference-image-modal__toolbar {
     gap: var(--space-2);
   }
 
-  .editor-toolbar > * {
+  .reference-image-modal__toolbar > * {
     font-size: 0.8rem;
   }
 
-  .selection-hint {
+  .reference-image-modal__selection-hint {
     font-size: 0.7rem;
   }
 
-  .selection-info {
+  .reference-image-modal__selection-info {
     order: 2;
   }
 }

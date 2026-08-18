@@ -138,7 +138,7 @@ function VariantThumbnail({
 
   return (
     <button
-      className={`variant-thumb ${isSelected ? "variant-thumb-selected" : ""}`}
+      className={`export-preview-modal__thumb ${isSelected ? "export-preview-modal__thumb--selected" : ""}`}
       onClick={onClick}
       title={variant.name}
     >
@@ -324,32 +324,32 @@ function ObjectPreviewRow({
   const gridSize = instance?.gridSize ?? { width: 0, height: 0 };
 
   return (
-    <div className="export-object-row">
+    <div className="export-preview-modal__object-row">
       {/* Left: animated canvas */}
-      <div className="export-object-row-left">
-        <div className="export-object-canvas-wrap">
+      <div className="export-preview-modal__object-col">
+        <div className="export-preview-modal__object-canvas">
           <canvas ref={canvasRef} />
         </div>
-        <div className="export-object-info">
-          <span className="export-object-name" title={obj.name}>
+        <div className="export-preview-modal__object-info">
+          <span className="export-preview-modal__object-name" title={obj.name}>
             {obj.name}
           </span>
-          <span className="export-object-meta">
+          <span className="export-preview-modal__object-meta">
             <span>
               {gridSize.width}x{gridSize.height}
             </span>
             <span>{frameCount} frames</span>
           </span>
-          <span className="export-object-frame-counter">
+          <span className="export-preview-modal__object-frames">
             Frame {currentFrame + 1} / {frameCount}
           </span>
           {obj.origin && (
-            <span className="export-object-origin">
+            <span className="export-preview-modal__object-origin">
               Origin: ({obj.origin.x}, {obj.origin.y})
             </span>
           )}
           {obj.maxCanvas && (
-            <span className="export-object-max-canvas">
+            <span className="export-preview-modal__object-max-canvas">
               MaxCanvas: {obj.maxCanvas.width}x{obj.maxCanvas.height} +(
               {obj.maxCanvas.offset.x}, {obj.maxCanvas.offset.y})
             </span>
@@ -359,11 +359,11 @@ function ObjectPreviewRow({
 
       {/* Right: variant picker */}
       {variantInfos.length > 0 && (
-        <div className="export-variant-panel">
+        <div className="export-preview-modal__variant-panel">
           {variantInfos.map((vi) => (
-            <div key={vi.layer.id} className="export-variant-row">
-              <span className="export-variant-layer-name">{vi.layer.name}</span>
-              <div className="export-variant-thumbs">
+            <div key={vi.layer.id} className="export-preview-modal__variant-row">
+              <span className="export-preview-modal__variant-layer-name">{vi.layer.name}</span>
+              <div className="export-preview-modal__variant-thumbs">
                 {vi.layer.variants.map((v: ExportedVariant) => (
                   <VariantThumbnail
                     key={v.id}
@@ -449,36 +449,36 @@ export function ExportPreviewModal({
   const textureCount = loaded?.textures.size ?? 0;
 
   return createPortal(
-    <div className="export-preview-overlay" onClick={onClose}>
+    <div className="export-preview-modal__overlay" onClick={onClose}>
       <div
         className="export-preview-modal"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="export-preview-header">
-          <div className="export-preview-header-left">
-            <h3 className="export-preview-title">Export Preview</h3>
-            <span className="export-preview-subtitle">{kebabName}/</span>
+        <div className="export-preview-modal__header">
+          <div className="export-preview-modal__header-left">
+            <h3 className="export-preview-modal__title">Export Preview</h3>
+            <span className="export-preview-modal__subtitle">{kebabName}/</span>
           </div>
-          <button className="export-preview-close" onClick={onClose}>
+          <button className="export-preview-modal__close" onClick={onClose}>
             <Icon icon={X} size={14} />
           </button>
         </div>
 
         {/* Body */}
         {error ? (
-          <div className="export-preview-error">
-            <span className="export-preview-error-icon"><Icon icon={AlertTriangle} size={16} /></span>
-            <span className="export-preview-error-msg">{error}</span>
+          <div className="export-preview-modal__error">
+            <span className="export-preview-modal__error-icon"><Icon icon={AlertTriangle} size={16} /></span>
+            <span className="export-preview-modal__error-msg">{error}</span>
           </div>
         ) : !loaded ? (
-          <div className="export-preview-loading">
-            <div className="export-preview-spinner" />
+          <div className="export-preview-modal__loading">
+            <div className="export-preview-modal__spinner" />
             <span>Loading exported project...</span>
           </div>
         ) : (
-          <div className="export-preview-content">
-            <div className="export-preview-list">
+          <div className="export-preview-modal__content">
+            <div className="export-preview-modal__list">
               {objects.map((obj) => (
                 <ObjectPreviewRow
                   key={obj.id}
@@ -494,16 +494,16 @@ export function ExportPreviewModal({
 
         {/* Footer Controls */}
         {loaded && (
-          <div className="export-preview-controls">
-            <div className="export-preview-fps">
-              <label className="export-preview-fps-label">FPS:</label>
+          <div className="export-preview-modal__controls">
+            <div className="export-preview-modal__fps">
+              <label className="export-preview-modal__fps-label">FPS:</label>
               <input
                 type="range"
                 min="1"
                 max="30"
                 value={fps}
                 onChange={(e) => setFps(Number(e.target.value))}
-                className="export-preview-fps-slider"
+                className="export-preview-modal__fps-slider"
               />
               <input
                 type="number"
@@ -513,19 +513,19 @@ export function ExportPreviewModal({
                 onChange={(e) =>
                   setFps(Math.max(1, Math.min(60, Number(e.target.value) || 1)))
                 }
-                className="export-preview-fps-value"
+                className="export-preview-modal__fps-value"
               />
             </div>
-            <div className="export-preview-stats">
-              <span className="export-preview-stat">
+            <div className="export-preview-modal__stats">
+              <span className="export-preview-modal__stat">
                 Objects:{" "}
-                <span className="export-preview-stat-value">
+                <span className="export-preview-modal__stat-value">
                   {objects.length}
                 </span>
               </span>
-              <span className="export-preview-stat">
+              <span className="export-preview-modal__stat">
                 Textures:{" "}
-                <span className="export-preview-stat-value">
+                <span className="export-preview-modal__stat-value">
                   {textureCount}
                 </span>
               </span>

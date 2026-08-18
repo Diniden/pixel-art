@@ -8,12 +8,12 @@
   height: 100%;
 }
 
-.frame-move-controls {
+.frame-timeline__move-controls {
   display: flex;
   gap: var(--space-0-5);
 }
 
-.frame-move-btn {
+.frame-timeline__move-btn {
   width: 20px;
   height: 20px;
   padding: 0;
@@ -29,24 +29,24 @@
   transition: all var(--transition-fast);
 }
 
-.frame-move-btn:hover:not(:disabled) {
+.frame-timeline__move-btn:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.frame-move-btn:disabled {
+.frame-timeline__move-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
 
-.timeline-controls {
+.frame-timeline__controls {
   display: flex;
   align-items: center;
   gap: var(--space-1-5);
 }
 
-.play-btn {
+.frame-timeline__play-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -58,12 +58,12 @@
   border: 1px solid var(--border-primary);
 }
 
-.play-btn.playing {
+.frame-timeline__play-btn--playing {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
 }
 
-.preview-btn {
+.frame-timeline__preview-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -79,13 +79,13 @@
   transition: all var(--transition-fast);
 }
 
-.preview-btn:hover {
+.frame-timeline__preview-btn:hover {
   background: linear-gradient(135deg, var(--accent-warning-20), var(--accent-primary-20));
   border-color: var(--accent-warning);
   color: var(--accent-warning);
 }
 
-.canvas-size-btn {
+.frame-timeline__size-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -101,24 +101,46 @@
   transition: all var(--transition-fast);
 }
 
-.canvas-size-btn:hover {
+.frame-timeline__size-btn:hover {
   background: linear-gradient(135deg, var(--accent-primary-20), var(--accent-variant-20));
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.canvas-size-btn.variant {
+.frame-timeline__size-btn--variant {
   border-color: var(--accent-variant-40);
   color: var(--accent-variant);
 }
 
-.canvas-size-btn.variant:hover {
+.frame-timeline__size-btn--variant:hover {
   background: var(--accent-variant-20);
   border-color: var(--accent-variant);
   color: var(--accent-variant-light);
 }
 
-.copy-previous-label {
+/* The wand button that opens the AI interpolate modal. Its rule lived in
+   AIInterpolateModal.css as the bare `.ai-interpolate-btn` even though the
+   markup is rendered by FramesView.tsx and VariantView.tsx; task 22 moved it
+   to the block that owns the markup. */
+.frame-timeline__ai-btn {
+  padding: var(--space-1) var(--space-2-5);
+  background: transparent;
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  line-height: var(--leading-none);
+}
+
+.frame-timeline__ai-btn:hover {
+  background: var(--accent-variant-10);
+  border-color: var(--accent-variant);
+  color: var(--accent-variant);
+}
+
+.frame-timeline__copy-previous {
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -128,24 +150,24 @@
   user-select: none;
 }
 
-.copy-previous-label input[type="checkbox"] {
+.frame-timeline__copy-previous input[type="checkbox"] {
   width: 12px;
   height: 12px;
   accent-color: var(--accent-primary);
   cursor: pointer;
 }
 
-.copy-previous-label:hover {
+.frame-timeline__copy-previous:hover {
   color: var(--text-primary);
 }
 
-.new-frame-input {
+.frame-timeline__new-frame-input {
   width: 120px;
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
 }
 
-.add-frame-btn {
+.frame-timeline__add-frame-btn {
   padding: var(--space-1) var(--space-2-5);
   font-size: var(--text-xs);
   background: var(--accent-primary);
@@ -153,25 +175,25 @@
   color: var(--white);
 }
 
-.frames-scroll {
+.frames-view__scroll {
   flex: 1 1 auto;
   overflow-x: auto;
   overflow-y: hidden;
   min-height: 0;
 }
 
-.frames-list {
+.frames-view__list {
   display: flex;
   gap: var(--space-2);
   min-width: min-content;
   padding-bottom: var(--space-2);
 }
 
-.frames-list-droppable {
+.frames-view__list--droppable {
   position: relative;
 }
 
-.frame-drop-indicator {
+.frame-timeline__drop-indicator {
   position: absolute;
   top: 0;
   bottom: 8px;
@@ -184,11 +206,11 @@
   box-shadow: var(--glow-accent-6);
 }
 
-.frame-drop-indicator-base {
+.frame-timeline__drop-indicator--base {
   bottom: 4px;
 }
 
-.frame-item {
+.frames-view__item {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -201,21 +223,21 @@
   min-width: 80px;
 }
 
-.frame-item:hover {
+.frames-view__item:hover {
   background: var(--bg-hover);
 }
 
-.frame-item.selected {
+.frames-view__item--selected {
   border-color: var(--accent-primary);
   background: var(--accent-primary-10);
 }
 
-.frame-item.dragging {
+.frames-view__item--dragging {
   opacity: 0.5;
   cursor: grabbing;
 }
 
-.frame-thumbnail {
+.frames-view__thumbnail {
   width: 48px;
   height: 48px;
   margin: 0 auto;
@@ -224,19 +246,19 @@
   border: 1px solid var(--border-primary);
 }
 
-.frame-thumb-canvas {
+.frame-timeline__thumb-canvas {
   display: block;
   image-rendering: pixelated;
 }
 
-.frame-info {
+.frames-view__info {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-0-5);
 }
 
-.frame-name {
+.frames-view__name {
   font-size: var(--text-xs);
   color: var(--text-primary);
   white-space: nowrap;
@@ -246,14 +268,14 @@
   text-align: center;
 }
 
-.frame-name-input {
+.frames-view__name-input {
   width: 64px;
   padding: var(--space-0-5) var(--space-1);
   font-size: var(--text-xs);
   text-align: center;
 }
 
-.frame-index {
+.frames-view__index {
   font-size: var(--text-2xs);
   color: var(--text-muted);
   font-family: var(--font-mono);
@@ -262,7 +284,7 @@
   gap: var(--space-1);
 }
 
-.frame-tag-dot {
+.frame-timeline__tag-dot {
   display: inline-block;
   width: 5px;
   height: 5px;
@@ -270,13 +292,13 @@
   flex-shrink: 0;
 }
 
-.frame-actions {
+.frames-view__actions {
   display: flex;
   justify-content: center;
   gap: var(--space-1);
 }
 
-.frame-action-btn {
+.frames-view__action-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -291,39 +313,39 @@
   transition: all var(--transition-fast);
 }
 
-.frame-item:hover .frame-action-btn {
+.frames-view__item:hover .frames-view__action-btn {
   opacity: 1;
 }
 
-.frame-action-btn:hover:not(:disabled) {
+.frames-view__action-btn:hover:not(:disabled) {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.frame-action-btn.delete:hover:not(:disabled) {
+.frames-view__action-btn--danger:hover:not(:disabled) {
   border-color: var(--accent-danger);
   color: var(--accent-danger);
 }
 
-.frame-action-btn:disabled {
+.frames-view__action-btn:disabled {
   cursor: not-allowed;
   opacity: 0.3;
 }
 
-.frame-tags-icon {
+.frame-timeline__tags-icon {
   font-size: 13px;
   font-weight: var(--weight-bold);
   font-family: var(--font-sans);
   line-height: var(--leading-none);
 }
 
-.frame-action-btn.frame-tags-btn:hover:not(:disabled) {
+.frames-view__action-btn--tags:hover:not(:disabled) {
   border-color: var(--accent-variant-60);
   color: var(--accent-variant-light);
 }
 
 /* Variant Timeline Styles */
-.variant-timeline {
+.variant-view {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -332,21 +354,21 @@
 }
 
 /* Base Frames Section - Compact view for offset control */
-.base-frames-section {
+.variant-view__base-section {
   flex-shrink: 0;
   margin-bottom: var(--space-3);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border-primary);
 }
 
-.base-frames-header {
+.variant-view__base-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--space-2);
 }
 
-.base-frames-title {
+.variant-view__base-title {
   font-size: 0.7rem;
   font-weight: var(--weight-semibold);
   text-transform: uppercase;
@@ -354,7 +376,7 @@
   color: var(--accent-warning);
 }
 
-.base-frames-offset {
+.variant-view__base-offset {
   font-size: 0.7rem;
   font-family: var(--font-mono);
   color: var(--accent-variant);
@@ -363,23 +385,23 @@
   border-radius: var(--radius-sm);
 }
 
-.base-frames-scroll {
+.variant-view__base-scroll {
   overflow-x: auto;
   overflow-y: hidden;
 }
 
-.base-frames-list {
+.variant-view__base-list {
   display: flex;
   gap: var(--space-1);
   min-width: min-content;
   padding-bottom: var(--space-1);
 }
 
-.base-frames-list-droppable {
+.variant-view__base-list--droppable {
   position: relative;
 }
 
-.base-frame-item {
+.variant-view__base-item {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -394,23 +416,23 @@
   opacity: 0.6;
 }
 
-.base-frame-item:hover {
+.variant-view__base-item:hover {
   opacity: 0.9;
   background: var(--bg-hover);
 }
 
-.base-frame-item.active {
+.variant-view__base-item--active {
   border-color: var(--accent-warning);
   background: var(--accent-warning-15);
   opacity: 1;
 }
 
-.base-frame-item.dragging {
+.variant-view__base-item--dragging {
   opacity: 0.5;
   cursor: grabbing;
 }
 
-.base-frame-thumbnail {
+.variant-view__base-thumbnail {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-xs);
@@ -418,23 +440,23 @@
   border: 1px solid var(--border-primary);
 }
 
-.base-frame-thumbnail .frame-thumb-canvas {
+.variant-view__base-thumbnail .frame-timeline__thumb-canvas {
   width: 32px;
   height: 32px;
 }
 
-.base-frame-index {
+.variant-view__base-index {
   font-size: 0.55rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
 
-.variant-frame-info {
+.variant-view__info {
   font-size: 0.7rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
 
-  /* merged from a duplicate .variant-frame-info block (task 12,
+  /* merged from a duplicate .variant-view__info block (task 12,
      no-duplicate-selectors); property sets were disjoint. */
   display: flex;
   flex-direction: column;
@@ -442,7 +464,7 @@
   gap: var(--space-0-5);
 }
 
-.variant-frames-scroll {
+.variant-view__scroll {
   flex: 1 1 auto;
   overflow-x: auto;
   overflow-y: hidden;
@@ -450,18 +472,18 @@
   max-height: 100%;
 }
 
-.variant-frames-list {
+.variant-view__list {
   display: flex;
   gap: var(--space-2);
   min-width: min-content;
   padding-bottom: var(--space-2);
 }
 
-.variant-frames-list-droppable {
+.variant-view__list--droppable {
   position: relative;
 }
 
-.variant-frame-item {
+.variant-view__item {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -474,21 +496,21 @@
   min-width: 80px;
 }
 
-.variant-frame-item:hover {
+.variant-view__item:hover {
   background: var(--bg-hover);
 }
 
-.variant-frame-item.selected {
+.variant-view__item--selected {
   border-color: var(--accent-primary);
   background: var(--accent-primary-10);
 }
 
-.variant-frame-item.dragging {
+.variant-view__item--dragging {
   opacity: 0.5;
   cursor: grabbing;
 }
 
-.variant-frame-thumbnail {
+.variant-view__thumbnail {
   width: 48px;
   height: 48px;
   margin: 0 auto;
@@ -497,7 +519,7 @@
   border: 1px solid var(--border-primary);
 }
 
-.variant-frame-index {
+.variant-view__index {
   font-size: var(--text-2xs);
   color: var(--text-muted);
   font-family: var(--font-mono);
@@ -506,18 +528,18 @@
   gap: var(--space-1);
 }
 
-.variant-frame-index .frame-tag-dot {
+.variant-view__index .frame-timeline__tag-dot {
   width: 5px;
   height: 5px;
 }
 
-.variant-frame-actions {
+.variant-view__actions {
   display: flex;
   justify-content: center;
   gap: var(--space-1);
 }
 
-.variant-frame-action-btn {
+.variant-view__action-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -532,27 +554,27 @@
   transition: all var(--transition-fast);
 }
 
-.variant-frame-item:hover .variant-frame-action-btn,
-.variant-frame-actions:hover .variant-frame-action-btn {
+.variant-view__item:hover .variant-view__action-btn,
+.variant-view__actions:hover .variant-view__action-btn {
   opacity: 1;
 }
 
-.variant-frame-action-btn:hover:not(:disabled) {
+.variant-view__action-btn:hover:not(:disabled) {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.variant-frame-action-btn.delete:hover:not(:disabled) {
+.variant-view__action-btn--danger:hover:not(:disabled) {
   border-color: var(--accent-danger);
   color: var(--accent-danger);
 }
 
-.variant-frame-action-btn:disabled {
+.variant-view__action-btn:disabled {
   cursor: not-allowed;
   opacity: 0.3;
 }
 
-.variant-frame-action-btn.variant-frame-tags-btn:hover:not(:disabled) {
+.variant-view__action-btn--tags:hover:not(:disabled) {
   border-color: var(--accent-variant-60);
   color: var(--accent-variant-light);
 }
@@ -561,7 +583,7 @@
 /* View Mode Dropdown Styles */
 /* ============================================ */
 
-.timeline-header-row {
+.frame-timeline__header-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -570,11 +592,11 @@
   flex-wrap: wrap;
 }
 
-.view-mode-dropdown {
+.frame-timeline__dropdown {
   position: relative;
 }
 
-.view-mode-dropdown-trigger {
+.frame-timeline__dropdown-trigger {
   display: flex;
   align-items: center;
   gap: var(--space-1-5);
@@ -591,18 +613,18 @@
   transition: all var(--transition-fast);
 }
 
-.view-mode-dropdown-trigger:hover {
+.frame-timeline__dropdown-trigger:hover {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.view-mode-dropdown-arrow {
+.frame-timeline__dropdown-arrow {
   font-size: var(--text-2xs);
   opacity: 0.7;
 }
 
-.view-mode-dropdown-menu {
+.frame-timeline__dropdown-menu {
   position: absolute;
   top: 100%;
   left: 0;
@@ -616,7 +638,7 @@
   overflow: hidden;
 }
 
-.view-mode-dropdown-item {
+.frame-timeline__dropdown-item {
   display: block;
   width: 100%;
   padding: var(--space-2) var(--space-3);
@@ -629,36 +651,36 @@
   transition: all var(--transition-fast);
 }
 
-.view-mode-dropdown-item:hover {
+.frame-timeline__dropdown-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.view-mode-dropdown-item.selected {
+.frame-timeline__dropdown-item--selected {
   background: var(--accent-primary-15);
   color: var(--accent-primary);
 }
 
-.view-mode-dropdown-item.variant-option {
+.frame-timeline__dropdown-item--variant {
   color: var(--accent-variant);
 }
 
-.view-mode-dropdown-item.variant-option:hover {
+.frame-timeline__dropdown-item--variant:hover {
   background: var(--accent-variant-15);
   color: var(--accent-variant-light);
 }
 
-.view-mode-dropdown-item.variant-option.selected {
+.frame-timeline__dropdown-item--variant.frame-timeline__dropdown-item--selected {
   background: var(--accent-variant-20);
   color: var(--accent-variant-light);
 }
 
-.view-mode-dropdown-trigger.variant-mode {
+.frame-timeline__dropdown-trigger--variant {
   border-color: var(--accent-variant);
   color: var(--accent-variant);
 }
 
-.view-mode-dropdown-trigger.variant-mode:hover {
+.frame-timeline__dropdown-trigger--variant:hover {
   border-color: var(--accent-variant-light);
   color: var(--accent-variant-light);
 }
@@ -675,19 +697,19 @@
   overflow: visible;
 }
 
-/* When timeline-action-bar is replaced by timeline-header-row, hide border */
-.timeline-view > .timeline-header-row {
+/* When timeline-action-bar is replaced by frame-timeline__header-row, hide border */
+.timeline-view > .frame-timeline__header-row {
   border-bottom: 1px solid var(--border-primary);
   padding-bottom: var(--space-2);
 }
 
-.timeline-action-buttons {
+.timeline-view__action-buttons {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.timeline-action-btn {
+.timeline-view__action-btn {
   padding: var(--space-1) var(--space-2);
   font-size: 0.7rem;
   font-weight: var(--weight-medium);
@@ -699,36 +721,36 @@
   transition: all var(--transition-fast);
 }
 
-.timeline-action-btn:hover:not(:disabled) {
+.timeline-view__action-btn:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.timeline-action-btn:disabled {
+.timeline-view__action-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
 
-.timeline-action-btn.add-layer-btn {
+.timeline-view__action-btn--add-layer {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
   color: var(--white);
 }
 
-.timeline-action-btn.add-layer-btn:hover {
+.timeline-view__action-btn--add-layer:hover {
   background: var(--accent-secondary);
   border-color: var(--accent-secondary);
   color: var(--white);
 }
 
-.timeline-new-layer {
+.timeline-view__new-layer {
   display: flex;
   align-items: center;
   gap: var(--space-1);
 }
 
-.timeline-new-layer-input {
+.timeline-view__new-layer-input {
   width: 100px;
   padding: var(--space-1) var(--space-2);
   font-size: 0.7rem;
@@ -738,18 +760,18 @@
   color: var(--text-primary);
 }
 
-.timeline-new-layer-input::placeholder {
+.timeline-view__new-layer-input::placeholder {
   color: var(--text-muted);
 }
 
-.timeline-playback-controls {
+.timeline-view__playback-controls {
   display: flex;
   align-items: center;
   gap: var(--space-1-5);
 }
 
 /* Grid Container */
-.timeline-grid-container {
+.timeline-view__layout {
   flex: 1 1 auto;
   display: flex;
   min-height: 0;
@@ -757,7 +779,7 @@
 }
 
 /* Layer Headers */
-.timeline-layer-headers {
+.timeline-view__layer-headers {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -770,7 +792,7 @@
   max-width: 140px;
 }
 
-.timeline-layer-header {
+.timeline-view__layer-header {
   display: flex;
   align-items: center;
   gap: var(--space-1-5);
@@ -784,28 +806,29 @@
   user-select: none;
 }
 
-.timeline-layer-header:hover,
-/* dynamic: hovered built at TimelineView.tsx:719. Do not delete as dead. */
-.timeline-layer-header.hovered {
+/* dynamic: timeline-view__layer-header--hovered applied conditionally at
+   TimelineView.tsx:719. Do not delete as dead. */
+.timeline-view__layer-header:hover,
+.timeline-view__layer-header--hovered {
   background: var(--bg-hover);
   border-left: 3px solid var(--layer-color, var(--accent-primary));
   padding-left: var(--space-1);
   box-shadow: var(--glow-white-8-15);
 }
 
-.timeline-layer-header.empty {
+.timeline-view__layer-header--empty {
   /* Empty spacer row - no content, just maintains height */
   pointer-events: none;
 }
 
-.timeline-layer-dot {
+.timeline-view__layer-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.timeline-layer-name {
+.timeline-view__layer-name {
   font-size: 0.7rem;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -814,13 +837,13 @@
 }
 
 /* Grid Scroll Area */
-.timeline-grid-scroll {
+.timeline-view__scroll {
   flex: 1 1 auto;
   overflow: auto;
   min-height: 0;
 }
 
-.timeline-grid {
+.timeline-view__grid {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -829,23 +852,24 @@
 }
 
 /* Grid Rows */
-.timeline-grid-row {
+.timeline-view__row {
   display: flex;
   gap: var(--space-0-5);
   height: 32px;
   min-height: 32px;
 }
 
-/* dynamic: even|odd built at TimelineView.tsx:758 (`${rowIndex % 2 === 0 ?
-   'even' : 'odd'}`). NOTE: `.odd` has no rule — see the "missing CSS" list;
-   task 09 deliberately does not invent one. Do not delete as dead. */
-.timeline-grid-row.even {
+/* dynamic: timeline-view__row--{even|odd} built at TimelineView.tsx:758
+   (`${rowIndex % 2 === 0 ? '...--even' : '...--odd'}`). NOTE: `--odd` has no
+   rule — see the "missing CSS" list; task 09 deliberately does not invent one
+   and task 22 carried the gap across the rename. Do not delete as dead. */
+.timeline-view__row--even {
   background: var(--overlay-15);
   border-radius: var(--radius-sm);
 }
 
 /* Grid Cells */
-.timeline-cell {
+.timeline-view__cell {
   width: 24px;
   height: 32px;
   display: flex;
@@ -861,47 +885,47 @@
   flex-shrink: 0;
 }
 
-.timeline-cell.empty {
+.timeline-view__cell--empty {
   background: transparent;
   border: 1px dashed var(--border-primary);
   opacity: 0.3;
 }
 
-.timeline-cell.empty.empty-selected {
+.timeline-view__cell--empty-selected {
   background: var(--accent-primary-08);
   border: 1px dashed var(--accent-primary);
   opacity: 0.6;
   box-shadow: var(--ring-accent-1-30);
 }
 
-.timeline-cell:hover:not(.empty) {
+.timeline-view__cell:hover:not(.timeline-view__cell--empty) {
   background: var(--bg-hover);
   border-color: var(--border-primary);
 }
 
-.timeline-cell.selected {
+.timeline-view__cell--selected {
   border-color: var(--accent-primary);
   background: var(--accent-primary-20);
   box-shadow: var(--ring-accent-1);
 }
 
-.timeline-cell.highlighted {
+.timeline-view__cell--highlighted {
   background: var(--white-25);
   border-color: var(--white-50);
   box-shadow: var(--glow-white-toggle);
   transform: scale(1.05);
 }
 
-.timeline-cell.variant {
+.timeline-view__cell--variant {
   border: 2px solid var(--accent-variant);
 }
 
-.timeline-cell.variant.selected {
+.timeline-view__cell--variant.timeline-view__cell--selected {
   border-color: var(--accent-primary);
   box-shadow: var(--ring-variant-accent);
 }
 
-.timeline-cell-dot {
+.timeline-view__cell-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -909,7 +933,7 @@
 }
 
 /* Thumbnail styles */
-.timeline-toggle-btn {
+.timeline-view__toggle-btn {
   padding: var(--space-1) var(--space-2-5);
   font-size: 0.7rem;
   font-weight: var(--weight-medium);
@@ -925,25 +949,25 @@
   white-space: nowrap;
 }
 
-.timeline-toggle-btn:hover {
+.timeline-view__toggle-btn:hover {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.timeline-toggle-btn.active {
+.timeline-view__toggle-btn--active {
   background: var(--accent-primary-20);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
   box-shadow: var(--glow-accent-6-30);
 }
 
-.timeline-cell.with-thumbnail {
+.timeline-view__cell--with-thumbnail {
   width: 28px;
   padding-top: var(--space-0-5);
 }
 
-.timeline-cell-thumbnail {
+.timeline-view__cell-thumbnail {
   width: 20px;
   height: 20px;
   image-rendering: pixelated;
@@ -952,7 +976,7 @@
 }
 
 /* Playhead */
-.timeline-playhead {
+.timeline-view__playhead {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -963,7 +987,7 @@
   pointer-events: none;
 }
 
-.timeline-playhead::before {
+.timeline-view__playhead::before {
   content: '';
   position: absolute;
   top: -4px;
@@ -979,38 +1003,37 @@
     padding: var(--space-2);
   }
 
-  .new-frame-input {
+  .frame-timeline__new-frame-input {
     width: 80px;
   }
 
-  .frame-item {
+  .frames-view__item {
     min-width: 64px;
     padding: var(--space-1-5);
   }
 
-  .frame-thumbnail {
+  .frames-view__thumbnail {
     width: 40px;
     height: 40px;
   }
 
-  .variant-frame-item {
+  .variant-view__item {
     min-width: 50px;
     padding: var(--space-1);
   }
 
-  .variant-frame-thumbnail {
+  .variant-view__thumbnail {
     width: 40px;
     height: 40px;
   }
 
-  .timeline-layer-headers {
+  .timeline-view__layer-headers {
     min-width: 80px;
     max-width: 100px;
   }
 
-  .timeline-cell {
+  .timeline-view__cell {
     width: 20px;
     height: 28px;
   }
 }
-

@@ -1,4 +1,4 @@
-.lighting-canvas-container {
+.lighting-canvas {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -10,7 +10,7 @@
   min-width: 0;
 }
 
-.lighting-canvas-empty {
+.lighting-canvas__empty {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -20,13 +20,13 @@
 }
 
 /* Editor area (pan/zoom like Pixel Studio) */
-.lighting-editor-outer {
+.lighting-canvas__layout {
   flex: 1;
   overflow: hidden;
   background: var(--bg-primary);
 }
 
-.lighting-editor-container {
+.lighting-canvas__viewport {
   display: flex;
   width: 100%;
   height: 100%;
@@ -35,13 +35,13 @@
   touch-action: none;
 }
 
-.lighting-editor-wrapper {
+.lighting-canvas__surface {
   will-change: transform;
   width: 100%;
   height: 100%;
 }
 
-.lighting-editor-stack {
+.lighting-canvas__stack {
   position: relative;
   display: inline-block;
   /* Stretch the interaction surface to the full canvas-area width/height */
@@ -49,7 +49,7 @@
   min-height: 100%;
 }
 
-.lighting-edit-canvas {
+.lighting-canvas__edit-canvas {
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
@@ -58,14 +58,14 @@
   cursor: crosshair;
 }
 
-.lighting-edit-overlay {
+.lighting-canvas__overlay {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none;
 }
 
-.lighting-canvas-info {
+.lighting-canvas__info {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -77,12 +77,12 @@
   color: var(--text-muted);
 }
 
-.lighting-canvas-info .separator {
+.lighting-canvas__separator {
   color: var(--border-primary);
 }
 
 /* Floating lighting preview (draggable, like frame reference) */
-.lighting-preview-panel {
+.lighting-canvas__preview {
   position: absolute;
   background: linear-gradient(135deg, var(--bg-hover) 0%, var(--bg-tertiary) 100%);
   border: 2px solid var(--bg-active);
@@ -94,17 +94,17 @@
   user-select: none;
 }
 
-.lighting-preview-panel.dragging {
+.lighting-canvas__preview--dragging {
   transition: none;
   box-shadow: var(--shadow-xl);
   cursor: grabbing;
 }
 
-.lighting-preview-panel.minimized {
+.lighting-canvas__preview--minimized {
   padding: var(--space-2) var(--space-2-5);
 }
 
-.lighting-preview-header {
+.lighting-canvas__preview-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -116,22 +116,22 @@
   transition: background-color var(--transition-base);
 }
 
-.lighting-preview-header:hover {
+.lighting-canvas__preview-header:hover {
   background-color: var(--white-05);
 }
 
-.lighting-preview-panel.minimized .lighting-preview-header {
+.lighting-canvas__preview--minimized .lighting-canvas__preview-header {
   margin-bottom: 0;
 }
 
-.lighting-preview-title {
+.lighting-canvas__preview-title {
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
   font-size: 13px;
   white-space: nowrap;
 }
 
-.lighting-preview-minimize {
+.lighting-canvas__preview-minimize {
   background: var(--white-05);
   border: 1px solid var(--white-10);
   color: var(--text-secondary);
@@ -142,12 +142,12 @@
   transition: all var(--transition-base);
 }
 
-.lighting-preview-minimize:hover {
+.lighting-canvas__preview-minimize:hover {
   background: var(--white-10);
   color: var(--text-primary);
 }
 
-.lighting-preview-content {
+.lighting-canvas__preview-content {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -157,7 +157,7 @@
   padding: var(--space-2);
 }
 
-.lighting-preview-content canvas {
+.lighting-canvas__preview-content canvas {
   display: block;
   width: 200px;
   height: 200px;

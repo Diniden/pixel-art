@@ -53,7 +53,7 @@ export interface UseFloatingPanelOptions {
   /**
    * CSS selector for elements inside the drag handle that must NOT start a
    * drag (e.g. the minimise button). Mirrors the legacy
-   * `closest(".lighting-preview-minimize")` guard.
+   * `closest(".lighting-canvas__preview-minimize")` guard.
    */
   dragExcludeSelector?: string | undefined;
 }

@@ -129,7 +129,7 @@ button:active {
  * genuinely shared, consumed by files that never defined them and which relied
  * on the old global collision to resolve.
  *
- *   app-pulse    <- Header.css (.status-dot); was index.css's `pulse`
+ *   app-pulse    <- Header.css (.header__status-dot); was index.css's `pulse`
  *   app-fade-in  <- App.css, ObjectLibrary.css, PaletteManager.css,
  *                   BrowseBackupsModal.css; was index.css's `fadeIn`
  *   app-slide-in <- BrowseBackupsModal.css; was ProjectSelectModal.css's

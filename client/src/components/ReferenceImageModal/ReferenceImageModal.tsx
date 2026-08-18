@@ -749,7 +749,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
 
   return (
     <div className="modal__overlay" onClick={handleClose}>
-      <div className="modal reference-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal reference-image-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal__header">
           <h2><Icon icon={Camera} size={18} /> Add Reference Image</h2>
           <button className="modal__close" onClick={handleClose}><Icon icon={X} size={14} /></button>
@@ -758,7 +758,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
         <div className="modal__body modal__body--fill">
           {!image ? (
             <div
-              className={`upload-zone ${isDragging ? 'dragging' : ''}`}
+              className={`reference-image-modal__upload-zone ${isDragging ? 'reference-image-modal__upload-zone--dragging' : ''}`}
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -771,39 +771,39 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
               />
-              <div className="upload-icon"><Icon icon={ImagePlus} size={32} /></div>
-              <p className="upload-text">Drop an image here or click to upload</p>
-              <p className="upload-hint">Supports PNG, JPG, GIF, WebP</p>
+              <div className="reference-image-modal__upload-icon"><Icon icon={ImagePlus} size={32} /></div>
+              <p className="reference-image-modal__upload-text">Drop an image here or click to upload</p>
+              <p className="reference-image-modal__upload-hint">Supports PNG, JPG, GIF, WebP</p>
             </div>
           ) : (
-            <div className="image-editor" ref={containerRef}>
-              <div className="editor-toolbar">
-                <span className="image-info">
+            <div className="reference-image-modal__editor" ref={containerRef}>
+              <div className="reference-image-modal__toolbar">
+                <span className="reference-image-modal__image-info">
                   {image.width} × {image.height}px
                 </span>
-                <div className="zoom-controls">
-                  <button className="toolbar-btn" onClick={handleZoomOut} title="Zoom Out">
+                <div className="reference-image-modal__zoom-controls">
+                  <button className="reference-image-modal__toolbar-btn" onClick={handleZoomOut} title="Zoom Out">
                     −
                   </button>
-                  <span className="zoom-level">{Math.round(zoom * 100)}%</span>
-                  <button className="toolbar-btn" onClick={handleZoomIn} title="Zoom In">
+                  <span className="reference-image-modal__zoom-level">{Math.round(zoom * 100)}%</span>
+                  <button className="reference-image-modal__toolbar-btn" onClick={handleZoomIn} title="Zoom In">
                     +
                   </button>
-                  <button className="toolbar-btn reset-btn" onClick={handleResetView} title="Reset View">
+                  <button className="reference-image-modal__toolbar-btn reference-image-modal__toolbar-btn--reset" onClick={handleResetView} title="Reset View">
                     <Icon icon={RotateCcw} size={12} />
                   </button>
                 </div>
-                <button className="select-all-btn" onClick={handleSelectAll}>
+                <button className="reference-image-modal__select-all-btn" onClick={handleSelectAll}>
                   Select All
                 </button>
                 <button
-                  className="change-image-btn"
+                  className="reference-image-modal__change-image-btn"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   Change Image
                 </button>
                 <button
-                  className="clear-image-btn"
+                  className="reference-image-modal__clear-image-btn"
                   onClick={handleClearImage}
                   title="Clear current image"
                 >
@@ -818,11 +818,11 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
                 />
               </div>
               <div
-                className="canvas-area"
+                className="reference-image-modal__canvas-area"
                 ref={canvasAreaRef}
               >
                 <div
-                  className="canvas-pan-container"
+                  className="reference-image-modal__pan"
                   style={{
                     transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
                   }}
@@ -837,7 +837,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
                   />
                 </div>
               </div>
-              <p className="selection-hint">
+              <p className="reference-image-modal__selection-hint">
                 <Icon icon={Search} size={12} /> Pinch or scroll to zoom • Two-finger swipe to pan • Click and drag to select • Drag inside selection to move it
               </p>
             </div>
@@ -845,7 +845,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
         </div>
 
         <div className="modal__footer">
-          <div className="selection-info">
+          <div className="reference-image-modal__selection-info">
             {hasValidSelection && (
               <span>Selection: {selectionWidth} × {selectionHeight}px</span>
             )}

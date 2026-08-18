@@ -166,8 +166,8 @@ function App() {
     // installed, the auto-save gate stays shut, and nothing can be written
     // over the real file. Retry re-runs the full init flow.
     return (
-      <div className="loading-screen">
-        <div className="loading-content">
+      <div className="app__loading">
+        <div className="app__loading-content">
           <h2>Project failed to load</h2>
           <p>
             {loadErrorMessage ??
@@ -184,9 +184,9 @@ function App() {
 
   if (loadState !== "loaded" || !project) {
     return (
-      <div className="loading-screen">
-        <div className="loading-content">
-          <div className="loading-spinner"></div>
+      <div className="app__loading">
+        <div className="app__loading-content">
+          <div className="app__loading-spinner"></div>
           <h2>Loading Pixel Art Editor</h2>
           <p>Preparing your workspace...</p>
         </div>
@@ -201,11 +201,11 @@ function App() {
     <div className="app">
       <HeaderContainer />
 
-      <div className="main-content">
+      <div className="app__main">
         {/* Left Panel - Objects & Layers */}
         {!isFocusMode && (
-          <aside className="side-panel left-panel open">
-            <div className="panel-scroll">
+          <aside className="app__side-panel app__side-panel--left app__side-panel--open">
+            <div className="app__panel-scroll">
               <ObjectLibrary />
               <LayerPanel />
             </div>
@@ -213,7 +213,7 @@ function App() {
         )}
 
         {/* Center - Canvas & Toolbar */}
-        <main className="canvas-area">
+        <main className="app__canvas-area canvas-area">
           <Toolbar
             onReferenceImageChange={handleReferenceImageChange}
             hasReferenceImage={referenceImage !== null}
@@ -248,8 +248,8 @@ function App() {
         </main>
 
         {/* Right Panel - Colors & Palettes (Pixel) or Normal/Light Controls (Lighting) */}
-        <aside className="side-panel right-panel open">
-          <div className="panel-scroll">
+        <aside className="app__side-panel app__side-panel--right app__side-panel--open">
+          <div className="app__panel-scroll">
             <RightSidebarTopControls />
             {isLightingMode ? <LightingStudioPanel /> : <PixelStudioPanel />}
           </div>
@@ -258,7 +258,7 @@ function App() {
 
       {/* Bottom Panel - Frame Timeline */}
       {!isFocusMode && (
-        <footer className="bottom-panel">
+        <footer className="app__bottom">
           <FrameTimeline />
         </footer>
       )}

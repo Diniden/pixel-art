@@ -31,7 +31,7 @@ const VariantThumbnail = memo(function VariantThumbnail({ variant }: { variant: 
     renderVariantFramePreview(ctx, thumbSize, variant, frameToRender);
   }, [variant]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="variant-thumb-canvas" />;
+  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="variant-select-modal__thumb-canvas" />;
 }, (prevProps, nextProps) => {
   // Custom comparison: only re-render if variant actually changed
   const prev = prevProps.variant;
@@ -136,31 +136,31 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
   };
 
   return createPortal(
-    <div className="variant-modal-backdrop" onClick={handleBackdropClick}>
-      <div className="variant-modal">
-        <div className="variant-modal-header">
+    <div className="variant-select-modal__backdrop" onClick={handleBackdropClick}>
+      <div className="variant-select-modal">
+        <div className="variant-select-modal__header">
           <h3><Icon icon={Hexagon} size={16} /> Select Variant</h3>
-          <span className="variant-group-name">{variantGroup.name}</span>
-          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <span className="variant-select-modal__group-name">{variantGroup.name}</span>
+          <button className="modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
-        <div className="variant-modal-content">
-          <div className="variants-grid">
+        <div className="variant-select-modal__content">
+          <div className="variant-select-modal__grid">
             {variantGroup.variants.map(variant => (
               <div
                 key={variant.id}
-                className={`variant-card ${selectedVariantId === variant.id ? 'selected' : ''}`}
+                className={`variant-select-modal__card ${selectedVariantId === variant.id ? 'variant-select-modal__card--selected' : ''}`}
                 onClick={() => handleSelectVariant(variant.id)}
               >
-                <div className="variant-thumb">
+                <div className="variant-select-modal__thumb">
                   <VariantThumbnail variant={variant} />
                 </div>
 
-                <div className="variant-info">
+                <div className="variant-select-modal__info">
                   {editingVariantId === variant.id ? (
                     <input
                       type="text"
-                      className="variant-name-input"
+                      className="variant-select-modal__name-input"
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
                       onBlur={() => handleFinishRename(variant.id)}
@@ -170,7 +170,7 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                     />
                   ) : (
                     <span
-                      className="variant-name"
+                      className="variant-select-modal__name"
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         handleStartRename(variant);
@@ -179,14 +179,14 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                       {variant.name}
                     </span>
                   )}
-                  <span className="variant-size">
+                  <span className="variant-select-modal__size">
                     {variant.gridSize.width}×{variant.gridSize.height}
                   </span>
                 </div>
 
-                <div className="variant-actions">
+                <div className="variant-select-modal__actions">
                   <button
-                    className="variant-action-btn"
+                    className="variant-select-modal__action-btn"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleStartResize(variant);
@@ -196,7 +196,7 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                     <Icon icon={Scaling} size={12} />
                   </button>
                   <button
-                    className="variant-action-btn"
+                    className="variant-select-modal__action-btn"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleAddNew(variant.id);
@@ -206,7 +206,7 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                     <Icon icon={Copy} size={12} />
                   </button>
                   <button
-                    className="variant-action-btn delete"
+                    className="variant-select-modal__action-btn variant-select-modal__action-btn--danger"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDelete(variant.id);
@@ -219,16 +219,16 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                 </div>
 
                 {selectedVariantId === variant.id && (
-                  <div className="selected-badge"><Icon icon={Check} size={12} /></div>
+                  <div className="variant-select-modal__badge--selected"><Icon icon={Check} size={12} /></div>
                 )}
               </div>
             ))}
           </div>
 
           {/* Add new variant section */}
-          <div className="add-variant-section">
+          <div className="variant-select-modal__add-section">
             {showAddOptions ? (
-              <div className="add-options">
+              <div className="variant-select-modal__add-options">
                 <button onClick={() => handleAddNew()}>
                   + New Empty Variant
                 </button>
@@ -237,7 +237,7 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                 </button>
               </div>
             ) : (
-              <button className="add-variant-btn" onClick={() => setShowAddOptions(true)}>
+              <button className="variant-select-modal__add-btn" onClick={() => setShowAddOptions(true)}>
                 + Add Variant
               </button>
             )}
@@ -246,10 +246,10 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
 
         {/* Resize dialog */}
         {resizingVariantId && (
-          <div className="resize-dialog-backdrop" onClick={() => setResizingVariantId(null)}>
-            <div className="resize-dialog" onClick={e => e.stopPropagation()}>
+          <div className="variant-select-modal__resize-backdrop" onClick={() => setResizingVariantId(null)}>
+            <div className="variant-select-modal__resize-dialog" onClick={e => e.stopPropagation()}>
               <h4>Resize Variant</h4>
-              <div className="resize-inputs">
+              <div className="variant-select-modal__resize-inputs">
                 <label>
                   Width:
                   <input
@@ -269,8 +269,8 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                   />
                 </label>
               </div>
-              <div className="resize-anchor-section">
-                <label className="anchor-label">Anchor Point:</label>
+              <div className="variant-select-modal__resize-anchor">
+                <label className="variant-select-modal__anchor-label">Anchor Point:</label>
                 <AnchorGrid
                   anchor={resizeAnchor}
                   onChange={setResizeAnchor}
@@ -280,7 +280,7 @@ export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSele
                   newHeight={resizeHeight}
                 />
               </div>
-              <div className="resize-actions">
+              <div className="variant-select-modal__resize-actions">
                 <button onClick={handleFinishResize}>Apply</button>
                 <button onClick={() => setResizingVariantId(null)}>Cancel</button>
               </div>

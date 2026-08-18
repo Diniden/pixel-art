@@ -165,13 +165,13 @@ export function FrameTagsModal({
       : `Variant frame tags · #${context.frameIndex + 1}`;
 
   return createPortal(
-    <div className="frame-tags-modal-backdrop" onClick={handleBackdropClick}>
+    <div className="frame-tags-modal__backdrop" onClick={handleBackdropClick}>
       <div className="frame-tags-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="frame-tags-modal-header">
+        <div className="frame-tags-modal__header">
           <h4>{title}</h4>
           <button
             type="button"
-            className="frame-tags-modal-close"
+            className="frame-tags-modal__close"
             onClick={onClose}
             aria-label="Close"
           >
@@ -179,18 +179,18 @@ export function FrameTagsModal({
           </button>
         </div>
 
-        <div className="frame-tags-modal-content">
-          <div className="frame-tags-pills">
+        <div className="frame-tags-modal__content">
+          <div className="frame-tags-modal__pills">
             {currentTags.map((tag) => (
               <span
                 key={tag}
-                className="frame-tag-pill"
+                className="frame-tags-modal__pill"
                 style={{ backgroundColor: tagColorForTag(tag) }}
               >
                 {tag}
                 <button
                   type="button"
-                  className="frame-tag-pill-remove"
+                  className="frame-tags-modal__pill-remove"
                   onClick={() => removeTag(tag)}
                   aria-label={`Remove ${tag}`}
                 >
@@ -200,10 +200,10 @@ export function FrameTagsModal({
             ))}
           </div>
 
-          <div className="frame-tags-input-row">
+          <div className="frame-tags-modal__input-row">
             <input
               type="text"
-              className="frame-tags-input"
+              className="frame-tags-modal__input"
               placeholder="Add tag..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
@@ -216,34 +216,34 @@ export function FrameTagsModal({
             />
             <button
               type="button"
-              className="frame-tags-add-btn"
+              className="frame-tags-modal__add-btn"
               onClick={handleSubmit}
             >
               Add
             </button>
           </div>
 
-          <div className="frame-tags-project-section">
-            <div className="frame-tags-project-title">
+          <div className="frame-tags-modal__project-section">
+            <div className="frame-tags-modal__project-title">
               Tags in project (click to add to this frame)
             </div>
-            <div className="frame-tags-project-list">
+            <div className="frame-tags-modal__project-list">
               {projectTagSections.length === 0 ? (
-                <div className="frame-tags-project-empty">
+                <div className="frame-tags-modal__project-empty">
                   No tags in project yet. Add tags above to frames.
                 </div>
               ) : (
                 projectTagSections.map((section) => (
-                  <div key={section.key} className="frame-tags-project-group">
-                    <div className="frame-tags-project-group-label">
+                  <div key={section.key} className="frame-tags-modal__project-group">
+                    <div className="frame-tags-modal__project-group-label">
                       {section.label}
                     </div>
-                    <div className="frame-tags-project-group-pills">
+                    <div className="frame-tags-modal__project-group-pills">
                       {section.items.map((item, i) => (
                         <button
                           key={`${item.tag}-${i}`}
                           type="button"
-                          className="frame-tag-pill clickable"
+                          className="frame-tags-modal__pill frame-tags-modal__pill--clickable"
                           style={{ backgroundColor: tagColorForTag(item.tag) }}
                           onClick={() => addTag(item.tag)}
                           title={item.label}

@@ -27,26 +27,26 @@ function OriginColorPicker() {
   });
 
   return (
-    <div className="panel origin-controls-panel">
+    <div className="panel pixel-studio-panel__origin-panel">
       <div className="panel__header">Origin</div>
       <div className="panel__body">
-        <div className="origin-controls">
-          <div className="origin-color-control">
+        <div className="pixel-studio-panel__origin-controls">
+          <div className="pixel-studio-panel__origin-color-control">
             <label>Color</label>
             <input
               type="color"
               value={toHex(color)}
               onChange={(e) => setOriginColor(fromHex(e.target.value))}
-              className="origin-color-input"
+              className="pixel-studio-panel__origin-color-input"
             />
           </div>
-          <div className="origin-position-display">
+          <div className="pixel-studio-panel__origin-position">
             <label>Position</label>
-            <span className="origin-position-value">
+            <span className="pixel-studio-panel__origin-position-value">
               {originPos ? `${originPos.x}, ${originPos.y}` : "Not set"}
             </span>
           </div>
-          <p className="origin-hint">
+          <p className="pixel-studio-panel__origin-hint">
             Click on the canvas to set the origin anchor point.
           </p>
         </div>
@@ -82,13 +82,13 @@ export function PixelStudioPanel() {
     <div className="pixel-studio-panel">
       {showOriginControls && <OriginColorPicker />}
       {showPencilControls && (
-        <div className="panel eraser-controls-panel">
+        <div className="panel pixel-studio-panel__section">
           <div className="panel__header panel__header--compact">Pencil</div>
           <div className="panel__body panel__body--dense">
-            <div className="eraser-controls">
-              <div className="brush-size-control">
+            <div className="pixel-studio-panel__controls">
+              <div className="pixel-studio-panel__size-control">
                 <label>Size</label>
-                <div className="brush-size-input-group">
+                <div className="pixel-studio-panel__size-input-group">
                   <input
                     type="range"
                     min="1"
@@ -96,19 +96,19 @@ export function PixelStudioPanel() {
                     value={Math.min(brushSize, pencilBrushMax ?? 16)}
                     onChange={(e) => setBrushSize(parseInt(e.target.value))}
                   />
-                  <span className="brush-size-value">
+                  <span className="pixel-studio-panel__size-value">
                     {Math.min(brushSize, pencilBrushMax ?? 16)}
                   </span>
                 </div>
               </div>
 
-              <div className="brush-max-control">
+              <div className="pixel-studio-panel__max-control">
                 <label>Max</label>
-                <div className="shape-buttons">
+                <div className="pixel-studio-panel__shape-buttons">
                   {maxOptions.map((opt) => (
                     <button
                       key={opt}
-                      className={`shape-btn ${(pencilBrushMax ?? 16) === opt ? "active" : ""}`}
+                      className={`pixel-studio-panel__shape-btn ${(pencilBrushMax ?? 16) === opt ? "pixel-studio-panel__shape-btn--active" : ""}`}
                       onClick={() => setPencilBrushMax(opt)}
                       title={`Set max size to ${opt}`}
                     >
@@ -118,18 +118,18 @@ export function PixelStudioPanel() {
                 </div>
               </div>
 
-              <div className="brush-shape-control">
+              <div className="pixel-studio-panel__shape-control">
                 <label>Shape</label>
-                <div className="shape-buttons">
+                <div className="pixel-studio-panel__shape-buttons">
                   <button
-                    className={`shape-btn ${(pencilBrushShape ?? "square") === "circle" ? "active" : ""}`}
+                    className={`pixel-studio-panel__shape-btn ${(pencilBrushShape ?? "square") === "circle" ? "pixel-studio-panel__shape-btn--active" : ""}`}
                     onClick={() => setPencilBrushShape("circle")}
                     title="Circle"
                   >
                     ⭕
                   </button>
                   <button
-                    className={`shape-btn ${(pencilBrushShape ?? "square") === "square" ? "active" : ""}`}
+                    className={`pixel-studio-panel__shape-btn ${(pencilBrushShape ?? "square") === "square" ? "pixel-studio-panel__shape-btn--active" : ""}`}
                     onClick={() => setPencilBrushShape("square")}
                     title="Square"
                   >
@@ -142,13 +142,13 @@ export function PixelStudioPanel() {
         </div>
       )}
       {showEraserControls && (
-        <div className="panel eraser-controls-panel">
+        <div className="panel pixel-studio-panel__section">
           <div className="panel__header panel__header--compact">Eraser</div>
           <div className="panel__body panel__body--dense">
-            <div className="eraser-controls">
-              <div className="brush-size-control">
+            <div className="pixel-studio-panel__controls">
+              <div className="pixel-studio-panel__size-control">
                 <label>Size</label>
-                <div className="brush-size-input-group">
+                <div className="pixel-studio-panel__size-input-group">
                   <input
                     type="range"
                     min="1"
@@ -156,22 +156,22 @@ export function PixelStudioPanel() {
                     value={brushSize}
                     onChange={(e) => setBrushSize(parseInt(e.target.value))}
                   />
-                  <span className="brush-size-value">{brushSize}</span>
+                  <span className="pixel-studio-panel__size-value">{brushSize}</span>
                 </div>
               </div>
 
-              <div className="brush-shape-control">
+              <div className="pixel-studio-panel__shape-control">
                 <label>Shape</label>
-                <div className="shape-buttons">
+                <div className="pixel-studio-panel__shape-buttons">
                   <button
-                    className={`shape-btn ${eraserShape === "circle" ? "active" : ""}`}
+                    className={`pixel-studio-panel__shape-btn ${eraserShape === "circle" ? "pixel-studio-panel__shape-btn--active" : ""}`}
                     onClick={() => setEraserShape("circle")}
                     title="Circle"
                   >
                     ⭕
                   </button>
                   <button
-                    className={`shape-btn ${eraserShape === "square" ? "active" : ""}`}
+                    className={`pixel-studio-panel__shape-btn ${eraserShape === "square" ? "pixel-studio-panel__shape-btn--active" : ""}`}
                     onClick={() => setEraserShape("square")}
                     title="Square"
                   >

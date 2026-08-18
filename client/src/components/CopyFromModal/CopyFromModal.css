@@ -1,4 +1,14 @@
-.copy-modal-backdrop {
+/* block: copy-from-modal (task 21, G6).
+   `.objects-grid` (duplicated verbatim in ObjectSelectModal), `.object-name`
+   and `.current-badge` were all BARE here. ObjectLibrary's bare `.object-name`
+   used to flatten this component's fixed 100px name column to `flex: 1` — task
+   20 already removed ObjectLibrary's side, and the block name now makes the
+   100px column collision-proof.
+   Q4 DECISION — this component's `current` badge keeps its OWN authored design:
+   an inline block-level accent label reading "(current)", NOT ObjectSelectModal's
+   absolutely-positioned blue pill that used to win by emission order. */
+
+.copy-from-modal__backdrop {
   position: fixed;
   top: 0;
   left: 0;
@@ -11,7 +21,7 @@
   z-index: var(--z-modal);
 }
 
-.copy-modal {
+.copy-from-modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
@@ -23,7 +33,7 @@
   box-shadow: var(--shadow-modal);
 }
 
-.copy-modal-header {
+.copy-from-modal__header {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -31,54 +41,37 @@
   border-bottom: 1px solid var(--border-primary);
 }
 
-.copy-modal-header h3 {
+.copy-from-modal__header h3 {
   margin: 0;
   color: var(--accent-primary);
   font-size: 1.1rem;
   font-weight: var(--weight-semibold);
 }
 
-.copy-modal-hint {
+.copy-from-modal__hint {
   color: var(--text-muted);
   font-size: 0.85rem;
 }
 
-.copy-modal-header .close-btn {
+/* The close button is blocks/modal.css's `modal__close` now; only the
+   push-to-the-right placement is local to this header. */
+.copy-from-modal__header .modal__close {
   margin-left: auto;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-size: var(--text-xl);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-fast);
 }
 
-.copy-modal-header .close-btn:hover {
-  border-color: var(--accent-danger);
-  color: var(--accent-danger);
-  background: var(--accent-danger-10);
-}
-
-.copy-modal-content {
+.copy-from-modal__content {
   flex: 1;
   overflow: auto;
   padding: var(--space-4);
 }
 
-.objects-grid {
+.copy-from-modal__grid {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.object-row {
+.copy-from-modal__row {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
@@ -88,12 +81,7 @@
   border: 1px solid var(--border-primary);
 }
 
-.object-row.current {
-  border-color: var(--accent-primary);
-  background: var(--accent-primary-05);
-}
-
-.object-name {
+.copy-from-modal__name {
   width: 100px;
   min-width: 100px;
   padding: var(--space-2) 0;
@@ -104,14 +92,14 @@
   text-overflow: ellipsis;
 }
 
-.current-badge {
+.copy-from-modal__badge--current {
   display: block;
   font-size: 0.7rem;
   color: var(--accent-primary);
   margin-top: var(--space-0-5);
 }
 
-.layers-row {
+.copy-from-modal__layers {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -120,7 +108,7 @@
   padding: var(--space-1) 0;
 }
 
-.copy-layer-cell {
+.copy-from-modal__cell {
   position: relative;
   width: 44px;
   height: 44px;
@@ -132,28 +120,19 @@
   flex-shrink: 0;
 }
 
-.copy-layer-cell:hover {
+.copy-from-modal__cell:hover {
   border-color: var(--accent-primary);
   transform: scale(1.08);
   box-shadow: var(--shadow-accent);
 }
 
-.copy-layer-cell.variant {
-  border-color: var(--accent-variant-40);
-}
-
-.copy-layer-cell.variant:hover {
-  border-color: var(--accent-variant);
-  box-shadow: var(--glow-variant-12);
-}
-
-.copy-thumb-canvas {
+.copy-from-modal__thumb-canvas {
   display: block;
   width: 40px;
   height: 40px;
 }
 
-.variant-badge {
+.copy-from-modal__badge--variant {
   position: absolute;
   top: 2px;
   right: 2px;
@@ -165,14 +144,14 @@
   line-height: var(--leading-none);
 }
 
-.no-layers {
+.copy-from-modal__no-layers {
   color: var(--text-muted);
   font-size: var(--text-xs);
   padding: var(--space-3);
 }
 
 /* Tooltip styles */
-.copy-tooltip {
+.copy-from-modal__tooltip {
   position: fixed;
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
@@ -186,6 +165,18 @@
   box-shadow: var(--shadow-md);
 }
 
+/* modifiers */
 
+.copy-from-modal__row--current {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-05);
+}
 
+.copy-from-modal__cell--variant {
+  border-color: var(--accent-variant-40);
+}
 
+.copy-from-modal__cell--variant:hover {
+  border-color: var(--accent-variant);
+  box-shadow: var(--glow-variant-12);
+}
