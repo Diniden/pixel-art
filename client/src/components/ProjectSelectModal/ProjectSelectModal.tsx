@@ -101,18 +101,18 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="project-select-modal" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
-        <div className="modal-header">
+    <div className="modal__overlay" onClick={onClose}>
+      <div className="modal project-select-modal" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+        <div className="modal__header">
           <h2>Switch Project</h2>
-          <button className="close-btn" onClick={onClose} disabled={isLoading}><Icon icon={X} size={14} /></button>
+          <button className="modal__close" onClick={onClose} disabled={isLoading}><Icon icon={X} size={14} /></button>
         </div>
 
         {error && (
           <div className="error-message">{error}</div>
         )}
 
-        <div className="modal-content">
+        <div className="modal__body">
           <div className="project-list">
             {projectList.map((name) => (
               <button
@@ -140,7 +140,7 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
               />
               <div className="form-buttons">
                 <button
-                  className="cancel-btn"
+                  className="btn btn--ghost"
                   onClick={() => {
                     setIsCreating(false);
                     setNewProjectName('');
@@ -151,7 +151,7 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
                   Cancel
                 </button>
                 <button
-                  className="create-btn"
+                  className="btn btn--gradient"
                   onClick={handleCreateProject}
                   disabled={isLoading || !newProjectName.trim()}
                 >
@@ -171,9 +171,9 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
           )}
         </div>
 
-        <div className="modal-footer">
+        <div className="modal__footer modal__footer--end">
           <button
-            className="delete-btn"
+            className="btn btn--danger-outline"
             onClick={handleDeleteProject}
             disabled={isLoading || projectList.length <= 1}
             title={projectList.length <= 1 ? 'Cannot delete the last project' : `Delete "${projectName}"`}

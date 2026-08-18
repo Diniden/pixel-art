@@ -1,0 +1,156 @@
+/*
+ * modal — shared modal chrome (task 18).
+ *
+ * Previously `.modal-overlay`, `.modal-header`, `.modal-footer`,
+ * `.modal-content` and `.close-btn` were DECLARED in ReferenceImageModal.css
+ * but CONSUMED by BrowseBackupsModal.tsx and ProjectSelectModal.tsx — two
+ * modals that broke outright if ReferenceImageModal.css was ever unimported.
+ * ProjectSelectModal.css's bare `.modal-overlay` additionally clobbered the
+ * shared overlay with its blur. Both cross-file dependencies end here.
+ *
+ * OVERLAY DECISION (spec step 3): the overlay is `--overlay-70` WITH
+ * `backdrop-filter: blur(4px)` — the value that actually rendered before this
+ * task (ProjectSelectModal's, which won on emission order). ReferenceImageModal
+ * had authored `--overlay-80` without blur and was already losing.
+ *
+ * `.close-btn` stays declared here as a LEGACY ALIAS of `.modal__close`: eight
+ * not-yet-converted modals still render `className="close-btn"` and override it
+ * with their own qualified rules. Tasks 20-22 retire the alias.
+ *
+ * Vocabulary (task 19 builds Modal.tsx against these exact names):
+ *   modal__overlay
+ *   modal                      the dialog box (component class adds width/animation)
+ *   modal__header              (+ its h2)
+ *   modal__close               (legacy alias: .close-btn)
+ *   modal__body                scrolling content area
+ *   modal__body--fill          non-scrolling flex column (canvas-hosting modals)
+ *   modal__footer              (+ modal__footer--end for right-aligned actions)
+ *   modal__actions             button cluster inside the footer
+ */
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal__overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-70);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  animation: modal-fade-in 0.15s ease-out;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-modal);
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.modal__header h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.modal__close,
+.close-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: var(--text-xl);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.modal__close:hover,
+.close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent-danger);
+}
+
+.modal__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+}
+
+.modal__body--fill {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5);
+}
+
+.modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.modal__footer--end {
+  justify-content: flex-end;
+  gap: var(--space-2-5);
+}
+
+.modal__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Responsive behaviour, moved from ReferenceImageModal.css's media block.
+   These rules were bare there and so already applied to every consumer of the
+   shared chrome; scope is unchanged. */
+@media (max-width: 768px) {
+  .modal__header {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .modal__body {
+    padding: var(--space-3);
+  }
+
+  .modal__footer {
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .modal__actions {
+    order: 1;
+    width: 100%;
+  }
+
+  .modal__actions .btn {
+    flex: 1;
+  }
+}

@@ -4,11 +4,8 @@
   gap: var(--space-3);
 }
 
-/* Make these top panels a bit more compact than default. */
-.compact-panel .panel-header {
-  padding: var(--space-1-5) var(--space-2-5);
-  font-size: 0.7rem;
-}
+/* The compact header sizing is blocks/panel.css's `panel__header--compact`
+   modifier now (task 18). */
 
 .compact-panel-content {
   padding: var(--space-2-5);
@@ -62,15 +59,10 @@
   letter-spacing: 0.05em;
 }
 
-.compact-slider-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.compact-slider {
-  flex: 1;
-}
+/* Slider rows reuse `.compact-row` (same flex/center/gap-2 recipe; the old
+   per-slider row class duplicated it) and the sliders are blocks/slider.css's
+   `slider` block — whose base already carried the `flex: 1` this sheet
+   declared redundantly (task 18). */
 
 .compact-segmented {
   display: flex;

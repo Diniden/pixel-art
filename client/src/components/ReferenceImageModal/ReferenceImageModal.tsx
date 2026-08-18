@@ -748,14 +748,14 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
   };
 
   return (
-    <div className="modal-overlay" onClick={handleClose}>
-      <div className="reference-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
+    <div className="modal__overlay" onClick={handleClose}>
+      <div className="modal reference-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal__header">
           <h2><Icon icon={Camera} size={18} /> Add Reference Image</h2>
-          <button className="close-btn" onClick={handleClose}><Icon icon={X} size={14} /></button>
+          <button className="modal__close" onClick={handleClose}><Icon icon={X} size={14} /></button>
         </div>
 
-        <div className="modal-body">
+        <div className="modal__body modal__body--fill">
           {!image ? (
             <div
               className={`upload-zone ${isDragging ? 'dragging' : ''}`}
@@ -844,18 +844,18 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
           )}
         </div>
 
-        <div className="modal-footer">
+        <div className="modal__footer">
           <div className="selection-info">
             {hasValidSelection && (
               <span>Selection: {selectionWidth} × {selectionHeight}px</span>
             )}
           </div>
-          <div className="modal-actions">
-            <button className="cancel-btn" onClick={handleClose}>
+          <div className="modal__actions">
+            <button className="btn btn--lg btn--neutral" onClick={handleClose}>
               Cancel
             </button>
             <button
-              className="confirm-btn"
+              className="btn btn--lg btn--primary"
               onClick={handleConfirm}
               disabled={!hasValidSelection}
             >

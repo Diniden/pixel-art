@@ -243,31 +243,31 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-        <div className="delete-confirm-backdrop" onClick={() => setDeleteConfirm(null)}>
-          <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="delete-confirm-header">
+        <div className="confirm-dialog__backdrop" onClick={() => setDeleteConfirm(null)}>
+          <div className="confirm-dialog confirm-dialog--danger" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-dialog__header">
               <h4><Icon icon={AlertTriangle} size={14} /> Delete Variant</h4>
             </div>
-            <div className="delete-confirm-content">
+            <div className="confirm-dialog__body">
               <p>
                 Are you sure you want to delete <strong>"{deleteConfirm.name}"</strong>?
               </p>
-              <p className="delete-confirm-warning">
+              <p className="confirm-dialog__warning">
                 This will remove this variant from <strong>all objects and all frames</strong> that reference it.
               </p>
-              <p className="delete-confirm-undo">
+              <p className="confirm-dialog__undo">
                 You can undo this action with Cmd+Z.
               </p>
             </div>
-            <div className="delete-confirm-actions">
+            <div className="confirm-dialog__actions">
               <button
-                className="cancel-btn"
+                className="btn btn--muted"
                 onClick={() => setDeleteConfirm(null)}
               >
                 Cancel
               </button>
               <button
-                className="delete-btn"
+                className="btn btn--danger"
                 onClick={handleDeleteConfirm}
               >
                 Delete

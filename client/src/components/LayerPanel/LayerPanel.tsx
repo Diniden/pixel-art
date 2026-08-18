@@ -141,8 +141,8 @@ export function LayerPanel() {
 
   return (
     <div className="panel layer-panel">
-      <div className="panel-header">
-        <div className="panel-header-title">Layers</div>
+      <div className="panel__header panel__header--stacked">
+        <div className="panel__title">Layers</div>
         <div className="header-actions">
           <button
             className="header-btn move-all-frames-btn"
@@ -238,7 +238,7 @@ export function LayerPanel() {
           </button>
         </div>
       </div>
-      <div className="panel-content">
+      <div className="panel__body">
         <div className="new-layer-form">
           <input
             type="text"

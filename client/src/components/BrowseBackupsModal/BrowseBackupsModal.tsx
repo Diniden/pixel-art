@@ -111,22 +111,22 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal__overlay" onClick={onClose}>
       <div
-        className="browse-backups-modal"
+        className="modal browse-backups-modal"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
-        <div className="modal-header">
+        <div className="modal__header">
           <h2>Backups — {projectName}</h2>
-          <button className="close-btn" onClick={onClose} disabled={isRestoring}>
+          <button className="modal__close" onClick={onClose} disabled={isRestoring}>
             <Icon icon={X} size={14} />
           </button>
         </div>
 
         {error && <div className="error-message" style={{ margin: '12px 20px 0' }}>{error}</div>}
 
-        <div className="modal-content">
+        <div className="modal__body">
           {isLoading ? (
             <div className="backups-loading">Loading backups...</div>
           ) : loadError ? (
@@ -167,7 +167,7 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
           )}
         </div>
 
-        <div className="modal-footer">
+        <div className="modal__footer modal__footer--end">
           <button
             className="restore-btn"
             onClick={handleRestore}
@@ -179,7 +179,7 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
       </div>
 
       {showConfirm && selectedBackup && (
-        <div className="confirm-overlay" onClick={() => !isRestoring && setShowConfirm(false)}>
+        <div className="confirm-dialog__backdrop" onClick={() => !isRestoring && setShowConfirm(false)}>
           <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>Restore Backup?</h3>
             <p>
@@ -187,19 +187,19 @@ export function BrowseBackupsModal({ onClose }: BrowseBackupsModalProps) {
               <strong>{formatDate(selectedBackup.date)}</strong> at{' '}
               <strong>{formatTime(selectedBackup.time)}</strong>.
             </p>
-            <p className="confirm-undo-hint">
+            <p className="confirm-dialog__undo">
               You can undo this action with Ctrl+Z.
             </p>
-            <div className="confirm-buttons">
+            <div className="confirm-dialog__actions">
               <button
-                className="confirm-cancel-btn"
+                className="btn btn--ghost"
                 onClick={() => setShowConfirm(false)}
                 disabled={isRestoring}
               >
                 Cancel
               </button>
               <button
-                className="confirm-restore-btn"
+                className="btn btn--gradient"
                 onClick={handleConfirmRestore}
                 disabled={isRestoring}
               >

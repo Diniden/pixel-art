@@ -12,18 +12,8 @@
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-.eraser-controls-panel .panel-header {
-  padding: var(--space-1-5) var(--space-2);
-  font-size: 0.7rem;
-}
-
-.eraser-controls-panel .panel-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1-5);
-  padding: var(--space-1-5);
-}
+/* The compact header and dense body are blocks/panel.css's
+   `panel__header--compact` / `panel__body--dense` modifiers now (task 18). */
 
 .eraser-controls {
   display: flex;

@@ -51,80 +51,10 @@
   margin-bottom: 0;
 }
 
-.color-slider-row .slider-label {
-  font-size: 0.7rem;
-  font-weight: var(--weight-semibold);
-  color: var(--text-muted);
-  width: 14px;
-  text-align: center;
-}
-
-.color-slider-row .compact-slider {
-  flex: 1;
-  height: 8px;
-  -webkit-appearance: none;
-  appearance: none;
-  border-radius: var(--radius-sm);
-  background: var(--bg-primary);
-  border: 1px solid var(--border-primary);
-  cursor: pointer;
-}
-
-.color-slider-row .compact-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--white);
-  border: 2px solid var(--accent-primary);
-  cursor: grab;
-  box-shadow: var(--shadow-sm);
-}
-
-.color-slider-row .compact-slider::-webkit-slider-thumb:active {
-  cursor: grabbing;
-}
-
-.color-slider-row .hue-slider {
-  background: linear-gradient(to right,
-    hsl(0, 100%, 50%),
-    hsl(60, 100%, 50%),
-    hsl(120, 100%, 50%),
-    hsl(180, 100%, 50%),
-    hsl(240, 100%, 50%),
-    hsl(300, 100%, 50%),
-    hsl(360, 100%, 50%)
-  );
-}
-
-.color-slider-row .slider-input {
-  width: 42px;
-  padding: var(--space-1) var(--space-1-5);
-  font-size: 0.7rem;
-  font-family: var(--font-mono);
-  text-align: center;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-}
-
-.color-slider-row .slider-input:focus {
-  outline: none;
-  border-color: var(--accent-primary);
-}
-
-/* Remove spinner buttons from number inputs */
-.color-slider-row .slider-input::-webkit-outer-spin-button,
-.color-slider-row .slider-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.color-slider-row .slider-input[type=number] {
-  -moz-appearance: textfield;
-}
+/* The slider family (track, thumb, hue gradient, label, number input) is
+   styles/blocks/slider.css now (task 18). This component uses the
+   `slider--thick`, `slider__label--muted` and `slider__input--boxed`
+   modifiers instead of re-implementing every class under this ancestor. */
 
 
 

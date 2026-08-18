@@ -1,0 +1,180 @@
+/*
+ * slider — shared range-slider family (task 18).
+ *
+ * Extracted from ColorPicker.css's full implementation. Before this task
+ * RightSidebarTopControls' sliders were styled almost entirely by
+ * ColorPicker.css + reset.css by accident (its own rule was only `flex: 1`),
+ * and LightControl.css re-implemented every class under a `.color-slider-row`
+ * ancestor.
+ *
+ * ⚠️ SPECIFICITY IS LOAD-BEARING. reset.css styles `input[type="range"]` and
+ * `input[type="number"]` at (0,1,1)+ specificity, which BEATS a lone class.
+ * That relationship is part of today's rendering and is preserved verbatim:
+ * the base rules here stay at (0,1,0) exactly like the rules they replace, and
+ * every variant that previously won via `.color-slider-row .x` (0,2,0) is a
+ * COMPOUND selector (`.slider.slider--thick`) so it still wins. This is also
+ * what let the `.hue-slider` `!important` be removed: the rainbow now wins by
+ * compound specificity (`.compact-slider.hue-slider`) instead of by force.
+ *
+ * `.compact-slider`, `.slider-label`, `.slider-input` and `.hue-slider` remain
+ * declared as LEGACY ALIASES: ColorPicker.tsx is frozen until task 20's G3.
+ * ColorPicker.css keeps its channel-gradient rules (.channel-slider.channel-*),
+ * which override the base track exactly as before. `slider__row` is NOT
+ * declared yet — ColorPicker's `.slider-row` is its only consumer and renaming
+ * it is task 20's G3; the name is reserved here for task 19.
+ *
+ * Vocabulary (task 19 builds Slider.tsx against these exact names):
+ *   slider                     (legacy alias: .compact-slider)
+ *   slider--thick              8px bordered track, large grab thumb (LightControl)
+ *   slider__hue                rainbow hue track (legacy alias: .hue-slider)
+ *   slider__label              (legacy alias: .slider-label)
+ *   slider__label--muted       LightControl's larger muted label
+ *   slider__input              (legacy alias: .slider-input)
+ *   slider__input--boxed       LightControl's centered boxed number input
+ *   slider__row                RESERVED — introduced by task 19/20 (.slider-row)
+ */
+
+.slider,
+.compact-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-xs);
+  outline: none;
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb,
+.compact-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.slider::-moz-range-thumb,
+.compact-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* LightControl's chunky variant — compound so it outranks reset.css's
+   input[type="range"] rules, as its .color-slider-row ancestor selector did.
+   (No -moz thumb here: the old variant never declared one either.) */
+.slider.slider--thick {
+  height: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+}
+
+.slider.slider--thick::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 2px solid var(--accent-primary);
+  cursor: grab;
+  box-shadow: var(--shadow-sm);
+}
+
+.slider.slider--thick::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+
+/* Hue rainbow — last of the track rules so it wins at equal specificity.
+   The old `!important` (ColorPicker.css:243) is GONE: the compound selectors
+   below outrank both reset.css's input[type="range"] background and the
+   --thick variant without it. */
+.compact-slider.hue-slider,
+.slider.slider__hue {
+  background: linear-gradient(to right,
+    hsl(0, 100%, 50%),
+    hsl(60, 100%, 50%),
+    hsl(120, 100%, 50%),
+    hsl(180, 100%, 50%),
+    hsl(240, 100%, 50%),
+    hsl(300, 100%, 50%),
+    hsl(360, 100%, 50%));
+}
+
+/* ── Labels ────────────────────────────────────────────────────────────── */
+
+.slider__label,
+.slider-label {
+  width: 14px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.slider__label--muted {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* ── Number inputs ─────────────────────────────────────────────────────── */
+
+.slider__input,
+.slider-input {
+  width: 42px;
+  padding: var(--space-0-5) var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-align: right;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.slider__input:focus,
+.slider-input:focus {
+  border-color: var(--accent-primary);
+  outline: none;
+}
+
+/* Remove spinner buttons from number inputs */
+.slider__input::-webkit-outer-spin-button,
+.slider__input::-webkit-inner-spin-button,
+.slider-input::-webkit-outer-spin-button,
+.slider-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.slider__input[type=number],
+.slider-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* LightControl's boxed variant — compound to outrank reset.css's
+   input[type="number"], as its .color-slider-row ancestor selector did. */
+.slider__input.slider__input--boxed {
+  padding: var(--space-1) var(--space-1-5);
+  font-size: 0.7rem;
+  text-align: center;
+  background: var(--bg-primary);
+}
+
+@media (max-width: 768px) {
+  .slider__input,
+  .slider-input {
+    width: 36px;
+  }
+}

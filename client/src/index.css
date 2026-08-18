@@ -1,5 +1,6 @@
 /*
- * Import manifest. Order is load-bearing and must stay tokens -> reset.
+ * Import manifest. Order is load-bearing and must stay
+ * tokens -> reset -> blocks.
  *
  * This file holds NO rules of its own. It previously did three unrelated jobs
  * (tokens, reset, a dead utility framework) and, because main.tsx imported it
@@ -7,8 +8,18 @@
  * the import to the top of main.tsx so that primitives are emitted BEFORE
  * component rules, not after.
  *
- * Task 12 adds the styles/blocks/ imports below reset.css.
+ * Task 18 added the styles/blocks/ layer: the five shared primitives (btn,
+ * modal, panel, slider, confirm-dialog). They must emit AFTER reset.css (they
+ * layer on the global element styles) and BEFORE every component sheet (a
+ * component override must win on order as well as specificity).
+ * .storybook/preview.tsx imports this manifest, so Storybook inherits the
+ * blocks automatically — do not import them separately there.
  */
 
 @import './styles/tokens.css';
 @import './styles/reset.css';
+@import './styles/blocks/btn.css';
+@import './styles/blocks/slider.css';
+@import './styles/blocks/panel.css';
+@import './styles/blocks/modal.css';
+@import './styles/blocks/confirm-dialog.css';

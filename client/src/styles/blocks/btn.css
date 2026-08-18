@@ -1,0 +1,129 @@
+/*
+ * btn — shared button primitive (task 18).
+ *
+ * Extracted from the union of the previously-colliding button families:
+ *   .cancel-btn   (ObjectLibrary, ProjectSelectModal, ReferenceImageModal)
+ *   .confirm-btn  (ReferenceImageModal; LayerPanel's copy was dead and deleted)
+ *   .create-btn   (ObjectLibrary, ProjectSelectModal) + .apply-btn
+ *   .delete-btn   (ProjectSelectModal bare; the confirm-dialog copies)
+ * plus the dead `button.primary` / `button.danger` intent from old index.css.
+ *
+ * The global `button` rule in reset.css supplies the skeleton (bg-tertiary,
+ * border, cursor, hover, active scale). `.btn` layers geometry on top and the
+ * modifiers replace the skin. Component sheets may not re-declare these names;
+ * a new appearance is a new modifier HERE.
+ *
+ * NOTE: src/ui/primitives/Button/Button.css (task 10's proof-of-harness story)
+ * also declares `.btn` + variants. It is loaded ONLY by its own story, never by
+ * the app; task 19 rebuilds that primitive on THIS file and deletes the proof.
+ *
+ * Vocabulary (task 19 builds Button.tsx against these exact names):
+ *   btn
+ *   btn--lg                    larger padding (modal footer actions)
+ *   btn--primary               flat accent CTA (accent bg, dark text)
+ *   btn--neutral               solid neutral (bg-secondary, bordered)
+ *   btn--ghost                 transparent, subtle border
+ *   btn--muted                 translucent white — for gradient/danger surfaces
+ *   btn--danger                solid danger
+ *   btn--danger-outline        outlined danger
+ *   btn--gradient              accent→violet gradient CTA
+ */
+
+.btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Size ──────────────────────────────────────────────────────────────── */
+
+.btn--lg {
+  padding: var(--space-2-5) var(--space-5);
+}
+
+/* ── Skins ─────────────────────────────────────────────────────────────── */
+
+.btn--primary {
+  background: var(--accent-primary);
+  border: none;
+  color: var(--text-on-accent);
+  font-weight: var(--weight-semibold);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-secondary);
+  box-shadow: var(--glow-accent-12-40);
+}
+
+.btn--neutral {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+}
+
+.btn--neutral:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn--ghost {
+  background: transparent;
+  border: 1px solid var(--border-secondary);
+  color: var(--text-secondary);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.btn--muted {
+  background: var(--white-10);
+  border: 1px solid var(--white-20);
+  color: var(--text-secondary);
+}
+
+.btn--muted:hover:not(:disabled) {
+  background: var(--white-15);
+}
+
+.btn--danger {
+  background: var(--accent-danger);
+  border: none;
+  color: var(--white);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--accent-danger-hover);
+}
+
+.btn--danger-outline {
+  background: transparent;
+  border: 1px solid var(--accent-danger);
+  color: var(--accent-danger);
+}
+
+.btn--danger-outline:hover:not(:disabled) {
+  background: var(--accent-danger-10);
+}
+
+.btn--gradient {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+  border: none;
+  color: var(--white);
+  font-weight: var(--weight-semibold);
+}
+
+.btn--gradient:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-accent);
+}
