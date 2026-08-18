@@ -1,13 +1,25 @@
 import type { Color, Point } from "../types";
 import type { StoreGet, StoreSet, UpdateProjectAndSave } from "./storeTypes";
 
+/**
+ * The stroke-batching seam (REFRESH task 17). Replaces the `_strokeActive`
+ * module closure: `begin`/`end` map onto `HistoryStore.beginTransaction("Draw")`
+ * / `endTransaction()`, and `isActive()` preserves the pinned `!_strokeActive`
+ * classification at the four pixel-write sites — a write during a drag records
+ * nothing of its own; one drag is one undo entry.
+ */
+export interface StrokeControl {
+  begin(): void;
+  end(): void;
+  isActive(): boolean;
+}
+
 export function createDrawingActions(
   get: StoreGet,
   set: StoreSet,
   updateProjectAndSave: UpdateProjectAndSave,
-  saveCurrentStateToHistory: () => void,
+  stroke: StrokeControl,
 ) {
-  let _strokeActive = false;
   const isEditMaskActiveFor = (
     x: number,
     y: number,
@@ -25,12 +37,11 @@ export function createDrawingActions(
 
   return {
     beginStroke: () => {
-      saveCurrentStateToHistory();
-      _strokeActive = true;
+      stroke.begin();
     },
 
     endStroke: () => {
-      _strokeActive = false;
+      stroke.end();
     },
 
     setPixel: (x: number, y: number, color: Color | 0) => {
@@ -116,7 +127,7 @@ export function createDrawingActions(
               };
             }),
           }),
-          !_strokeActive,
+          !stroke.isActive(),
         );
         return;
       }
@@ -181,7 +192,7 @@ export function createDrawingActions(
               : o,
           ),
         }),
-        !_strokeActive,
+        !stroke.isActive(),
       );
     },
 
@@ -270,7 +281,7 @@ export function createDrawingActions(
               };
             }),
           }),
-          !_strokeActive,
+          !stroke.isActive(),
         );
         return;
       }
@@ -349,7 +360,7 @@ export function createDrawingActions(
               : o,
           ),
         }),
-        !_strokeActive,
+        !stroke.isActive(),
       );
     },
 

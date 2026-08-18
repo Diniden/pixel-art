@@ -10,6 +10,12 @@
  * the transport at the NEW seam: `projectApi.save` (which now receives the
  * COMPACT payload — the same bytes the old facade produced).
  *
+ * ONE further assertion flipped by task 17, authorised by its spec and SETTLED
+ * BY OWNER DECISION (2026-08-16), marked `FLIPPED (task 17)` below: undo no
+ * longer triggers an immediate save. `HistoryStore.isReplaying` suppresses the
+ * bridge's `domainVersion` bump and the auto-save trigger for the duration of
+ * the replay, so the NEXT real edit saves instead.
+ *
  * Three assertions flipped, each authorised by the task 16 spec and marked
  * `FLIPPED (task 16)` below:
  *  1. `cancelPendingSave()` is gone — suspension DEFERS a pending edit instead
@@ -216,12 +222,23 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
       expect(harness.getHistoryLength()).toBe(1);
     });
 
-    it("undo DOES schedule a save (the project commit bumps domainVersion)", async () => {
+    it("FLIPPED (task 17): undo schedules NO save — the NEXT real edit does (owner decision 2026-08-16)", async () => {
+      // The old stack saved on undo (projectActions.ts:224 called
+      // scheduleAutoSave), which made "did the undo persist?" untestable — a
+      // replay-triggered save is indistinguishable from an edit-triggered
+      // one. Under HistoryStore, `isReplaying` gates both the bridge's
+      // domainVersion bump and the auto-save trigger, so the replay commit
+      // never counts as an edit.
       harness.dispatch("setPixel", 0, 0, RED);
       await vi.advanceTimersByTimeAsync(500);
       save.mockClear();
 
       harness.dispatch("undo");
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(save).not.toHaveBeenCalled();
+
+      // The next REAL edit saves normally.
+      harness.dispatch("setPixel", 1, 1, RED);
       await vi.advanceTimersByTimeAsync(500);
       expect(save).toHaveBeenCalledTimes(1);
     });

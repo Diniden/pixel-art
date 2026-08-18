@@ -39,6 +39,24 @@
  *     the 300k-cell tree. Bumps are gated on `loadState === "loaded"` and
  *     `!saveSuspended`, so hydration installs and lifecycle flows never
  *     schedule a save of their own.
+ *
+ * ── Task 17 additions ──────────────────────────────────────────────────────
+ *
+ *  4. The bump is ALSO gated on `!history.isReplaying`: a project commit made
+ *     by `undo()`/`redo()` replay must not bump `domainVersion` (the whole
+ *     replay runs synchronously inside one MobX action, so the flag is still
+ *     set when Zustand's subscribe fires). Together with the trigger guard in
+ *     `AutoSaveController` this is the owner-accepted (2026-08-16) behaviour
+ *     change: undo performs NO immediate save; the next real edit saves.
+ *  5. `projectHistory`/`historyIndex` join Phase B: `HistoryStore` owns undo
+ *     history, and the Zustand fields are mirrors. Unusually for Phase B the
+ *     writer is NOT the reaction below but the history glue in
+ *     `store/index.ts`, which mirrors synchronously after every history
+ *     operation — the task 08 suite runs without the bridge installed and
+ *     must still see the legacy fields move. External writes to the legacy
+ *     fields (`zustandProjectHost`, the test harness) are ADOPTED back by the
+ *     glue's `reconcile()` before the next history operation, preserving the
+ *     one-field/one-direction/one-writer invariant (R6) via a pull seam.
  */
 import { compareStructural, flowResult, reaction, runInAction } from "mobx";
 import { useEditorStore } from "../../store";
@@ -63,6 +81,10 @@ export const PHASE_B_FIELDS = [
   "projectName", //   domain.projectName  → EditorState.projectName
   "projectList", //   domain.projectList  → EditorState.projectList
   "saveStatus", //    session.saveStatus  → EditorState.saveStatus
+  // Task 17 — mirrored by the history glue in store/index.ts, NOT by the
+  // reaction below (see item 5 in the module header):
+  "projectHistory", // history.entries    → EditorState.projectHistory (before-snapshots)
+  "historyIndex", //   history.index      → EditorState.historyIndex
 ] as const;
 
 /**
@@ -131,7 +153,9 @@ export function installBridge(app: ApplicationStore): () => void {
         if (
           s.project !== null &&
           app.domain.loadState === "loaded" &&
-          !app.session.saveSuspended
+          !app.session.saveSuspended &&
+          // Task 17: replay commits never count as edits (item 4, header).
+          !app.history.isReplaying
         ) {
           app.domain.bumpDomainVersion();
         }

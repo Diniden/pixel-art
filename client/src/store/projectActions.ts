@@ -14,14 +14,19 @@
  * otherwise fail silently, which is exactly the failure mode W3's boundary
  * probe exists to prevent.
  *
- * `undo` is still genuinely Zustand-owned until the HistoryStore task (17).
- * It no longer schedules its own save: the `set({ project })` commit is
- * observed by the bridge, which bumps `DomainStore.domainVersion`, and the
- * `AutoSaveController` reaction owns the rest — so undo still results in
- * exactly one debounced save, as pinned by the task 08 suite.
+ * ── undo / redo (REFRESH task 17) ──────────────────────────────────────────
+ * Both delegate to the `HistoryStore` glue built in `store/index.ts` (the
+ * cursor semantics — pre-mutation snapshots, deferred redo-tail truncation —
+ * are pinned by task 08 and live in `HistoryStore` now). `redo` is NEW: the
+ * legacy store kept the redo data reachable but never had the action.
+ *
+ * Neither schedules a save. For `undo`/`redo` this is DELIBERATE and
+ * owner-accepted (2026-08-16): `HistoryStore.isReplaying` suppresses both the
+ * bridge's `domainVersion` bump and `AutoSaveController`'s trigger for the
+ * duration of the replay, so the NEXT real edit saves instead — a save
+ * triggered by replay is indistinguishable from one triggered by an edit,
+ * which made "did the undo persist?" untestable.
  */
-import { projectToCompact, compactToProject } from "../types";
-import type { StoreGet, StoreSet } from "./storeTypes";
 
 const notWired =
   (name: string) =>
@@ -32,7 +37,13 @@ const notWired =
     );
   };
 
-export function createProjectActions(get: StoreGet, set: StoreSet) {
+/** The undo/redo delegates the `store/index.ts` history glue provides. */
+export interface HistoryControl {
+  undo(): void;
+  redo(): void;
+}
+
+export function createProjectActions(history: HistoryControl) {
   return {
     initProject: notWired("initProject") as () => Promise<void>,
     createNewProject: notWired("createNewProject") as (
@@ -53,21 +64,7 @@ export function createProjectActions(get: StoreGet, set: StoreSet) {
       filename: string,
     ) => Promise<boolean>,
 
-    undo: () => {
-      const { projectHistory, historyIndex } = get();
-      if (historyIndex < 0 || projectHistory.length === 0) return;
-
-      const previousProject = projectHistory[historyIndex];
-      // Deep clone when restoring to ensure complete independence
-      const compactProject = projectToCompact(previousProject);
-      const clonedProject = compactToProject(compactProject);
-      const newIndex = historyIndex - 1;
-
-      set({
-        project: clonedProject,
-        historyIndex: newIndex,
-      });
-      // The save: bridge bump → AutoSaveController (see the module header).
-    },
+    undo: () => history.undo(),
+    redo: () => history.redo(),
   };
 }
