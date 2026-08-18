@@ -1,0 +1,25 @@
+/*
+ * empty-state — shared placeholder (task 19 primitive).
+ *
+ * The measured styling that was declared identically in LayerPanel.css,
+ * ObjectLibrary.css and PaletteManager.css, extracted verbatim. The legacy
+ * declarations remain until tasks 20-22 rename their consumers; the values
+ * are identical, so double-declaration is inert.
+ */
+
+.empty-state {
+  text-align: center;
+  padding: var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.empty-state__icon {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--text-muted);
+}
+
+.empty-state__text {
+  line-height: var(--leading-normal);
+}

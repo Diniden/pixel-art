@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { VariantGroup } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Wand2, X, AlertTriangle } from 'lucide-react';
 import './AddVariantModal.css';
 

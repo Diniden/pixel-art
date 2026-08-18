@@ -1,0 +1,29 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Button > renders danger-outline disabled 1`] = `
+<button
+  class="btn btn--danger-outline"
+  disabled=""
+  type="button"
+>
+  Delete
+</button>
+`;
+
+exports[`Button > renders the bare block 1`] = `
+<button
+  class="btn"
+  type="button"
+>
+  Save
+</button>
+`;
+
+exports[`Button > renders variant + size modifiers 1`] = `
+<button
+  class="btn btn--primary btn--lg"
+  type="button"
+>
+  Confirm
+</button>
+`;

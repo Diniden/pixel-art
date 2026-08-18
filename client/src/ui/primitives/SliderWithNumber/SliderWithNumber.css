@@ -1,0 +1,16 @@
+/*
+ * slider__row — the labelled slider + number row (task 19).
+ *
+ * This name was RESERVED (deliberately left undeclared) by task 18's
+ * blocks/slider.css: ColorPicker's `.slider-row` was its only would-be
+ * consumer and renaming that is task 20's G3. Task 19 introduces the class
+ * here, in the primitive that consumes it, so the dead-class gate stays
+ * honest. The geometry is ColorPicker's measured `.slider-row`.
+ */
+
+.slider__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  height: 22px;
+}

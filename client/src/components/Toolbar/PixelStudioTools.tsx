@@ -5,7 +5,7 @@ import {
   ReferenceImageModal,
   ReferenceImageData,
 } from "../ReferenceImageModal/ReferenceImageModal";
-import { Icon } from "../Icon/Icon";
+import { Icon } from "../../ui/primitives/Icon/Icon";
 import type { LucideIcon } from "lucide-react";
 import {
   Pencil,

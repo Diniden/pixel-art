@@ -3,7 +3,7 @@ import { useEditorStore } from "../../store";
 import { ReferenceImageData } from "../ReferenceImageModal/ReferenceImageModal";
 import { PixelStudioTools } from "./PixelStudioTools";
 import { LightingStudioTools } from "./LightingStudioTools";
-import { Icon } from "../Icon/Icon";
+import { Icon } from "../../ui/primitives/Icon/Icon";
 import { Maximize2, Sun, Moon, Film, Palette, Lightbulb } from "lucide-react";
 import "./Toolbar.css";
 

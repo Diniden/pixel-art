@@ -3,7 +3,7 @@ import { useEditorStore } from '../../store';
 import { VariantSelectModal } from '../VariantSelectModal/VariantSelectModal';
 import { CopyFromModal } from '../CopyFromModal/CopyFromModal';
 import { AddVariantModal } from '../AddVariantModal/AddVariantModal';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Hexagon, ArrowDownToLine, ArrowUpToLine, Eye, EyeOff, ClipboardCopy, Wand2, Plus, X, Copy, ChevronUp, ChevronDown } from 'lucide-react';
 import './LayerPanel.css';
 

@@ -4,7 +4,7 @@ import { useEditorStore } from '../../store';
 import { PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Copy, Maximize, X, AlertTriangle } from 'lucide-react';
 import './ObjectLibrary.css';
 

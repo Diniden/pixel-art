@@ -1,0 +1,25 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`NumberInput > renders the boxed variant 1`] = `
+<input
+  aria-label="Radius"
+  class="slider__input slider__input--boxed"
+  max="10"
+  min="0"
+  step="1"
+  type="number"
+  value="5"
+/>
+`;
+
+exports[`NumberInput > renders the slider__input styling 1`] = `
+<input
+  aria-label="FPS"
+  class="slider__input"
+  max="60"
+  min="1"
+  step="1"
+  type="number"
+  value="12"
+/>
+`;

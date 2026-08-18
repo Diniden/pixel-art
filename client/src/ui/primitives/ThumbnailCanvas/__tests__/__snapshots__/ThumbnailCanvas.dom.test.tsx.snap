@@ -1,0 +1,20 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ThumbnailCanvas > renders decorative by default 1`] = `
+<canvas
+  aria-hidden="true"
+  class="thumb-canvas"
+  height="48"
+  width="48"
+/>
+`;
+
+exports[`ThumbnailCanvas > renders labelled as an image with custom size 1`] = `
+<canvas
+  aria-label="Frame 3 preview"
+  class="thumb-canvas"
+  height="96"
+  role="img"
+  width="96"
+/>
+`;

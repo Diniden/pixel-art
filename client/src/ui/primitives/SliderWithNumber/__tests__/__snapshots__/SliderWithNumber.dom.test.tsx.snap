@@ -1,0 +1,86 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SliderWithNumber > renders the labelled row 1`] = `
+<div
+  class="slider__row"
+>
+  <span
+    class="slider__label"
+  >
+    R
+  </span>
+  <input
+    aria-label="R"
+    class="slider"
+    max="255"
+    min="0"
+    step="1"
+    type="range"
+    value="128"
+  />
+  <input
+    aria-label="R"
+    class="slider__input"
+    max="255"
+    min="0"
+    step="1"
+    type="number"
+    value="128"
+  />
+</div>
+`;
+
+exports[`SliderWithNumber > renders the thick muted variant with boxed input 1`] = `
+<div
+  class="slider__row"
+>
+  <span
+    class="slider__label slider__label--muted"
+  >
+    Intensity
+  </span>
+  <input
+    aria-label="Intensity"
+    class="slider slider--thick"
+    max="100"
+    min="0"
+    step="1"
+    type="range"
+    value="60"
+  />
+  <input
+    aria-label="Intensity"
+    class="slider__input slider__input--boxed"
+    max="100"
+    min="0"
+    step="1"
+    type="number"
+    value="60"
+  />
+</div>
+`;
+
+exports[`SliderWithNumber > renders without a label 1`] = `
+<div
+  class="slider__row"
+>
+  <input
+    aria-label="Opacity"
+    class="slider"
+    max="100"
+    min="0"
+    step="1"
+    type="range"
+    value="10"
+  />
+  <input
+    aria-label="Opacity"
+    class="slider__input"
+    max="100"
+    min="0"
+    step="1"
+    type="number"
+    value="10"
+  />
+</div>
+`;

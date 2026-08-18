@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import './ReferenceImageModal.css';
 import { useEditorStore } from '../../store';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { ImagePlus, RotateCcw, Camera, X, Trash2, Search } from 'lucide-react';
 
 export interface ReferenceImageData {

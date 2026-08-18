@@ -1,6 +1,6 @@
 import { useEditorStore } from "../../store";
 import type { SelectionBehavior, SelectionMode, ShapeMode } from "../../types";
-import { Icon } from "../Icon/Icon";
+import { Icon } from "../../ui/primitives/Icon/Icon";
 import { X } from "lucide-react";
 import "./RightSidebarTopControls.css";
 

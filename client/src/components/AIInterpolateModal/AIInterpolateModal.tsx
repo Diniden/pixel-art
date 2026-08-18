@@ -6,7 +6,7 @@ import {
   VariantFrame, PixelData, Pixel, generateId,
 } from '../../types';
 import { aiApi } from '../../api';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Wand2, X } from 'lucide-react';
 import './AIInterpolateModal.css';
 

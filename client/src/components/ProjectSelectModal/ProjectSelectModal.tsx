@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useEditorStore } from '../../store';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { FolderOpen, Plus, X } from 'lucide-react';
 import './ProjectSelectModal.css';
 

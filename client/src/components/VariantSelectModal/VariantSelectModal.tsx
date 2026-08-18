@@ -4,7 +4,7 @@ import { useEditorStore } from '../../store';
 import { Layer, VariantGroup, Variant } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Hexagon, X, Scaling, Copy, Check } from 'lucide-react';
 import './VariantSelectModal.css';
 

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { ObjectSelectModal } from '../ObjectSelectModal/ObjectSelectModal';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Film, Package, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Target } from 'lucide-react';
 import './FrameReferencePanel.css';
 

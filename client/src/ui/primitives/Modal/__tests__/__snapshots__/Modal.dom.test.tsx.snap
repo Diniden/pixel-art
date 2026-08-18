@@ -1,0 +1,145 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Modal — DOM snapshots > renders a footer--end with actions and body--fill 1`] = `
+<div
+  class="modal__overlay"
+>
+  <div
+    aria-labelledby="_r_2_"
+    aria-modal="true"
+    class="modal"
+    data-ui-dialog="_r_3_"
+    role="dialog"
+    tabindex="-1"
+  >
+    <div
+      class="modal__header"
+    >
+      <h2
+        id="_r_2_"
+      >
+        Export
+      </h2>
+      <button
+        aria-label="Close"
+        class="icon-btn modal__close"
+        title="Close"
+        type="button"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-x icon"
+          fill="none"
+          height="14"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="14"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M18 6 6 18"
+          />
+          <path
+            d="m6 6 12 12"
+          />
+        </svg>
+      </button>
+    </div>
+    <div
+      class="modal__body modal__body--fill"
+    >
+      Body
+    </div>
+    <div
+      class="modal__footer modal__footer--end"
+    >
+      <div
+        class="modal__actions"
+      >
+        actions
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`Modal — DOM snapshots > renders no header chrome without title or onClose, with aria-label 1`] = `
+<div
+  class="modal__overlay"
+>
+  <div
+    aria-label="Blocking flow"
+    aria-modal="true"
+    class="modal"
+    data-ui-dialog="_r_5_"
+    role="dialog"
+    tabindex="-1"
+  >
+    <div
+      class="modal__body"
+    >
+      Body
+    </div>
+  </div>
+</div>
+`;
+
+exports[`Modal — DOM snapshots > renders overlay > dialog > header/body with a11y wiring 1`] = `
+<div
+  class="modal__overlay"
+>
+  <div
+    aria-labelledby="_r_0_"
+    aria-modal="true"
+    class="modal"
+    data-ui-dialog="_r_1_"
+    role="dialog"
+    tabindex="-1"
+  >
+    <div
+      class="modal__header"
+    >
+      <h2
+        id="_r_0_"
+      >
+        Settings
+      </h2>
+      <button
+        aria-label="Close"
+        class="icon-btn modal__close"
+        title="Close"
+        type="button"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-x icon"
+          fill="none"
+          height="14"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="14"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M18 6 6 18"
+          />
+          <path
+            d="m6 6 12 12"
+          />
+        </svg>
+      </button>
+    </div>
+    <div
+      class="modal__body"
+    >
+      Body
+    </div>
+  </div>
+</div>
+`;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useEditorStore } from '../../store';
 import { Color } from '../../types';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import './PaletteManager.css';
 

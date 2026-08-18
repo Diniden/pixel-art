@@ -8,7 +8,7 @@ import {
   renderHeightAsGrayscale,
 } from "../../utils/lightingRenderer";
 import { getSquarePixels, getCirclePixels } from "./drawingUtils";
-import { Icon } from "../Icon/Icon";
+import { Icon } from "../../ui/primitives/Icon/Icon";
 import { Lightbulb, ChevronUp, ChevronDown } from "lucide-react";
 import "./LightingCanvas.css";
 

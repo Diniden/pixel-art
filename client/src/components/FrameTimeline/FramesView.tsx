@@ -8,7 +8,7 @@ import { FrameTagsModal, tagColorForTag } from '../FrameTagsModal/FrameTagsModal
 import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
 import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import { AIInterpolateModal } from '../AIInterpolateModal/AIInterpolateModal';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Tag, SquareIcon, Play, Zap, Maximize, Wand2, Copy, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 // Memoized thumbnail component that only re-renders when frame data actually changes

@@ -1,0 +1,136 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`FloatingPanel > renders header + body 1`] = `
+<div
+  style="position: relative;"
+>
+  <div
+    class="floating-panel"
+    style="top: 20px; left: 20px;"
+  >
+    <div
+      class="floating-panel__header"
+    >
+      <span
+        class="floating-panel__title"
+      >
+        Preview
+      </span>
+      <span
+        class="floating-panel__controls"
+      >
+        <button
+          aria-label="Minimize panel"
+          class="icon-btn floating-panel__minimize"
+          title="Minimize panel"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-minus icon"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M5 12h14"
+            />
+          </svg>
+        </button>
+      </span>
+    </div>
+    <div
+      class="floating-panel__body"
+    >
+      content
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FloatingPanel > renders minimized (no body) 1`] = `
+<div
+  style="position: relative;"
+>
+  <div
+    class="floating-panel floating-panel--minimized"
+    style="top: 20px; left: 20px;"
+  >
+    <div
+      class="floating-panel__header"
+    >
+      <span
+        class="floating-panel__title"
+      >
+        Preview
+      </span>
+      <span
+        class="floating-panel__controls"
+      >
+        <button
+          aria-label="Expand panel"
+          class="icon-btn floating-panel__minimize"
+          title="Expand panel"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-plus icon"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M5 12h14"
+            />
+            <path
+              d="M12 5v14"
+            />
+          </svg>
+        </button>
+      </span>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FloatingPanel > renders without a minimize affordance when uncontrolled 1`] = `
+<div
+  style="position: relative;"
+>
+  <div
+    class="floating-panel"
+    style="top: 20px; left: 20px;"
+  >
+    <div
+      class="floating-panel__header"
+    >
+      <span
+        class="floating-panel__title"
+      >
+        Reference
+      </span>
+      <span
+        class="floating-panel__controls"
+      />
+    </div>
+    <div
+      class="floating-panel__body"
+    >
+      content
+    </div>
+  </div>
+</div>
+`;

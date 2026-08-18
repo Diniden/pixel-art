@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { Pixel, PixelData } from '../../types';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Mountain, X } from 'lucide-react';
 import './HeightMapModal.css';
 

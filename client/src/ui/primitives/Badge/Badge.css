@@ -1,0 +1,43 @@
+/*
+ * badge — shared status badge (task 19 primitive).
+ *
+ * `--selected`: the measured 20px circular badge (ObjectSelectModal's green
+ * `--status-ok` is the fill that actually renders at all three legacy sites
+ * today; `--violet` restores the other components' authored intent when task
+ * 21's G7 decides — the measured indigo #6366f1 was collapsed onto
+ * --accent-variant by task 12, so violet covers both).
+ * `--current`: ObjectSelectModal's blue pill — the design that currently wins
+ * at all three `.current-badge` sites.
+ *
+ * Positioning (`top`/`right` absolutes) stays with the CONSUMER: the legacy
+ * offsets differ per component and are layout, not badge identity.
+ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.badge--selected {
+  width: 20px;
+  height: 20px;
+  background: var(--status-ok);
+  border-radius: 50%;
+  color: var(--white);
+  font-size: var(--text-xs);
+}
+
+.badge--selected.badge--violet {
+  background: var(--accent-variant);
+}
+
+.badge--current {
+  padding: var(--space-0-5) var(--space-2);
+  background: var(--accent-info-30);
+  border: 1px solid var(--accent-info-50);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  color: var(--text-primary);
+}

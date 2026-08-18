@@ -1,0 +1,78 @@
+/*
+ * toggle — shared switch control (task 19 primitive).
+ *
+ * Design: RightSidebarTopControls.css's measured `.compact-toggle` /
+ * `.compact-toggle-slider` pill, verbatim, under the primitive's own block
+ * name (task 20's G3 splits the legacy `.compact-toggle` name, so the
+ * primitive does not squat on it).
+ *
+ * The checkbox is visually hidden but REAL — focus and Space work natively.
+ * Its focus ring is projected onto the track so keyboard users can see where
+ * they are (the legacy pattern hid the input and showed nothing).
+ */
+
+.toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2-5);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.toggle__track {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  transition: all var(--transition-fast);
+}
+
+.toggle__track::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 2px;
+  top: 2px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+}
+
+.toggle__input:checked + .toggle__track {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.toggle__input:checked + .toggle__track::before {
+  transform: translateX(16px);
+  background: var(--white);
+}
+
+/* Keyboard focus, projected from the hidden input onto the track. */
+.toggle__input:focus-visible + .toggle__track {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.toggle__label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}

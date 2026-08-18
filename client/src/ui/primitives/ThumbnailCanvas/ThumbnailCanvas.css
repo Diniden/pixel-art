@@ -1,0 +1,10 @@
+/*
+ * thumb-canvas — shared preview canvas (task 19 primitive).
+ */
+
+.thumb-canvas {
+  display: block;
+  image-rendering: pixelated;
+  background: var(--bg-primary);
+  border-radius: var(--radius-xs);
+}

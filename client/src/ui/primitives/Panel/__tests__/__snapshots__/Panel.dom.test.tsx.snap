@@ -1,0 +1,60 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Panel > renders header + body 1`] = `
+<section
+  class="panel"
+>
+  <div
+    class="panel__header"
+  >
+    <span
+      class="panel__title"
+    >
+      Layers
+    </span>
+  </div>
+  <div
+    class="panel__body"
+  >
+    Body
+  </div>
+</section>
+`;
+
+exports[`Panel > renders headerless with compact/dense modifiers unset 1`] = `
+<section
+  class="panel"
+>
+  <div
+    class="panel__body panel__body--dense"
+  >
+    Body
+  </div>
+</section>
+`;
+
+exports[`Panel > renders stacked header with actions and stack body 1`] = `
+<section
+  class="panel"
+>
+  <div
+    class="panel__header panel__header--stacked"
+  >
+    <span
+      class="panel__title"
+    >
+      Layers
+    </span>
+    <button
+      type="button"
+    >
+      all
+    </button>
+  </div>
+  <div
+    class="panel__body panel__body--stack"
+  >
+    Body
+  </div>
+</section>
+`;
