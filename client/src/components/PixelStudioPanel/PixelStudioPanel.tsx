@@ -1,5 +1,5 @@
 import { ColorPicker } from "../ColorPicker/ColorPicker";
-import { PaletteManager } from "../PaletteManager/PaletteManager";
+import { PaletteManagerContainer } from "../../containers/PaletteManagerContainer";
 import { useEditorStore } from "../../store";
 import type { Color } from "../../types";
 import "./PixelStudioPanel.css";
@@ -184,7 +184,7 @@ export function PixelStudioPanel() {
         </div>
       )}
       <ColorPicker />
-      <PaletteManager />
+      <PaletteManagerContainer />
     </div>
   );
 }

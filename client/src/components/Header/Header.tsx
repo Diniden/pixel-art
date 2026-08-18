@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
 import type { SaveStatus } from '../../store/storeTypes';
 import { aiApi, exportApi } from '../../api';
-import { ProjectSelectModal } from '../ProjectSelectModal/ProjectSelectModal';
+import { ProjectSelectModalContainer } from '../../containers/ProjectSelectModalContainer';
 import { ExportPreviewModal } from '../ExportPreviewModal/ExportPreviewModal';
-import { BrowseBackupsModal } from '../BrowseBackupsModal/BrowseBackupsModal';
+import { BrowseBackupsModalContainer } from '../../containers/BrowseBackupsModalContainer';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Diamond, Wand2, History, FolderOpen, ExternalLink, PenLine } from 'lucide-react';
 import './Header.css';
@@ -343,11 +343,11 @@ export function Header({ saveStatus, aiServiceUrl }: HeaderProps) {
       </div>
 
       {showProjectModal && (
-        <ProjectSelectModal onClose={() => setShowProjectModal(false)} />
+        <ProjectSelectModalContainer onClose={() => setShowProjectModal(false)} />
       )}
 
       {showBackupsModal && (
-        <BrowseBackupsModal onClose={() => setShowBackupsModal(false)} />
+        <BrowseBackupsModalContainer onClose={() => setShowBackupsModal(false)} />
       )}
 
       {exportKebabName && (

@@ -1,15 +1,29 @@
 import { useState } from 'react';
-import { useEditorStore } from '../../store';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { FolderOpen, Plus, X } from 'lucide-react';
 import './ProjectSelectModal.css';
 
 interface ProjectSelectModalProps {
   onClose: () => void;
+  /** From DomainStore via ProjectSelectModalContainer (REFRESH task 23). */
+  projectName: string;
+  projectList: string[];
+  /** The four DomainStore lifecycle flows, as promise-returning callbacks. */
+  onSwitchProject: (name: string) => Promise<boolean>;
+  onCreateProject: (name: string) => Promise<boolean>;
+  onDeleteProject: () => Promise<boolean>;
+  onRefreshProjectList: () => Promise<void>;
 }
 
-export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
-  const { projectList, projectName, switchToProject, createNewProject, deleteCurrentProject, refreshProjectList } = useEditorStore();
+export function ProjectSelectModal({
+  onClose,
+  projectName,
+  projectList,
+  onSwitchProject,
+  onCreateProject,
+  onDeleteProject,
+  onRefreshProjectList,
+}: ProjectSelectModalProps) {
   const [newProjectName, setNewProjectName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +38,7 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
     setIsLoading(true);
     setError(null);
 
-    const success = await switchToProject(name);
+    const success = await onSwitchProject(name);
     if (success) {
       onClose();
     } else {
@@ -54,7 +68,7 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
     setIsLoading(true);
     setError(null);
 
-    const success = await createNewProject(trimmedName);
+    const success = await onCreateProject(trimmedName);
     if (success) {
       onClose();
     } else {
@@ -76,9 +90,9 @@ export function ProjectSelectModal({ onClose }: ProjectSelectModalProps) {
     setIsLoading(true);
     setError(null);
 
-    const success = await deleteCurrentProject();
+    const success = await onDeleteProject();
     if (success) {
-      await refreshProjectList();
+      await onRefreshProjectList();
       onClose();
     } else {
       setError('Failed to delete project');

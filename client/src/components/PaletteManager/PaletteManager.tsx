@@ -1,20 +1,36 @@
 import { useState } from 'react';
 import { useEditorStore } from '../../store';
-import { Color } from '../../types';
+import { Color, Palette } from "../../types";
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import './PaletteManager.css';
 
-export function PaletteManager() {
-  const {
-    project,
-    setColor,
-    addPalette,
-    deletePalette,
-    renamePalette,
-    addColorToPalette,
-    removeColorFromPalette
-  } = useEditorStore();
+/**
+ * Props supplied by `PaletteManagerContainer` (REFRESH task 23). `palettes`
+ * comes from `DomainStore`; the five callbacks are `PaletteStore` actions and
+ * are all deliberately NON-UNDOABLE (task 17, pinned).
+ *
+ * `setColor` and `uiState.selectedColor` are still read from Zustand here —
+ * they are tool state, migrating with the UIStore task.
+ */
+interface PaletteManagerProps {
+  palettes: Palette[];
+  onAddPalette: (name: string) => void;
+  onDeletePalette: (id: string) => void;
+  onRenamePalette: (id: string, name: string) => void;
+  onAddColorToPalette: (paletteId: string, color: Color) => void;
+  onRemoveColorFromPalette: (paletteId: string, colorIndex: number) => void;
+}
+
+export function PaletteManager({
+  palettes,
+  onAddPalette,
+  onDeletePalette,
+  onRenamePalette,
+  onAddColorToPalette,
+  onRemoveColorFromPalette,
+}: PaletteManagerProps) {
+  const { project, setColor } = useEditorStore();
 
   const [newPaletteName, setNewPaletteName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -23,11 +39,11 @@ export function PaletteManager() {
 
   if (!project) return null;
 
-  const { palettes, uiState } = project;
+  const { uiState } = project;
 
   const handleAddPalette = () => {
     const name = newPaletteName.trim() || `Palette ${palettes.length + 1}`;
-    addPalette(name);
+    onAddPalette(name);
     setNewPaletteName('');
   };
 
@@ -38,14 +54,14 @@ export function PaletteManager() {
 
   const handleFinishRename = (id: string) => {
     if (editingName.trim()) {
-      renamePalette(id, editingName.trim());
+      onRenamePalette(id, editingName.trim());
     }
     setEditingId(null);
     setEditingName('');
   };
 
   const handleAddCurrentColor = (paletteId: string) => {
-    addColorToPalette(paletteId, uiState.selectedColor);
+    onAddColorToPalette(paletteId, uiState.selectedColor);
   };
 
   const getColorStyle = (color: Color): string => {
@@ -125,7 +141,7 @@ export function PaletteManager() {
                         </button>
                         <button
                           className="palette-manager__swatch-remove"
-                          onClick={() => removeColorFromPalette(palette.id, index)}
+                          onClick={() => onRemoveColorFromPalette(palette.id, index)}
                           title="Remove color"
                         >
                           <Icon icon={X} size={8} />
@@ -144,7 +160,7 @@ export function PaletteManager() {
                   <div className="palette-manager__actions">
                     <button
                       className="palette-manager__delete-btn"
-                      onClick={() => deletePalette(palette.id)}
+                      onClick={() => onDeletePalette(palette.id)}
                     >
                       Delete Palette
                     </button>

@@ -46,6 +46,12 @@ function makeRig(
   };
   const session = new SessionStore();
   const domain = new DomainStore({ session, host });
+  // Task 23: `serialize()` now builds its payload from the MobX TREE plus the
+  // hosted `uiState`, so a rig that swaps the hosted project must also adopt
+  // it — exactly what the bridge's adoption seam does for the legacy Zustand
+  // writers in the real app. Without this the rig would serialize an empty
+  // tree, which is a defect in the harness, not in the store.
+  runInAction(() => domain.adoptTree(current as Project));
   const save = vi.fn(
     saveImpl ?? (async () => ({ success: true, backupCreated: false })),
   );
@@ -57,6 +63,8 @@ function makeRig(
     save,
     setProject: (p) => {
       current = p;
+      // Mirror the bridge's adoption seam (task 23) — see makeRig's comment.
+      if (p) runInAction(() => domain.adoptTree(p));
     },
     openGate: (name = "unit") => {
       runInAction(() => {

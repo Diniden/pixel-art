@@ -1,16 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useEditorStore } from '../../store';
-import { Pixel, PixelData } from '../../types';
+import { Layer, Pixel, PixelData, PixelObject } from '../../types';
+import type { CurrentVariant } from '../../stores/ApplicationStore';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Mountain, X } from 'lucide-react';
 import './HeightMapModal.css';
 
-type ChannelType = 'R' | 'G' | 'B' | 'H' | 'S' | 'L';
+export type ChannelType = 'R' | 'G' | 'B' | 'H' | 'S' | 'L';
 
 interface HeightMapModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Resolved computeds, from HeightMapModalContainer (REFRESH task 23). */
+  layer: Layer | null;
+  object: PixelObject | null;
+  editingVariant: boolean;
+  variantData: CurrentVariant | null;
   onConfirm: (params: {
     channel: ChannelType;
     min: number;
@@ -72,17 +77,19 @@ function getChannelValue(pixel: Pixel, channel: ChannelType): number {
   }
 }
 
-export function HeightMapModal({ isOpen, onClose, onConfirm }: HeightMapModalProps) {
-  const { getCurrentLayer, getCurrentObject, isEditingVariant, getCurrentVariant } = useEditorStore();
+export function HeightMapModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  layer,
+  object: obj,
+  editingVariant,
+  variantData,
+}: HeightMapModalProps) {
   const [channel, setChannel] = useState<ChannelType>('L');
   const [min, setMin] = useState(0);
   const [max, setMax] = useState(255);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  const layer = getCurrentLayer();
-  const obj = getCurrentObject();
-  const editingVariant = isEditingVariant();
-  const variantData = getCurrentVariant();
 
   // Determine target layer and dimensions
   let targetLayer = layer;

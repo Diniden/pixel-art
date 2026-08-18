@@ -57,10 +57,50 @@
  *     fields (`zustandProjectHost`, the test harness) are ADOPTED back by the
  *     glue's `reconcile()` before the next history operation, preserving the
  *     one-field/one-direction/one-writer invariant (R6) via a pull seam.
+ *
+ * ── Task 23 — THE PIVOT ────────────────────────────────────────────────────
+ *
+ *  6. The domain TREE (`version`, `objects`, `palettes`, `variants`,
+ *     `referenceImage`) moved A→B. MobX is now the source of truth for it and
+ *     Zustand's `project` is a read-only mirror.
+ *
+ *     The spec sketches Phase B as one `reaction(() => app.migratedSnapshot(),
+ *     setState)`. That shape is CORRECT for scalars but **must not** be used
+ *     for the tree, and this is the one place the implementation deliberately
+ *     departs from the spec's snippet:
+ *
+ *       - a `reaction` returning a rebuilt `{...project}` would allocate a new
+ *         project object on every unrelated Phase B change (`saveStatus`
+ *         flipping idle→saving→saved is 3 per save), and every one of the 34
+ *         consumers reading `project` would re-render;
+ *       - with `compareStructural` (which the existing Phase B reaction uses)
+ *         it would DEEP-COMPARE a 300,249-cell tree on every change — the R2
+ *         catastrophe arriving through the back door rather than through an
+ *         annotation.
+ *
+ *     So the tree is published EVENT-WISE instead: a domain sub-store commits,
+ *     then pushes the recombined project into Zustand by reference exactly
+ *     once (`DomainMutator` step 3, via `createZustandDomainMirror`). Peak
+ *     overhead is one shallow `setState` per actual change, which is what the
+ *     spec's "never cloned / one shallow setState per change" requirement is
+ *     really asking for. The scalar Phase B reaction below is untouched.
+ *
+ *  7. The ADOPTION seam (in the subscribe callback): tasks 25-29 still own
+ *     ~137 `updateProjectAndSave` call sites, so legacy Zustand actions keep
+ *     committing whole `project` objects. Those commits are pulled back into
+ *     the MobX tree rather than being given a second writer — the same
+ *     pull-based technique as item 5.
+ *
+ *  8. Four `uiState` selection ids joined Phase A (`selectedObjectId`,
+ *     `selectedFrameId`, `selectedLayerId`, `variantFrameIndices`). They are
+ *     UI fields owned by Zustand until task 24, but the 6 cross-store
+ *     computeds cannot recompute unless their inputs are observable, so MobX
+ *     keeps a read-only copy on `SelectionMirror`.
  */
 import { compareStructural, flowResult, reaction, runInAction } from "mobx";
 import { useEditorStore } from "../../store";
 import type { EditorState } from "../../store/storeTypes";
+import type { Project } from "../../types";
 import type { ApplicationStore } from "../ApplicationStore";
 
 /* ── Phase A: Zustand → MobX. Fields whose slice has NOT yet flipped. ────── */
@@ -69,6 +109,14 @@ export const PHASE_A_FIELDS = [
   "layerClipboard", //         EditorState.layerClipboard    → session.layerClipboard
   "timelineCellClipboard", //  EditorState.timelineCellClipboard → session.timelineCellClipboard
   "colorHistory", //           EditorState.colorHistory      → session.colorHistory
+  // Task 23 — the 4 `uiState` selection ids the cross-store computeds read.
+  // They are UI fields (4 of the 43 persisted ones) and move to
+  // `TimelineUIStore` in task 24; until then Zustand owns them and MobX keeps
+  // a read-only copy on `SelectionMirror` so the computeds can recompute.
+  "selectedObjectId", //   project.uiState.selectedObjectId  → selection.selectedObjectId
+  "selectedFrameId", //    project.uiState.selectedFrameId   → selection.selectedFrameId
+  "selectedLayerId", //    project.uiState.selectedLayerId   → selection.selectedLayerId
+  "variantFrameIndices", //project.uiState.variantFrameIndices → selection.variantFrameIndices
 ] as const;
 
 /* ── Phase B: MobX → Zustand. Fields whose ownership HAS flipped. ────────── */
@@ -85,6 +133,18 @@ export const PHASE_B_FIELDS = [
   // reaction below (see item 5 in the module header):
   "projectHistory", // history.entries    → EditorState.projectHistory (before-snapshots)
   "historyIndex", //   history.index      → EditorState.historyIndex
+  // ── Task 23: THE PIVOT. The domain TREE is now MobX-owned. ──────────────
+  // Zustand's `project` is a read-only mirror for the 34 unmigrated
+  // consumers; these five members are written into it, by reference, by the
+  // domain sub-stores' `publish()` (see `DomainMutator`). The legacy
+  // `updateProjectAndSave` actions that still write `project` are ADOPTED
+  // back into the tree by the subscribe callback below — a pull seam, exactly
+  // like task 17's `reconcile()`, so there is still ONE writer per field.
+  "version", //         domain.version        → project.version
+  "objects", //         domain.objects        → project.objects
+  "palettes", //        domain.palettes       → project.palettes
+  "variants", //        domain.variants       → project.variants
+  "referenceImage", //  domain.referenceImage → project.referenceImage
 ] as const;
 
 /**
@@ -114,6 +174,14 @@ function syncPhaseA(app: ApplicationStore, s: EditorState): void {
     app.session.layerClipboard = s.layerClipboard;
     app.session.timelineCellClipboard = s.timelineCellClipboard;
     app.session.colorHistory = s.colorHistory;
+    // Task 23: the 4 selection ids the cross-store computeds depend on.
+    const uiState = s.project?.uiState;
+    app.selection.adopt({
+      selectedObjectId: uiState?.selectedObjectId ?? null,
+      selectedFrameId: uiState?.selectedFrameId ?? null,
+      selectedLayerId: uiState?.selectedLayerId ?? null,
+      variantFrameIndices: uiState?.variantFrameIndices ?? {},
+    });
   });
 }
 
@@ -149,6 +217,22 @@ export function installBridge(app: ApplicationStore): () => void {
     syncPhaseA(app, s);
     if (s.project !== lastProject) {
       lastProject = s.project;
+
+      // ── Task 23: ADOPT a legacy commit back into the MobX tree ──────────
+      //
+      // Tasks 25-29 still own ~137 `updateProjectAndSave` call sites, so
+      // Zustand actions keep committing whole `project` objects. Rather than
+      // give those five fields a second writer (which R6 forbids), the tree
+      // PULLS the commit back in — the same adoption seam task 17 used for
+      // `projectHistory`. `adoptTree` assigns by reference, so no grid is
+      // cloned and no grid is proxied.
+      //
+      // A publish made BY a domain sub-store re-enters here with a tree that
+      // is already reference-identical, so adoption is a no-op for it.
+      if (s.project) {
+        runInAction(() => app.domain.adoptTree(s.project as Project));
+      }
+
       runInAction(() => {
         if (
           s.project !== null &&
@@ -183,6 +267,41 @@ export function installBridge(app: ApplicationStore): () => void {
     refreshProjectList: useEditorStore.getState().refreshProjectList,
     restoreFromBackup: useEditorStore.getState().restoreFromBackup,
   };
+  // Task 23: the 11 migrated domain actions. `PaletteStore`/`ObjectStore`
+  // mutate the MobX tree and publish the result back into Zustand, so the
+  // unmigrated consumers keep calling `useEditorStore().addPalette(...)` and
+  // see the same observable behaviour they always did.
+  const previousDomainActions = {
+    addPalette: useEditorStore.getState().addPalette,
+    deletePalette: useEditorStore.getState().deletePalette,
+    renamePalette: useEditorStore.getState().renamePalette,
+    addColorToPalette: useEditorStore.getState().addColorToPalette,
+    removeColorFromPalette: useEditorStore.getState().removeColorFromPalette,
+    addObject: useEditorStore.getState().addObject,
+    deleteObject: useEditorStore.getState().deleteObject,
+    renameObject: useEditorStore.getState().renameObject,
+    resizeObject: useEditorStore.getState().resizeObject,
+    duplicateObject: useEditorStore.getState().duplicateObject,
+    setObjectOrigin: useEditorStore.getState().setObjectOrigin,
+  };
+  useEditorStore.setState({
+    addPalette: (name) => app.palettes.addPalette(name),
+    deletePalette: (id) => app.palettes.deletePalette(id),
+    renamePalette: (id, name) => app.palettes.renamePalette(id, name),
+    addColorToPalette: (paletteId, color) =>
+      app.palettes.addColorToPalette(paletteId, color),
+    removeColorFromPalette: (paletteId, colorIndex) =>
+      app.palettes.removeColorFromPalette(paletteId, colorIndex),
+    addObject: (name, width, height) =>
+      app.objects.addObject(name, width, height),
+    deleteObject: (id) => app.objects.deleteObject(id),
+    renameObject: (id, name) => app.objects.renameObject(id, name),
+    resizeObject: (id, width, height, anchor) =>
+      app.objects.resizeObject(id, width, height, anchor),
+    duplicateObject: (id) => app.objects.duplicateObject(id),
+    setObjectOrigin: (id, origin) => app.objects.setObjectOrigin(id, origin),
+  });
+
   useEditorStore.setState({
     initProject: () => flowResult(app.domain.initProject()),
     createNewProject: (name) => flowResult(app.domain.createProject(name)),
@@ -199,5 +318,6 @@ export function installBridge(app: ApplicationStore): () => void {
     disposeZ();
     disposeB();
     useEditorStore.setState(previousActions);
+    useEditorStore.setState(previousDomainActions);
   };
 }

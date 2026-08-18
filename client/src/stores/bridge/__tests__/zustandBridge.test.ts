@@ -29,22 +29,35 @@ import {
 import { projectToCompact } from "@/types";
 
 describe("the R6 ledger", () => {
-  it("PHASE_A holds the four still-Zustand-owned session tenants", () => {
+  it("PHASE_A holds the still-Zustand-owned session tenants + the selection ids", () => {
     // `saveStatus` moved OUT in task 16 — `AutoSaveController` writes it on
     // SessionStore now, and the bridge mirrors it back to Zustand (Phase B).
+    //
+    // Task 23 ADDED the four `uiState` selection ids. They are UI fields that
+    // Zustand still owns (they move to TimelineUIStore in task 24), but the 6
+    // cross-store computeds cannot recompute unless their inputs are
+    // observable, so MobX keeps a read-only copy on `SelectionMirror`.
     expect([...PHASE_A_FIELDS]).toEqual([
       "aiServiceUrl",
       "layerClipboard",
       "timelineCellClipboard",
       "colorHistory",
+      "selectedObjectId",
+      "selectedFrameId",
+      "selectedLayerId",
+      "variantFrameIndices",
     ]);
   });
 
-  it("PHASE_B holds the lifecycle slice + saveStatus (task 16) + the history mirror (task 17)", () => {
+  it("PHASE_B holds the lifecycle slice, the history mirror, and the domain TREE (task 23)", () => {
     // `projectHistory`/`historyIndex` flipped in task 17: `HistoryStore` owns
     // undo history; the Zustand fields are mirrors written by the history glue
     // in store/index.ts (synchronously, bridge-independent — see the bridge
     // module header, item 5).
+    //
+    // Task 23 is THE PIVOT: the five domain-tree members flipped A→B, so MobX
+    // is now the source of truth for the project tree and Zustand's `project`
+    // is a read-only mirror.
     expect([...PHASE_B_FIELDS]).toEqual([
       "loadState",
       "projectName",
@@ -52,6 +65,11 @@ describe("the R6 ledger", () => {
       "saveStatus",
       "projectHistory",
       "historyIndex",
+      "version",
+      "objects",
+      "palettes",
+      "variants",
+      "referenceImage",
     ]);
   });
 
@@ -73,7 +91,7 @@ describe("bridge mirroring", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    harness = createZustandHarness();
+    harness = createZustandHarness({ bridge: false });
     harness.reset();
     harness.load(tinyProject());
     app = new ApplicationStore({ autoSaveEnabled: false });

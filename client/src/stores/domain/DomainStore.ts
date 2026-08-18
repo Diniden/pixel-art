@@ -1,12 +1,31 @@
 /**
- * DomainStore — the project load/save LIFECYCLE (REFRESH task 16).
+ * DomainStore — the project TREE plus its load/save lifecycle (REFRESH tasks
+ * 16 and 23).
  *
- * This task ships the lifecycle only: `loadState`, `loadError`, `projectName`,
+ * Task 16 shipped the lifecycle: `loadState`, `loadError`, `projectName`,
  * `projectList`, the version counters the auto-save reaction observes, and the
- * project-lifecycle flows. The domain tree itself (`objects` / `palettes` /
- * `variants` / `referenceImage`) still lives in the Zustand store and arrives
- * with later tasks — this store reaches it through the injected
- * {@link ProjectHost}.
+ * project-lifecycle flows.
+ *
+ * ── Task 23 added the TREE ─────────────────────────────────────────────────
+ * `version`, `objects`, `palettes`, `variants` and `referenceImage` are now
+ * MobX-owned observables here, and the bridge runs in PHASE B for them:
+ * Zustand is a read-only mirror. **Read the R2 note on the field declarations
+ * before touching an annotation** — the pixel grids must never be proxied.
+ *
+ * `uiState` is deliberately NOT here. 43 of its 44 fields are UI and one is
+ * session, so it stays Zustand-owned until the UIStore task; `serialize()`
+ * reads it back through the {@link ProjectHost}, which is why this task
+ * cannot change the saved bytes.
+ *
+ * The tree still has TWO mutation paths during the bridge era, which is the
+ * one subtlety here:
+ *   1. MobX-native — `PaletteStore` and `ObjectStore` (task 23) mutate the
+ *      observables directly and then push the result to Zustand.
+ *   2. Legacy — the ~137 `updateProjectAndSave` call sites in `store/*.ts`
+ *      that later tasks (25-29) still own. The bridge ADOPTS those commits
+ *      back into the tree so MobX stays canonical.
+ * Both funnel through `adoptTree()`, so there is exactly one writer of these
+ * five observables.
  *
  * ── THE LOAD-STATE MACHINE — THIS IS THE R5 FIX ────────────────────────────
  *
@@ -57,7 +76,10 @@ import {
 import { runMigrations } from "../../services/migrations";
 import {
   CompactProject,
+  Palette,
+  PixelObject,
   Project,
+  VariantGroup,
   compactToProject,
   createDefaultProject,
   isCompactFormat,
@@ -93,8 +115,51 @@ export class DomainStore {
   projectName = "";
   /** Pure API cache of the server directory listing. */
   projectList: string[] = [];
-  /** Carried verbatim from the loaded payload; assigned by later tasks. */
+
+  /* ── THE DOMAIN TREE (task 23) ──────────────────────────────────────────
+   *
+   * ⚠️ R2 — THE OBSERVABLE KINDS BELOW ARE NON-NEGOTIABLE. The owner's real
+   * project holds 300,249 `PixelData` cells. MobX's default `observable` is
+   * DEEP, so annotating `objects` deep would proxy every cell AND its nested
+   * `Pixel`/`Normal` — ~1M proxies. The app becomes unusable and it presents
+   * as "MobX is slow" rather than as the modelling error it is.
+   *
+   * See `adoptTree()` for the one place these are written, and
+   * `assertGridsAreRaw()` for the runtime proof that no grid was proxied.
+   */
+
+  /** Carried verbatim from the loaded payload. */
   version?: string;
+
+  /**
+   * `observableShallow`: the ARRAY is observable (add/remove/reorder an
+   * object propagates) but its elements are left as raw plain objects, so no
+   * `PixelObject` → `Frame` → `Layer` → `pixels` proxy chain is ever built.
+   *
+   * Structural edits below the array level are made by replacing the object
+   * (or the whole array) — the immutable-update style the Zustand actions
+   * already use — so shallow observation loses no granularity that this
+   * codebase actually relies on.
+   */
+  objects: PixelObject[] = [];
+
+  /**
+   * Deep `observable` — and the ONLY deep member of the tree. Palettes hold a
+   * few hundred `{r,g,b,a}` colours, so deep observation is affordable and
+   * gives `PaletteManager` per-swatch granularity for free (the design's
+   * stated rationale).
+   */
+  palettes: Palette[] = [];
+
+  /** `observableShallow` for the same reason as `objects` — `VariantFrame.layers[].pixels`. */
+  variants: VariantGroup[] = [];
+
+  /**
+   * `observableRef`: a whole base64 PNG (megabytes). Never cloned, never
+   * entered into a history command — this alone keeps up to 100 MB of
+   * duplicated PNG out of the undo stack.
+   */
+  referenceImage: Project["referenceImage"] = undefined;
 
   /**
    * The auto-save trigger counters. `domainVersion` bumps once per committed
@@ -127,7 +192,15 @@ export class DomainStore {
       loadError: observableRef,
       projectName: observable,
       projectList: observableShallow,
+      // ── The tree (task 23). See the R2 note on the field declarations. ──
       version: observable,
+      objects: observableShallow, //      NEVER `observable` — see R2
+      palettes: observable, //            the one deep member, deliberately
+      variants: observableShallow, //     NEVER `observable` — see R2
+      referenceImage: observableRef, //   a whole base64 PNG
+      adoptTree: action,
+      setReferenceImage: action,
+      hasProject: computed,
       domainVersion: observable,
       pixelVersion: observable,
       loadGeneration: observable,
@@ -165,15 +238,100 @@ export class DomainStore {
     this.pixelVersion += 1;
   }
 
+  /* ── the tree (task 23) ────────────────────────────────────────────────── */
+
+  /** True once a project tree has been adopted. */
+  get hasProject(): boolean {
+    return this.loadState === "loaded" || this.objects.length > 0;
+  }
+
   /**
-   * The payload `AutoSaveController` saves. Still produced from the
-   * Zustand-held project via the host, so the saved bytes are EXACTLY what
-   * the old `saveProject(project, name)` facade emitted:
-   * `projectToCompact(project)`, `uiState.aiServiceUrl` included. The full
-   * `serialize()` with the UI slice merged arrives with the UIStore task.
+   * THE SINGLE WRITER of the tree. Splits an incoming `Project` into the five
+   * observable members, leaving every pixel grid EXACTLY as it arrived — by
+   * reference, never cloned, never proxied.
+   *
+   * Called from two places, both of which are "the tree changed wholesale":
+   *  - the lifecycle flows, via `installTree()` (load / create / switch / …)
+   *  - the bridge, ADOPTING a commit made by a not-yet-migrated Zustand
+   *    action (see `zustandBridge`'s Phase B note).
+   *
+   * `uiState` is deliberately NOT stored here: 43 of its 44 fields are UI and
+   * one is session, so it stays Zustand-owned until the UIStore task. Task 23
+   * reads it back through the host at `serialize()` time, which is why the
+   * saved bytes cannot change.
+   */
+  adoptTree(project: Project): void {
+    this.version = project.version;
+    this.objects = project.objects;
+    this.palettes = project.palettes;
+    this.variants = project.variants ?? [];
+    this.referenceImage = project.referenceImage;
+  }
+
+  /**
+   * Reconstitute a plain `Project` from the tree. The inverse of
+   * `adoptTree`, and the value the Zustand mirror receives.
+   *
+   * ⚠️ `variants` round-trips as `undefined` when empty, NOT `[]` — task 07's
+   * R1 pinned that the load path turns `variants: []` into `undefined`, and
+   * `projectToCompact` omits a falsy `variants`. Emitting `[]` here would
+   * change the saved bytes for every project without variants.
+   */
+  private treeToProject(uiState: Project["uiState"]): Project {
+    return {
+      version: this.version,
+      objects: this.objects,
+      palettes: this.palettes,
+      ...(this.variants.length > 0 ? { variants: this.variants } : {}),
+      ...(this.referenceImage ? { referenceImage: this.referenceImage } : {}),
+      uiState,
+    };
+  }
+
+  /**
+   * The `Project` the bridge mirrors into Zustand and `serialize()` saves.
+   * `null` until a tree has been adopted. `uiState` comes from the host —
+   * the bridge-era seam that keeps the wire format byte-identical.
+   */
+  currentProject(): Project | null {
+    const hosted = this.host.getProject();
+    if (!hosted) return null;
+    return this.treeToProject(hosted.uiState);
+  }
+
+  /** `referenceImage` is non-undoable and never enters a history command. */
+  setReferenceImage(image: Project["referenceImage"]): void {
+    this.referenceImage = image;
+  }
+
+  /**
+   * Install a freshly loaded/created project: adopt it into the MobX tree AND
+   * push it to the host (which resets undo history, as the old
+   * `projectActions` did). One helper so a lifecycle flow can never adopt
+   * into one side and forget the other.
+   */
+  private installTree(project: Project): void {
+    this.adoptTree(project);
+    this.host.installProject(project);
+  }
+
+  /** History-PRESERVING install (restore-from-backup is undoable). */
+  private replaceTree(project: Project): void {
+    this.adoptTree(project);
+    this.host.replaceProject(project);
+  }
+
+  /**
+   * The payload `AutoSaveController` saves.
+   *
+   * Task 23: the domain half now comes from the MobX tree and `uiState` still
+   * comes through the host, recombined by `currentProject()`. The bytes are
+   * unchanged — `projectToCompact` receives a structurally identical
+   * `Project`, `uiState.aiServiceUrl` included. The full `serialize()` with a
+   * MobX-owned UI slice arrives with the UIStore task.
    */
   serialize(): CompactProject | null {
-    const project = this.host.getProject();
+    const project = this.currentProject();
     return project ? projectToCompact(project) : null;
   }
 
@@ -206,7 +364,7 @@ export class DomainStore {
 
       this.projectName = projectName;
       this.projectList = projectList;
-      this.host.installProject(project);
+      this.installTree(project);
       this.loadGeneration += 1;
       this.loadState = "loaded";
     } catch (error) {
@@ -229,7 +387,7 @@ export class DomainStore {
     this.loadError = null;
     try {
       const project: Project = yield this.fetchAndMigrate(name);
-      this.host.installProject(project);
+      this.installTree(project);
       if (name !== undefined) this.projectName = name;
       this.loadGeneration += 1;
       this.loadState = "loaded";
@@ -305,7 +463,7 @@ export class DomainStore {
       const projectList: string[] = yield projectApi.list();
       this.projectName = name;
       this.projectList = projectList;
-      this.host.installProject(newProject);
+      this.installTree(newProject);
       this.loadGeneration += 1;
       this.loadState = "loaded";
       return true;
@@ -325,7 +483,7 @@ export class DomainStore {
       yield projectApi.switchTo(name);
       const project: Project = yield this.fetchAndMigrate(name);
       this.projectName = name;
-      this.host.installProject(project);
+      this.installTree(project);
       this.loadGeneration += 1;
       this.loadState = "loaded";
       return true;
@@ -371,7 +529,7 @@ export class DomainStore {
       const project: Project = yield this.fetchAndMigrate(newProjectName);
       this.projectName = newProjectName;
       this.projectList = newProjectList;
-      this.host.installProject(project);
+      this.installTree(project);
       this.loadGeneration += 1;
       this.loadState = "loaded";
       return true;
@@ -415,7 +573,7 @@ export class DomainStore {
       );
 
       // History-preserving install: restore is undoable.
-      this.host.replaceProject(restoredProject);
+      this.replaceTree(restoredProject);
       this.loadState = "loaded";
     } catch (error) {
       console.error("Failed to restore backup:", error);

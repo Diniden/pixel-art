@@ -17,6 +17,8 @@ import { useEditorStore } from "../../store";
 import { compactToProject, projectToCompact } from "../../types";
 import type { Project } from "../../types";
 import type { ProjectHost } from "../domain/DomainStore";
+import type { DomainMirror } from "../domain/DomainMutator";
+import type { SelectionSink } from "../domain/ObjectStore";
 
 export function createZustandProjectHost(): ProjectHost {
   return {
@@ -49,6 +51,51 @@ export function createZustandProjectHost(): ProjectHost {
       useEditorStore.setState({
         projectHistory: newHistory,
         historyIndex: newHistory.length - 1,
+      });
+    },
+  };
+}
+
+/**
+ * The Phase B publisher (task 23). A committed MobX-native domain mutation
+ * is pushed into Zustand BY REFERENCE — never cloned — so the 34 unmigrated
+ * consumers re-render exactly as they did when Zustand owned the tree.
+ *
+ * `uiState` rides along inside `project` untouched: `DomainStore` rebuilt the
+ * project from its own tree plus the hosted `uiState`, so this write cannot
+ * change the UI slice.
+ */
+export function createZustandDomainMirror(): DomainMirror {
+  return {
+    publish: (project: Project) => {
+      useEditorStore.setState({ project });
+    },
+
+    // Routed through the Zustand action, NOT through HistoryStore directly:
+    // that action is the single writer of the `projectHistory`/`historyIndex`
+    // Phase B mirror (task 17's glue, `store/index.ts`). See the note on
+    // `DomainMirror.snapshot`.
+    snapshot: (label: string) => {
+      useEditorStore.getState().saveCurrentStateToHistory(label);
+    },
+  };
+}
+
+/**
+ * Where `ObjectStore` writes the `uiState` selection ids during the bridge
+ * era (task 23). `uiState` is still Zustand-owned, and a domain store may not
+ * import a UI store, so the write arrives through this injected sink.
+ *
+ * Merges into the CURRENT project rather than the one the mutation saw, so it
+ * composes correctly after `publish()` has already landed the new tree.
+ */
+export function createZustandSelectionSink(): SelectionSink {
+  return {
+    selectObjectTree: (ids) => {
+      const { project } = useEditorStore.getState();
+      if (!project) return;
+      useEditorStore.setState({
+        project: { ...project, uiState: { ...project.uiState, ...ids } },
       });
     },
   };
