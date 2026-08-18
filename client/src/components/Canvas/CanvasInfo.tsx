@@ -51,38 +51,38 @@ export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
   const { setCanvasInfoHidden } = useEditorStore();
 
   return (
-    <div className="canvas-info-wrap">
+    <div className="canvas-info">
       <button
         type="button"
-        className="canvas-info-arrow-toggle"
+        className="canvas-info__arrow-toggle"
         onClick={() => setCanvasInfoHidden(!isCanvasInfoHidden)}
         title={isCanvasInfoHidden ? "Show canvas info" : "Hide canvas info"}
         aria-expanded={!isCanvasInfoHidden}
       >
-        <span className="canvas-info-arrow" aria-hidden>
+        <span className="canvas-info__arrow" aria-hidden>
           <Icon icon={isCanvasInfoHidden ? ChevronDown : ChevronUp} size={10} />
         </span>
       </button>
       <div
-        className="canvas-info-panel"
+        className="canvas-info__panel"
         data-hidden={isCanvasInfoHidden}
         aria-hidden={isCanvasInfoHidden}
       >
-        <div className="canvas-info">
+        <div className="canvas-info__row">
           {editingVariant && variantData ? (
             <>
-              <span className="variant-indicator">
+              <span className="canvas-info__variant">
                 <Icon icon={Hexagon} size={10} /> Variant: {variantData.variant.name}
               </span>
-              <span className="separator">|</span>
+              <span className="canvas-info__separator">|</span>
               <span>
                 {gridWidth} × {gridHeight}
               </span>
-              <span className="separator">|</span>
+              <span className="canvas-info__separator">|</span>
               <span>
                 Offset: ({variantOffset.x}, {variantOffset.y})
               </span>
-              <span className="separator">|</span>
+              <span className="canvas-info__separator">|</span>
               <span>WASD to adjust offset</span>
             </>
           ) : (
@@ -92,9 +92,9 @@ export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
               </span>
             </>
           )}
-          <span className="separator">|</span>
+          <span className="canvas-info__separator">|</span>
           <span>Zoom: {Math.round(zoom)}x</span>
-          <span className="separator">|</span>
+          <span className="canvas-info__separator">|</span>
           <span>
             ↑↓←→{" "}
             {!selection
@@ -105,34 +105,34 @@ export function CanvasInfo({ referenceImage }: CanvasInfoProps) {
                   ? "move selected pixels"
                   : "no move"}
           </span>
-          {currentTool === "move" && <span className="separator">|</span>}
+          {currentTool === "move" && <span className="canvas-info__separator">|</span>}
           {currentTool === "move" && <span>Drag to move</span>}
-          {currentTool === "selection" && <span className="separator">|</span>}
+          {currentTool === "selection" && <span className="canvas-info__separator">|</span>}
           {currentTool === "selection" && (
             <span>Drag to select • Esc to clear</span>
           )}
-          {selection && <span className="separator">|</span>}
+          {selection && <span className="canvas-info__separator">|</span>}
           {selection && (
-            <span className="selection-info">
+            <span className="canvas-info__selection">
               <Icon icon={BoxSelect} size={10} /> Selection: {selection.bounds.width}×{selection.bounds.height} at
               ({selection.bounds.x}, {selection.bounds.y}) •{" "}
               {selection.mask.size}
               px
             </span>
           )}
-          {currentTool === "rectangle" && <span className="separator">|</span>}
+          {currentTool === "rectangle" && <span className="canvas-info__separator">|</span>}
           {currentTool === "rectangle" && (
             <span>Shift+↑↓ radius: {borderRadius}</span>
           )}
-          {isReferenceTraceActive && <span className="separator">|</span>}
+          {isReferenceTraceActive && <span className="canvas-info__separator">|</span>}
           {isReferenceTraceActive && (
-            <span className="trace-info">
+            <span className="canvas-info__trace">
               <Icon icon={Target} size={10} /> Offset: ({referenceOverlayOffset.x}, {referenceOverlayOffset.y}
               )
             </span>
           )}
           {referenceImage && !isReferenceTraceActive && (
-            <span className="separator">|</span>
+            <span className="canvas-info__separator">|</span>
           )}
           {referenceImage && !isReferenceTraceActive && (
             <span>

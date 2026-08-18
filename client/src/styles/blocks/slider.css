@@ -14,28 +14,26 @@
  * every variant that previously won via `.color-slider-row .x` (0,2,0) is a
  * COMPOUND selector (`.slider.slider--thick`) so it still wins. This is also
  * what let the `.hue-slider` `!important` be removed: the rainbow now wins by
- * compound specificity (`.compact-slider.hue-slider`) instead of by force.
+ * compound specificity (`.slider.slider__hue`) instead of by force.
  *
- * `.compact-slider`, `.slider-label`, `.slider-input` and `.hue-slider` remain
- * declared as LEGACY ALIASES: ColorPicker.tsx is frozen until task 20's G3.
- * ColorPicker.css keeps its channel-gradient rules (.channel-slider.channel-*),
- * which override the base track exactly as before. `slider__row` is NOT
- * declared yet — ColorPicker's `.slider-row` is its only consumer and renaming
- * it is task 20's G3; the name is reserved here for task 19.
+ * Task 20 (G3) retired the legacy aliases `.compact-slider`, `.slider-label`,
+ * `.slider-input` and `.hue-slider`: ColorPicker was their last consumer and
+ * now renders the block names. ColorPicker.css keeps its channel-gradient
+ * rules as `.slider.color-picker__slider--{r|g|b}` compounds, which override
+ * the base track exactly as before.
  *
  * Vocabulary (task 19 builds Slider.tsx against these exact names):
- *   slider                     (legacy alias: .compact-slider)
+ *   slider                     base 4px track
  *   slider--thick              8px bordered track, large grab thumb (LightControl)
- *   slider__hue                rainbow hue track (legacy alias: .hue-slider)
- *   slider__label              (legacy alias: .slider-label)
+ *   slider__hue                rainbow hue track (compound `.slider.slider__hue`)
+ *   slider__label              14px mono channel label
  *   slider__label--muted       LightControl's larger muted label
- *   slider__input              (legacy alias: .slider-input)
+ *   slider__input              42px mono number input
  *   slider__input--boxed       LightControl's centered boxed number input
- *   slider__row                RESERVED — introduced by task 19/20 (.slider-row)
+ *   slider__row                flex row: label + track + number input
  */
 
-.slider,
-.compact-slider {
+.slider {
   flex: 1;
   height: 4px;
   -webkit-appearance: none;
@@ -46,8 +44,7 @@
   cursor: pointer;
 }
 
-.slider::-webkit-slider-thumb,
-.compact-slider::-webkit-slider-thumb {
+.slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 10px;
@@ -59,8 +56,7 @@
   box-shadow: var(--shadow-sm);
 }
 
-.slider::-moz-range-thumb,
-.compact-slider::-moz-range-thumb {
+.slider::-moz-range-thumb {
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -98,7 +94,6 @@
    The old `!important` (ColorPicker.css:243) is GONE: the compound selectors
    below outrank both reset.css's input[type="range"] background and the
    --thick variant without it. */
-.compact-slider.hue-slider,
 .slider.slider__hue {
   background: linear-gradient(to right,
     hsl(0, 100%, 50%),
@@ -110,10 +105,20 @@
     hsl(360, 100%, 50%));
 }
 
+/* ── Row ───────────────────────────────────────────────────────────────── */
+
+/* One slider line: label + track + number input (moved verbatim from
+   ColorPicker.css's `.slider-row` by task 20; SliderWithNumber renders it). */
+.slider__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  height: 22px;
+}
+
 /* ── Labels ────────────────────────────────────────────────────────────── */
 
-.slider__label,
-.slider-label {
+.slider__label {
   width: 14px;
   font-family: var(--font-mono);
   font-size: 0.65rem;
@@ -129,8 +134,7 @@
 
 /* ── Number inputs ─────────────────────────────────────────────────────── */
 
-.slider__input,
-.slider-input {
+.slider__input {
   width: 42px;
   padding: var(--space-0-5) var(--space-1);
   font-family: var(--font-mono);
@@ -143,23 +147,19 @@
   flex-shrink: 0;
 }
 
-.slider__input:focus,
-.slider-input:focus {
+.slider__input:focus {
   border-color: var(--accent-primary);
   outline: none;
 }
 
 /* Remove spinner buttons from number inputs */
 .slider__input::-webkit-outer-spin-button,
-.slider__input::-webkit-inner-spin-button,
-.slider-input::-webkit-outer-spin-button,
-.slider-input::-webkit-inner-spin-button {
+.slider__input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.slider__input[type=number],
-.slider-input[type=number] {
+.slider__input[type=number] {
   -moz-appearance: textfield;
 }
 
@@ -173,8 +173,7 @@
 }
 
 @media (max-width: 768px) {
-  .slider__input,
-  .slider-input {
+  .slider__input {
     width: 36px;
   }
 }

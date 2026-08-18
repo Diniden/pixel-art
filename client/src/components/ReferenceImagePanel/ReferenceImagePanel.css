@@ -1,3 +1,5 @@
+/* reference-image-panel — BEM block (task 20, G1). */
+
 .reference-image-panel {
   position: absolute;
   background: linear-gradient(135deg, var(--bg-hover) 0%, var(--bg-tertiary) 100%);
@@ -12,17 +14,9 @@
   user-select: none;
 }
 
-.reference-image-panel.dragging {
-  transition: none;
-  box-shadow: var(--shadow-xl);
-  cursor: grabbing;
-}
+/* elements, DOM order */
 
-.reference-image-panel.minimized {
-  padding: var(--space-2) var(--space-3);
-}
-
-.reference-image-header {
+.reference-image-panel__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -35,15 +29,11 @@
   transition: background-color var(--transition-base);
 }
 
-.reference-image-header:hover {
+.reference-image-panel__header:hover {
   background-color: var(--white-05);
 }
 
-.reference-image-panel.minimized .reference-image-header {
-  margin-bottom: 0;
-}
-
-.reference-image-title {
+.reference-image-panel__title {
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -52,7 +42,7 @@
   user-select: none;
 }
 
-.reference-image-minimize {
+.reference-image-panel__minimize {
   background: var(--white-05);
   border: 1px solid var(--white-10);
   color: var(--text-secondary);
@@ -63,18 +53,18 @@
   transition: all var(--transition-base);
 }
 
-.reference-image-minimize:hover {
+.reference-image-panel__minimize:hover {
   background: var(--white-10);
   color: var(--text-primary);
 }
 
-.reference-image-content {
+.reference-image-panel__body {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.reference-image-preview {
+.reference-image-panel__preview {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -87,13 +77,13 @@
   position: relative;
 }
 
-.reference-canvas-wrapper {
+.reference-image-panel__frame {
   position: relative;
   display: inline-block;
   margin: var(--space-8);
 }
 
-.reference-image-preview canvas {
+.reference-image-panel__preview canvas {
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
@@ -102,7 +92,7 @@
   max-height: 200px;
 }
 
-.reference-image-info {
+.reference-image-panel__info {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -110,7 +100,7 @@
 }
 
 /* Reference box adjustment buttons */
-.ref-box-btn {
+.reference-image-panel__box-btn {
   position: absolute;
   z-index: var(--z-overlay-control);
   width: 24px;
@@ -130,139 +120,19 @@
   font-family: inherit;
 }
 
-.ref-box-btn:hover {
+.reference-image-panel__box-btn:hover {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
   z-index: var(--z-hover-lift);
 }
 
-.ref-box-btn:active {
+.reference-image-panel__box-btn:active {
   background: var(--bg-active);
   transform: scale(0.9);
 }
 
-/* Top buttons - positioned at top center */
-.ref-box-btn-top {
-  top: -28px;
-  left: 50%;
-}
-
-.ref-box-btn-top.ref-box-btn-increase {
-  transform: translateX(-50%) translateX(-16px);
-}
-
-.ref-box-btn-top.ref-box-btn-decrease {
-  transform: translateX(-50%) translateX(16px);
-}
-
-.ref-box-btn-top.ref-box-btn-increase:hover {
-  transform: translateX(-50%) translateX(-16px) scale(1.05);
-}
-
-.ref-box-btn-top.ref-box-btn-decrease:hover {
-  transform: translateX(-50%) translateX(16px) scale(1.05);
-}
-
-.ref-box-btn-top.ref-box-btn-increase:active {
-  transform: translateX(-50%) translateX(-16px) scale(0.9);
-}
-
-.ref-box-btn-top.ref-box-btn-decrease:active {
-  transform: translateX(-50%) translateX(16px) scale(0.9);
-}
-
-/* Bottom buttons - positioned at bottom center */
-.ref-box-btn-bottom {
-  bottom: -28px;
-  left: 50%;
-}
-
-.ref-box-btn-bottom.ref-box-btn-increase {
-  transform: translateX(-50%) translateX(-16px);
-}
-
-.ref-box-btn-bottom.ref-box-btn-decrease {
-  transform: translateX(-50%) translateX(16px);
-}
-
-.ref-box-btn-bottom.ref-box-btn-increase:hover {
-  transform: translateX(-50%) translateX(-16px) scale(1.05);
-}
-
-.ref-box-btn-bottom.ref-box-btn-decrease:hover {
-  transform: translateX(-50%) translateX(16px) scale(1.05);
-}
-
-.ref-box-btn-bottom.ref-box-btn-increase:active {
-  transform: translateX(-50%) translateX(-16px) scale(0.9);
-}
-
-.ref-box-btn-bottom.ref-box-btn-decrease:active {
-  transform: translateX(-50%) translateX(16px) scale(0.9);
-}
-
-/* Left buttons - positioned at left center */
-.ref-box-btn-left {
-  left: -28px;
-  top: 50%;
-}
-
-.ref-box-btn-left.ref-box-btn-increase {
-  transform: translateY(-50%) translateY(-16px);
-}
-
-.ref-box-btn-left.ref-box-btn-decrease {
-  transform: translateY(-50%) translateY(16px);
-}
-
-.ref-box-btn-left.ref-box-btn-increase:hover {
-  transform: translateY(-50%) translateY(-16px) scale(1.05);
-}
-
-.ref-box-btn-left.ref-box-btn-decrease:hover {
-  transform: translateY(-50%) translateY(16px) scale(1.05);
-}
-
-.ref-box-btn-left.ref-box-btn-increase:active {
-  transform: translateY(-50%) translateY(-16px) scale(0.9);
-}
-
-.ref-box-btn-left.ref-box-btn-decrease:active {
-  transform: translateY(-50%) translateY(16px) scale(0.9);
-}
-
-/* Right buttons - positioned at right center */
-.ref-box-btn-right {
-  right: -28px;
-  top: 50%;
-}
-
-.ref-box-btn-right.ref-box-btn-increase {
-  transform: translateY(-50%) translateY(-16px);
-}
-
-.ref-box-btn-right.ref-box-btn-decrease {
-  transform: translateY(-50%) translateY(16px);
-}
-
-.ref-box-btn-right.ref-box-btn-increase:hover {
-  transform: translateY(-50%) translateY(-16px) scale(1.05);
-}
-
-.ref-box-btn-right.ref-box-btn-decrease:hover {
-  transform: translateY(-50%) translateY(16px) scale(1.05);
-}
-
-.ref-box-btn-right.ref-box-btn-increase:active {
-  transform: translateY(-50%) translateY(-16px) scale(0.9);
-}
-
-.ref-box-btn-right.ref-box-btn-decrease:active {
-  transform: translateY(-50%) translateY(16px) scale(0.9);
-}
-
-.reference-navigation {
+.reference-image-panel__nav {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -273,14 +143,14 @@
   z-index: var(--z-overlay-control);
 }
 
-.reference-nav-group {
+.reference-image-panel__nav-group {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-1);
   flex: 1;
 }
 
-.reference-nav-btn {
+.reference-image-panel__nav-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -299,19 +169,19 @@
   position: relative;
 }
 
-.reference-nav-btn:hover {
+.reference-image-panel__nav-btn:hover {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
   z-index: var(--z-hover-lift);
 }
 
-.reference-nav-btn:active {
+.reference-image-panel__nav-btn:active {
   background: var(--bg-active);
   transform: scale(0.9);
 }
 
-.reference-trace-btn {
+.reference-image-panel__trace-btn {
   width: 96px;
   height: 96px;
   padding: 0;
@@ -331,28 +201,162 @@
   flex-shrink: 0;
 }
 
-.reference-trace-btn:hover {
+.reference-image-panel__trace-btn:hover {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
   transform: scale(1.05);
 }
 
-.reference-trace-btn.active {
+.reference-image-panel__trace-btn:active {
+  background: var(--bg-active);
+  transform: scale(0.95);
+}
+
+/* modifiers */
+
+.reference-image-panel--dragging {
+  transition: none;
+  box-shadow: var(--shadow-xl);
+  cursor: grabbing;
+}
+
+.reference-image-panel--minimized {
+  padding: var(--space-2) var(--space-3);
+}
+
+.reference-image-panel--minimized .reference-image-panel__header {
+  margin-bottom: 0;
+}
+
+/* Box-btn placement modifiers — one combined modifier per button, replacing
+   the old direction ⨯ increase/decrease compound selectors 1:1. */
+
+.reference-image-panel__box-btn--top-increase {
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%) translateX(-16px);
+}
+
+.reference-image-panel__box-btn--top-increase:hover {
+  transform: translateX(-50%) translateX(-16px) scale(1.05);
+}
+
+.reference-image-panel__box-btn--top-increase:active {
+  transform: translateX(-50%) translateX(-16px) scale(0.9);
+}
+
+.reference-image-panel__box-btn--top-decrease {
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%) translateX(16px);
+}
+
+.reference-image-panel__box-btn--top-decrease:hover {
+  transform: translateX(-50%) translateX(16px) scale(1.05);
+}
+
+.reference-image-panel__box-btn--top-decrease:active {
+  transform: translateX(-50%) translateX(16px) scale(0.9);
+}
+
+.reference-image-panel__box-btn--bottom-increase {
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%) translateX(-16px);
+}
+
+.reference-image-panel__box-btn--bottom-increase:hover {
+  transform: translateX(-50%) translateX(-16px) scale(1.05);
+}
+
+.reference-image-panel__box-btn--bottom-increase:active {
+  transform: translateX(-50%) translateX(-16px) scale(0.9);
+}
+
+.reference-image-panel__box-btn--bottom-decrease {
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%) translateX(16px);
+}
+
+.reference-image-panel__box-btn--bottom-decrease:hover {
+  transform: translateX(-50%) translateX(16px) scale(1.05);
+}
+
+.reference-image-panel__box-btn--bottom-decrease:active {
+  transform: translateX(-50%) translateX(16px) scale(0.9);
+}
+
+.reference-image-panel__box-btn--left-increase {
+  left: -28px;
+  top: 50%;
+  transform: translateY(-50%) translateY(-16px);
+}
+
+.reference-image-panel__box-btn--left-increase:hover {
+  transform: translateY(-50%) translateY(-16px) scale(1.05);
+}
+
+.reference-image-panel__box-btn--left-increase:active {
+  transform: translateY(-50%) translateY(-16px) scale(0.9);
+}
+
+.reference-image-panel__box-btn--left-decrease {
+  left: -28px;
+  top: 50%;
+  transform: translateY(-50%) translateY(16px);
+}
+
+.reference-image-panel__box-btn--left-decrease:hover {
+  transform: translateY(-50%) translateY(16px) scale(1.05);
+}
+
+.reference-image-panel__box-btn--left-decrease:active {
+  transform: translateY(-50%) translateY(16px) scale(0.9);
+}
+
+.reference-image-panel__box-btn--right-increase {
+  right: -28px;
+  top: 50%;
+  transform: translateY(-50%) translateY(-16px);
+}
+
+.reference-image-panel__box-btn--right-increase:hover {
+  transform: translateY(-50%) translateY(-16px) scale(1.05);
+}
+
+.reference-image-panel__box-btn--right-increase:active {
+  transform: translateY(-50%) translateY(-16px) scale(0.9);
+}
+
+.reference-image-panel__box-btn--right-decrease {
+  right: -28px;
+  top: 50%;
+  transform: translateY(-50%) translateY(16px);
+}
+
+.reference-image-panel__box-btn--right-decrease:hover {
+  transform: translateY(-50%) translateY(16px) scale(1.05);
+}
+
+.reference-image-panel__box-btn--right-decrease:active {
+  transform: translateY(-50%) translateY(16px) scale(0.9);
+}
+
+.reference-image-panel__trace-btn--active {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
   color: var(--black);
   box-shadow: var(--glow-accent-12-50);
 }
 
-.reference-trace-btn.active:hover {
+.reference-image-panel__trace-btn--active:hover {
   background: var(--accent-secondary);
   box-shadow: var(--glow-accent-16-60);
-}
-
-.reference-trace-btn:active {
-  background: var(--bg-active);
-  transform: scale(0.95);
+  /* task 20: keeps the icon black while hovered — the old `.active` compound
+     out-ordered `:hover` for `color`; the b1 modifier alone no longer would. */
+  color: var(--black);
 }
 
 /* Responsive adjustments */
@@ -367,8 +371,7 @@
     max-width: calc(100vw - 40px);
   }
 
-  .reference-image-panel.minimized {
+  .reference-image-panel--minimized {
     max-width: 200px;
   }
 }
-

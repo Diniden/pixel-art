@@ -131,7 +131,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
 
   // Drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.reference-image-minimize')) {
+    if ((e.target as HTMLElement).closest('.reference-image-panel__minimize')) {
       return;
     }
 
@@ -198,19 +198,19 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
   return (
     <div
       ref={panelRef}
-      className={`reference-image-panel ${isMinimized ? 'minimized' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`reference-image-panel ${isMinimized ? 'reference-image-panel--minimized' : ''} ${isDragging ? 'reference-image-panel--dragging' : ''}`}
       style={{ top: `${position.top}px`, left: `${position.left}px` }}
     >
       <div
-        className="reference-image-header"
+        className="reference-image-panel__header"
         onMouseDown={handleMouseDown}
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       >
-        <span className="reference-image-title">
+        <span className="reference-image-panel__title">
           <Icon icon={Camera} size={12} /> Reference Image
         </span>
         <button
-          className="reference-image-minimize"
+          className="reference-image-panel__minimize"
           onClick={(e) => {
             e.stopPropagation();
             const newMinimized = !isMinimized;
@@ -225,15 +225,15 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
       </div>
 
       {!isMinimized && (
-        <div className="reference-image-content">
-          <div className="reference-image-preview">
-            <div className="reference-canvas-wrapper">
+        <div className="reference-image-panel__body">
+          <div className="reference-image-panel__preview">
+            <div className="reference-image-panel__frame">
               {/* Reference box adjustment buttons */}
               {!isReferenceTraceActive && onReferenceImageChange && (
                 <>
                   {/* Top buttons - Up adjustments */}
                   <button
-                    className="ref-box-btn ref-box-btn-top ref-box-btn-increase"
+                    className="reference-image-panel__box-btn reference-image-panel__box-btn--top-increase"
                     onClick={() => {
                       const newData = adjustReferenceBoxSize('up', true);
                       if (newData) onReferenceImageChange(newData);
@@ -243,7 +243,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                     ↑
                   </button>
                   <button
-                    className="ref-box-btn ref-box-btn-top ref-box-btn-decrease"
+                    className="reference-image-panel__box-btn reference-image-panel__box-btn--top-decrease"
                     onClick={() => {
                       const newData = adjustReferenceBoxSize('up', false);
                       if (newData) onReferenceImageChange(newData);
@@ -255,7 +255,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
 
                   {/* Bottom buttons - Down adjustments */}
                   <button
-                    className="ref-box-btn ref-box-btn-bottom ref-box-btn-increase"
+                    className="reference-image-panel__box-btn reference-image-panel__box-btn--bottom-increase"
                     onClick={() => {
                       const newData = adjustReferenceBoxSize('down', true);
                       if (newData) onReferenceImageChange(newData);
@@ -265,7 +265,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                     ↓
                   </button>
                   <button
-                    className="ref-box-btn ref-box-btn-bottom ref-box-btn-decrease"
+                    className="reference-image-panel__box-btn reference-image-panel__box-btn--bottom-decrease"
                     onClick={() => {
                       const newData = adjustReferenceBoxSize('down', false);
                       if (newData) onReferenceImageChange(newData);
@@ -277,7 +277,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
 
                   {/* Left buttons - Left adjustments */}
                   <button
-                    className="ref-box-btn ref-box-btn-left ref-box-btn-increase"
+                    className="reference-image-panel__box-btn reference-image-panel__box-btn--left-increase"
                     onClick={() => {
                       const newData = adjustReferenceBoxSize('left', true);
                       if (newData) onReferenceImageChange(newData);
@@ -287,7 +287,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                     ←
                   </button>
                   <button
-                    className="ref-box-btn ref-box-btn-left ref-box-btn-decrease"
+                    className="reference-image-panel__box-btn reference-image-panel__box-btn--left-decrease"
                     onClick={() => {
                       const newData = adjustReferenceBoxSize('left', false);
                       if (newData) onReferenceImageChange(newData);
@@ -299,7 +299,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
 
                   {/* Right buttons - Right adjustments */}
                   <button
-                    className="ref-box-btn ref-box-btn-right ref-box-btn-increase"
+                    className="reference-image-panel__box-btn reference-image-panel__box-btn--right-increase"
                     onClick={() => {
                       const newData = adjustReferenceBoxSize('right', true);
                       if (newData) onReferenceImageChange(newData);
@@ -309,7 +309,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                     →
                   </button>
                   <button
-                    className="ref-box-btn ref-box-btn-right ref-box-btn-decrease"
+                    className="reference-image-panel__box-btn reference-image-panel__box-btn--right-decrease"
                     onClick={() => {
                       const newData = adjustReferenceBoxSize('right', false);
                       if (newData) onReferenceImageChange(newData);
@@ -324,16 +324,16 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
             </div>
           </div>
 
-          <div className="reference-image-info">
+          <div className="reference-image-panel__info">
             {referenceImage.width} × {referenceImage.height}px
           </div>
 
           {/* Navigation buttons */}
           {onReferenceImageChange && (
-            <div className="reference-navigation">
-              <div className="reference-nav-group">
+            <div className="reference-image-panel__nav">
+              <div className="reference-image-panel__nav-group">
                 <button
-                  className="reference-nav-btn"
+                  className="reference-image-panel__nav-btn"
                   onClick={() => {
                     const newData = shiftReferenceSelection(-1, 0);
                     if (newData) onReferenceImageChange(newData);
@@ -343,7 +343,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   ←
                 </button>
                 <button
-                  className="reference-nav-btn"
+                  className="reference-image-panel__nav-btn"
                   onClick={() => {
                     const newData = shiftReferenceSelection(1, 0);
                     if (newData) onReferenceImageChange(newData);
@@ -353,7 +353,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   →
                 </button>
                 <button
-                  className="reference-nav-btn"
+                  className="reference-image-panel__nav-btn"
                   onClick={() => {
                     const newData = shiftReferenceSelectionBySize(-1, 0, referenceImage.width, referenceImage.height);
                     if (newData) onReferenceImageChange(newData);
@@ -363,7 +363,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   ⇇
                 </button>
                 <button
-                  className="reference-nav-btn"
+                  className="reference-image-panel__nav-btn"
                   onClick={() => {
                     const newData = shiftReferenceSelectionBySize(1, 0, referenceImage.width, referenceImage.height);
                     if (newData) onReferenceImageChange(newData);
@@ -373,7 +373,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   ⇉
                 </button>
                 <button
-                  className="reference-nav-btn"
+                  className="reference-image-panel__nav-btn"
                   onClick={() => {
                     const newData = shiftReferenceSelection(0, -1);
                     if (newData) onReferenceImageChange(newData);
@@ -383,7 +383,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   ↑
                 </button>
                 <button
-                  className="reference-nav-btn"
+                  className="reference-image-panel__nav-btn"
                   onClick={() => {
                     const newData = shiftReferenceSelection(0, 1);
                     if (newData) onReferenceImageChange(newData);
@@ -393,7 +393,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   ↓
                 </button>
                 <button
-                  className="reference-nav-btn"
+                  className="reference-image-panel__nav-btn"
                   onClick={() => {
                     const newData = shiftReferenceSelectionBySize(0, -1, referenceImage.width, referenceImage.height);
                     if (newData) onReferenceImageChange(newData);
@@ -403,7 +403,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   ⇈
                 </button>
                 <button
-                  className="reference-nav-btn"
+                  className="reference-image-panel__nav-btn"
                   onClick={() => {
                     const newData = shiftReferenceSelectionBySize(0, 1, referenceImage.width, referenceImage.height);
                     if (newData) onReferenceImageChange(newData);
@@ -414,7 +414,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 </button>
               </div>
               <button
-                className={`reference-trace-btn ${isReferenceTraceActive ? 'active' : ''}`}
+                className={`reference-image-panel__trace-btn ${isReferenceTraceActive ? 'reference-image-panel__trace-btn--active' : ''}`}
                 onClick={() => {
                   // Toggle trace mode: if already active, switch to pixel tool
                   if (isReferenceTraceActive) {

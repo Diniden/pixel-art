@@ -1,23 +1,61 @@
+/* object-library — BEM block (task 20, G2/G3).
+
+   De-sharing notes (task 20):
+   - The two header buttons previously rendered `header-btn` and relied on
+     PaletteManager.css's BARE `.header-btn` rule; `__header-btn` /
+     `__view-toggle` below carry that measured styling verbatim so task 22 can
+     rename PaletteManager's rule without touching this component.
+   - `__view-toggle` additionally carries what RightSidebarTopControls' bare
+     `.compact-toggle` leaked onto it (position/gap/cursor/user-select) plus
+     this sheet's old `.object-library .compact-toggle` narrowing.
+   - `.object-name`, `.resize-actions`, `.resize-anchor-section` were bare and
+     also styled CopyFromModal / VariantSelectModal (task 21 G6/G7's measured
+     defects); those components regain their own authored rules now. */
+
 .object-library {
   flex-shrink: 0;
 }
 
-/* Header actions container */
-.object-library .header-actions {
+/* elements, DOM order */
+
+.object-library__header-actions {
   display: flex;
   gap: var(--space-1);
 }
 
-.object-library .compact-toggle {
+.object-library__view-toggle {
+  width: 24px;
+  height: 24px;
+  padding: 0;
   font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-primary);
+  border: none;
+  color: var(--white);
+  position: relative;
+  gap: var(--space-2-5);
+  cursor: pointer;
+  user-select: none;
 }
 
-.object-library .compact-toggle.active {
+.object-library__header-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--accent-primary);
+  border: none;
   color: var(--white);
 }
 
-.new-object-form {
+.object-library__new-form {
   padding: var(--space-3);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
@@ -27,29 +65,29 @@
   gap: var(--space-3);
 }
 
-.new-object-form input[type="text"] {
+.object-library__new-form input[type="text"] {
   width: 100%;
 }
 
-.size-inputs {
+.object-library__size-inputs {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.size-field {
+.object-library__size-field {
   display: flex;
   align-items: center;
   gap: var(--space-1-5);
 }
 
-.size-field label {
+.object-library__size-field label {
   font-size: var(--text-xs);
   color: var(--text-muted);
   font-weight: var(--weight-medium);
 }
 
-.size-field input {
+.object-library__size-field input {
   width: 60px;
   padding: var(--space-1-5) var(--space-2);
   font-family: var(--font-mono);
@@ -57,31 +95,31 @@
   text-align: center;
 }
 
-.size-separator {
+.object-library__size-separator {
   color: var(--text-muted);
 }
 
-.form-actions {
+.object-library__form-actions {
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
 }
 
 /* The form's cancel / create buttons and the resize apply button are
-   blocks/btn.css modifiers now (btn--ghost / btn--primary). */
+   blocks/btn.css modifiers (btn--ghost / btn--primary). */
 
-.object-list {
+.object-library__list {
   display: flex;
   flex-direction: column;
   gap: var(--space-0-5);
 }
 
-.object-wrapper {
+.object-library__entry {
   display: flex;
   flex-direction: column;
 }
 
-.object-item {
+.object-library__item {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -94,16 +132,11 @@
   border: 2px solid transparent;
 }
 
-.object-item:hover {
+.object-library__item:hover {
   background: var(--bg-hover);
 }
 
-.object-item.selected {
-  border-color: var(--accent-primary);
-  background: var(--accent-primary-10);
-}
-
-.object-thumbnail {
+.object-library__thumb {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
@@ -112,7 +145,7 @@
   flex-shrink: 0;
 }
 
-.object-content {
+.object-library__content {
   display: flex;
   flex-direction: column;
   gap: var(--space-px);
@@ -120,17 +153,17 @@
   min-width: 0;
 }
 
-.object-name-row {
+.object-library__name-row {
   display: flex;
   align-items: center;
 }
 
-.obj-thumb-canvas {
+.object-library__thumb-canvas {
   display: block;
   image-rendering: pixelated;
 }
 
-.object-name {
+.object-library__name {
   font-size: var(--text-sm);
   color: var(--text-primary);
   white-space: nowrap;
@@ -140,35 +173,35 @@
   min-width: 0;
 }
 
-.object-name-input {
+.object-library__name-input {
   padding: var(--space-0-5) var(--space-1-5);
   font-size: var(--text-sm);
   flex: 1;
   min-width: 0;
 }
 
-.object-metrics-row {
+.object-library__metrics-row {
   display: flex;
   align-items: center;
 }
 
-.object-details {
+.object-library__details {
   font-size: 0.7rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
 
-.object-actions-row {
+.object-library__actions-row {
   display: flex;
   align-items: center;
 }
 
-.object-actions {
+.object-library__actions {
   display: flex;
   gap: var(--space-1);
 }
 
-.object-action-btn {
+.object-library__action-btn {
   width: 24px;
   height: 24px;
   padding: 0;
@@ -183,21 +216,16 @@
   transition: all var(--transition-fast);
 }
 
-.object-item:hover .object-action-btn {
+.object-library__item:hover .object-library__action-btn {
   opacity: 1;
 }
 
-.object-action-btn:hover {
+.object-library__action-btn:hover {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-.object-action-btn.delete:hover {
-  border-color: var(--accent-danger);
-  color: var(--accent-danger);
-}
-
-.resize-panel {
+.object-library__resize-panel {
   padding: var(--space-2);
   background: var(--bg-elevated);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
@@ -210,24 +238,24 @@
   animation: app-fade-in 0.2s ease;
 }
 
-.resize-anchor-section {
+.object-library__resize-anchor {
   display: flex;
   justify-content: center;
   margin: var(--space-2) 0;
 }
 
-.resize-actions {
+.object-library__resize-actions {
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
 }
 
-.resize-actions button {
+.object-library__resize-actions button {
   padding: var(--space-1-5) var(--space-3);
   font-size: var(--text-xs);
 }
 
-.empty-state {
+.object-library__empty {
   text-align: center;
   padding: var(--space-6);
   color: var(--text-muted);
@@ -235,16 +263,16 @@
 }
 
 /* The delete confirmation dialog is styles/blocks/confirm-dialog.css's
-   `--danger` skin now (task 18); its buttons are btn--muted / btn--danger. */
+   `--danger` skin (task 18); its buttons are btn--muted / btn--danger. */
 
 /* Small Rows View */
-.object-list-small {
+.object-library__list-small {
   display: flex;
   flex-direction: column;
   gap: var(--space-px);
 }
 
-.object-item-small {
+.object-library__item-small {
   display: flex;
   align-items: center;
   gap: var(--space-1-5);
@@ -256,16 +284,11 @@
   border: 1px solid transparent;
 }
 
-.object-item-small:hover {
+.object-library__item-small:hover {
   background: var(--bg-hover);
 }
 
-.object-item-small.selected {
-  border-color: var(--accent-primary);
-  background: var(--accent-primary-10);
-}
-
-.object-thumbnail-small {
+.object-library__thumb-small {
   width: 20px;
   height: 20px;
   border-radius: var(--radius-xs);
@@ -273,12 +296,12 @@
   flex-shrink: 0;
 }
 
-.object-thumbnail-small .obj-thumb-canvas {
+.object-library__thumb-small .object-library__thumb-canvas {
   width: 20px;
   height: 20px;
 }
 
-.object-name-small {
+.object-library__name-small {
   font-size: 0.8rem;
   color: var(--text-primary);
   white-space: nowrap;
@@ -288,7 +311,7 @@
   min-width: 0;
 }
 
-.object-name-input-small {
+.object-library__name-input-small {
   flex: 1;
   min-width: 0;
   padding: var(--space-px) var(--space-1);
@@ -300,14 +323,14 @@
 }
 
 /* Compact Grid View */
-.object-grid {
+.object-library__grid {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
   padding: var(--space-0-5);
 }
 
-.compact-object-item {
+.object-library__grid-item {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
@@ -318,22 +341,17 @@
   background: var(--bg-tertiary);
 }
 
-.compact-object-item:hover {
+.object-library__grid-item:hover {
   border-color: var(--border-primary);
   background: var(--bg-hover);
 }
 
-.compact-object-item.selected {
-  border-color: var(--accent-primary);
-  box-shadow: var(--glow-accent-8-30);
-}
-
-.compact-object-item .obj-thumb-canvas {
+.object-library__grid-item .object-library__thumb-canvas {
   display: block;
 }
 
 /* Compact Tooltip */
-.compact-tooltip {
+.object-library__tooltip {
   position: fixed;
   z-index: var(--z-tooltip);
   background: var(--bg-elevated);
@@ -342,10 +360,10 @@
   padding: var(--space-2) var(--space-3);
   box-shadow: var(--shadow-md);
   pointer-events: none;
-  animation: tooltip-fade-in 0.15s ease;
+  animation: object-library-tooltip-fade-in 0.15s ease;
 }
 
-@keyframes tooltip-fade-in {
+@keyframes object-library-tooltip-fade-in {
   from {
     opacity: 0;
     transform: translateX(-4px);
@@ -356,7 +374,7 @@
   }
 }
 
-.compact-tooltip .tooltip-name {
+.object-library__tooltip-name {
   font-size: var(--text-sm);
   color: var(--text-primary);
   font-weight: var(--weight-medium);
@@ -364,9 +382,36 @@
   white-space: nowrap;
 }
 
-.compact-tooltip .tooltip-details {
+.object-library__tooltip-details {
   font-size: 0.7rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
   white-space: nowrap;
+}
+
+/* modifiers */
+
+.object-library__view-toggle--active {
+  background: var(--accent-primary);
+  color: var(--white);
+}
+
+.object-library__item.object-library__item--selected {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-10);
+}
+
+.object-library__action-btn--danger:hover {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
+
+.object-library__item-small.object-library__item-small--selected {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-10);
+}
+
+.object-library__grid-item.object-library__grid-item--selected {
+  border-color: var(--accent-primary);
+  box-shadow: var(--glow-accent-8-30);
 }

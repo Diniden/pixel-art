@@ -3001,22 +3001,22 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
   };
 
   return (
-    <div className="canvas-wrapper-outer">
-      <div className="canvas-container" ref={containerRef} tabIndex={0}>
+    <div className="canvas">
+      <div className="canvas__viewport" ref={containerRef} tabIndex={0}>
         <div
-          className="canvas-wrapper"
+          className="canvas__layout"
           style={{
             transform: `translate(${viewPanOffset.x}px, ${viewPanOffset.y}px) scale(${viewZoom})`,
             transformOrigin: "0 0",
           }}
         >
           {/* Main Editing Canvas */}
-          <div className="main-canvas-container">
+          <div className="canvas__frame">
             <canvas
               ref={canvasRef}
               width={canvasWidth}
               height={canvasHeight}
-              className="pixel-canvas"
+              className="canvas__surface"
               style={{ cursor: getCursorStyle() }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
@@ -3032,7 +3032,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
                 ref={overlayCanvasRef}
                 width={canvasWidth}
                 height={canvasHeight}
-                className="reference-overlay-canvas"
+                className="canvas__overlay"
               />
             )}
             {/* Frame Reference Overlay */}
@@ -3041,7 +3041,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
                 ref={frameOverlayCanvasRef}
                 width={canvasWidth}
                 height={canvasHeight}
-                className="reference-overlay-canvas"
+                className="canvas__overlay"
                 style={{ pointerEvents: "none" }}
               />
             )}
@@ -3051,7 +3051,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
                 ref={frameTraceOverlayCanvasRef}
                 width={canvasWidth}
                 height={canvasHeight}
-                className="reference-overlay-canvas"
+                className="canvas__overlay"
               />
             )}
           </div>

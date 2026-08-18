@@ -64,7 +64,7 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
     });
   }, [obj, project, isSelected, isFirstFrameSelected]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="obj-thumb-canvas" />;
+  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="object-library__thumb-canvas" />;
 }, (prevProps, nextProps) => {
   // Custom comparison: only re-render if object content actually changed
   const prev = prevProps.obj;
@@ -151,7 +151,7 @@ function Tooltip({ children, visible, x, y }: { children: React.ReactNode; visib
 
   return createPortal(
     <div
-      className="compact-tooltip"
+      className="object-library__tooltip"
       style={{
         left: x,
         top: y,
@@ -205,7 +205,7 @@ const CompactObjectItem = memo(function CompactObjectItem({
     <>
       <div
         ref={itemRef}
-        className={`compact-object-item ${isSelected ? 'selected' : ''}`}
+        className={`object-library__grid-item ${isSelected ? 'object-library__grid-item--selected' : ''}`}
         onClick={onClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -218,8 +218,8 @@ const CompactObjectItem = memo(function CompactObjectItem({
         />
       </div>
       <Tooltip visible={showTooltip} x={tooltipPos.x} y={tooltipPos.y}>
-        <div className="tooltip-name">{obj.name}</div>
-        <div className="tooltip-details">
+        <div className="object-library__tooltip-name">{obj.name}</div>
+        <div className="object-library__tooltip-details">
           {obj.gridSize.width}×{obj.gridSize.height} • {obj.frames.length} frame{obj.frames.length !== 1 ? 's' : ''}
         </div>
       </Tooltip>
@@ -327,18 +327,18 @@ export function ObjectLibrary() {
 
   return (
     <div className="panel object-library">
-      <div className="panel-header">
+      <div className="panel__header">
         Objects
-        <div className="header-actions">
+        <div className="object-library__header-actions">
           <button
-            className={`header-btn compact-toggle ${viewMode !== 'normal' ? 'active' : ''}`}
+            className={`object-library__view-toggle ${viewMode !== 'normal' ? 'object-library__view-toggle--active' : ''}`}
             onClick={cycleViewMode}
             title={getViewModeTitle()}
           >
             {getViewModeIcon()}
           </button>
           <button
-            className="header-btn"
+            className="object-library__header-btn"
             onClick={() => setShowNewForm(!showNewForm)}
             title="New Object"
           >
@@ -346,17 +346,17 @@ export function ObjectLibrary() {
           </button>
         </div>
       </div>
-      <div className="panel-content">
+      <div className="panel__body">
         {showNewForm && (
-          <div className="new-object-form">
+          <div className="object-library__new-form">
             <input
               type="text"
               placeholder="Object name..."
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
             />
-            <div className="size-inputs">
-              <div className="size-field">
+            <div className="object-library__size-inputs">
+              <div className="object-library__size-field">
                 <label>W</label>
                 <input
                   type="number"
@@ -366,8 +366,8 @@ export function ObjectLibrary() {
                   onChange={(e) => setNewWidth(parseInt(e.target.value) || 1)}
                 />
               </div>
-              <span className="size-separator">×</span>
-              <div className="size-field">
+              <span className="object-library__size-separator">×</span>
+              <div className="object-library__size-field">
                 <label>H</label>
                 <input
                   type="number"
@@ -378,7 +378,7 @@ export function ObjectLibrary() {
                 />
               </div>
             </div>
-            <div className="form-actions">
+            <div className="object-library__form-actions">
               <button className="btn btn--ghost" onClick={() => setShowNewForm(false)}>
                 Cancel
               </button>
@@ -390,7 +390,7 @@ export function ObjectLibrary() {
         )}
 
         {viewMode === 'grid' ? (
-          <div className="object-grid">
+          <div className="object-library__grid">
             {objects.map((obj) => {
               const isSelected = selectedObjectId === obj.id;
               const firstFrame = obj.frames[0];
@@ -409,7 +409,7 @@ export function ObjectLibrary() {
             })}
           </div>
         ) : viewMode === 'small-rows' ? (
-          <div className="object-list-small">
+          <div className="object-library__list-small">
             {objects.map((obj) => {
               const isSelected = selectedObjectId === obj.id;
               const firstFrame = obj.frames[0];
@@ -418,10 +418,10 @@ export function ObjectLibrary() {
               return (
                 <div
                   key={obj.id}
-                  className={`object-item-small ${isSelected ? 'selected' : ''}`}
+                  className={`object-library__item-small ${isSelected ? 'object-library__item-small--selected' : ''}`}
                   onClick={() => selectObject(obj.id)}
                 >
-                  <div className="object-thumbnail-small">
+                  <div className="object-library__thumb-small">
                     <ObjectThumbnail
                       obj={obj}
                       project={project}
@@ -432,7 +432,7 @@ export function ObjectLibrary() {
                   {editingId === obj.id ? (
                     <input
                       type="text"
-                      className="object-name-input-small"
+                      className="object-library__name-input-small"
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
                       onBlur={() => handleFinishRename(obj.id)}
@@ -442,7 +442,7 @@ export function ObjectLibrary() {
                     />
                   ) : (
                     <span
-                      className="object-name-small"
+                      className="object-library__name-small"
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         handleStartRename(obj.id, obj.name);
@@ -456,19 +456,19 @@ export function ObjectLibrary() {
             })}
           </div>
         ) : (
-          <div className="object-list">
+          <div className="object-library__list">
             {objects.map((obj) => {
               const isSelected = selectedObjectId === obj.id;
               const firstFrame = obj.frames[0];
               const isFirstFrameSelected = isSelected && firstFrame && project.uiState.selectedFrameId === firstFrame.id;
 
               return (
-              <div key={obj.id} className="object-wrapper">
+              <div key={obj.id} className="object-library__entry">
                 <div
-                  className={`object-item ${isSelected ? 'selected' : ''}`}
+                  className={`object-library__item ${isSelected ? 'object-library__item--selected' : ''}`}
                   onClick={() => selectObject(obj.id)}
                 >
-                  <div className="object-thumbnail">
+                  <div className="object-library__thumb">
                     <ObjectThumbnail
                       obj={obj}
                       project={project}
@@ -476,12 +476,12 @@ export function ObjectLibrary() {
                       isFirstFrameSelected={isFirstFrameSelected}
                     />
                   </div>
-                  <div className="object-content">
-                    <div className="object-name-row">
+                  <div className="object-library__content">
+                    <div className="object-library__name-row">
                       {editingId === obj.id ? (
                         <input
                           type="text"
-                          className="object-name-input"
+                          className="object-library__name-input"
                           value={editingName}
                           onChange={(e) => setEditingName(e.target.value)}
                           onBlur={() => handleFinishRename(obj.id)}
@@ -491,7 +491,7 @@ export function ObjectLibrary() {
                         />
                       ) : (
                         <span
-                          className="object-name"
+                          className="object-library__name"
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             handleStartRename(obj.id, obj.name);
@@ -502,16 +502,16 @@ export function ObjectLibrary() {
                       )}
                     </div>
 
-                    <div className="object-metrics-row">
-                      <span className="object-details">
+                    <div className="object-library__metrics-row">
+                      <span className="object-library__details">
                         {obj.gridSize.width}×{obj.gridSize.height} • {obj.frames.length} frame{obj.frames.length !== 1 ? 's' : ''}
                       </span>
                     </div>
 
-                    <div className="object-actions-row">
-                      <div className="object-actions">
+                    <div className="object-library__actions-row">
+                      <div className="object-library__actions">
                         <button
-                          className="object-action-btn"
+                          className="object-library__action-btn"
                           onClick={(e) => {
                             e.stopPropagation();
                             duplicateObject(obj.id);
@@ -521,7 +521,7 @@ export function ObjectLibrary() {
                           <Icon icon={Copy} size={12} />
                         </button>
                         <button
-                          className="object-action-btn"
+                          className="object-library__action-btn"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleStartResize(obj);
@@ -531,7 +531,7 @@ export function ObjectLibrary() {
                           <Icon icon={Maximize} size={12} />
                         </button>
                         <button
-                          className="object-action-btn delete"
+                          className="object-library__action-btn object-library__action-btn--danger"
                           onClick={(e) => {
                             e.stopPropagation();
                             setDeleteConfirm({ id: obj.id, name: obj.name });
@@ -546,9 +546,9 @@ export function ObjectLibrary() {
                 </div>
 
                 {showResizeFor === obj.id && (
-                  <div className="resize-panel">
-                    <div className="size-inputs">
-                      <div className="size-field">
+                  <div className="object-library__resize-panel">
+                    <div className="object-library__size-inputs">
+                      <div className="object-library__size-field">
                         <label>W</label>
                         <input
                           type="number"
@@ -558,8 +558,8 @@ export function ObjectLibrary() {
                           onChange={(e) => setResizeWidth(parseInt(e.target.value) || 1)}
                         />
                       </div>
-                      <span className="size-separator">×</span>
-                      <div className="size-field">
+                      <span className="object-library__size-separator">×</span>
+                      <div className="object-library__size-field">
                         <label>H</label>
                         <input
                           type="number"
@@ -570,7 +570,7 @@ export function ObjectLibrary() {
                         />
                       </div>
                     </div>
-                    <div className="resize-anchor-section">
+                    <div className="object-library__resize-anchor">
                       <AnchorGrid
                         anchor={resizeAnchor}
                         onChange={setResizeAnchor}
@@ -580,7 +580,7 @@ export function ObjectLibrary() {
                         newHeight={resizeHeight}
                       />
                     </div>
-                    <div className="resize-actions">
+                    <div className="object-library__resize-actions">
                       <button onClick={() => setShowResizeFor(null)}>Cancel</button>
                       <button className="btn btn--primary" onClick={() => handleApplyResize(obj.id)}>
                         Apply
@@ -595,7 +595,7 @@ export function ObjectLibrary() {
         )}
 
         {objects.length === 0 && (
-          <div className="empty-state">
+          <div className="object-library__empty">
             No objects yet. Create one to start.
           </div>
         )}

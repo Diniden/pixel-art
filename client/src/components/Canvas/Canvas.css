@@ -1,4 +1,16 @@
-.canvas-wrapper-outer {
+/* Canvas.css — two blocks by documented exception (task 20 R1):
+   `canvas` (Canvas.tsx) and `canvas-info` (CanvasInfo.tsx share this sheet).
+
+   Task 20 note: this sheet previously duplicated ReferenceImagePanel's
+   `.ref-box-btn` family, `.reference-canvas-wrapper`, `.reference-navigation`
+   and `.reference-nav-btn`. Canvas.tsx renders NONE of those elements — the
+   copies only ever matched ReferenceImagePanel's markup, and that panel's own
+   later-emitted rules won every conflict. The duplicates were deleted, not
+   renamed (zero consumers). */
+
+/* ── canvas ─────────────────────────────────────────────────────────────── */
+
+.canvas {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -9,7 +21,7 @@
   width: 100%;
 }
 
-.canvas-container {
+.canvas__viewport {
   flex: 1;
   display: flex;
   align-items: flex-start;
@@ -30,7 +42,7 @@
     var(--bg-primary);
 }
 
-.canvas-wrapper {
+.canvas__layout {
   position: relative;
   transition: none;
   display: flex;
@@ -38,12 +50,26 @@
   gap: var(--space-6);
 }
 
-.main-canvas-container {
+.canvas__frame {
   position: relative;
 }
 
-/* Reference Trace Overlay */
-.reference-overlay-canvas {
+.canvas__surface {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 2px solid var(--border-accent);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-canvas);
+  cursor: crosshair;
+}
+
+.canvas__surface:active {
+  cursor: crosshair;
+}
+
+/* Reference trace overlay canvases */
+.canvas__overlay {
   position: absolute;
   top: 0;
   left: 0;
@@ -55,194 +81,10 @@
   z-index: var(--z-canvas-overlay);
 }
 
-.reference-canvas-wrapper {
-  position: relative;
-  display: inline-block;
-}
+/* ── canvas-info ────────────────────────────────────────────────────────── */
+/* Info bar: in-flow, full width, above layer colors; arrow on top toggles slide */
 
-/* Reference box adjustment buttons.
-   NOTE (task 12): this block declared `position: absolute` AND, last,
-   `position: relative` — the computed value was already `relative` (last
-   declaration wins), so the dead `absolute` was removed. No rendering
-   change. */
-.ref-box-btn {
-  z-index: var(--z-overlay-control);
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: var(--text-xs);
-  line-height: var(--leading-none);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  font-family: inherit;
-  position: relative;
-}
-
-.ref-box-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  z-index: var(--z-hover-lift);
-}
-
-.ref-box-btn:active {
-  background: var(--bg-active);
-  transform: scale(0.9);
-}
-
-/* Top buttons - positioned at top center */
-.ref-box-btn-top {
-  top: -32px;
-  left: 50%;
-}
-
-.ref-box-btn-top:first-of-type {
-  transform: translateX(-50%) translateX(-16px);
-}
-
-.ref-box-btn-top:last-of-type {
-  transform: translateX(-50%) translateX(16px);
-}
-
-.ref-box-btn-top:first-of-type:active {
-  transform: translateX(-50%) translateX(-16px) scale(0.9);
-}
-
-.ref-box-btn-top:last-of-type:active {
-  transform: translateX(-50%) translateX(16px) scale(0.9);
-}
-
-/* Bottom buttons - positioned at bottom center */
-.ref-box-btn-bottom {
-  bottom: -32px;
-  left: 50%;
-}
-
-.ref-box-btn-bottom:first-of-type {
-  transform: translateX(-50%) translateX(-16px);
-}
-
-.ref-box-btn-bottom:last-of-type {
-  transform: translateX(-50%) translateX(16px);
-}
-
-.ref-box-btn-bottom:first-of-type:active {
-  transform: translateX(-50%) translateX(-16px) scale(0.9);
-}
-
-.ref-box-btn-bottom:last-of-type:active {
-  transform: translateX(-50%) translateX(16px) scale(0.9);
-}
-
-/* Left buttons - positioned at left center */
-.ref-box-btn-left {
-  left: -32px;
-  top: 50%;
-}
-
-.ref-box-btn-left:first-of-type {
-  transform: translateY(-50%) translateY(-16px);
-}
-
-.ref-box-btn-left:last-of-type {
-  transform: translateY(-50%) translateY(16px);
-}
-
-.ref-box-btn-left:first-of-type:active {
-  transform: translateY(-50%) translateY(-16px) scale(0.9);
-}
-
-.ref-box-btn-left:last-of-type:active {
-  transform: translateY(-50%) translateY(16px) scale(0.9);
-}
-
-/* Right buttons - positioned at right center */
-.ref-box-btn-right {
-  right: -32px;
-  top: 50%;
-}
-
-.ref-box-btn-right:first-of-type {
-  transform: translateY(-50%) translateY(-16px);
-}
-
-.ref-box-btn-right:last-of-type {
-  transform: translateY(-50%) translateY(16px);
-}
-
-.ref-box-btn-right:first-of-type:active {
-  transform: translateY(-50%) translateY(-16px) scale(0.9);
-}
-
-.ref-box-btn-right:last-of-type:active {
-  transform: translateY(-50%) translateY(16px) scale(0.9);
-}
-
-.reference-navigation {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-1);
-  margin-top: var(--space-1-5);
-  width: 100%;
-  max-width: 120px;
-  position: relative;
-  z-index: var(--z-overlay-control);
-}
-
-.reference-nav-btn {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: var(--text-xs);
-  line-height: var(--leading-none);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  font-family: inherit;
-  position: relative;
-}
-
-.reference-nav-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  z-index: var(--z-hover-lift);
-}
-
-.reference-nav-btn:active {
-  background: var(--bg-active);
-  transform: scale(0.9);
-}
-
-.pixel-canvas {
-  display: block;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  border: 2px solid var(--border-accent);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-canvas);
-  cursor: crosshair;
-}
-
-.pixel-canvas:active {
-  cursor: crosshair;
-}
-
-/* Canvas info bar: in-flow, full width, above layer colors; arrow on top toggles slide */
-.canvas-info-wrap {
+.canvas-info {
   width: 100%;
   flex-shrink: 0;
   display: flex;
@@ -252,7 +94,7 @@
   box-sizing: border-box;
 }
 
-.canvas-info-arrow-toggle {
+.canvas-info__arrow-toggle {
   width: 100%;
   min-height: 6px;
   padding: 0;
@@ -270,29 +112,29 @@
   font-family: inherit;
 }
 
-.canvas-info-arrow-toggle:hover {
+.canvas-info__arrow-toggle:hover {
   background: var(--bg-hover);
   color: var(--accent-primary);
 }
 
-.canvas-info-arrow {
+.canvas-info__arrow {
   display: block;
   line-height: var(--leading-none);
   font-size: 6px;
 }
 
-.canvas-info-panel {
+.canvas-info__panel {
   overflow: hidden;
   max-height: 120px;
   transition: max-height var(--transition-normal);
 }
 
-.canvas-info-panel[data-hidden="true"] {
+.canvas-info__panel[data-hidden="true"] {
   max-height: 0;
   transition: max-height var(--transition-normal);
 }
 
-.canvas-info {
+.canvas-info__row {
   width: 100%;
   display: flex;
   align-items: center;
@@ -311,40 +153,40 @@
   box-sizing: border-box;
 }
 
-.canvas-info .separator {
+.canvas-info__separator {
   color: var(--border-accent);
 }
 
-.canvas-info .trace-info {
+.canvas-info__trace {
   color: var(--accent-warning);
   font-weight: var(--weight-medium);
 }
 
-.canvas-info .selection-info {
+.canvas-info__selection {
   color: var(--accent-primary);
   font-weight: var(--weight-medium);
 }
 
-.canvas-info .variant-indicator {
+.canvas-info__variant {
   color: var(--accent-variant);
   font-weight: var(--weight-semibold);
 }
 
 /* Touch-friendly adjustments */
 @media (pointer: coarse) {
-  .pixel-canvas {
+  .canvas__surface {
     touch-action: none;
   }
 }
 
 @media (max-width: 768px) {
-  .canvas-info {
+  .canvas-info__row {
     padding: var(--space-1-5) var(--space-3);
     padding-top: var(--space-1);
     font-size: 0.7rem;
   }
 
-  .canvas-info-panel {
+  .canvas-info__panel {
     max-height: 100px;
   }
 }

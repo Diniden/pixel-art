@@ -137,16 +137,16 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
   };
 
   return (
-    <div className="color-slider-section">
-      <div className="color-slider-header">
-        <span className="color-slider-label">{label}</span>
+    <div className="light-control__color-section">
+      <div className="light-control__color-header">
+        <span className="light-control__color-label">{label}</span>
         <div
-          className="color-slider-preview"
+          className="light-control__color-preview"
           style={{ backgroundColor: getColorPreview() }}
         />
       </div>
 
-      <div className="color-slider-row">
+      <div className="light-control__row">
         <label className="slider__label slider__label--muted">H</label>
         <input
           type="range"
@@ -166,7 +166,7 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
         />
       </div>
 
-      <div className="color-slider-row">
+      <div className="light-control__row">
         <label className="slider__label slider__label--muted">S</label>
         <input
           type="range"
@@ -191,7 +191,7 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
         />
       </div>
 
-      <div className="color-slider-row">
+      <div className="light-control__row">
         <label className="slider__label slider__label--muted">L</label>
         <input
           type="range"
@@ -229,11 +229,11 @@ export function LightControl() {
 
   return (
     <div className="light-control">
-      <div className="light-control-section">
+      <div className="light-control__section">
         <NormalPicker isLightDirection={true} />
       </div>
 
-      <div className="light-control-section">
+      <div className="light-control__section">
         <ColorSlider
           label="Light Color"
           color={lightColor}
@@ -241,7 +241,7 @@ export function LightControl() {
         />
       </div>
 
-      <div className="light-control-section">
+      <div className="light-control__section">
         <ColorSlider
           label="Ambient Color"
           color={ambientColor}
@@ -249,12 +249,12 @@ export function LightControl() {
         />
       </div>
 
-      <div className="light-control-section">
-        <div className="color-slider-section">
-          <div className="color-slider-header">
-            <span className="color-slider-label">Shadow Height Scale</span>
+      <div className="light-control__section">
+        <div className="light-control__color-section">
+          <div className="light-control__color-header">
+            <span className="light-control__color-label">Shadow Height Scale</span>
           </div>
-          <div className="color-slider-row">
+          <div className="light-control__row">
             <label className="slider__label slider__label--muted">Scale</label>
             <input
               type="range"

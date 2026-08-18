@@ -33,7 +33,7 @@ const VariantGroupThumbnail = memo(function VariantGroupThumbnail({
     renderVariantFramePreview(ctx, thumbSize, variant, frameToRender);
   }, [variantGroup]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="add-variant-thumb-canvas" />;
+  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="add-variant-modal__thumb-canvas" />;
 }, (prevProps, nextProps) => {
   const prev = prevProps.variantGroup;
   const next = nextProps.variantGroup;
@@ -119,23 +119,23 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
     : null;
 
   return createPortal(
-    <div className="add-variant-modal-backdrop" onClick={handleBackdropClick}>
+    <div className="add-variant-modal__backdrop" onClick={handleBackdropClick}>
       <div className="add-variant-modal">
-        <div className="add-variant-modal-header">
+        <div className="add-variant-modal__header">
           <h3><Icon icon={Wand2} size={16} /> Add Variant Layer</h3>
-          <button className="close-btn" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <button className="modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
         </div>
 
-        <div className="add-variant-modal-content">
+        <div className="add-variant-modal__content">
           {variants.length === 0 ? (
-            <div className="no-variants-message">
+            <div className="add-variant-modal__empty">
               <p>No variants exist yet.</p>
-              <p className="hint">Create a variant by selecting a layer and clicking the make variant button.</p>
+              <p className="add-variant-modal__hint">Create a variant by selecting a layer and clicking the make variant button.</p>
             </div>
           ) : (
             <>
               {/* Toggle for add to all frames */}
-              <div className="add-to-all-frames-toggle">
+              <div className="add-variant-modal__all-frames-toggle">
                 <label>
                   <input
                     type="checkbox"
@@ -147,17 +147,17 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
               </div>
 
               {/* Variant Groups Grid */}
-              <div className="add-variant-section-title">Select Variant</div>
-              <div className="add-variant-grid">
+              <div className="add-variant-modal__section-title">Select Variant</div>
+              <div className="add-variant-modal__grid">
                 {variants.map(variantGroup => (
                   <div
                     key={variantGroup.id}
-                    className={`add-variant-card ${selectedVariantGroupId === variantGroup.id ? 'selected' : ''}`}
+                    className={`add-variant-modal__card ${selectedVariantGroupId === variantGroup.id ? 'add-variant-modal__card--selected' : ''}`}
                     onClick={() => handleSelectVariantGroup(variantGroup.id)}
                   >
                     {/* Delete button */}
                     <button
-                      className="delete-variant-btn"
+                      className="add-variant-modal__delete-btn"
                       onClick={(e) => {
                         e.stopPropagation();
                         setDeleteConfirm({ groupId: variantGroup.id, name: variantGroup.name });
@@ -167,15 +167,15 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
                       <Icon icon={X} size={10} />
                     </button>
 
-                    <div className="add-variant-thumb">
+                    <div className="add-variant-modal__thumb">
                       <VariantGroupThumbnail variantGroup={variantGroup} />
                     </div>
 
-                    <div className="add-variant-info">
+                    <div className="add-variant-modal__info">
                       {editingGroupId === variantGroup.id ? (
                         <input
                           type="text"
-                          className="add-variant-name-input"
+                          className="add-variant-modal__name-input"
                           value={editingName}
                           onChange={(e) => setEditingName(e.target.value)}
                           onBlur={() => handleFinishRename(variantGroup.id)}
@@ -185,7 +185,7 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
                         />
                       ) : (
                         <span
-                          className="add-variant-name"
+                          className="add-variant-modal__name"
                           onDoubleClick={(e) => {
                             e.stopPropagation();
                             handleStartRename(variantGroup);
@@ -195,13 +195,13 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
                           {variantGroup.name}
                         </span>
                       )}
-                      <span className="add-variant-count">
+                      <span className="add-variant-modal__count">
                         {variantGroup.variants.length} type{variantGroup.variants.length !== 1 ? 's' : ''}
                       </span>
                     </div>
 
                     {selectedVariantGroupId === variantGroup.id && (
-                      <div className="selected-badge">✓</div>
+                      <div className="add-variant-modal__badge add-variant-modal__badge--selected">✓</div>
                     )}
                   </div>
                 ))}
@@ -210,16 +210,16 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
               {/* Variant Type Picker (when a group is selected) */}
               {selectedGroup && selectedGroup.variants.length > 1 && (
                 <>
-                  <div className="add-variant-section-title">Select Variant Type</div>
-                  <div className="variant-type-picker">
+                  <div className="add-variant-modal__section-title">Select Variant Type</div>
+                  <div className="add-variant-modal__type-picker">
                     {selectedGroup.variants.map(variant => (
                       <div
                         key={variant.id}
-                        className={`variant-type-option ${selectedVariantId === variant.id ? 'selected' : ''}`}
+                        className={`add-variant-modal__type-option ${selectedVariantId === variant.id ? 'add-variant-modal__type-option--selected' : ''}`}
                         onClick={() => handleSelectVariantType(variant.id)}
                       >
-                        <span className="variant-type-name">{variant.name}</span>
-                        {selectedVariantId === variant.id && <span className="check">✓</span>}
+                        <span className="add-variant-modal__type-name">{variant.name}</span>
+                        {selectedVariantId === variant.id && <span className="add-variant-modal__check">✓</span>}
                       </div>
                     ))}
                   </div>
@@ -227,9 +227,9 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
               )}
 
               {/* Add button */}
-              <div className="add-variant-actions">
+              <div className="add-variant-modal__actions">
                 <button
-                  className="add-variant-confirm-btn"
+                  className="add-variant-modal__confirm-btn"
                   onClick={handleAdd}
                   disabled={!selectedVariantGroupId || !selectedVariantId}
                 >
