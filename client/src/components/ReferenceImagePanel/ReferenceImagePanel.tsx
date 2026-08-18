@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
 import { ReferenceImageData, adjustReferenceBoxSize, shiftReferenceSelection, shiftReferenceSelectionBySize } from '../ReferenceImageModal/ReferenceImageModal';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Camera, ChevronUp, ChevronDown, Target } from 'lucide-react';
 import './ReferenceImagePanel.css';
 

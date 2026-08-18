@@ -1,0 +1,70 @@
+/*
+ * floating-panel — draggable minimisable overlay panel (task 19 primitive).
+ *
+ * Design distilled from the three measured clones (LightingCanvas's preview
+ * panel, FrameReferencePanel, ReferenceImagePanel): absolute inside the
+ * canvas container, elevated surface, grab-handle header.
+ */
+
+.floating-panel {
+  position: absolute;
+  min-width: 160px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-floating-panel);
+  overflow: hidden;
+}
+
+.floating-panel--dragging {
+  user-select: none;
+}
+
+.floating-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1-5) var(--space-2-5);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  cursor: grab;
+  user-select: none;
+}
+
+.floating-panel--dragging .floating-panel__header {
+  cursor: grabbing;
+}
+
+.floating-panel--minimized .floating-panel__header {
+  border-bottom: none;
+}
+
+.floating-panel__title {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.floating-panel__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.floating-panel__minimize.icon-btn {
+  width: 20px;
+  height: 20px;
+}
+
+.floating-panel__minimize.icon-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.floating-panel__body {
+  padding: var(--space-2-5);
+}

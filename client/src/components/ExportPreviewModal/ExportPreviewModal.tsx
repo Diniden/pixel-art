@@ -13,7 +13,7 @@ import type {
   ExportedVariant,
 } from "../../../lib/parse-pixel-project";
 import { exportApi } from "../../api";
-import { Icon } from "../Icon/Icon";
+import { Icon } from "../../ui/primitives/Icon/Icon";
 import { AlertTriangle, X } from "lucide-react";
 import "./ExportPreviewModal.css";
 

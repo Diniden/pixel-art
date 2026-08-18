@@ -1,0 +1,112 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Dropdown > renders disabled 1`] = `
+<div
+  class="dropdown"
+>
+  <button
+    aria-expanded="false"
+    aria-haspopup="listbox"
+    aria-label="View mode"
+    class="dropdown__trigger"
+    disabled=""
+    type="button"
+  >
+    <span
+      class="dropdown__value"
+    >
+      Frames
+    </span>
+    <span
+      aria-hidden="true"
+      class="dropdown__arrow"
+    >
+      ▾
+    </span>
+  </button>
+</div>
+`;
+
+exports[`Dropdown > renders the closed trigger 1`] = `
+<div
+  class="dropdown"
+>
+  <button
+    aria-expanded="false"
+    aria-haspopup="listbox"
+    aria-label="View mode"
+    class="dropdown__trigger"
+    type="button"
+  >
+    <span
+      class="dropdown__value"
+    >
+      Frames
+    </span>
+    <span
+      aria-hidden="true"
+      class="dropdown__arrow"
+    >
+      ▾
+    </span>
+  </button>
+</div>
+`;
+
+exports[`Dropdown > renders the open listbox with the selected option 1`] = `
+<div
+  class="dropdown"
+>
+  <button
+    aria-controls="_r_1_"
+    aria-expanded="true"
+    aria-haspopup="listbox"
+    aria-label="View mode"
+    class="dropdown__trigger"
+    type="button"
+  >
+    <span
+      class="dropdown__value"
+    >
+      Timeline
+    </span>
+    <span
+      aria-hidden="true"
+      class="dropdown__arrow"
+    >
+      ▴
+    </span>
+  </button>
+  <div
+    aria-label="View mode"
+    class="dropdown__menu"
+    id="_r_1_"
+    role="listbox"
+  >
+    <button
+      aria-selected="false"
+      class="dropdown__item"
+      role="option"
+      type="button"
+    >
+      Frames
+    </button>
+    <button
+      aria-selected="true"
+      class="dropdown__item dropdown__item--selected dropdown__item--active"
+      role="option"
+      type="button"
+    >
+      Timeline
+    </button>
+    <button
+      aria-selected="false"
+      class="dropdown__item"
+      role="option"
+      type="button"
+    >
+      Variant
+    </button>
+  </div>
+</div>
+`;

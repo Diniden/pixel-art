@@ -1,6 +1,6 @@
 import { useEditorStore } from "../../store";
 import { ReferenceImageData } from "../ReferenceImageModal/ReferenceImageModal";
-import { Icon } from "../Icon/Icon";
+import { Icon } from "../../ui/primitives/Icon/Icon";
 import { ChevronDown, ChevronUp, Hexagon, BoxSelect, Target, Camera } from "lucide-react";
 import "./Canvas.css";
 

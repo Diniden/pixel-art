@@ -1,0 +1,21 @@
+/*
+ * confirm-dialog — primitive-local additions (task 19).
+ *
+ * The block itself lives in styles/blocks/confirm-dialog.css (task 18). This
+ * file adds ONLY the amber warning callout that task 18's record preserved
+ * from LayerPanel's deleted confirm dialog: it could not be declared in the
+ * block file because a class with zero consumers fails the dead-class gate —
+ * task 18's record explicitly defers it to task 19, which now consumes it.
+ *
+ * Compound with __warning so it outranks both `.confirm-dialog p` (0,1,1)
+ * and `.confirm-dialog__body .confirm-dialog__warning` (0,2,0).
+ */
+
+.confirm-dialog__warning.confirm-dialog__warning--callout,
+.confirm-dialog__body .confirm-dialog__warning.confirm-dialog__warning--callout {
+  color: var(--status-warn);
+  background: var(--status-warn-10);
+  padding: var(--space-2-5) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--status-warn-30);
+}

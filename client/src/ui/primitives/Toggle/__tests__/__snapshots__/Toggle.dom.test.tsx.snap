@@ -1,0 +1,68 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Toggle > renders checked and disabled 1`] = `
+<label
+  class="toggle toggle--disabled"
+  for="_r_1_"
+>
+  <input
+    checked=""
+    class="toggle__input"
+    disabled=""
+    id="_r_1_"
+    role="switch"
+    type="checkbox"
+  />
+  <span
+    aria-hidden="true"
+    class="toggle__track"
+  />
+  <span
+    class="toggle__label"
+  >
+    Locked
+  </span>
+</label>
+`;
+
+exports[`Toggle > renders unchecked with a visible label 1`] = `
+<label
+  class="toggle"
+  for="_r_0_"
+>
+  <input
+    class="toggle__input"
+    id="_r_0_"
+    role="switch"
+    type="checkbox"
+  />
+  <span
+    aria-hidden="true"
+    class="toggle__track"
+  />
+  <span
+    class="toggle__label"
+  >
+    Move all layers
+  </span>
+</label>
+`;
+
+exports[`Toggle > renders unlabelled with an aria-label 1`] = `
+<label
+  class="toggle"
+  for="_r_2_"
+>
+  <input
+    aria-label="Layer visibility"
+    class="toggle__input"
+    id="_r_2_"
+    role="switch"
+    type="checkbox"
+  />
+  <span
+    aria-hidden="true"
+    class="toggle__track"
+  />
+</label>
+`;

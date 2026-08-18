@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useEditorStore } from '../../store';
 import { backupApi, isApiError, type BackupEntry } from '../../api';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Clock, X } from 'lucide-react';
 import './BrowseBackupsModal.css';
 

@@ -1,0 +1,64 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ColorSwatch > renders a translucent colour, selected, custom size 1`] = `
+<button
+  aria-label="#ff3366"
+  aria-pressed="true"
+  class="swatch swatch--selected"
+  style="width: 28px; height: 28px;"
+  title="#ff3366"
+  type="button"
+>
+  <span
+    aria-hidden="true"
+    class="swatch__bg"
+  />
+  <span
+    aria-hidden="true"
+    class="swatch__color"
+    style="background: rgba(255, 51, 102, 0.502);"
+  />
+</button>
+`;
+
+exports[`ColorSwatch > renders an opaque colour with hex name 1`] = `
+<button
+  aria-label="#00d9ff"
+  aria-pressed="false"
+  class="swatch"
+  style="width: 20px; height: 20px;"
+  title="#00d9ff"
+  type="button"
+>
+  <span
+    aria-hidden="true"
+    class="swatch__bg"
+  />
+  <span
+    aria-hidden="true"
+    class="swatch__color"
+    style="background: rgb(0, 217, 255);"
+  />
+</button>
+`;
+
+exports[`ColorSwatch > renders with a label override 1`] = `
+<button
+  aria-label="Grass green"
+  aria-pressed="false"
+  class="swatch"
+  style="width: 20px; height: 20px;"
+  title="Grass green"
+  type="button"
+>
+  <span
+    aria-hidden="true"
+    class="swatch__bg"
+  />
+  <span
+    aria-hidden="true"
+    class="swatch__color"
+    style="background: rgb(16, 185, 129);"
+  />
+</button>
+`;

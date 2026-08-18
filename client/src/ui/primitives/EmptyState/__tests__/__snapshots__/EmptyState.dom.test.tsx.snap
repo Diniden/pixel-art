@@ -1,0 +1,33 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`EmptyState > renders text only 1`] = `
+<div
+  class="empty-state"
+>
+  <div
+    class="empty-state__text"
+  >
+    No layers yet.
+  </div>
+</div>
+`;
+
+exports[`EmptyState > renders with an icon 1`] = `
+<div
+  class="empty-state"
+>
+  <span
+    aria-hidden="true"
+    class="empty-state__icon"
+  >
+    <svg
+      data-testid="icon"
+    />
+  </span>
+  <div
+    class="empty-state__text"
+  >
+    No palettes saved.
+  </div>
+</div>
+`;

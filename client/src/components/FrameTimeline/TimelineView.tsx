@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 're
 import { useEditorStore } from '../../store';
 import { Project, PixelObject, Frame, Layer, PixelData, VariantGroup } from '../../types';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { ChevronUp, ChevronDown, SquareIcon, Play, Zap } from 'lucide-react';
 
 // Helper to render a layer's pixels to a small thumbnail canvas

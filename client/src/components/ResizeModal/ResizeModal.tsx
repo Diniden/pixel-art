@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { X } from 'lucide-react';
 import './ResizeModal.css';
 

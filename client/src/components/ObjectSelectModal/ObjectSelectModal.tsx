@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Target, Check, X, Package } from 'lucide-react';
 import './ObjectSelectModal.css';
 

@@ -5,7 +5,7 @@ import { EdgeInterpolateModal } from "../EdgeInterpolateModal/EdgeInterpolateMod
 import { HeightMapModal } from "../HeightMapModal/HeightMapModal";
 import { computeEdgeInterpolatedNormals } from "../../utils/edgeInterpolate";
 import { Pixel, PixelData } from "../../types";
-import { Icon } from "../Icon/Icon";
+import { Icon } from "../../ui/primitives/Icon/Icon";
 import type { LucideIcon } from "lucide-react";
 import { Sun, Wrench, Mountain } from "lucide-react";
 

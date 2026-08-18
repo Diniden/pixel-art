@@ -1,0 +1,35 @@
+/*
+ * icon-btn — square icon-only button (task 19 primitive).
+ *
+ * The skin is the 13-fold-duplicated `.close-btn` (now `.modal__close` in
+ * blocks/modal.css); declared here as the primitive's own block so an
+ * IconButton can exist OUTSIDE a modal. When `Modal` renders its close
+ * control it adds `modal__close` alongside this class — the two rule sets
+ * agree by construction (both descend from the same measured source).
+ */
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: var(--text-xl);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--accent-danger);
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

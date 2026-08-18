@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { PixelObject, Frame, VariantGroup, Layer, Variant, Pixel, PixelData } from '../../types';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Zap, X } from 'lucide-react';
 import './PreviewModal.css';
 

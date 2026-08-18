@@ -1,0 +1,145 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ConfirmDialog — DOM snapshots > renders the amber warning callout 1`] = `
+<div
+  class="confirm-dialog__backdrop"
+>
+  <div
+    aria-modal="true"
+    class="confirm-dialog confirm-dialog--danger"
+    data-ui-dialog="_r_2_"
+    role="alertdialog"
+    tabindex="-1"
+  >
+    <div
+      class="confirm-dialog__header"
+    >
+      <h4>
+        Delete layer?
+      </h4>
+    </div>
+    <div
+      class="confirm-dialog__body"
+    >
+      <p
+        class="confirm-dialog__warning confirm-dialog__warning--callout"
+      >
+        Variant layers will fall back to the base layer.
+      </p>
+      <p
+        class="confirm-dialog__undo"
+      >
+        You can undo this.
+      </p>
+    </div>
+    <div
+      class="confirm-dialog__actions"
+    >
+      <button
+        class="btn btn--muted"
+        type="button"
+      >
+        Cancel
+      </button>
+      <button
+        class="btn btn--danger"
+        type="button"
+      >
+        Confirm
+      </button>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`ConfirmDialog — DOM snapshots > renders the danger skin with structured header/body 1`] = `
+<div
+  class="confirm-dialog__backdrop"
+>
+  <div
+    aria-modal="true"
+    class="confirm-dialog confirm-dialog--danger"
+    data-ui-dialog="_r_1_"
+    role="alertdialog"
+    tabindex="-1"
+  >
+    <div
+      class="confirm-dialog__header"
+    >
+      <h4>
+        Delete variant group?
+      </h4>
+    </div>
+    <div
+      class="confirm-dialog__body"
+    >
+      <p>
+        All frames will be removed.
+      </p>
+      <p
+        class="confirm-dialog__warning"
+      >
+        This action cannot be undone.
+      </p>
+    </div>
+    <div
+      class="confirm-dialog__actions"
+    >
+      <button
+        class="btn btn--muted"
+        type="button"
+      >
+        Cancel
+      </button>
+      <button
+        class="btn btn--danger"
+        type="button"
+      >
+        Delete
+      </button>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`ConfirmDialog — DOM snapshots > renders the neutral skin 1`] = `
+<div
+  class="confirm-dialog__backdrop"
+>
+  <div
+    aria-modal="true"
+    class="confirm-dialog"
+    data-ui-dialog="_r_0_"
+    role="alertdialog"
+    tabindex="-1"
+  >
+    <h3>
+      Restore this backup?
+    </h3>
+    <p>
+      The current project state will be replaced.
+    </p>
+    <p
+      class="confirm-dialog__undo"
+    >
+      You can undo this.
+    </p>
+    <div
+      class="confirm-dialog__actions"
+    >
+      <button
+        class="btn btn--ghost"
+        type="button"
+      >
+        Cancel
+      </button>
+      <button
+        class="btn btn--gradient"
+        type="button"
+      >
+        Restore
+      </button>
+    </div>
+  </div>
+</div>
+`;

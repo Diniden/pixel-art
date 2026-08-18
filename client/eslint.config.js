@@ -36,13 +36,14 @@ export default tseslint.config(
           // `.storybook/**` block carrying its own `projectService` dropped
           // `["*.ts", "*.js"]` and turned aliases.ts, vite.config.ts and
           // vitest.config.ts into 3 hard parse errors. Measured, not guessed.
-          allowDefaultProject: [
-            "*.ts",
-            "*.js",
-            ".storybook/*.ts",
-            ".storybook/*.tsx",
-            ".storybook/decorators/*.tsx",
-          ],
+          // NOTE (task 19): `.storybook/decorators/*.tsx` was removed from
+          // this list. Since Modal.stories.tsx (src/, inside the tsconfig
+          // project) imports the modalHost decorator, the project service now
+          // discovers that file by following imports, and a file may not be
+          // BOTH project-service-owned and allowDefaultProject-listed (hard
+          // parse error, measured). main.ts/preview.tsx are still only
+          // reachable from outside the project and stay listed.
+          allowDefaultProject: ["*.ts", "*.js", ".storybook/*.ts", ".storybook/*.tsx"],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -259,7 +260,19 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ["**/stores/ui/**", "**/stores/ui"],
+              // Task 19 closed a measured gap: the original two patterns
+              // matched neither the relative form (`../ui/...` from
+              // src/stores/domain/) nor the alias form (`@stores/ui/...` —
+              // "@stores" is not the segment "stores"). All four forms are
+              // banned; the boundary probe covers the added ones.
+              group: [
+                "**/stores/ui/**",
+                "**/stores/ui",
+                "../ui",
+                "../ui/**",
+                "@stores/ui",
+                "@stores/ui/**",
+              ],
               message:
                 "DomainStore and its sub-stores must not read UIStore. Selection mask, " +
                 "selectionBehavior and variantFrameIndices are passed as ARGUMENTS.",

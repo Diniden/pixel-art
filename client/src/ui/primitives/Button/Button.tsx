@@ -1,58 +1,91 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import "./Button.css";
+import { classNames } from "../../classNames";
 
 /**
- * A minimal styled button — the PROOF STORY's subject, not the real primitive.
+ * Button — the shared button primitive (task 19).
  *
- * ⚠️ TASK 12 OWNS THE REAL `Button`. This exists only so task 10 can prove the
- * Storybook harness renders with the app's real tokens, reset and web fonts.
- * Keep it small; do not grow it, and do not migrate any existing component onto
- * it — the 25+ `<something>-btn` classes in `src/components/` are renamed by
- * tasks 20-22, not by anything here.
+ * BEM block: `btn` (`client/src/styles/blocks/btn.css`, task 18). The CSS is
+ * loaded globally via `src/index.css`; this component owns no stylesheet.
+ * Task 10's proof-of-harness `Button.css` (with its dead `.btn--sm`) is
+ * deleted — the vocabulary below is the block file's, exactly:
  *
- * It obeys the `ui/` boundary: no store, no API, no MobX, no context read. Data
- * in as props, effects out as callbacks. ESLint enforces this
- * (`src/ui/primitives/**` additionally forbids domain-type imports, which is
- * why this file imports nothing from `@/types`).
+ *   btn
+ *   btn--lg                  larger padding (modal footer actions)
+ *   btn--primary | --neutral | --ghost | --muted | --danger |
+ *   btn--danger-outline | --gradient
+ *
+ * Replaces the measured duplication of 197 raw `<button>` elements
+ * (LayerPanel's 13-line twins, ReferenceImagePanel's 2×8 clone buttons, the
+ * play/preview triplet in FramesView/VariantView/TimelineView, …).
+ *
+ * Pure: props in, callbacks out. `type` defaults to `"button"` so a Button
+ * inside a form never submits by accident.
  */
 
-export type ButtonVariant = "default" | "primary" | "danger" | "ghost";
-export type ButtonSize = "sm" | "md" | "lg";
+export type ButtonVariant =
+  | "default"
+  | "primary"
+  | "neutral"
+  | "ghost"
+  | "muted"
+  | "danger"
+  | "danger-outline"
+  | "gradient";
 
-export interface ButtonProps extends Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  "className"
-> {
+export type ButtonSize = "md" | "lg";
+
+export interface ButtonProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className"> {
   children: ReactNode;
+  /** Skin modifier (`btn--<variant>`). `"default"` renders the bare block. */
   variant?: ButtonVariant;
+  /** `"lg"` adds `btn--lg`. */
   size?: ButtonSize;
-  /** Render the label in `var(--font-mono)` — the JetBrains Mono harness proof. */
-  mono?: boolean;
   /** Extra classes, appended after the block/modifier classes. */
   className?: string;
 }
+
+/**
+ * Explicit variant → class map (immutable). Written as literals rather than
+ * `btn--${variant}` so scripts/check-classes.mjs sees every modifier as a
+ * real reference (interpolation would mark the whole `btn--` stem live and
+ * mask genuinely dead modifiers).
+ */
+const VARIANT_CLASS: Record<ButtonVariant, string | null> = {
+  default: null,
+  primary: "btn--primary",
+  neutral: "btn--neutral",
+  ghost: "btn--ghost",
+  muted: "btn--muted",
+  danger: "btn--danger",
+  "danger-outline": "btn--danger-outline",
+  gradient: "btn--gradient",
+};
+
+const SIZE_CLASS: Record<ButtonSize, string | null> = {
+  md: null,
+  lg: "btn--lg",
+};
 
 export function Button({
   children,
   variant = "default",
   size = "md",
-  mono = false,
   type = "button",
   className,
   ...rest
 }: ButtonProps) {
-  const classes = [
-    "btn",
-    variant !== "default" ? `btn--${variant}` : null,
-    size !== "md" ? `btn--${size}` : null,
-    mono ? "btn--mono" : null,
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
   return (
-    <button type={type} className={classes} {...rest}>
+    <button
+      type={type}
+      className={classNames(
+        "btn",
+        VARIANT_CLASS[variant],
+        SIZE_CLASS[size],
+        className,
+      )}
+      {...rest}
+    >
       {children}
     </button>
   );

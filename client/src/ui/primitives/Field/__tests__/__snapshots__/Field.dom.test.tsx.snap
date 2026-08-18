@@ -1,0 +1,79 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Field > renders a hint via aria-describedby 1`] = `
+<div
+  class="field"
+>
+  <label
+    class="field__label"
+    for="_r_1_"
+  >
+    Width
+  </label>
+  <div
+    class="field__control"
+  >
+    <input
+      aria-describedby="_r_1_-hint"
+      id="_r_1_"
+      type="text"
+    />
+  </div>
+  <div
+    class="field__hint"
+    id="_r_1_-hint"
+  >
+    1-512 pixels.
+  </div>
+</div>
+`;
+
+exports[`Field > renders an error: aria-invalid + error hint, inline layout 1`] = `
+<div
+  class="field field--inline"
+>
+  <label
+    class="field__label"
+    for="_r_2_"
+  >
+    Width
+  </label>
+  <div
+    class="field__control"
+  >
+    <input
+      aria-describedby="_r_2_-hint"
+      aria-invalid="true"
+      id="_r_2_"
+      type="text"
+    />
+  </div>
+  <div
+    class="field__hint field__hint--error"
+    id="_r_2_-hint"
+  >
+    Out of range.
+  </div>
+</div>
+`;
+
+exports[`Field > renders label wired to the control by generated id 1`] = `
+<div
+  class="field"
+>
+  <label
+    class="field__label"
+    for="_r_0_"
+  >
+    Width
+  </label>
+  <div
+    class="field__control"
+  >
+    <input
+      id="_r_0_"
+      type="text"
+    />
+  </div>
+</div>
+`;

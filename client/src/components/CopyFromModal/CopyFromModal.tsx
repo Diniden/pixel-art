@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useEditorStore } from '../../store';
 import { Layer, PixelObject, Variant } from '../../types';
 import { renderLayerPreview, renderVariantLayerPreview } from '../../utils/previewRenderer';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Hexagon, ClipboardCopy, X } from 'lucide-react';
 import './CopyFromModal.css';
 

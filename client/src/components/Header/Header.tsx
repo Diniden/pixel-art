@@ -5,7 +5,7 @@ import { aiApi, exportApi } from '../../api';
 import { ProjectSelectModal } from '../ProjectSelectModal/ProjectSelectModal';
 import { ExportPreviewModal } from '../ExportPreviewModal/ExportPreviewModal';
 import { BrowseBackupsModal } from '../BrowseBackupsModal/BrowseBackupsModal';
-import { Icon } from '../Icon/Icon';
+import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Diamond, Wand2, History, FolderOpen, ExternalLink, PenLine } from 'lucide-react';
 import './Header.css';
 

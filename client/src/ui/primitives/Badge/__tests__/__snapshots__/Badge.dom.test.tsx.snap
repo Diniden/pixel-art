@@ -1,0 +1,26 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Badge > renders selected (default green, decorative) 1`] = `
+<span
+  aria-hidden="true"
+  class="badge badge--selected"
+>
+  ✓
+</span>
+`;
+
+exports[`Badge > renders selected violet with an accessible name 1`] = `
+<span
+  aria-label="Selected"
+  class="badge badge--selected badge--violet"
+/>
+`;
+
+exports[`Badge > renders the current pill 1`] = `
+<span
+  aria-hidden="true"
+  class="badge badge--current"
+>
+  Current
+</span>
+`;

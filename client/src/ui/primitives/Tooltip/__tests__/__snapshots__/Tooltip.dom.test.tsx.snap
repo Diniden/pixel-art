@@ -1,0 +1,20 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Tooltip > renders only the trigger while hidden 1`] = `
+<button
+  type="button"
+>
+  Trigger
+</button>
+`;
+
+exports[`Tooltip > shows the bubble on hover and snapshots it 1`] = `
+<div
+  class="tooltip"
+  id="_r_1_"
+  role="tooltip"
+  style="left: 0px; top: 10px;"
+>
+  Focus Mode (\`)
+</div>
+`;
