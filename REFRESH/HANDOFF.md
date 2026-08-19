@@ -142,7 +142,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W18** | 26 | W17 | ⚠️ | `78846c8` | a 50-pixel stroke command < 5 kB · task 08's suite unchanged · 100-pixel drag under 16 ms |
 | **W19** | 27 | W18 | ⚠️ | `7ebb120` | all 9 lighting fields bump `persistedUIVersion` and persist |
 | **W20** | 28 | W19 | ⚠️ | `741ebb1` | no `src/stores` file imports from `components/` · variant matrix green |
-| **W21** | 29 | W20 | ⬜ | — | `! grep -n ReferenceImageModal src/App.tsx` · zero `useEditorStore.getState()` remain |
+| **W21** | 29 | W20 | ⚠️ | `7807830` | `! grep -n ReferenceImageModal src/App.tsx` · zero `useEditorStore.getState()` remain |
 | **W22** | 30 | W21 | ⬜ | — | golden-hash render tests per mode · one client copy of the offset fallback |
 | **W23** | 31 | W22 | ⬜ | — | brushStamp mouse-vs-touch agreement test passes |
 | **W24** | 32 | W23 | ⬜ | — | `Canvas.tsx` deleted · `CanvasSurface` stories render with **no** store provider |
