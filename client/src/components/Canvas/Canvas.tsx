@@ -12,10 +12,35 @@ import {
   getCirclePixels,
 } from "./drawingUtils";
 import type { ReferenceImageData } from "../../types/referenceImage";
+import { resolveVariantOffset } from "../../ui/canvas/model/variantOffset";
+import { screenToPixel } from "../../ui/canvas/model/coords";
+import type { CanvasViewGeometry } from "../../ui/canvas/model/coords";
+import {
+  backgroundTheme,
+  paintCheckerboard,
+  strokeGrid,
+} from "../../ui/canvas/render/canvasBackground";
+import type { BackgroundGeometry } from "../../ui/canvas/render/canvasBackground";
+import {
+  renderFrameOverlay as renderFrameOverlayBuffer,
+  overlayVariantFrameIndices,
+  FRAME_OVERLAY_MODE,
+  FRAME_TRACE_MODE,
+} from "../../ui/canvas/render/renderFrameOverlay";
+import { drawOriginCross } from "../../ui/canvas/render/renderOriginCross";
+import {
+  drawLasso,
+  drawMarchingAnts,
+} from "../../ui/canvas/render/renderSelectionOverlay";
 import "./Canvas.css";
 
-// Helper to extract color from PixelData
-function getPixelColor(pd: PixelData | undefined): Pixel | null {
+// Helper to extract color from PixelData.
+//
+// Takes `unknown` because the pure renderers under ui/canvas/ deliberately do
+// not import the domain `PixelData` type — they treat a pixel cell as opaque
+// and delegate reading it to this callback. The narrowing happens here.
+function getPixelColor(cell: unknown): Pixel | null {
+  const pd = cell as PixelData | undefined;
   if (!pd || pd.color === 0) return null;
   return pd.color;
 }
@@ -284,85 +309,71 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     ? `view-${viewWidth}-${viewHeight}-${viewMinX}-${viewMinY}-${zoom}-${lightGridMode ? "l" : "d"}`
     : `${gridWidth}-${gridHeight}-${zoom}-${lightGridMode ? "l" : "d"}`;
 
-  // Get pixel from canvas coordinates. Uses getBoundingClientRect() so it works with
-  // the view zoom transform (scale) — no dependency on zoom or viewZoom.
+  // View geometry the pure coordinate mapper runs against. Rebuilt per render;
+  // `screenToPixel` itself lives in ui/canvas/model/coords.ts and is store-free.
+  const coordGeom: CanvasViewGeometry = {
+    gridWidth,
+    gridHeight,
+    objWidth,
+    objHeight,
+    editingVariant: Boolean(editingVariant && variantData),
+    variantOffset,
+    viewMinX,
+    viewMinY,
+    viewWidth,
+    viewHeight,
+  };
+  const coordGeomRef = useRef(coordGeom);
+  coordGeomRef.current = coordGeom;
+
+  // Get pixel from canvas coordinates. Uses getBoundingClientRect() so it works
+  // with the view zoom transform (scale) — no dependency on zoom or viewZoom.
   const getPixelCoords = useCallback(
     (clientX: number, clientY: number): Point | null => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
-
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return null;
-
-      let x: number;
-      let y: number;
-      if (editingVariant && variantData) {
-        const localViewX = ((clientX - rect.left) / rect.width) * viewWidth;
-        const localViewY = ((clientY - rect.top) / rect.height) * viewHeight;
-        const worldX = viewMinX + localViewX;
-        const worldY = viewMinY + localViewY;
-        x = Math.floor(worldX - variantOffset.x);
-        y = Math.floor(worldY - variantOffset.y);
-      } else {
-        x = Math.floor(((clientX - rect.left) / rect.width) * gridWidth);
-        y = Math.floor(((clientY - rect.top) / rect.height) * gridHeight);
-      }
-
-      if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return null;
-      return { x, y };
+      return screenToPixel(
+        clientX,
+        clientY,
+        canvas.getBoundingClientRect(),
+        coordGeomRef.current,
+        "pixel",
+      );
     },
-    [
-      gridWidth,
-      gridHeight,
-      editingVariant,
-      variantData,
-      variantOffsetKey,
-      viewMinX,
-      viewMinY,
-      viewWidth,
-      viewHeight,
-    ],
+    [],
   );
 
-  // Get origin coords snapped to nearest half-pixel. Uses rect so it works with view zoom.
+  // Get origin coords snapped to nearest half-pixel. Uses rect so it works with
+  // view zoom.
   const getOriginCoords = useCallback(
     (clientX: number, clientY: number): { x: number; y: number } | null => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
-
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return null;
-
-      let rawX: number;
-      let rawY: number;
-      if (editingVariant && variantData) {
-        const localViewX = ((clientX - rect.left) / rect.width) * viewWidth;
-        const localViewY = ((clientY - rect.top) / rect.height) * viewHeight;
-        rawX = viewMinX + localViewX;
-        rawY = viewMinY + localViewY;
-      } else {
-        rawX = ((clientX - rect.left) / rect.width) * objWidth;
-        rawY = ((clientY - rect.top) / rect.height) * objHeight;
-      }
-
-      const x = Math.round(rawX * 2) / 2;
-      const y = Math.round(rawY * 2) / 2;
-
-      if (x < -1 || x > objWidth + 1 || y < -1 || y > objHeight + 1)
-        return null;
-      return { x, y };
+      return screenToPixel(
+        clientX,
+        clientY,
+        canvas.getBoundingClientRect(),
+        coordGeomRef.current,
+        "origin",
+      );
     },
-    [
-      objWidth,
-      objHeight,
-      editingVariant,
-      variantData,
-      viewMinX,
-      viewMinY,
-      viewWidth,
-      viewHeight,
-    ],
+    [],
   );
+
+  // Geometry shared by the checkerboard and the grid. Both are pure functions
+  // in ui/canvas/render/canvasBackground.ts; this component only owns the
+  // offscreen-canvas CACHE around them.
+  const bgGeom: BackgroundGeometry = {
+    canvasWidth,
+    canvasHeight,
+    cellsX: editingVariant ? viewWidth : gridWidth,
+    cellsY: editingVariant ? viewHeight : gridHeight,
+    offsetX: editingVariant ? viewMinX : 0,
+    offsetY: editingVariant ? viewMinY : 0,
+    zoom,
+  };
+  const bgGeomRef = useRef(bgGeom);
+  bgGeomRef.current = bgGeom;
 
   // Create or update cached background canvas (checkerboard)
   const ensureBgCanvas = useCallback(() => {
@@ -370,7 +381,6 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       return bgCanvasRef.current;
     }
 
-    // Create or resize background canvas
     if (!bgCanvasRef.current) {
       bgCanvasRef.current = document.createElement("canvas");
     }
@@ -380,63 +390,17 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     const bgCtx = bgCanvas.getContext("2d");
     if (!bgCtx) return bgCanvas;
 
-    // Draw base color
-    bgCtx.fillStyle = lightGridMode ? "#c8c8c8" : "#1a1a25";
-    bgCtx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-    // Draw checkerboard using ImageData for speed
-    const imageData = bgCtx.getImageData(0, 0, canvasWidth, canvasHeight);
-    const data = imageData.data;
-
-    // Dark mode: dark blue/grey checkerboard; Light mode: classic light grey checkerboard
-    const color1 = lightGridMode
-      ? { r: 204, g: 204, b: 204 }
-      : { r: 42, g: 42, b: 58 }; // light: #cccccc, dark: #2a2a3a
-    const color2 = lightGridMode
-      ? { r: 238, g: 238, b: 238 }
-      : { r: 34, g: 34, b: 48 }; // light: #eeeeee, dark: #222230
-
-    const cellsX = editingVariant ? viewWidth : gridWidth;
-    const cellsY = editingVariant ? viewHeight : gridHeight;
-    const offsetX = editingVariant ? viewMinX : 0;
-    const offsetY = editingVariant ? viewMinY : 0;
-
-    for (let py = 0; py < cellsY; py++) {
-      for (let px = 0; px < cellsX; px++) {
-        const color =
-          (offsetX + px + (offsetY + py)) % 2 === 0 ? color1 : color2;
-        const startX = px * zoom;
-        const startY = py * zoom;
-
-        for (let dy = 0; dy < zoom; dy++) {
-          for (let dx = 0; dx < zoom; dx++) {
-            const idx = ((startY + dy) * canvasWidth + (startX + dx)) * 4;
-            data[idx] = color.r;
-            data[idx + 1] = color.g;
-            data[idx + 2] = color.b;
-            data[idx + 3] = 255;
-          }
-        }
-      }
-    }
-
+    const imageData = bgCtx.createImageData(canvasWidth, canvasHeight);
+    paintCheckerboard(
+      imageData,
+      bgGeomRef.current,
+      backgroundTheme(lightGridMode),
+    );
     bgCtx.putImageData(imageData, 0, 0);
+
     bgCacheKeyRef.current = bgCacheKey;
     return bgCanvas;
-  }, [
-    bgCacheKey,
-    canvasWidth,
-    canvasHeight,
-    gridWidth,
-    gridHeight,
-    zoom,
-    lightGridMode,
-    editingVariant,
-    viewWidth,
-    viewHeight,
-    viewMinX,
-    viewMinY,
-  ]);
+  }, [bgCacheKey, canvasWidth, canvasHeight, lightGridMode]);
 
   // Create or update cached grid canvas
   const ensureGridCanvas = useCallback(() => {
@@ -454,41 +418,11 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     if (!gridCtx) return gridCanvas;
 
     gridCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-    gridCtx.strokeStyle = lightGridMode
-      ? "rgba(0, 0, 0, 0.08)"
-      : "rgba(255, 255, 255, 0.05)";
-    gridCtx.lineWidth = 1;
-
-    const linesX = editingVariant ? viewWidth + 1 : gridWidth + 1;
-    const linesY = editingVariant ? viewHeight + 1 : gridHeight + 1;
-
-    // Draw all vertical lines in one path
-    gridCtx.beginPath();
-    for (let x = 0; x < linesX; x++) {
-      gridCtx.moveTo(x * zoom + 0.5, 0);
-      gridCtx.lineTo(x * zoom + 0.5, canvasHeight);
-    }
-    // Draw all horizontal lines in the same path
-    for (let y = 0; y < linesY; y++) {
-      gridCtx.moveTo(0, y * zoom + 0.5);
-      gridCtx.lineTo(canvasWidth, y * zoom + 0.5);
-    }
-    gridCtx.stroke();
+    strokeGrid(gridCtx, bgGeomRef.current, backgroundTheme(lightGridMode));
 
     gridCacheKeyRef.current = bgCacheKey;
     return gridCanvas;
-  }, [
-    bgCacheKey,
-    canvasWidth,
-    canvasHeight,
-    gridWidth,
-    gridHeight,
-    zoom,
-    lightGridMode,
-    editingVariant,
-    viewWidth,
-    viewHeight,
-  ]);
+  }, [bgCacheKey, canvasWidth, canvasHeight, lightGridMode]);
 
   // Optimized render - uses cached offscreen canvases for static content
   const render = useCallback(() => {
@@ -537,10 +471,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
           const baseFrameIndex = obj.frames.findIndex((f) => f.id === frame.id);
 
           if (variant && vFrame) {
-            // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
-            const vOffset = l.variantOffsets?.[l.selectedVariantId ?? ""] ??
-              l.variantOffset ??
-              variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
+            const vOffset = resolveVariantOffset(l, variant, baseFrameIndex);
             const isCurrentLayer = l.id === layer?.id;
 
             for (const vl of vFrame.layers) {
@@ -659,10 +590,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
             variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
 
           if (variant && vFrame) {
-            // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
-            const vOffset = l.variantOffsets?.[l.selectedVariantId ?? ""] ??
-              l.variantOffset ??
-              variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
+            const vOffset = resolveVariantOffset(l, variant, baseFrameIndex);
 
             for (const vl of vFrame.layers) {
               if (!vl.visible) continue;
@@ -806,49 +734,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     }
 
     // Draw lasso preview path
-    if (isLassoSelecting && lassoPoints.length > 1) {
-      ctx.save();
-      ctx.strokeStyle = "#00d9ff";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      const p0 = lassoPoints[0];
-      ctx.moveTo((p0.x + 0.5 + offsetX) * zoom, (p0.y + 0.5 + offsetY) * zoom);
-      for (let i = 1; i < lassoPoints.length; i++) {
-        const p = lassoPoints[i];
-        ctx.lineTo((p.x + 0.5 + offsetX) * zoom, (p.y + 0.5 + offsetY) * zoom);
-      }
-      ctx.stroke();
-      ctx.restore();
+    if (isLassoSelecting) {
+      drawLasso(ctx, lassoPoints, zoom, offsetX, offsetY);
     }
 
     // Draw selection box (preview or finalized)
     const selBox = previewSelection || selection?.bounds;
     if (selBox) {
-      ctx.strokeStyle = "#00d9ff";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-      ctx.strokeRect(
-        (selBox.x + offsetX + dragDx) * zoom,
-        (selBox.y + offsetY + dragDy) * zoom,
-        selBox.width * zoom,
-        selBox.height * zoom,
-      );
-      ctx.setLineDash([]);
-
-      // Draw inner dashed line with offset for marching ants effect
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.lineDashOffset = 4;
-      ctx.strokeRect(
-        (selBox.x + offsetX + dragDx) * zoom + 1,
-        (selBox.y + offsetY + dragDy) * zoom + 1,
-        selBox.width * zoom - 2,
-        selBox.height * zoom - 2,
-      );
-      ctx.setLineDash([]);
-      ctx.lineDashOffset = 0;
+      drawMarchingAnts(ctx, selBox, zoom, offsetX, offsetY, dragDx, dragDy);
     }
 
     // Draw origin cross only when the move origin tool is selected
@@ -860,33 +753,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
         b: 50,
         a: 255,
       };
-      const originScreenX = originPos.x * zoom;
-      const originScreenY = originPos.y * zoom;
-      const crossSize = 12; // Fixed screen-space size regardless of zoom
-
-      ctx.save();
-      ctx.strokeStyle = `rgba(${oc.r}, ${oc.g}, ${oc.b}, ${oc.a / 255})`;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([]);
-
-      // Horizontal line
-      ctx.beginPath();
-      ctx.moveTo(originScreenX - crossSize, originScreenY);
-      ctx.lineTo(originScreenX + crossSize, originScreenY);
-      ctx.stroke();
-
-      // Vertical line
-      ctx.beginPath();
-      ctx.moveTo(originScreenX, originScreenY - crossSize);
-      ctx.lineTo(originScreenX, originScreenY + crossSize);
-      ctx.stroke();
-
-      // Small circle at center
-      ctx.beginPath();
-      ctx.arc(originScreenX, originScreenY, 3, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.restore();
+      drawOriginCross(ctx, originPos, zoom, oc);
     }
 
     if (editingVariant && variantData) {
@@ -1021,273 +888,114 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
 
   // Render frame overlay (transparent overlay on top of main canvas)
   // Uses the same rendering strategy as thumbnails for consistency
+  // Frame overlay (#8) and frame-trace overlay (#9) were ~200 lines of
+  // near-duplicate code. Both now call ONE parameterised buffer renderer,
+  // `renderFrameOverlay` in ui/canvas/render/renderFrameOverlay.ts, which
+  // documents the SIX ways the two genuinely differ.
+  const drawOverlayCanvas = useCallback(
+    (
+      canvas: HTMLCanvasElement | null,
+      overlaySourceFrame: { id: string; layers: Layer[] } | null | undefined,
+      mode: typeof FRAME_OVERLAY_MODE | typeof FRAME_TRACE_MODE,
+      drawOffset: { x: number; y: number },
+      active: boolean,
+    ) => {
+      const ctx = canvas?.getContext("2d");
+      if (!canvas || !ctx || !overlaySourceFrame || !frameRefObj || !active) {
+        // Clear canvas if not active
+        if (canvas && ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        return;
+      }
+
+      const refObjWidth = frameRefObj.gridSize.width;
+      const refObjHeight = frameRefObj.gridSize.height;
+
+      // When editing variant, overlay shows expanded view — draw in view space
+      const ox = editingVariant && variantData ? viewMinX : 0;
+      const oy = editingVariant && variantData ? viewMinY : 0;
+
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = canvasWidth;
+      tempCanvas.height = canvasHeight;
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) return;
+
+      const frameIndex = frameRefObj.frames.findIndex(
+        (f) => f.id === overlaySourceFrame.id,
+      );
+      const variants = project?.variants;
+      const variantFrameIndices = overlayVariantFrameIndices(
+        variants,
+        frameIndex,
+      );
+
+      // createImageData is already zero-filled — the originals' explicit
+      // transparent-fill loop was redundant.
+      const imageData = tempCtx.createImageData(canvasWidth, canvasHeight);
+
+      renderFrameOverlayBuffer(imageData, {
+        layers: overlaySourceFrame.layers,
+        refObjWidth,
+        refObjHeight,
+        zoom,
+        ox,
+        oy,
+        variants,
+        variantFrameIndices,
+        frameIndex,
+        getPixelColor,
+        composite: mode.composite,
+        clipToObject: mode.clipToObject,
+        cellFill: mode.cellFill,
+        renderOrphanVariantLayers: mode.renderOrphanVariantLayers,
+      });
+
+      tempCtx.putImageData(imageData, 0, 0);
+
+      const drawX = (drawOffset.x - ox) * zoom;
+      const drawY = (drawOffset.y - oy) * zoom;
+
+      ctx.globalAlpha = mode.opacity;
+      ctx.drawImage(tempCanvas, drawX, drawY);
+      ctx.globalAlpha = 1;
+
+      // Subtle dashed border around the overlay
+      ctx.strokeStyle = mode.borderColor;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([...mode.borderDash]);
+      ctx.strokeRect(drawX, drawY, refObjWidth * zoom, refObjHeight * zoom);
+      ctx.setLineDash([]);
+    },
+    [
+      canvasWidth,
+      canvasHeight,
+      zoom,
+      frameRefObj,
+      project?.variants,
+      editingVariant,
+      variantData,
+      viewMinX,
+      viewMinY,
+    ],
+  );
+
   const renderFrameOverlay = useCallback(() => {
-    const canvas = frameOverlayCanvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx || !overlayFrame || !frameRefObj) {
-      // Clear canvas if not active
-      if (canvas && ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      return;
-    }
-
-    // Use the frame reference object's dimensions
-    const refObjWidth = frameRefObj.gridSize.width;
-    const refObjHeight = frameRefObj.gridSize.height;
-
-    // When editing variant, overlay shows expanded view — draw in view space (world - viewMin)
-    const ox = editingVariant && variantData ? viewMinX : 0;
-    const oy = editingVariant && variantData ? viewMinY : 0;
-
-    // Size the overlay to match the main canvas
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-    // Create an offscreen canvas to render the frame at full size
-    // We'll use renderFramePreview but at full canvas size
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = canvasWidth;
-    tempCanvas.height = canvasHeight;
-    const tempCtx = tempCanvas.getContext("2d");
-    if (!tempCtx) return;
-
-    // Calculate variant frame indices for the overlay frame
-    const overlayFrameIndex = frameRefObj.frames.findIndex(
-      (f) => f.id === overlayFrame.id,
+    drawOverlayCanvas(
+      frameOverlayCanvasRef.current,
+      overlayFrame,
+      FRAME_OVERLAY_MODE,
+      // #8 draws at the origin — it does NOT honour frameOverlayOffset.
+      { x: 0, y: 0 },
+      Boolean(overlayFrame),
     );
-    const variants = project?.variants;
-    let variantFrameIndices: { [key: string]: number } | undefined;
-
-    if (variants) {
-      // Calculate static indices based on frame position
-      variantFrameIndices = {};
-      for (const vg of variants) {
-        const variant = vg.variants[0]; // All variants should have same frame count
-        if (variant && variant.frames.length > 0) {
-          // Use frame index modulo variant frame count to determine which variant frame to show
-          variantFrameIndices[vg.id] =
-            overlayFrameIndex % variant.frames.length;
-        }
-      }
-    }
-
-    // Render the frame at full size using the same logic as thumbnails
-    // We need to render it pixel-perfect at zoom level
-    // Create ImageData for the full canvas size
-    const imageData = tempCtx.createImageData(canvasWidth, canvasHeight);
-    const data = imageData.data;
-
-    // Fill with transparent background
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = 0;
-      data[i + 1] = 0;
-      data[i + 2] = 0;
-      data[i + 3] = 0;
-    }
-
-    // Render layers front to back (same as thumbnails)
-    for (let layerIdx = 0; layerIdx < overlayFrame.layers.length; layerIdx++) {
-      const layer = overlayFrame.layers[layerIdx];
-      if (!layer.visible) continue;
-
-      // Handle variant layers
-      if (
-        layer.isVariant &&
-        layer.variantGroupId &&
-        variants &&
-        variantFrameIndices
-      ) {
-        const vg = variants.find((vg) => vg.id === layer.variantGroupId);
-        const variant = vg?.variants.find(
-          (v) => v.id === layer.selectedVariantId,
-        );
-        const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
-        const vFrame =
-          variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
-
-        if (variant && vFrame) {
-          // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
-          const variantOffset = layer.variantOffsets?.[
-            layer.selectedVariantId ?? ""
-          ] ??
-            layer.variantOffset ??
-            variant.baseFrameOffsets?.[overlayFrameIndex] ?? { x: 0, y: 0 };
-
-          // Render variant frame pixels
-          const vHeight = variant.gridSize.height;
-          const vWidth = variant.gridSize.width;
-
-          for (let vlIdx = 0; vlIdx < vFrame.layers.length; vlIdx++) {
-            const vl = vFrame.layers[vlIdx];
-            if (!vl.visible) continue;
-
-            const pixels = vl.pixels;
-            if (!pixels) continue;
-
-            for (let vy = 0; vy < vHeight; vy++) {
-              const row = pixels[vy];
-              if (!row) continue;
-
-              for (let vx = 0; vx < vWidth; vx++) {
-                const pixel = getPixelColor(row[vx]);
-                if (!pixel || pixel.a === 0) continue;
-
-                // Calculate position in base object coordinates
-                const baseX = variantOffset.x + vx;
-                const baseY = variantOffset.y + vy;
-
-                // Skip if outside base object bounds
-                if (
-                  baseX < 0 ||
-                  baseX >= refObjWidth ||
-                  baseY < 0 ||
-                  baseY >= refObjHeight
-                )
-                  continue;
-
-                // Draw at zoom level (view space when editing variant)
-                const drawX = (baseX - ox) * zoom;
-                const drawY = (baseY - oy) * zoom;
-                const drawEndX = Math.min(canvasWidth, (baseX - ox + 1) * zoom);
-                const drawEndY = Math.min(
-                  canvasHeight,
-                  (baseY - oy + 1) * zoom,
-                );
-
-                if (
-                  drawX >= canvasWidth ||
-                  drawY >= canvasHeight ||
-                  drawEndX <= 0 ||
-                  drawEndY <= 0
-                )
-                  continue;
-
-                const srcAlpha = pixel.a / 255;
-                const r = pixel.r;
-                const g = pixel.g;
-                const b = pixel.b;
-
-                for (let dy = Math.max(0, drawY); dy < drawEndY; dy++) {
-                  for (let dx = Math.max(0, drawX); dx < drawEndX; dx++) {
-                    const idx = (dy * canvasWidth + dx) * 4;
-
-                    const dstAlpha = data[idx + 3] / 255;
-                    const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
-
-                    if (outAlpha > 0.01) {
-                      const invOutAlpha = 1 / outAlpha;
-                      data[idx] =
-                        (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) *
-                        invOutAlpha;
-                      data[idx + 1] =
-                        (g * srcAlpha +
-                          data[idx + 1] * dstAlpha * (1 - srcAlpha)) *
-                        invOutAlpha;
-                      data[idx + 2] =
-                        (b * srcAlpha +
-                          data[idx + 2] * dstAlpha * (1 - srcAlpha)) *
-                        invOutAlpha;
-                      data[idx + 3] = outAlpha * 255;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      } else if (!layer.isVariant) {
-        // Regular layer
-        const pixels = layer.pixels;
-        if (!pixels) continue;
-
-        for (let py = 0; py < refObjHeight; py++) {
-          const row = pixels[py];
-          if (!row) continue;
-
-          for (let px = 0; px < refObjWidth; px++) {
-            const pixel = getPixelColor(row[px]);
-            if (!pixel || pixel.a === 0) continue;
-
-            // Draw at zoom level (view space when editing variant)
-            const drawX = (px - ox) * zoom;
-            const drawY = (py - oy) * zoom;
-            const drawEndX = Math.min(canvasWidth, (px - ox + 1) * zoom);
-            const drawEndY = Math.min(canvasHeight, (py - oy + 1) * zoom);
-
-            if (
-              drawX >= canvasWidth ||
-              drawY >= canvasHeight ||
-              drawEndX <= 0 ||
-              drawEndY <= 0
-            )
-              continue;
-
-            const srcAlpha = pixel.a / 255;
-            const r = pixel.r;
-            const g = pixel.g;
-            const b = pixel.b;
-
-            for (let dy = Math.max(0, drawY); dy < drawEndY; dy++) {
-              for (let dx = Math.max(0, drawX); dx < drawEndX; dx++) {
-                const idx = (dy * canvasWidth + dx) * 4;
-
-                const dstAlpha = data[idx + 3] / 255;
-                const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
-
-                if (outAlpha > 0.01) {
-                  const invOutAlpha = 1 / outAlpha;
-                  data[idx] =
-                    (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) *
-                    invOutAlpha;
-                  data[idx + 1] =
-                    (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) *
-                    invOutAlpha;
-                  data[idx + 2] =
-                    (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) *
-                    invOutAlpha;
-                  data[idx + 3] = outAlpha * 255;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Put the rendered frame onto the temp canvas
-    tempCtx.putImageData(imageData, 0, 0);
-
-    // Draw with transparency (40% opacity)
-    ctx.globalAlpha = 0.4;
-    ctx.drawImage(tempCanvas, 0, 0);
-    ctx.globalAlpha = 1;
-
-    // Draw a subtle border around the overlay (view space when editing variant)
-    ctx.strokeStyle = "rgba(139, 92, 246, 0.6)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 6]);
-    ctx.strokeRect(
-      -ox * zoom,
-      -oy * zoom,
-      refObjWidth * zoom,
-      refObjHeight * zoom,
-    );
-    ctx.setLineDash([]);
-  }, [
-    overlayFrame,
-    canvasWidth,
-    canvasHeight,
-    zoom,
-    frameRefObj,
-    project?.variants,
-    editingVariant,
-    variantData,
-    viewMinX,
-    viewMinY,
-  ]);
+  }, [drawOverlayCanvas, overlayFrame]);
 
   // Use a ref to always have access to the latest render function
   const renderRef = useRef(render);
@@ -1295,214 +1003,19 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
 
   // Render frame trace overlay (transparent overlay on top of main canvas, similar to reference trace)
   const renderFrameTraceOverlay = useCallback(() => {
-    const canvas = frameTraceOverlayCanvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (
-      !canvas ||
-      !ctx ||
-      !frameTraceFrame ||
-      !frameRefObj ||
-      !frameTraceActive
-    ) {
-      // Clear canvas if not active
-      if (canvas && ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      return;
-    }
-
-    // Use the frame reference object's dimensions
-    const refObjWidth = frameRefObj.gridSize.width;
-    const refObjHeight = frameRefObj.gridSize.height;
-
-    // When editing variant, overlay shows expanded view — draw in view space (world - viewMin)
-    const ox = editingVariant && variantData ? viewMinX : 0;
-    const oy = editingVariant && variantData ? viewMinY : 0;
-
-    // Size the overlay to match the main canvas
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-    // Create an offscreen canvas to render the frame at full size
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = canvasWidth;
-    tempCanvas.height = canvasHeight;
-    const tempCtx = tempCanvas.getContext("2d");
-    if (!tempCtx) return;
-
-    // Calculate variant frame indices for the trace frame
-    const traceFrameIndex = frameRefObj.frames.findIndex(
-      (f) => f.id === frameTraceFrame.id,
+    drawOverlayCanvas(
+      frameTraceOverlayCanvasRef.current,
+      frameTraceFrame,
+      FRAME_TRACE_MODE,
+      // #9 DOES honour the user-nudgeable trace offset.
+      frameOverlayOffset,
+      Boolean(frameTraceFrame && frameTraceActive),
     );
-    const variants = project?.variants;
-    let variantFrameIndices: { [key: string]: number } | undefined;
-
-    if (variants) {
-      variantFrameIndices = {};
-      for (const vg of variants) {
-        const variant = vg.variants[0];
-        if (variant && variant.frames.length > 0) {
-          variantFrameIndices[vg.id] = traceFrameIndex % variant.frames.length;
-        }
-      }
-    }
-
-    // Render the frame at full size using the same logic as frame overlay
-    const imageData = tempCtx.createImageData(canvasWidth, canvasHeight);
-    const data = imageData.data;
-
-    // Fill with transparent background
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = 0;
-      data[i + 1] = 0;
-      data[i + 2] = 0;
-      data[i + 3] = 0;
-    }
-
-    // Render layers front to back
-    for (
-      let layerIdx = 0;
-      layerIdx < frameTraceFrame.layers.length;
-      layerIdx++
-    ) {
-      const layer = frameTraceFrame.layers[layerIdx];
-      if (!layer.visible) continue;
-
-      // Handle variant layers
-      if (
-        layer.isVariant &&
-        layer.variantGroupId &&
-        variants &&
-        variantFrameIndices
-      ) {
-        const vg = variants.find((vg) => vg.id === layer.variantGroupId);
-        const variant = vg?.variants.find(
-          (v) => v.id === layer.selectedVariantId,
-        );
-        const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
-        const vFrame =
-          variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
-
-        if (variant && vFrame) {
-          // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
-          const variantOffset = layer.variantOffsets?.[
-            layer.selectedVariantId ?? ""
-          ] ??
-            layer.variantOffset ??
-            variant.baseFrameOffsets?.[traceFrameIndex] ?? { x: 0, y: 0 };
-          const vHeight = variant.gridSize.height;
-          const vWidth = variant.gridSize.width;
-
-          for (let vlIdx = 0; vlIdx < vFrame.layers.length; vlIdx++) {
-            const vl = vFrame.layers[vlIdx];
-            if (!vl.visible) continue;
-
-            const pixels = vl.pixels;
-            if (!pixels) continue;
-
-            for (let vy = 0; vy < vHeight; vy++) {
-              const row = pixels[vy];
-              if (!row) continue;
-
-              for (let vx = 0; vx < vWidth; vx++) {
-                const pixel = getPixelColor(row[vx]);
-                if (!pixel || pixel.a === 0) continue;
-
-                const canvasX = (vx + variantOffset.x - ox) * zoom;
-                const canvasY = (vy + variantOffset.y - oy) * zoom;
-
-                if (
-                  canvasX >= 0 &&
-                  canvasX < canvasWidth &&
-                  canvasY >= 0 &&
-                  canvasY < canvasHeight
-                ) {
-                  for (let dy = 0; dy < zoom; dy++) {
-                    for (let dx = 0; dx < zoom; dx++) {
-                      const idx =
-                        ((canvasY + dy) * canvasWidth + (canvasX + dx)) * 4;
-                      data[idx] = pixel.r;
-                      data[idx + 1] = pixel.g;
-                      data[idx + 2] = pixel.b;
-                      data[idx + 3] = pixel.a;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      } else {
-        // Regular layer
-        const pixels = layer.pixels;
-        if (!pixels) continue;
-
-        for (let py = 0; py < refObjHeight; py++) {
-          const row = pixels[py];
-          if (!row) continue;
-
-          for (let px = 0; px < refObjWidth; px++) {
-            const pixel = getPixelColor(row[px]);
-            if (!pixel || pixel.a === 0) continue;
-
-            const canvasX = (px - ox) * zoom;
-            const canvasY = (py - oy) * zoom;
-
-            if (
-              canvasX >= 0 &&
-              canvasX < canvasWidth &&
-              canvasY >= 0 &&
-              canvasY < canvasHeight
-            ) {
-              for (let dy = 0; dy < zoom; dy++) {
-                for (let dx = 0; dx < zoom; dx++) {
-                  const idx =
-                    ((canvasY + dy) * canvasWidth + (canvasX + dx)) * 4;
-                  data[idx] = pixel.r;
-                  data[idx + 1] = pixel.g;
-                  data[idx + 2] = pixel.b;
-                  data[idx + 3] = pixel.a;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    tempCtx.putImageData(imageData, 0, 0);
-
-    // Draw with transparency (50% opacity, like reference trace)
-    ctx.globalAlpha = 0.5;
-
-    // Apply offset (view space when editing variant)
-    const overlayX = (frameOverlayOffset.x - ox) * zoom;
-    const overlayY = (frameOverlayOffset.y - oy) * zoom;
-
-    ctx.drawImage(tempCanvas, overlayX, overlayY);
-    ctx.globalAlpha = 1;
-
-    // Draw a subtle border around the overlay
-    ctx.strokeStyle = "rgba(255, 171, 0, 0.6)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    ctx.strokeRect(overlayX, overlayY, refObjWidth * zoom, refObjHeight * zoom);
-    ctx.setLineDash([]);
   }, [
+    drawOverlayCanvas,
     frameTraceFrame,
     frameTraceActive,
-    canvasWidth,
-    canvasHeight,
-    zoom,
-    frameRefObj,
-    project?.variants,
     frameOverlayOffset,
-    editingVariant,
-    variantData,
-    viewMinX,
-    viewMinY,
   ]);
 
   // Render overlay when trace tool state changes
@@ -1911,11 +1424,11 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
             variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
 
           if (variant && vFrame) {
-            // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
-            const traceVariantOffset: { x: number; y: number } = traceLayer
-              .variantOffsets?.[traceLayer.selectedVariantId ?? ""] ??
-              traceLayer.variantOffset ??
-              variant.baseFrameOffsets?.[traceFrameIndex] ?? { x: 0, y: 0 };
+            const traceVariantOffset = resolveVariantOffset(
+              traceLayer,
+              variant,
+              traceFrameIndex,
+            );
             const vX = frameX - traceVariantOffset.x;
             const vY = frameY - traceVariantOffset.y;
 
