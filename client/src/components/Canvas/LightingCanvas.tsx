@@ -9,6 +9,7 @@ import {
 } from "../../utils/lightingRenderer";
 import { getSquarePixels, getCirclePixels } from "./drawingUtils";
 import { Icon } from "../../ui/primitives/Icon/Icon";
+import { useCanvasViewport } from "../../ui/hooks/useCanvasViewport";
 import { Lightbulb, ChevronUp, ChevronDown } from "lucide-react";
 import {
   backgroundTheme,
@@ -32,34 +33,12 @@ export function LightingCanvas() {
   const [hoverPixel, setHoverPixel] = useState<Point | null>(null);
 
   // View zoom: CSS transform scale for pinch/gesture only (mirrors Pixel Studio Canvas)
-  const [viewZoom, setViewZoom] = useState(1);
-  const [viewPanOffset, setViewPanOffset] = useState({ x: 0, y: 0 });
-  const viewPanRef = useRef(viewPanOffset);
+  // View zoom/pan, the native wheel listener and the pinch math come from
+  // `ui/hooks/useCanvasViewport` — the shared engine. This canvas passes no
+  // `onCommitPan`, which is exactly how its copy behaved: pan stayed local and
+  // its wheel handler had none of Canvas's `scheduleCommitPan()` calls.
 
   // Touch pinch support
-  const pinchStartRef = useRef<{
-    distance: number;
-    center: { x: number; y: number };
-    viewZoom: number;
-    pan: { x: number; y: number };
-  } | null>(null);
-
-  // Zoom anchor lock (reduces jitter)
-  const ZOOM_ANCHOR_MS = 100;
-  const zoomAnchorLockRef = useRef<{
-    anchor: { x: number; y: number };
-    timeoutId: ReturnType<typeof setTimeout> | null;
-  } | null>(null);
-
-  const wheelStateRef = useRef({
-    viewPanOffset: { x: 0, y: 0 },
-    canvasWidth: 320,
-    canvasHeight: 320,
-    viewZoom: 1,
-    setViewZoom: (_: number | ((prev: number) => number)) => {},
-    clampPanToViewport: (o: { x: number; y: number }, _w: number, _h: number) =>
-      o,
-  });
 
   const {
     project,
@@ -130,41 +109,19 @@ export function LightingCanvas() {
   const canvasWidth = gridWidth * zoom;
   const canvasHeight = gridHeight * zoom;
 
-  useEffect(() => {
-    viewPanRef.current = viewPanOffset;
-  }, [viewPanOffset]);
-
-  // Clamp pan so the canvas can move freely within the editor viewport
-  const clampPanToViewport = useCallback(
-    (
-      offset: { x: number; y: number },
-      contentWidth: number,
-      contentHeight: number,
-    ) => {
-      const container = editorContainerRef.current;
-      if (!container) return offset;
-      const viewW = container.clientWidth;
-      const viewH = container.clientHeight;
-      const minX = Math.min(0, viewW - contentWidth);
-      const maxX = Math.max(0, viewW - contentWidth);
-      const minY = Math.min(0, viewH - contentHeight);
-      const maxY = Math.max(0, viewH - contentHeight);
-      return {
-        x: Math.max(minX, Math.min(maxX, offset.x)),
-        y: Math.max(minY, Math.min(maxY, offset.y)),
-      };
-    },
-    [],
-  );
-
-  wheelStateRef.current = {
-    viewPanOffset: viewPanRef.current,
+  const {
+    viewZoom,
+    viewPanOffset,
+    beginPinch,
+    updatePinch,
+    endPinch,
+    isPinching,
+  } = useCanvasViewport({
+    containerRef: editorContainerRef,
     canvasWidth,
     canvasHeight,
-    viewZoom,
-    setViewZoom,
-    clampPanToViewport,
-  };
+    panOffset: { x: 0, y: 0 },
+  });
 
   // Get pixel coords using rect so it works with viewZoom transform
   const getPixelCoordsFromClient = useCallback(
@@ -390,106 +347,16 @@ export function LightingCanvas() {
     renderBrushOverlay();
   }, [renderBrushOverlay]);
 
-  // Native non-passive wheel listener: pinch = view zoom toward cursor, scroll = pan
-  useEffect(() => {
-    const container = editorContainerRef.current;
-    if (!container) return;
-    const handler = (e: WheelEvent) => {
-      const state = wheelStateRef.current;
-      if (e.ctrlKey) {
-        e.preventDefault();
-        const rect = container.getBoundingClientRect();
-        const cursorX = e.clientX - rect.left;
-        const cursorY = e.clientY - rect.top;
-        if (!zoomAnchorLockRef.current) {
-          zoomAnchorLockRef.current = {
-            anchor: { x: cursorX, y: cursorY },
-            timeoutId: null,
-          };
-        }
-        if (zoomAnchorLockRef.current.timeoutId) {
-          clearTimeout(zoomAnchorLockRef.current.timeoutId);
-        }
-        zoomAnchorLockRef.current.timeoutId = setTimeout(() => {
-          zoomAnchorLockRef.current = null;
-        }, ZOOM_ANCHOR_MS);
-        const anchor = zoomAnchorLockRef.current.anchor;
-
-        const factor = Math.exp(-e.deltaY * 0.012);
-        const newViewZoom = Math.max(
-          0.25,
-          Math.min(4, state.viewZoom * factor),
-        );
-        const ratio = newViewZoom / state.viewZoom;
-        const newPan = {
-          x: anchor.x * (1 - ratio) + state.viewPanOffset.x * ratio,
-          y: anchor.y * (1 - ratio) + state.viewPanOffset.y * ratio,
-        };
-        state.setViewZoom(newViewZoom);
-        viewPanRef.current = newPan;
-        setViewPanOffset(newPan);
-      } else {
-        e.preventDefault();
-        const displayedW = state.canvasWidth * state.viewZoom;
-        const displayedH = state.canvasHeight * state.viewZoom;
-        const next = state.clampPanToViewport(
-          {
-            x: state.viewPanOffset.x - e.deltaX,
-            y: state.viewPanOffset.y - e.deltaY,
-          },
-          displayedW,
-          displayedH,
-        );
-        viewPanRef.current = next;
-        setViewPanOffset(next);
-      }
-    };
-    container.addEventListener("wheel", handler, { passive: false });
-    return () => {
-      container.removeEventListener("wheel", handler);
-      if (zoomAnchorLockRef.current?.timeoutId) {
-        clearTimeout(zoomAnchorLockRef.current.timeoutId);
-      }
-    };
-  }, []);
-
-  const getTouchCenter = (touches: React.TouchList) => {
-    const container = editorContainerRef.current;
-    if (!container || touches.length < 2) return { x: 0, y: 0 };
-    const rect = container.getBoundingClientRect();
-    const x = (touches[0].clientX + touches[1].clientX) / 2 - rect.left;
-    const y = (touches[0].clientY + touches[1].clientY) / 2 - rect.top;
-    return { x, y };
-  };
-  const getTouchDistance = (touches: React.TouchList) => {
-    if (touches.length < 2) return 0;
-    const dx = touches[1].clientX - touches[0].clientX;
-    const dy = touches[1].clientY - touches[0].clientY;
-    return Math.hypot(dx, dy);
-  };
+  // The native wheel listener and the touch-gesture math now come from
+  // `useCanvasViewport` (see the hook call above).
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       e.preventDefault();
-      const center = getTouchCenter(e.touches);
-      pinchStartRef.current = {
-        distance: getTouchDistance(e.touches),
-        center,
-        viewZoom,
-        pan: { ...viewPanRef.current },
-      };
-      if (zoomAnchorLockRef.current?.timeoutId) {
-        clearTimeout(zoomAnchorLockRef.current.timeoutId);
-      }
-      zoomAnchorLockRef.current = {
-        anchor: center,
-        timeoutId: setTimeout(() => {
-          zoomAnchorLockRef.current = null;
-        }, ZOOM_ANCHOR_MS),
-      };
+      beginPinch(e.touches);
       return;
     }
-    pinchStartRef.current = null;
+    endPinch();
 
     const touch = e.touches[0];
     if (!touch) return;
@@ -517,51 +384,14 @@ export function LightingCanvas() {
 
   const handleTouchMove = (e: React.TouchEvent) => {
     // Two-finger pinch = zoom + pan
-    if (e.touches.length === 2 && pinchStartRef.current) {
+    if (e.touches.length === 2 && isPinching()) {
       e.preventDefault();
-      const start = pinchStartRef.current;
-      const dist = getTouchDistance(e.touches);
-      const center = getTouchCenter(e.touches);
-      if (dist <= 0) return;
-
-      if (zoomAnchorLockRef.current?.timeoutId) {
-        clearTimeout(zoomAnchorLockRef.current.timeoutId);
-      }
-      if (zoomAnchorLockRef.current) {
-        zoomAnchorLockRef.current.timeoutId = setTimeout(() => {
-          zoomAnchorLockRef.current = null;
-        }, ZOOM_ANCHOR_MS);
-      } else {
-        zoomAnchorLockRef.current = {
-          anchor: center,
-          timeoutId: setTimeout(() => {
-            zoomAnchorLockRef.current = null;
-          }, ZOOM_ANCHOR_MS),
-        };
-      }
-      const anchor = zoomAnchorLockRef.current.anchor;
-
-      const scale = Math.pow(dist / start.distance, 1.15);
-      const newViewZoom = Math.max(0.25, Math.min(4, start.viewZoom * scale));
-      const zoomRatio = newViewZoom / start.viewZoom;
-      const newPan = {
-        x: anchor.x * (1 - zoomRatio) + start.pan.x * zoomRatio,
-        y: anchor.y * (1 - zoomRatio) + start.pan.y * zoomRatio,
-      };
-      setViewZoom(newViewZoom);
-      viewPanRef.current = newPan;
-      setViewPanOffset(newPan);
-      pinchStartRef.current = {
-        distance: dist,
-        center,
-        viewZoom: newViewZoom,
-        pan: newPan,
-      };
+      updatePinch(e.touches);
       return;
     }
 
     if (e.touches.length < 2) {
-      pinchStartRef.current = null;
+      endPinch();
     }
 
     if (!isPainting) return;
@@ -594,7 +424,7 @@ export function LightingCanvas() {
   };
 
   const handleTouchEnd = () => {
-    pinchStartRef.current = null;
+    endPinch();
     setIsPainting(false);
     setLastPaintPixel(null);
   };
@@ -842,7 +672,8 @@ export function LightingCanvas() {
   ]);
 
   const handlePreviewHeaderMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest(".lighting-canvas__preview-minimize")) return;
+    if ((e.target as HTMLElement).closest(".lighting-canvas__preview-minimize"))
+      return;
     setIsPreviewDragging(true);
     const rect = previewPanelRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -925,7 +756,9 @@ export function LightingCanvas() {
           onMouseDown={handlePreviewHeaderMouseDown}
           style={{ cursor: isPreviewDragging ? "grabbing" : "grab" }}
         >
-          <span className="lighting-canvas__preview-title"><Icon icon={Lightbulb} size={12} /> Lighting Preview</span>
+          <span className="lighting-canvas__preview-title">
+            <Icon icon={Lightbulb} size={12} /> Lighting Preview
+          </span>
           <button
             className="lighting-canvas__preview-minimize"
             onMouseDown={(e) => e.stopPropagation()}
