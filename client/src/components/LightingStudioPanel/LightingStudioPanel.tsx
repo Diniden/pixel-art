@@ -1,5 +1,9 @@
-import { NormalPicker } from "./NormalPicker";
-import { LightControl } from "./LightControl";
+// Task 27: the two children arrive through their CONTAINERS, so each is an
+// `observer()` boundary of its own. `NormalPicker` in particular has two
+// containers because it drives two INDEPENDENT store fields — see
+// `NormalPickerContainer`.
+import { SelectedNormalPickerContainer } from "../../containers/NormalPickerContainer";
+import { LightControlContainer } from "../../containers/LightControlContainer";
 import { useEditorStore } from "../../store";
 import "./LightingStudioPanel.css";
 
@@ -40,7 +44,7 @@ export function LightingStudioPanel() {
               </div>
             </div>
           ) : (
-            <NormalPicker enableScrollControl={true} />
+            <SelectedNormalPickerContainer enableScrollControl={true} />
           )}
 
           <div className="lighting-studio-panel__brush-controls">
@@ -82,7 +86,7 @@ export function LightingStudioPanel() {
       <div className="panel lighting-studio-panel__section">
         <div className="panel__header">Light Settings</div>
         <div className="panel__body panel__body--stack">
-          <LightControl />
+          <LightControlContainer />
         </div>
       </div>
     </div>

@@ -119,6 +119,12 @@ interface Rig {
   pixels: PixelStore;
   /** How many times the tree was published to the (fake) Zustand mirror. */
   publishes: number;
+  /**
+   * Labels of the project SNAPSHOTS taken (task 27). Only the two flips
+   * should ever appear here — every other action on this store records an
+   * inverse patch instead.
+   */
+  snapshots: string[];
   layer(): Layer;
   variantLayer(index: number): Layer;
 }
@@ -145,6 +151,7 @@ function makeRig(project: Project = mkProject()): Rig {
     domain,
     history,
     publishes: 0,
+    snapshots: [] as string[],
     pixels: null as unknown as PixelStore,
     layer: () => domain.objects[0].frames[0].layers[0],
     variantLayer: (index) => domain.variants[0].variants[0].frames[index].layers[0],
@@ -156,6 +163,12 @@ function makeRig(project: Project = mkProject()): Rig {
     },
     syncHistory: () => {},
     reconcile: () => {},
+    // Task 27: the two FLIPS are snapshot-family commands (an inverse patch
+    // over a full mirror is strictly worse than the snapshot). The rig
+    // records the labels so the flip tests can assert the family.
+    snapshot: (label: string) => {
+      rig.snapshots.push(label);
+    },
   };
 
   rig.pixels = new PixelStore({

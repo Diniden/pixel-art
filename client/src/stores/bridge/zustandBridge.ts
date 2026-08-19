@@ -120,8 +120,9 @@
 import { compareStructural, flowResult, reaction, runInAction } from "mobx";
 import { strokeControl, useEditorStore } from "../../store";
 import type { EditorState } from "../../store/storeTypes";
-import type { PixelData, Project } from "../../types";
-import { normalToPacked, rgbaToHex } from "../../types";
+import type { Color, Normal, PixelData, Project, StudioMode } from "../../types";
+// (task 27 removed the last packing call site here — `UIStore` owns the
+// domain→compact conversion now, at the one boundary where it belongs.)
 import type { ApplicationStore } from "../ApplicationStore";
 
 /* ── Phase A: Zustand → MobX. Fields whose slice has NOT yet flipped. ────── */
@@ -220,6 +221,37 @@ export const PHASE_B_FIELDS = [
   "layerSelectionCounter", // viewport.layerSelectionCounter → uiState.layerSelectionCounter
   "objectLibraryViewMode", // viewport.objectLibraryViewMode → uiState.objectLibraryViewMode
   "timelineThumbnailMode", // viewport.timelineThumbnailMode → uiState.timelineThumbnailMode
+  // ── Task 27: THE 9 LIGHTING SETTINGS FLIP A→B (R6) ─────────────────────
+  //
+  // `LightingUIStore` is now the only writer of all nine: the eight legacy
+  // `lightingActions` setters and `toolActions.setNormalBrushShape` are
+  // bridge-installed delegates into it, so Zustand can no longer be the
+  // source of truth. The flip happens in THIS change because this is the
+  // change that migrates their consumers — `LightingStudioPanel`,
+  // `LightControl`, `NormalPicker`, `LightingStudioTools` and
+  // `LightingCanvas` all read them off `project.uiState`, which the lighting
+  // reaction below keeps in sync.
+  //
+  // ⚠️ THIS IS THE STRUCTURAL HALF OF LIVE BUG #2. Eight of the nine never
+  // scheduled a save at all before W8 patched them by hand. Owned by a store
+  // whose fields feed `toPersistedUIState()`, they now bump
+  // `persistedUIVersion` by construction — there is no per-setter save call
+  // left to forget. `LightingUIStore.test.ts` asserts the bump for each.
+  //
+  // Mirrored as PACKED values, exactly as `projectToCompact` emits them?
+  // NO — `project.uiState` is the DOMAIN shape (`Normal`/`Color` objects),
+  // not the compact one, so the reaction below writes the domain values
+  // straight off the store. The packing happens only in
+  // `UIStore.toPersistedUIState()`, at the serialization boundary.
+  "studioMode", //                lightingUI.studioMode                → uiState.studioMode
+  "lightingDataLayerEditMode", // lightingUI.lightingDataLayerEditMode → uiState.lightingDataLayerEditMode
+  "selectedNormal", //            lightingUI.selectedNormal            → uiState.selectedNormal
+  "lightDirection", //            lightingUI.lightDirection            → uiState.lightDirection
+  "lightColor", //                lightingUI.lightColor                → uiState.lightColor
+  "ambientColor", //              lightingUI.ambientColor              → uiState.ambientColor
+  "heightScale", //               lightingUI.heightScale               → uiState.heightScale
+  "heightBrushValue", //          lightingUI.heightBrushValue          → uiState.heightBrushValue
+  "normalBrushShape", //          lightingUI.normalBrushShape          → uiState.normalBrushShape
 ] as const;
 
 /**
@@ -259,18 +291,11 @@ function syncPhaseA(app: ApplicationStore, s: EditorState): void {
     // defaults. `persistedUIState.test.ts` pins the shape; this keeps the
     // VALUES right.
     if (s.project) {
+      // `UIStore.hydrate` now forwards the nine lighting fields to
+      // `LightingUIStore` (task 27), so the packed block this used to build
+      // by hand is gone — and with it the conversion that had to be kept in
+      // step with the builder's own packing.
       app.ui.hydrate(s.project.uiState);
-      app.ui.lighting = {
-        studioMode: s.project.uiState.studioMode,
-        lightingDataLayerEditMode: s.project.uiState.lightingDataLayerEditMode,
-        selectedNormal: normalToPacked(s.project.uiState.selectedNormal),
-        lightDirection: normalToPacked(s.project.uiState.lightDirection),
-        lightColor: rgbaToHex(s.project.uiState.lightColor),
-        ambientColor: rgbaToHex(s.project.uiState.ambientColor),
-        heightScale: s.project.uiState.heightScale,
-        heightBrushValue: s.project.uiState.heightBrushValue,
-        normalBrushShape: s.project.uiState.normalBrushShape,
-      };
     }
     // Task 25: the two clipboards moved to Phase B — MobX owns them now and
     // the reaction below mirrors them OUT. Reading them back in here would
@@ -332,6 +357,88 @@ function phaseBEquals(
   );
 }
 
+
+/* ══ Task 27: the lighting Phase B helpers ════════════════════════════════ */
+
+/**
+ * The nine lighting settings in their DOMAIN shape — `Normal`/`Color`
+ * objects, exactly as `project.uiState` holds them.
+ *
+ * ⚠️ NOT the compact/packed shape. Packing (`normalToPacked`, `rgbaToHex`)
+ * happens only in `UIStore.toPersistedUIState()`, at the serialization
+ * boundary. Mirroring packed values into `project.uiState` would corrupt it:
+ * `uiState.selectedNormal` is declared `Normal`, and the legacy consumers
+ * read `.x`/`.y`/`.z` off it directly.
+ */
+interface LightingSnapshot {
+  studioMode: StudioMode;
+  lightingDataLayerEditMode: "normals" | "height" | undefined;
+  selectedNormal: Normal;
+  lightDirection: Normal;
+  lightColor: Color;
+  ambientColor: Color;
+  heightScale: number;
+  heightBrushValue: number | undefined;
+  normalBrushShape: "circle" | "square";
+}
+
+function lightingSnapshot(app: ApplicationStore): LightingSnapshot {
+  const l = app.lightingUI;
+  return {
+    studioMode: l.studioMode,
+    lightingDataLayerEditMode: l.lightingDataLayerEditMode,
+    selectedNormal: l.selectedNormal,
+    lightDirection: l.lightDirection,
+    lightColor: l.lightColor,
+    ambientColor: l.ambientColor,
+    heightScale: l.heightScale,
+    heightBrushValue: l.heightBrushValue,
+    normalBrushShape: l.normalBrushShape,
+  };
+}
+
+/** Are two normals the same? Component-wise — these are 3-number records. */
+function sameNormal(a: Normal | undefined, b: Normal | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.x === b.x && a.y === b.y && a.z === b.z;
+}
+
+/** Are two colours the same? Component-wise — these are 4-number records. */
+function sameColor(a: Color | undefined, b: Color | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a;
+}
+
+/**
+ * Structural equality over the nine, used by BOTH directions of the mirror.
+ *
+ * ⚠️ Hand-written rather than `compareStructural`, and deliberately so. The
+ * comparator shape has bitten this migration twice — W17's `compareStructural`
+ * on clipboards and W18's on the selection mask — because MobX's structural
+ * compare walks whatever it is handed. Nothing here is a grid, so a deep
+ * compare would be SAFE; it is written out anyway so that it stays safe when
+ * somebody adds a tenth field, and so the four record comparisons are
+ * visibly component-wise rather than reference-wise.
+ */
+function lightingEquals(
+  a: Partial<LightingSnapshot>,
+  b: Partial<LightingSnapshot>,
+): boolean {
+  return (
+    a.studioMode === b.studioMode &&
+    a.lightingDataLayerEditMode === b.lightingDataLayerEditMode &&
+    sameNormal(a.selectedNormal, b.selectedNormal) &&
+    sameNormal(a.lightDirection, b.lightDirection) &&
+    sameColor(a.lightColor, b.lightColor) &&
+    sameColor(a.ambientColor, b.ambientColor) &&
+    a.heightScale === b.heightScale &&
+    a.heightBrushValue === b.heightBrushValue &&
+    a.normalBrushShape === b.normalBrushShape
+  );
+}
+
 /**
  * Install the bridge. Call once, from `main.tsx`, right after constructing
  * the `ApplicationStore`. Returns a disposer.
@@ -368,6 +475,38 @@ export function installBridge(app: ApplicationStore): () => void {
   if (initialProject) {
     runInAction(() => app.domain.adoptTree(initialProject));
   }
+
+  /* ── Task 27: the PHASE B lighting ADOPTION seam (R6) ───────────────────
+   *
+   * The nine lighting settings are MobX-owned now, so unlike the ~30 Phase A
+   * fields they must NOT be re-read from Zustand on every store change — that
+   * would make Zustand a second writer and would clobber a fresh lighting
+   * edit with the stale mirror on the very next tick.
+   *
+   * But external writes to `project.uiState` still exist during the bridge
+   * era: a project LOAD installs a whole new `uiState`, and the migration
+   * chain fills in defaults. So this uses the same ECHO-CHECK seam task 17
+   * used for `projectHistory` and task 25 used for the clipboards: remember
+   * what MobX last PUBLISHED, and adopt only a Zustand value that differs
+   * from it. The mirror's own echo is thereby ignored, while a genuine
+   * external write (a load) is adopted.
+   *
+   * ⚠️ Keying on `project` IDENTITY instead does NOT work, and this is
+   * measured: every pixel edit publishes a new `project` object, so identity
+   * changes constantly and the lighting fields would be re-adopted — i.e.
+   * reverted — on every stroke.
+   */
+  let mirroredLighting = lightingSnapshot(app);
+  const adoptLighting = (s: EditorState): void => {
+    const ui = s.project?.uiState;
+    if (!ui) return;
+    if (lightingEquals(ui, mirroredLighting)) return;
+    runInAction(() => {
+      app.ui.hydrateLighting(ui);
+      mirroredLighting = lightingSnapshot(app);
+    });
+  };
+  adoptLighting(useEditorStore.getState());
 
   // The `domainVersion` bump — see item 3 in the module header.
   let lastProject = initialProject;
@@ -415,6 +554,9 @@ export function installBridge(app: ApplicationStore): () => void {
   const disposeZ = useEditorStore.subscribe((s) => {
     syncPhaseA(app, s);
     runInAction(() => adoptClipboards(s));
+    // Task 27: adopt an EXTERNAL lighting write (a project load). A write
+    // that came from MobX itself is recognised by the echo check and ignored.
+    adoptLighting(s);
     if (s.project !== lastProject) {
       lastProject = s.project;
 
@@ -507,6 +649,38 @@ export function installBridge(app: ApplicationStore): () => void {
       });
     },
     { equals: compareStructural },
+  );
+
+  // ── Task 27: the 9 LIGHTING fields that flipped A→B ─────────────────────
+  //
+  // A third reaction, for the same reason the one above is a second: these
+  // nine live INSIDE `project.uiState`, so they cannot ride the top-level
+  // scalar snapshot. Kept separate from the task-25 trio because they have a
+  // different equality function — four of the nine are RECORDS
+  // (`Normal`/`Color`) and must be compared component-wise, not by reference.
+  //
+  // ⚠️ It rebuilds `project`, but only when one of the nine actually changes
+  // — a slider drag or a colour pick, not a save-status flicker. It must NOT
+  // be folded into the tree publication path: that would deep-compare a
+  // 300k-cell tree.
+  //
+  // ⚠️ `mirroredLighting` is updated HERE as well as in `adoptLighting`,
+  // which is what closes the loop: the value this reaction writes into
+  // Zustand comes straight back through `subscribe`, and the echo check then
+  // recognises it as the mirror's own and does not re-adopt it.
+  const disposeLightingB = reaction(
+    () => lightingSnapshot(app),
+    (snap) => {
+      const { project } = useEditorStore.getState();
+      if (!project) return;
+      mirroredLighting = snap;
+      const ui = project.uiState;
+      if (lightingEquals(ui, snap)) return;
+      useEditorStore.setState({
+        project: { ...project, uiState: { ...ui, ...snap } },
+      });
+    },
+    { equals: lightingEquals },
   );
 
   // The lifecycle DELEGATES — see item 2 in the module header. The previous
@@ -801,6 +975,101 @@ export function installBridge(app: ApplicationStore): () => void {
     },
   });
 
+  // ── Task 27: the 9 lighting SETTINGS + the 6 lighting PIXEL actions ─────
+  //
+  // Same delegate technique tasks 23, 25 and 26 used, and the reason this
+  // task migrates the lighting slice without editing `LightingCanvas.tsx`
+  // (937 lines, owned by task 33). Every consumer keeps calling
+  // `useEditorStore().setLightColor(...)` and lands in `LightingUIStore`.
+  //
+  // ⚠️ THIS IS WHERE LIVE BUG #2 BECOMES STRUCTURAL. None of the nine
+  // delegates below schedules a save, and none needs to: the fields are
+  // observables that `toPersistedUIState()` reads, so `persistedUIVersion`
+  // bumps and `AutoSaveController` fires. Compare the legacy setters, which
+  // each had to remember to call `updateProjectAndSave` — and eight of which
+  // did not.
+  //
+  // ⚠️ AND NONE OF THEM RECORDS HISTORY. `trackHistory = false` was
+  // deliberate in the legacy actions (all 33 `uiState` call sites in
+  // `toolActions` use `false`) and `autoSave.test.ts` retains that pin.
+  // `LightingUIStore` holds no `HistoryStore` reference at all.
+  const previousLightingActions = {
+    setStudioMode: useEditorStore.getState().setStudioMode,
+    setLightingDataLayerEditMode:
+      useEditorStore.getState().setLightingDataLayerEditMode,
+    setSelectedNormal: useEditorStore.getState().setSelectedNormal,
+    setLightDirection: useEditorStore.getState().setLightDirection,
+    setLightColor: useEditorStore.getState().setLightColor,
+    setAmbientColor: useEditorStore.getState().setAmbientColor,
+    setHeightScale: useEditorStore.getState().setHeightScale,
+    setHeightBrushValue: useEditorStore.getState().setHeightBrushValue,
+    setNormalBrushShape: useEditorStore.getState().setNormalBrushShape,
+    // The Phase A half of `setStudioMode`'s coupled write — captured, like
+    // every other previous action, so `dispose()` restores a clean store.
+    // Named apart from `setTool` so restoring `previousLightingActions` can
+    // never clobber the live `setTool` delegate.
+    setToolForStudioMode: useEditorStore.getState().setTool,
+    setNormalPixel: useEditorStore.getState().setNormalPixel,
+    setNormalPixels: useEditorStore.getState().setNormalPixels,
+    setHeightPixels: useEditorStore.getState().setHeightPixels,
+    computeNormalsForAllFrames:
+      useEditorStore.getState().computeNormalsForAllFrames,
+    flipHorizontal: useEditorStore.getState().flipHorizontal,
+    flipVertical: useEditorStore.getState().flipVertical,
+  };
+  useEditorStore.setState({
+    /* the 9 settings → LightingUIStore */
+    //
+    // ⚠️ `setStudioMode` IS A COUPLED WRITE, AND THE TWO HALVES ARE IN
+    // DIFFERENT PHASES. It sets `studioMode` (Phase B, this task) AND resets
+    // `selectedTool` (still Phase **A** — task 24 deliberately left the 30
+    // `toolActions` setters in place because their consumers live in files
+    // tasks 29-37 own). `LightingUIStore` writes `ToolUIStore.selectedTool`,
+    // which is only a MIRROR while the field is Phase A, so that write alone
+    // never reaches `project.uiState` and the toolbar would keep the pixel
+    // pencil selected in lighting mode.
+    //
+    // The Phase A half therefore goes through the legacy `setTool` action,
+    // which is still the field's single writer. Measured: task 08's
+    // "setStudioMode ALSO rewrites selectedTool — a coupled write" fails
+    // without it, and that pin is exactly why the coupling is not silently
+    // lost here.
+    //
+    // When `selectedTool` flips A→B this whole branch collapses back to the
+    // one-liner the other eight are.
+    setStudioMode: (mode) => {
+      app.lightingUI.setStudioMode(mode);
+      previousLightingActions.setToolForStudioMode(
+        mode === "lighting" ? "normal-pencil" : "pixel",
+      );
+    },
+    setLightingDataLayerEditMode: (mode) =>
+      app.lightingUI.setLightingDataLayerEditMode(mode),
+    setSelectedNormal: (normal) => app.lightingUI.setSelectedNormal(normal),
+    setLightDirection: (normal) => app.lightingUI.setLightDirection(normal),
+    setLightColor: (color) => app.lightingUI.setLightColor(color),
+    setAmbientColor: (color) => app.lightingUI.setAmbientColor(color),
+    setHeightScale: (scale) => app.lightingUI.setHeightScale(scale),
+    setHeightBrushValue: (value) => app.lightingUI.setHeightBrushValue(value),
+    setNormalBrushShape: (shape) => app.lightingUI.setNormalBrushShape(shape),
+
+    /* the 6 pixel actions → PixelStore (R2: normals and heights are content) */
+    setNormalPixel: (x, y, normal) =>
+      app.pixels.setNormalPixel(x, y, normal, pixelWriteOptions()),
+    setNormalPixels: (pixels) =>
+      app.pixels.setNormalPixels(pixels, pixelWriteOptions()),
+    setHeightPixels: (pixels) =>
+      app.pixels.setHeightPixels(pixels, pixelWriteOptions()),
+    // A FLOW now: it yields between frames so the UI can paint. The legacy
+    // signature is synchronous and every caller ignores the return value, so
+    // firing and forgetting preserves the call shape exactly.
+    computeNormalsForAllFrames: (params) => {
+      void flowResult(app.pixels.computeNormalsForAllFrames(params));
+    },
+    flipHorizontal: () => app.pixels.flipHorizontal(pixelWriteOptions()),
+    flipVertical: () => app.pixels.flipVertical(pixelWriteOptions()),
+  });
+
   useEditorStore.setState({
     initProject: () => flowResult(app.domain.initProject()),
     createNewProject: (name) => flowResult(app.domain.createProject(name)),
@@ -817,9 +1086,17 @@ export function installBridge(app: ApplicationStore): () => void {
     disposeZ();
     disposeB();
     disposeUIB();
+    disposeLightingB();
     useEditorStore.setState(previousActions);
     useEditorStore.setState(previousDomainActions);
     useEditorStore.setState(previousTimelineActions);
     useEditorStore.setState(previousPixelActions);
+    {
+      // `setToolForStudioMode` is a capture, not a store field — strip it
+      // before restoring so `dispose()` cannot invent a key on EditorState.
+      const { setToolForStudioMode: _unused, ...restore } =
+        previousLightingActions;
+      useEditorStore.setState(restore);
+    }
   };
 }

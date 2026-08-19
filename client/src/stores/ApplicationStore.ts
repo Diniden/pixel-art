@@ -39,6 +39,8 @@ import { DomainStore, type ProjectHost } from "./domain/DomainStore";
 import { DomainMutator, type DomainMirror } from "./domain/DomainMutator";
 import { UIStore } from "./ui/UIStore";
 import { ViewportUIStore } from "./ui/ViewportUIStore";
+import { ToolUIStore } from "./ui/ToolUIStore";
+import { LightingUIStore } from "./ui/LightingUIStore";
 import { TimelineUIStore, type TimelineContext } from "./ui/TimelineUIStore";
 import { ObjectStore, type SelectionSink } from "./domain/ObjectStore";
 import { PaletteStore } from "./domain/PaletteStore";
@@ -202,6 +204,19 @@ export class ApplicationStore {
    */
   readonly selectionUI: SelectionUIStore;
 
+  /* ── task 27 ───────────────────────────────────────────────────────────── */
+  /**
+   * The lighting studio's 9 persisted settings.
+   *
+   * ⚠️ It is the STRUCTURAL fix for live bug #2: eight of the nine never
+   * scheduled a save at all, because `store/lightingActions.ts` did not
+   * import `services/autoSave`. Here they are observables the
+   * `persistedUIVersion` reaction reads through `toPersistedUIState()`, so a
+   * save is scheduled by construction and cannot be forgotten. See
+   * `LightingUIStore`'s header.
+   */
+  readonly lightingUI: LightingUIStore;
+
   readonly options: Readonly<{
     api: unknown;
     autoSaveEnabled: boolean;
@@ -254,6 +269,15 @@ export class ApplicationStore {
     // the injection seam `VariantStore` will reuse in task 28 to retire
     // `variantActions.ts`'s `selectLayer` import.
     const viewport = new ViewportUIStore();
+    // ── task 27 ────────────────────────────────────────────────────────────
+    // `ToolUIStore` is hoisted out of `UIStore` for the same reason
+    // `ViewportUIStore` was in task 25: `LightingUIStore.setStudioMode` also
+    // writes `selectedTool`, and `UIStore`'s `persistedUIVersion` reaction
+    // reads the lighting store EAGERLY during construction. Building tool →
+    // lighting → UI removes the cycle outright.
+    const tool = new ToolUIStore();
+    const lightingUI = new LightingUIStore({ tool });
+    this.lightingUI = lightingUI;
     const zustandTimeline = createZustandTimelineContext();
     const timelineUI = new TimelineUIStore({
       viewport,
@@ -275,6 +299,8 @@ export class ApplicationStore {
       session: this.session,
       selection: timelineUI,
       viewport,
+      tool,
+      lighting: lightingUI,
     });
     const uiRef = this.ui;
     // ⚠️ INJECTED, not imported: `DomainStore` may not depend on
