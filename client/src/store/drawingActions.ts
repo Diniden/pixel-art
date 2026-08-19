@@ -1,368 +1,62 @@
-import type { Color, Point } from "../types";
-import type { StoreGet, StoreSet, UpdateProjectAndSave } from "./storeTypes";
+import type { Point } from "../types";
+import type { StoreSet } from "./storeTypes";
 
 /**
- * The stroke-batching seam (REFRESH task 17). Replaces the `_strokeActive`
- * module closure: `begin`/`end` map onto `HistoryStore.beginTransaction("Draw")`
- * / `endTransaction()`, and `isActive()` preserves the pinned `!_strokeActive`
- * classification at the four pixel-write sites — a write during a drag records
- * nothing of its own; one drag is one undo entry.
+ * Drawing actions — THE PIXEL WRITES ARE MIGRATED (REFRESH task 26).
+ *
+ * `setPixel` and `setPixels` moved to `stores/domain/PixelStore`, the sole
+ * writer of pixel grids. `beginStroke`/`endStroke` moved to
+ * `HistoryStore.beginTransaction`/`endTransaction`. All four are installed as
+ * bridge delegates, so `Canvas.tsx` (owned by tasks 30-32) keeps its
+ * `useEditorStore()` seam and reaches the MobX implementation unchanged —
+ * there is exactly ONE implementation of each action.
+ *
+ * ── What stays, and why ───────────────────────────────────────────────────
+ *
+ * The five GESTURE actions below (`startDrawing`, `updateDrawing`,
+ * `endDrawing`, `setPreviewPixels`, `clearPreviewPixels`) are NOT migrated
+ * here. They write `isDrawing`, `drawStartPoint` and `previewPixels`, which
+ * the spec assigns to a `CanvasInteractionStore` in the Canvas task, not to
+ * `PixelStore`. They touch no pixel grid and record no history.
+ *
+ * ⚠️ Note for that task: `previewPixels` is rewritten on EVERY mousemove. When
+ * it moves it must be `observableRef` with whole-array replacement — a deep
+ * observable array there is a per-frame allocation storm on the hot path.
+ *
+ * ── The stroke closure is gone ────────────────────────────────────────────
+ *
+ * `let _strokeActive = false` (the old `drawingActions.ts:10`) was promoted to
+ * `HistoryStore`'s transaction primitive by task 17 and is now consumed
+ * directly by `PixelStore`: a `setPixel` during a drag records an inverse
+ * patch INTO the open transaction, and `endStroke` collapses the lot into one
+ * `CompositeCommand`. One drag is exactly one undo entry — pinned by task 08.
+ *
+ * The edit-mask gate (`isEditMaskActiveFor`, the old `:11-24`) moved with the
+ * writes, but INVERTED: it is no longer a cross-store read of
+ * `selection`/`selectionBehavior` from inside a domain write. Those values are
+ * now passed DOWN as arguments (`PixelWriteOptions`), which is what keeps
+ * `stores/domain/**` free of any `stores/ui/**` import.
+ *
+ * This module is deleted outright with the Zustand store (task 38).
  */
-export interface StrokeControl {
-  begin(): void;
-  end(): void;
-  isActive(): boolean;
+function migrated(name: string): never {
+  throw new Error(
+    `${name} moved to PixelStore/HistoryStore (REFRESH task 26) and is ` +
+      "reached through the Zustand bridge. This store has no bridge " +
+      "installed — construct an ApplicationStore and call installBridge(), " +
+      "or use the test harness, which does it for you.",
+  );
 }
 
-export function createDrawingActions(
-  get: StoreGet,
-  set: StoreSet,
-  updateProjectAndSave: UpdateProjectAndSave,
-  stroke: StrokeControl,
-) {
-  const isEditMaskActiveFor = (
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-  ) => {
-    const { project, selection } = get();
-    const behavior = project?.uiState.selectionBehavior ?? "movePixels";
-    if (behavior !== "editMask") return true;
-    if (!selection) return true; // no selection -> allow edits
-    if (selection.width !== width || selection.height !== height) return true;
-    const idx = y * width + x;
-    return selection.mask.has(idx);
-  };
-
+export function createDrawingActions(set: StoreSet) {
   return {
-    beginStroke: () => {
-      stroke.begin();
-    },
+    /* ── migrated: PixelStore + HistoryStore transactions ─────────────────── */
+    beginStroke: () => migrated("beginStroke"),
+    endStroke: () => migrated("endStroke"),
+    setPixel: () => migrated("setPixel"),
+    setPixels: () => migrated("setPixels"),
 
-    endStroke: () => {
-      stroke.end();
-    },
-
-    setPixel: (x: number, y: number, color: Color | 0) => {
-      const obj = get().getCurrentObject();
-      const frame = get().getCurrentFrame();
-      const layer = get().getCurrentLayer();
-      const { project } = get();
-      if (!obj || !frame || !layer || !project) return;
-
-      // Check if we're editing a variant
-      if (layer.isVariant && layer.variantGroupId && layer.selectedVariantId) {
-        const variantData = get().getCurrentVariant();
-        if (!variantData) return;
-
-        const { variant, variantFrame } = variantData;
-        const { width, height } = variant.gridSize;
-
-        if (x < 0 || x >= width || y < 0 || y >= height) return;
-        if (!isEditMaskActiveFor(x, y, width, height)) return;
-
-        // Skip if pixel color is already the same
-        const targetLayer = variantFrame.layers[0];
-        if (!targetLayer) return;
-        const currentPixelData = targetLayer.pixels[y]?.[x];
-        const currentColor = currentPixelData?.color;
-        if (color === 0 && currentColor === 0) return;
-        if (color && currentColor && typeof currentColor === "object") {
-          if (
-            color.r === currentColor.r &&
-            color.g === currentColor.g &&
-            color.b === currentColor.b &&
-            color.a === currentColor.a
-          )
-            return;
-        }
-
-        const variantGroupId = layer.variantGroupId;
-        const variantId = layer.selectedVariantId;
-        const frameIndex =
-          project.uiState.variantFrameIndices?.[variantGroupId] ?? 0;
-
-        updateProjectAndSave(
-          (proj) => ({
-            ...proj,
-            // Update variants at project level
-            variants: proj.variants?.map((vg) => {
-              if (vg.id !== variantGroupId) return vg;
-              return {
-                ...vg,
-                variants: vg.variants.map((v) => {
-                  if (v.id !== variantId) return v;
-                  return {
-                    ...v,
-                    frames: v.frames.map((f, idx) => {
-                      if (idx !== frameIndex % v.frames.length) return f;
-                      return {
-                        ...f,
-                        layers: f.layers.map((l, li) => {
-                          if (li !== 0) return l;
-                          const newPixels = [...l.pixels];
-                          newPixels[y] = [...l.pixels[y]];
-                          const existing = newPixels[y][x];
-                          // When erasing, clear all data; when drawing, preserve normal/height or set defaults
-                          if (color === 0) {
-                            newPixels[y][x] = {
-                              color: 0,
-                              normal: 0,
-                              height: 0,
-                            };
-                          } else {
-                            newPixels[y][x] = {
-                              color,
-                              normal: existing?.normal ?? 0,
-                              height: existing?.height ?? 1,
-                            };
-                          }
-                          return { ...l, pixels: newPixels };
-                        }),
-                      };
-                    }),
-                  };
-                }),
-              };
-            }),
-          }),
-          !stroke.isActive(),
-        );
-        return;
-      }
-
-      // Regular layer editing
-      if (x < 0 || x >= obj.gridSize.width || y < 0 || y >= obj.gridSize.height)
-        return;
-      if (!isEditMaskActiveFor(x, y, obj.gridSize.width, obj.gridSize.height))
-        return;
-
-      // Skip if pixel color is already the same
-      const currentPixelData = layer.pixels[y]?.[x];
-      const currentColor = currentPixelData?.color;
-      if (color === 0 && currentColor === 0) return;
-      if (color && currentColor && typeof currentColor === "object") {
-        if (
-          color.r === currentColor.r &&
-          color.g === currentColor.g &&
-          color.b === currentColor.b &&
-          color.a === currentColor.a
-        )
-          return;
-      }
-
-      updateProjectAndSave(
-        (project) => ({
-          ...project,
-          objects: project.objects.map((o) =>
-            o.id === obj.id
-              ? {
-                  ...o,
-                  frames: o.frames.map((f) =>
-                    f.id === frame.id
-                      ? {
-                          ...f,
-                          layers: f.layers.map((l) => {
-                            if (l.id !== layer.id) return l;
-                            // Only copy the affected row, not the entire grid
-                            const newPixels = [...l.pixels];
-                            newPixels[y] = [...l.pixels[y]];
-                            const existing = newPixels[y][x];
-                            // When erasing, clear all data; when drawing, preserve normal/height or set defaults
-                            if (color === 0) {
-                              newPixels[y][x] = {
-                                color: 0,
-                                normal: 0,
-                                height: 0,
-                              };
-                            } else {
-                              newPixels[y][x] = {
-                                color,
-                                normal: existing?.normal ?? 0,
-                                height: existing?.height ?? 1,
-                              };
-                            }
-                            return { ...l, pixels: newPixels };
-                          }),
-                        }
-                      : f,
-                  ),
-                }
-              : o,
-          ),
-        }),
-        !stroke.isActive(),
-      );
-    },
-
-    setPixels: (pixels: { x: number; y: number; color: Color | 0 }[]) => {
-      const obj = get().getCurrentObject();
-      const frame = get().getCurrentFrame();
-      const layer = get().getCurrentLayer();
-      const { project } = get();
-      if (!obj || !frame || !layer || !project || pixels.length === 0) return;
-
-      // Check if we're editing a variant
-      if (layer.isVariant && layer.variantGroupId && layer.selectedVariantId) {
-        const variantData = get().getCurrentVariant();
-        if (!variantData) return;
-
-        const { variant } = variantData;
-        const { width, height } = variant.gridSize;
-
-        // Edit-mask filtering
-        pixels = pixels.filter(
-          (p) =>
-            p.x >= 0 &&
-            p.x < width &&
-            p.y >= 0 &&
-            p.y < height &&
-            isEditMaskActiveFor(p.x, p.y, width, height),
-        );
-        if (pixels.length === 0) return;
-
-        const variantGroupId = layer.variantGroupId;
-        const variantId = layer.selectedVariantId;
-        const frameIndex =
-          project.uiState.variantFrameIndices?.[variantGroupId] ?? 0;
-
-        updateProjectAndSave(
-          (proj) => ({
-            ...proj,
-            // Update variants at project level
-            variants: proj.variants?.map((vg) => {
-              if (vg.id !== variantGroupId) return vg;
-              return {
-                ...vg,
-                variants: vg.variants.map((v) => {
-                  if (v.id !== variantId) return v;
-                  return {
-                    ...v,
-                    frames: v.frames.map((f, idx) => {
-                      if (idx !== frameIndex % v.frames.length) return f;
-                      return {
-                        ...f,
-                        layers: f.layers.map((l, li) => {
-                          if (li !== 0) return l;
-                          const affectedRows = new Set(
-                            pixels
-                              .map((p) => p.y)
-                              .filter((y) => y >= 0 && y < height),
-                          );
-                          const newPixels = [...l.pixels];
-                          for (const rowY of affectedRows) {
-                            newPixels[rowY] = [...l.pixels[rowY]];
-                          }
-                          for (const { x, y, color } of pixels) {
-                            if (x >= 0 && x < width && y >= 0 && y < height) {
-                              const existing = newPixels[y][x];
-                              if (color === 0) {
-                                newPixels[y][x] = {
-                                  color: 0,
-                                  normal: 0,
-                                  height: 0,
-                                };
-                              } else {
-                                newPixels[y][x] = {
-                                  color,
-                                  normal: existing?.normal ?? 0,
-                                  height: existing?.height ?? 1,
-                                };
-                              }
-                            }
-                          }
-                          return { ...l, pixels: newPixels };
-                        }),
-                      };
-                    }),
-                  };
-                }),
-              };
-            }),
-          }),
-          !stroke.isActive(),
-        );
-        return;
-      }
-
-      // Regular layer editing
-      // Edit-mask filtering
-      pixels = pixels.filter(
-        (p) =>
-          p.x >= 0 &&
-          p.x < obj.gridSize.width &&
-          p.y >= 0 &&
-          p.y < obj.gridSize.height &&
-          isEditMaskActiveFor(
-            p.x,
-            p.y,
-            obj.gridSize.width,
-            obj.gridSize.height,
-          ),
-      );
-      if (pixels.length === 0) return;
-
-      updateProjectAndSave(
-        (project) => ({
-          ...project,
-          objects: project.objects.map((o) =>
-            o.id === obj.id
-              ? {
-                  ...o,
-                  frames: o.frames.map((f) =>
-                    f.id === frame.id
-                      ? {
-                          ...f,
-                          layers: f.layers.map((l) => {
-                            if (l.id !== layer.id) return l;
-                            // Only copy affected rows
-                            const affectedRows = new Set(
-                              pixels
-                                .map((p) => p.y)
-                                .filter(
-                                  (y) => y >= 0 && y < obj.gridSize.height,
-                                ),
-                            );
-                            const newPixels = [...l.pixels];
-                            for (const rowY of affectedRows) {
-                              newPixels[rowY] = [...l.pixels[rowY]];
-                            }
-                            for (const { x, y, color } of pixels) {
-                              if (
-                                x >= 0 &&
-                                x < obj.gridSize.width &&
-                                y >= 0 &&
-                                y < obj.gridSize.height
-                              ) {
-                                const existing = newPixels[y][x];
-                                if (color === 0) {
-                                  newPixels[y][x] = {
-                                    color: 0,
-                                    normal: 0,
-                                    height: 0,
-                                  };
-                                } else {
-                                  newPixels[y][x] = {
-                                    color,
-                                    normal: existing?.normal ?? 0,
-                                    height: existing?.height ?? 1,
-                                  };
-                                }
-                              }
-                            }
-                            return { ...l, pixels: newPixels };
-                          }),
-                        }
-                      : f,
-                  ),
-                }
-              : o,
-          ),
-        }),
-        !stroke.isActive(),
-      );
-    },
+    /* ── NOT migrated: gesture state (Canvas task) ────────────────────────── */
 
     startDrawing: (point: Point) => {
       // Clear color adjustment when starting to draw

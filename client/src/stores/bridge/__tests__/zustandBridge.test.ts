@@ -88,6 +88,15 @@ describe("the R6 ledger", () => {
       // The three timeline/layer `uiState` fields with a single writer: every
       // writer now routes into `TimelineUIStore` (`selectLayer` directly, the
       // two view-mode setters as bridge delegates).
+      //
+      // ── Task 26 ────────────────────────────────────────────────────────
+      // The pixel SELECTION. `SelectionUIStore` is the only writer of the
+      // mask (the 9 legacy `selectionActions` are throwing stubs behind
+      // bridge delegates), so Zustand cannot be its source of truth. It is a
+      // TOP-LEVEL `EditorState` field and is NOT persisted, so the flip has
+      // no wire-format consequence — `selectionMode`/`selectionBehavior`,
+      // which ARE persisted, stay on `ToolUIStore` from task 24.
+      "selection",
       "layerSelectionCounter",
       "objectLibraryViewMode",
       "timelineThumbnailMode",

@@ -13,12 +13,18 @@
  * it (restore-from-backup is undoable); `snapshotToHistory` is the deep-clone
  * history push moved verbatim from `projectActions.ts:186-198`.
  */
-import { useEditorStore } from "../../store";
+import {
+  reconcileHistory,
+  syncHistoryMirror,
+  useEditorStore,
+} from "../../store";
 import { compactToProject, projectToCompact } from "../../types";
 import type { Project } from "../../types";
 import type { ProjectHost } from "../domain/DomainStore";
 import type { DomainMirror } from "../domain/DomainMutator";
 import type { SelectionSink } from "../domain/ObjectStore";
+import type { PixelMirror } from "../domain/PixelStore";
+import type { SelectionState } from "../../store/storeTypes";
 
 export function createZustandProjectHost(): ProjectHost {
   return {
@@ -144,5 +150,57 @@ export function createZustandTimelineContext(): {
     clearColorAdjustment: () => {
       useEditorStore.setState({ colorAdjustment: null });
     },
+  };
+}
+
+/**
+ * The Phase B publisher for a PIXEL mutation (task 26).
+ *
+ * Structurally the same one-line `setState` as {@link createZustandDomainMirror}'s
+ * `publish`, and deliberately a SEPARATE factory: `PixelStore` needs no
+ * `snapshot` member at all. It records inverse-patch commands directly onto
+ * `HistoryStore` rather than routing through
+ * `saveCurrentStateToHistory` — the whole point of the family conversion is
+ * that a pixel edit never captures a project.
+ *
+ * ⚠️ BY REFERENCE, never cloned. The project carries 300k-cell grids.
+ */
+export function createZustandPixelMirror(): PixelMirror {
+  return {
+    publish: (project: Project) => {
+      useEditorStore.setState({ project });
+    },
+    // Routed through the `store/index.ts` glue, NOT through HistoryStore
+    // directly — that glue is the single writer of the
+    // `projectHistory`/`historyIndex` Phase B mirror (R6, task 17). See
+    // `PixelMirror.syncHistory`.
+    syncHistory: () => {
+      syncHistoryMirror();
+    },
+    reconcile: () => {
+      reconcileHistory();
+    },
+  };
+}
+
+/**
+ * How `SelectionUIStore` publishes the selection during the bridge era
+ * (task 26).
+ *
+ * `EditorState.selection` is a TOP-LEVEL Zustand field (`storeTypes.ts:123`),
+ * not part of `project.uiState`, and it is not persisted — so unlike the four
+ * selection IDs it has no wire-format consequences and no second writer once
+ * the legacy `selectionActions` become stubs.
+ *
+ * ⚠️ Assigns the `SelectionState` BY REFERENCE. Its `mask` is a raw
+ * `Set<number>` that reaches 300,249 entries on a select-all over the owner's
+ * real project; cloning it here would put a full mask copy on every selection
+ * change.
+ */
+export function createZustandSelectionPublisher(): (
+  selection: SelectionState | null,
+) => void {
+  return (selection) => {
+    useEditorStore.setState({ selection });
   };
 }
