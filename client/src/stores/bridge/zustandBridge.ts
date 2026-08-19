@@ -91,6 +91,26 @@
  *     the MobX tree rather than being given a second writer — the same
  *     pull-based technique as item 5.
  *
+ * ── Task 24 — UIStore lands; the bridge lists DO NOT MOVE (yet) ────────────
+ *
+ *  9. `UIStore`/`ToolUIStore`/`ViewportUIStore` exist and own the 30 UI
+ *     fields as observables, and `DomainStore.serialize()` now builds its
+ *     `uiState` from `UIStore.toPersistedUIState()` (R3, wire-identical and
+ *     pinned against all 151 real corpus snapshots).
+ *
+ *     But the 30 fields stay in **Phase A**, deliberately. Flipping a field
+ *     to Phase B means MobX becomes its single writer — and the ~15 legacy
+ *     consumers that still call `useEditorStore().setZoom(...)` live in files
+ *     this task's `Touches` list does not cover (`Canvas.tsx` → tasks 30-32,
+ *     the lighting consumers → task 27, the reference-image consumers →
+ *     task 29, `App.tsx` → task 37). Flipping without migrating them would
+ *     give each field TWO writers, which is precisely what R6 forbids.
+ *
+ *     So `UIStore` MIRRORS Zustand for now (hydrated in `syncPhaseA` below),
+ *     which is Phase A's definition. The A→B move happens in the same change
+ *     that migrates those consumers — the ownership rule is unchanged, only
+ *     its timing is later than the task spec assumed. See the task 24 report.
+ *
  *  8. Four `uiState` selection ids joined Phase A (`selectedObjectId`,
  *     `selectedFrameId`, `selectedLayerId`, `variantFrameIndices`). They are
  *     UI fields owned by Zustand until task 24, but the 6 cross-store
@@ -101,6 +121,7 @@ import { compareStructural, flowResult, reaction, runInAction } from "mobx";
 import { useEditorStore } from "../../store";
 import type { EditorState } from "../../store/storeTypes";
 import type { Project } from "../../types";
+import { normalToPacked, rgbaToHex } from "../../types";
 import type { ApplicationStore } from "../ApplicationStore";
 
 /* ── Phase A: Zustand → MobX. Fields whose slice has NOT yet flipped. ────── */
@@ -171,6 +192,32 @@ export function assertDisjointPhases(
 function syncPhaseA(app: ApplicationStore, s: EditorState): void {
   runInAction(() => {
     app.session.aiServiceUrl = s.project?.uiState.aiServiceUrl ?? null;
+    // ── Task 24: keep `UIStore` hydrated from the authoritative `uiState` ──
+    //
+    // The 30 migrated fields are still written through the legacy Zustand
+    // setters by consumers tasks 25-29 own, so Zustand remains the source of
+    // truth for them and `UIStore` mirrors it (Phase A). This is what makes
+    // `DomainStore.serialize()` — which now builds its `uiState` from
+    // `UIStore` — emit the user's real settings rather than store defaults.
+    //
+    // ⚠️ Without this the save payload would be wire-shaped but WRONG: every
+    // save would overwrite the project's UI state with the constructor
+    // defaults. `persistedUIState.test.ts` pins the shape; this keeps the
+    // VALUES right.
+    if (s.project) {
+      app.ui.hydrate(s.project.uiState);
+      app.ui.lighting = {
+        studioMode: s.project.uiState.studioMode,
+        lightingDataLayerEditMode: s.project.uiState.lightingDataLayerEditMode,
+        selectedNormal: normalToPacked(s.project.uiState.selectedNormal),
+        lightDirection: normalToPacked(s.project.uiState.lightDirection),
+        lightColor: rgbaToHex(s.project.uiState.lightColor),
+        ambientColor: rgbaToHex(s.project.uiState.ambientColor),
+        heightScale: s.project.uiState.heightScale,
+        heightBrushValue: s.project.uiState.heightBrushValue,
+        normalBrushShape: s.project.uiState.normalBrushShape,
+      };
+    }
     app.session.layerClipboard = s.layerClipboard;
     app.session.timelineCellClipboard = s.timelineCellClipboard;
     app.session.colorHistory = s.colorHistory;

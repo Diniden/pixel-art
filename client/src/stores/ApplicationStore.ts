@@ -38,6 +38,7 @@ import {
 import { DomainStore, type ProjectHost } from "./domain/DomainStore";
 import { DomainMutator, type DomainMirror } from "./domain/DomainMutator";
 import { SelectionMirror } from "./SelectionMirror";
+import { UIStore } from "./ui/UIStore";
 import { ObjectStore, type SelectionSink } from "./domain/ObjectStore";
 import { PaletteStore } from "./domain/PaletteStore";
 import {
@@ -128,8 +129,13 @@ export class ApplicationStore {
   /** The bridge-era home of the 4 `uiState` selection ids the computeds read. */
   readonly selection: SelectionMirror;
 
-  // Future children — typed and constructed by their own tasks:
-  // readonly ui: UIStore;            (task 24)
+  /* ── task 24 ───────────────────────────────────────────────────────────── */
+  /**
+   * The UI slice: `ToolUIStore` + `ViewportUIStore`, and the owner of
+   * `toPersistedUIState()` — the explicit field-by-field builder that keeps
+   * the save payload wire-identical (R3).
+   */
+  readonly ui: UIStore;
 
   readonly options: Readonly<{
     api: unknown;
@@ -159,6 +165,15 @@ export class ApplicationStore {
       history: this.history,
       mirror: options.domainMirror ?? createZustandDomainMirror(),
     });
+    this.ui = new UIStore({
+      session: this.session,
+      selection: this.selection,
+    });
+    // ⚠️ INJECTED, not imported: `DomainStore` may not depend on
+    // `stores/ui/**` (ESLint, task 05). This is the seam that lets
+    // `serialize()` emit the 43 UI fields without a domain→UI dependency.
+    this.domain.setUIStateProvider(() => this.ui.toPersistedUIState());
+
     this.palettes = new PaletteStore({ domain: this.domain, mutator });
     this.objects = new ObjectStore({
       domain: this.domain,
@@ -301,5 +316,6 @@ export class ApplicationStore {
   /** Storybook/Vitest teardown: stop the save reaction and its timers. */
   dispose(): void {
     this.autoSave?.dispose();
+    this.ui.dispose();
   }
 }
