@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useEditorStore } from "../../store";
 import { Tool } from "../../types";
-import {
-  ReferenceImageModal,
-  ReferenceImageData,
-} from "../ReferenceImageModal/ReferenceImageModal";
+// Task 29: the modal is rendered through its container, which feeds it the
+// image/selection off `ReferenceUIStore` — the state that used to be a
+// module-level singleton inside the modal itself.
+import { ReferenceImageContainer } from "../../containers/ReferenceImageContainer";
+import type { ReferenceImageData } from "../../types/referenceImage";
 import { Icon } from "../../ui/primitives/Icon/Icon";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -129,7 +130,7 @@ export function PixelStudioTools({
         </div>
       </div>
 
-      <ReferenceImageModal
+      <ReferenceImageContainer
         isOpen={isRefModalOpen}
         onClose={() => setIsRefModalOpen(false)}
         onConfirm={handleReferenceConfirm}

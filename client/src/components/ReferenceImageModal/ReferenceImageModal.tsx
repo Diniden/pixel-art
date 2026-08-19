@@ -1,357 +1,152 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import './ReferenceImageModal.css';
-import { useEditorStore } from '../../store';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { ImagePlus, RotateCcw, Camera, X, Trash2, Search } from 'lucide-react';
+import type { ReferenceImageData } from '../../types/referenceImage';
+import {
+  extractPixelsFromSelection,
+  type ReferenceSelectionBox,
+} from '../../utils/referenceImage';
 
-export interface ReferenceImageData {
-  pixels: Array<Array<{ r: number; g: number; b: number; a: number } | 0>>;
-  width: number;
-  height: number;
-}
+/**
+ * ══════════════════════════════════════════════════════════════════════════
+ *  TASK 29: THE MODULE-LEVEL SINGLETON THAT USED TO LIVE HERE IS GONE
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * This file declared `const persistentState = {...}` above the component — six
+ * fields of mutable state in a React module, with the comment "Store persistent
+ * state outside the component so it survives unmounts". It was the LAST
+ * module-level state in the codebase and a fourth, undeclared store:
+ * `ReferenceImagePanel` mutated it from 16 call sites and `App.tsx` used it as
+ * a data-transfer object, all with none of the reactivity a store provides.
+ *
+ * It is now `ReferenceUIStore`. This file also exported TEN non-component
+ * symbols; all ten moved:
+ *
+ *   extractPixelsFromSelection ─┐
+ *   (shift/adjust geometry)     ├─→ `utils/referenceImage.ts`   (pure)
+ *   encodeImageToBase64 ────────┐
+ *   decodeBase64ToImage         └─→ `utils/imageEncoding.ts`    (pure)
+ *   shiftReferenceSelection ────┐
+ *   shiftReferenceSelectionBySize ├→ `ReferenceUIStore` actions (stateful)
+ *   adjustReferenceBoxSize ─────┘
+ *   saveReferenceImageToProject ┐
+ *   restoreReferenceImageFromProject └→ `DomainStore` actions   (the last two
+ *                                       `useEditorStore.getState()` calls)
+ *   getCurrentReferenceImageData → `ReferenceUIStore.currentReferenceImageData`
+ *   ReferenceImageData (the type) → `types/referenceImage.ts`
+ *
+ * ⚠️ THE COMPONENT IS NOW PURE PRESENTATION — props in, callbacks out. It
+ * imports NO store and NO MobX, so it can live under `ui/` when task 35
+ * relocates it. Its `ReferenceImageModalContainer` supplies the store wiring.
+ *
+ * ⚠️ The cropper UI is deliberately NOT decomposed here (task 29 constraint:
+ * "Do not restructure the modal's cropper UI into a separate component — that
+ * is a later purification task"). This task moves state and deletes the
+ * singleton, nothing more.
+ */
 
 interface ReferenceImageModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (data: ReferenceImageData) => void;
-}
-
-interface SelectionBox {
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
+  /**
+   * The persisted image, owned by `ReferenceUIStore`.
+   *
+   * ⚠️ THIS PROP IS THE REPLACEMENT FOR THE SINGLETON'S LIFETIME. The modal
+   * returns `null` when closed, so React discards its state on every close —
+   * which is precisely why `persistentState` existed. The image now outlives
+   * the component because the STORE holds it, and it arrives here as a prop.
+   */
+  image: HTMLImageElement | null;
+  imageUrl: string | null;
+  selection: ReferenceSelectionBox | null;
+  /** Commit a new image + selection to the store (one atomic write). */
+  onImageChange: (
+    image: HTMLImageElement | null,
+    imageUrl: string | null,
+    selection: ReferenceSelectionBox | null,
+  ) => void;
+  /** Commit a selection-only change. */
+  onSelectionChange: (selection: ReferenceSelectionBox | null) => void;
+  /** Persist the current image + crop to `project.referenceImage`. */
+  onSave: (
+    image: HTMLImageElement | null,
+    selection: ReferenceSelectionBox | null,
+  ) => void;
 }
 
 type InteractionMode = 'none' | 'selecting' | 'dragging-selection' | 'panning';
 
-// Store persistent state outside the component so it survives unmounts
-const persistentState = {
-  image: null as HTMLImageElement | null,
-  imageUrl: null as string | null,
-  selection: null as SelectionBox | null,
-  zoom: 1,
-  panOffset: { x: 0, y: 0 },
-  // Track if the modal has ever been opened and had data set
-  // This prevents the sync effect from clearing data on mount
-  hasBeenActivated: false,
-};
-
-// Extract pixels from selection (exported for use outside modal)
-export function extractPixelsFromSelection(image: HTMLImageElement | null, selection: SelectionBox | null): ReferenceImageData | null {
-  if (!image || !selection) return null;
-
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = image.width;
-  tempCanvas.height = image.height;
-  const ctx = tempCanvas.getContext('2d');
-  if (!ctx) return null;
-
-  ctx.drawImage(image, 0, 0);
-
-  const x = Math.min(selection.startX, selection.endX);
-  const y = Math.min(selection.startY, selection.endY);
-  const w = Math.abs(selection.endX - selection.startX);
-  const h = Math.abs(selection.endY - selection.startY);
-
-  if (w === 0 || h === 0) return null;
-
-  const imageData = ctx.getImageData(x, y, w, h);
-  const pixels: ReferenceImageData['pixels'] = [];
-
-  for (let py = 0; py < h; py++) {
-    const row: Array<{ r: number; g: number; b: number; a: number } | 0> = [];
-    for (let px = 0; px < w; px++) {
-      const idx = (py * w + px) * 4;
-      const r = imageData.data[idx];
-      const g = imageData.data[idx + 1];
-      const b = imageData.data[idx + 2];
-      const a = imageData.data[idx + 3];
-      row.push(a > 0 ? { r, g, b, a } : 0);
-    }
-    pixels.push(row);
-  }
-
-  return { pixels, width: w, height: h };
-}
-
-// Shift the reference selection and return new reference image data
-export function shiftReferenceSelection(dx: number, dy: number): ReferenceImageData | null {
-  const { image, selection } = persistentState;
-  if (!image || !selection) return null;
-
-  const minX = Math.min(selection.startX, selection.endX);
-  const minY = Math.min(selection.startY, selection.endY);
-  const maxX = Math.max(selection.startX, selection.endX);
-  const maxY = Math.max(selection.startY, selection.endY);
-  const width = maxX - minX;
-  const height = maxY - minY;
-
-  // Calculate new position
-  let newMinX = minX + dx;
-  let newMinY = minY + dy;
-
-  // Clamp to image bounds
-  newMinX = Math.max(0, Math.min(newMinX, image.width - width));
-  newMinY = Math.max(0, Math.min(newMinY, image.height - height));
-
-  // Update selection
-  const newSelection: SelectionBox = {
-    startX: newMinX,
-    startY: newMinY,
-    endX: newMinX + width,
-    endY: newMinY + height
-  };
-
-  persistentState.selection = newSelection;
-
-  // Save to project when selection shifts
-  saveReferenceImageToProject(image, newSelection);
-
-  // Extract and return new pixels
-  return extractPixelsFromSelection(image, newSelection);
-}
-
-// Shift the reference selection by the width/height of the current reference image
-// Only moves if there's enough room for the full skip to prevent misalignment
-export function shiftReferenceSelectionBySize(dx: number, dy: number, currentRefWidth: number, currentRefHeight: number): ReferenceImageData | null {
-  const { image, selection } = persistentState;
-  if (!image || !selection) return null;
-
-  const minX = Math.min(selection.startX, selection.endX);
-  const minY = Math.min(selection.startY, selection.endY);
-  const maxX = Math.max(selection.startX, selection.endX);
-  const maxY = Math.max(selection.startY, selection.endY);
-  const width = maxX - minX;
-  const height = maxY - minY;
-
-  const shiftX = dx * currentRefWidth;
-  const shiftY = dy * currentRefHeight;
-
-  // Calculate where the new position would be
-  const newMinX = minX + shiftX;
-  const newMinY = minY + shiftY;
-  const newMaxX = newMinX + width;
-  const newMaxY = newMinY + height;
-
-  // Check if the full shift is possible (all corners must be within bounds)
-  const canMoveX = newMinX >= 0 && newMaxX <= image.width;
-  const canMoveY = newMinY >= 0 && newMaxY <= image.height;
-
-  // Only move if we can complete the full skip
-  if (!canMoveX || !canMoveY) {
-    return null;
-  }
-
-  return shiftReferenceSelection(shiftX, shiftY);
-}
-
-// Adjust reference box size in a specific direction
-export function adjustReferenceBoxSize(direction: 'up' | 'down' | 'left' | 'right', increase: boolean): ReferenceImageData | null {
-  const { image, selection } = persistentState;
-  if (!image || !selection) return null;
-
-  const minX = Math.min(selection.startX, selection.endX);
-  const minY = Math.min(selection.startY, selection.endY);
-  const maxX = Math.max(selection.startX, selection.endX);
-  const maxY = Math.max(selection.endY, selection.startY);
-
-  const delta = increase ? 1 : -1;
-  let newMinX = minX;
-  let newMinY = minY;
-  let newMaxX = maxX;
-  let newMaxY = maxY;
-
-  switch (direction) {
-    case 'up':
-      newMinY = Math.max(0, minY - delta);
-      break;
-    case 'down':
-      newMaxY = Math.min(image.height, maxY + delta);
-      break;
-    case 'left':
-      newMinX = Math.max(0, minX - delta);
-      break;
-    case 'right':
-      newMaxX = Math.min(image.width, maxX + delta);
-      break;
-  }
-
-  // Ensure minimum size of 1x1
-  if (newMaxX - newMinX < 1 || newMaxY - newMinY < 1) return null;
-
-  // Determine which corner is start/end based on original selection
-  const startIsTopLeft = selection.startX <= selection.endX && selection.startY <= selection.endY;
-
-  const newSelection: SelectionBox = {
-    startX: startIsTopLeft ? newMinX : newMaxX,
-    startY: startIsTopLeft ? newMinY : newMaxY,
-    endX: startIsTopLeft ? newMaxX : newMinX,
-    endY: startIsTopLeft ? newMaxY : newMinY
-  };
-
-  persistentState.selection = newSelection;
-
-  // Save to project when selection adjusts
-  saveReferenceImageToProject(image, newSelection);
-
-  // Extract and return new pixels
-  return extractPixelsFromSelection(image, newSelection);
-}
-
-// Encode image to base64
-export function encodeImageToBase64(image: HTMLImageElement): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      reject(new Error('Could not get canvas context'));
-      return;
-    }
-    ctx.drawImage(image, 0, 0);
-    try {
-      const base64 = canvas.toDataURL('image/png');
-      resolve(base64);
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-// Decode base64 to image
-export function decodeBase64ToImage(base64: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = (error) => reject(error);
-    img.src = base64;
-  });
-}
-
-// Save reference image to project
-export function saveReferenceImageToProject(image: HTMLImageElement | null, selection: SelectionBox | null): Promise<void> {
-  const { project, setReferenceImage } = useEditorStore.getState();
-  if (!project) return Promise.resolve();
-
-  if (!image || !selection) {
-    // Clear reference image if no image or selection
-    setReferenceImage(undefined);
-    return Promise.resolve();
-  }
-
-  return encodeImageToBase64(image).then((base64) => {
-    setReferenceImage({
-      imageBase64: base64,
-      selectionBox: {
-        startX: selection.startX,
-        startY: selection.startY,
-        endX: selection.endX,
-        endY: selection.endY
-      }
-    });
-  }).catch((error) => {
-    console.error('Failed to save reference image:', error);
-  });
-}
-
-// Restore reference image from project
-export function restoreReferenceImageFromProject(): Promise<void> {
-  const { project } = useEditorStore.getState();
-  if (!project || !project.referenceImage) {
-    return Promise.resolve();
-  }
-
-  const { imageBase64, selectionBox } = project.referenceImage;
-
-  return decodeBase64ToImage(imageBase64).then((img) => {
-    // Restore to persistent state
-    persistentState.image = img;
-    persistentState.imageUrl = imageBase64; // Base64 data URL can be used directly
-    persistentState.selection = {
-      startX: selectionBox.startX,
-      startY: selectionBox.startY,
-      endX: selectionBox.endX,
-      endY: selectionBox.endY
-    };
-    persistentState.hasBeenActivated = true; // Mark as activated so sync works correctly
-  }).catch((error) => {
-    console.error('Failed to restore reference image:', error);
-  });
-}
-
-// Get current reference image data from persistent state
-export function getCurrentReferenceImageData(): ReferenceImageData | null {
-  return extractPixelsFromSelection(persistentState.image, persistentState.selection);
-}
-
-export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceImageModalProps) {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [selection, setSelection] = useState<SelectionBox | null>(null);
+export function ReferenceImageModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  image,
+  imageUrl,
+  selection,
+  onImageChange,
+  onSelectionChange,
+  onSave,
+}: ReferenceImageModalProps) {
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('none');
   const [isDragging, setIsDragging] = useState(false);
+  /**
+   * ⚠️ `zoom` and `panOffset` are COMPONENT-LOCAL, deliberately (task 29).
+   *
+   * They were fields 4 and 5 of `persistentState`, but nothing outside this
+   * modal ever read them — they are viewport state for one dialog. Keeping
+   * them local is not a downgrade: the restore effect the singleton needed
+   * always reset BOTH to their defaults on open anyway ("Always reset zoom and
+   * pan to defaults for a clean view"), so storing them across unmounts was
+   * dead weight. `useState` reproduces that reset for free.
+   */
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [selectionDragOffset, setSelectionDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [isHoveringSelection, setIsHoveringSelection] = useState(false);
 
-  // Track if we're currently restoring to prevent sync during restore
-  const isRestoringRef = useRef(false);
-  const hasRestoredRef = useRef(false);
-
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Restore state from persistent storage when modal opens
+  /* ══════════════════════════════════════════════════════════════════════
+   *  THE TWO SYNC EFFECTS THAT USED TO LIVE HERE ARE DELETED (task 29)
+   *
+   *  A "restore from persistent storage on open" effect and a "sync state to
+   *  persistent storage" effect kept local `useState` and the module singleton
+   *  in agreement, guarded by `isRestoringRef` / `hasRestoredRef` — two refs
+   *  that existed only to stop the two effects from fighting each other, plus
+   *  a `requestAnimationFrame` to let the copy settle.
+   *
+   *  All of it was the cost of duplicating store state into component state.
+   *  `image`/`imageUrl`/`selection` are now PROPS off `ReferenceUIStore`, so
+   *  there is one copy, no synchronisation, and no ordering hazard. The
+   *  "reset zoom/pan for a clean view on open" behaviour the restore effect
+   *  also performed is preserved by the effect below.
+   * ══════════════════════════════════════════════════════════════════════ */
+
+  // Reset the viewport whenever the modal opens, so a reopened modal always
+  // shows the image centred at 100% — verbatim behaviour from the deleted
+  // restore effect, which did exactly this under the comment "Always reset zoom
+  // and pan to defaults for a clean view".
+  //
+  // ⚠️ `react-hooks/set-state-in-effect` warns here (a WARNING, not an error).
+  // It is correct in general and wrong for this case: the reset must happen on
+  // the OPEN TRANSITION, and `isOpen` is a prop owned by the parent, so there
+  // is no render-time or event-handler position that observes the transition.
+  // Deriving it instead would change behaviour — a user who zooms in, closes
+  // and reopens must get 100%, and this is the effect that guarantees it.
+  // Silencing the rule with a disable comment would hide it for any FUTURE
+  // setState added to this effect, so the warning is left visible on purpose.
   useEffect(() => {
-    if (isOpen && !hasRestoredRef.current) {
-      isRestoringRef.current = true;
-      hasRestoredRef.current = true;
-
-      // Restore image and selection from persistent state
-      setImage(persistentState.image);
-      setImageUrl(persistentState.imageUrl);
-      setSelection(persistentState.selection);
-
-      // Always reset zoom and pan to defaults for a clean view
-      // This ensures the image is visible and centered when reopening
+    if (isOpen) {
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
-
-      // Allow sync after a tick to ensure state is settled
-      requestAnimationFrame(() => {
-        isRestoringRef.current = false;
-      });
-    }
-
-    // Reset the restored flag when modal closes so next open will restore
-    if (!isOpen) {
-      hasRestoredRef.current = false;
     }
   }, [isOpen]);
-
-  // Sync state to persistent storage (but not during restoration and only when modal is open)
-  useEffect(() => {
-    // Only sync when:
-    // 1. Not currently restoring from persistent state
-    // 2. Modal is open (user is actively interacting)
-    // This prevents clearing persistent state on component mount
-    if (!isRestoringRef.current && isOpen) {
-      persistentState.image = image;
-      persistentState.imageUrl = imageUrl;
-      persistentState.selection = selection;
-      persistentState.zoom = zoom;
-      persistentState.panOffset = panOffset;
-      if (image) {
-        persistentState.hasBeenActivated = true;
-      }
-    }
-  }, [isOpen, image, imageUrl, selection, zoom, panOffset]);
 
   // Calculate display scale based on zoom
   const getDisplayScale = useCallback(() => {
@@ -455,9 +250,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      setImage(img);
-      setImageUrl(url);
-      setSelection(null);
+      onImageChange(img, url, null);
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
     };
@@ -483,9 +276,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      setImage(img);
-      setImageUrl(url);
-      setSelection(null);
+      onImageChange(img, url, null);
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
     };
@@ -518,7 +309,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
   }, [image, getDisplayScale]);
 
   // Check if a point is inside the selection (non-memoized to always use latest selection)
-  const isInsideSelection = (sel: SelectionBox | null, imageX: number, imageY: number) => {
+  const isInsideSelection = (sel: ReferenceSelectionBox | null, imageX: number, imageY: number) => {
     if (!sel) return false;
     const minX = Math.min(sel.startX, sel.endX);
     const maxX = Math.max(sel.startX, sel.endX);
@@ -601,7 +392,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
 
     // Start new selection
     setInteractionMode('selecting');
-    setSelection({
+    onSelectionChange({
       startX: coords.x,
       startY: coords.y,
       endX: coords.x,
@@ -632,7 +423,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
     }
 
     if (interactionMode === 'selecting' && selection) {
-      setSelection({
+      onSelectionChange({
         ...selection,
         endX: coords.x,
         endY: coords.y
@@ -649,7 +440,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
       newX = Math.max(0, Math.min(newX, image.width - width));
       newY = Math.max(0, Math.min(newY, image.height - height));
 
-      setSelection({
+      onSelectionChange({
         startX: newX,
         startY: newY,
         endX: newX + width,
@@ -674,7 +465,7 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
     if (data) {
       // Save to project when user confirms selection
       if (image && selection) {
-        saveReferenceImageToProject(image, selection);
+        onSave(image, selection);
       }
       onConfirm(data);
       onClose();
@@ -691,27 +482,18 @@ export function ReferenceImageModal({ isOpen, onClose, onConfirm }: ReferenceIma
       // Only revoke object URLs, not data URLs (base64)
       URL.revokeObjectURL(imageUrl);
     }
-    setImage(null);
-    setImageUrl(null);
-    setSelection(null);
+    // One store write replaces the six-line manual reset of the singleton.
+    onImageChange(null, null, null);
     setZoom(1);
     setPanOffset({ x: 0, y: 0 });
 
-    // Clear persistent state
-    persistentState.image = null;
-    persistentState.imageUrl = null;
-    persistentState.selection = null;
-    persistentState.zoom = 1;
-    persistentState.panOffset = { x: 0, y: 0 };
-    persistentState.hasBeenActivated = false; // Allow future restores
-
     // Clear from project
-    saveReferenceImageToProject(null, null);
+    onSave(null, null);
   };
 
   const handleSelectAll = () => {
     if (image) {
-      setSelection({
+      onSelectionChange({
         startX: 0,
         startY: 0,
         endX: image.width,

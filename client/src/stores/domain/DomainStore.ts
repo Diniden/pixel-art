@@ -86,6 +86,14 @@ import {
   projectToCompact,
 } from "../../types";
 import type { SessionStore } from "../session/SessionStore";
+// Task 29: the two pure helpers the reference-image persistence needs. Both are
+// plain functions over a DOM node / a string — no store dependency, so this is
+// not a domain→UI import.
+import {
+  decodeBase64ToImage,
+  encodeImageToBase64,
+} from "../../utils/imageEncoding";
+import type { ReferenceSelectionBox } from "../../utils/referenceImage";
 
 export type LoadState = "idle" | "loading" | "loaded" | "failed";
 
@@ -321,6 +329,111 @@ export class DomainStore {
   /** `referenceImage` is non-undoable and never enters a history command. */
   setReferenceImage(image: Project["referenceImage"]): void {
     this.referenceImage = image;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+   *  Reference-image persistence (REFRESH task 29)
+   *
+   *  These two replace `ReferenceImageModal.tsx`'s module-level
+   *  `saveReferenceImageToProject` / `restoreReferenceImageFromProject`,
+   *  which were the codebase's LAST TWO `useEditorStore.getState()` calls
+   *  (lines 235 and 261 of that file). Both reached into the Zustand store
+   *  from a React module rather than receiving it — `getState()` outside a
+   *  component is an untracked read that no reaction can observe, which is
+   *  exactly why the panel's nudges re-rendered nothing.
+   *
+   *  They live on `DomainStore` because they touch only
+   *  `project.referenceImage`. ⚠️ NON-UNDOABLE, deliberately and unchanged:
+   *  they call `setReferenceImage` above, which writes the `observableRef`
+   *  directly and enters no history command. The legacy action carried the
+   *  comment "Don't track reference image changes in history"
+   *  (`referenceActions.ts:47`) and that behaviour is preserved exactly — a
+   *  base64 PNG in every undo entry would blow the history byte budget.
+   * ══════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * Encode the live image + crop box into `project.referenceImage`.
+   *
+   * ⚠️ Takes the image as an ARGUMENT rather than reading a UI store:
+   * `stores/domain/**` may not import `stores/ui/**` (ESLint, task 05). The
+   * caller is `ReferenceUIStore`, wired through the injected `save` callback
+   * in `ApplicationStore`.
+   *
+   * A null image or selection CLEARS the field — the same overload the
+   * original had, and what `handleClearImage` relies on.
+   */
+  saveReferenceImageToProject(
+    image: HTMLImageElement | null,
+    selection: ReferenceSelectionBox | null,
+  ): Promise<void> {
+    // Preserved verbatim: with no project loaded this is a silent no-op, NOT
+    // an error. `App` can call it before the first load resolves.
+    if (!this.hasProject) return Promise.resolve();
+
+    if (!image || !selection) {
+      this.setReferenceImage(undefined);
+      return Promise.resolve();
+    }
+
+    return encodeImageToBase64(image)
+      .then((base64) => {
+        this.setReferenceImage({
+          imageBase64: base64,
+          selectionBox: {
+            startX: selection.startX,
+            startY: selection.startY,
+            endX: selection.endX,
+            endY: selection.endY,
+          },
+        });
+      })
+      .catch((error) => {
+        console.error("Failed to save reference image:", error);
+      });
+  }
+
+  /**
+   * Decode `project.referenceImage` back into a live image + crop box.
+   *
+   * ⚠️ Returns the decoded triple rather than writing a UI store, for the same
+   * import-direction reason as above. `ApplicationStore.restoreReferenceImage()`
+   * is the composition point that hands the result to `ReferenceUIStore`.
+   *
+   * Resolves `null` when there is nothing to restore, and ALSO when decoding
+   * fails — the original swallowed a decode error with a `console.error` and
+   * left the singleton untouched, so a corrupt base64 blob degrades to "no
+   * reference image" instead of breaking project load. Preserved.
+   */
+  restoreReferenceImageFromProject(): Promise<{
+    image: HTMLImageElement;
+    imageUrl: string;
+    selection: ReferenceSelectionBox;
+  } | null> {
+    const referenceImage = this.referenceImage;
+    if (!this.hasProject || !referenceImage) {
+      return Promise.resolve(null);
+    }
+
+    const { imageBase64, selectionBox } = referenceImage;
+
+    return decodeBase64ToImage(imageBase64)
+      .then((image) => ({
+        image,
+        // A base64 data URL is directly usable as an object URL would be, and
+        // must NOT be passed to `URL.revokeObjectURL` — the modal's
+        // `handleClearImage` checks the `data:` prefix for exactly this.
+        imageUrl: imageBase64,
+        selection: {
+          startX: selectionBox.startX,
+          startY: selectionBox.startY,
+          endX: selectionBox.endX,
+          endY: selectionBox.endY,
+        },
+      }))
+      .catch((error) => {
+        console.error("Failed to restore reference image:", error);
+        return null;
+      });
   }
 
   /**

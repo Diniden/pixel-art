@@ -9,9 +9,17 @@ import './FrameReferencePanel.css';
 interface FrameReferencePanelProps {
   onOverlayChange: (frameIndex: number | null) => void;
   overlayFrameIndex: number | null;
+  /** Owned by `ViewportUIStore.panels.frameReference` — see the note below. */
+  frameReferencePanelMinimized: boolean;
+  onMinimizedChange: (minimized: boolean) => void;
 }
 
-export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: FrameReferencePanelProps) {
+export function FrameReferencePanel({
+  onOverlayChange,
+  overlayFrameIndex,
+  frameReferencePanelMinimized,
+  onMinimizedChange,
+}: FrameReferencePanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [referenceFrameIndex, setReferenceFrameIndex] = useState(0); // Absolute frame index for the reference object
@@ -24,7 +32,6 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
     getCurrentObject,
     getFrameReferenceObject,
     setFrameReferencePanelPosition,
-    setFrameReferencePanelMinimized,
     frameTraceActive,
     frameTraceFrameIndex,
     setFrameTraceActive,
@@ -32,7 +39,19 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
     setFrameReferenceObjectId,
   } = useEditorStore();
 
-  const [isMinimized, setIsMinimized] = useState(project?.uiState.frameReferencePanelMinimized ?? false);
+  /**
+   * ⚠️ TASK 29: the local `isMinimized` MIRROR IS DELETED, not migrated.
+   *
+   * It was `useState(project?.uiState.frameReferencePanelMinimized ?? false)`
+   * plus a `useEffect` that re-synced it from the store — a duplicate that
+   * disagreed with the store for one render after every external change. The
+   * value is a prop now, so there is exactly one copy and nothing to sync.
+   *
+   * ⚠️ This panel keeps its OWN persistence keys
+   * (`frameReferencePanelMinimized` / `frameReferencePanelPosition`) — the
+   * three floating panels are deliberately NOT unified (task 29 constraint).
+   */
+  const isMinimized = frameReferencePanelMinimized;
   const [position, setPosition] = useState({ top: 20, left: 20 }); // Position in pixels (for rendering)
 
   // Helper to convert percentage to pixels
@@ -79,13 +98,6 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
       });
     }
   }, [project?.uiState.frameReferencePanelPosition, percentageToPixels]);
-
-  // Sync minimized state
-  useEffect(() => {
-    if (project?.uiState.frameReferencePanelMinimized !== undefined) {
-      setIsMinimized(project.uiState.frameReferencePanelMinimized);
-    }
-  }, [project?.uiState.frameReferencePanelMinimized]);
 
   // Recalculate position on window resize
   useEffect(() => {
@@ -366,10 +378,7 @@ export function FrameReferencePanel({ onOverlayChange, overlayFrameIndex }: Fram
             className="frame-reference-panel__minimize"
             onClick={(e) => {
               e.stopPropagation();
-              const newMinimized = !isMinimized;
-              setIsMinimized(newMinimized);
-              // Persist minimized state to project
-              setFrameReferencePanelMinimized(newMinimized);
+              onMinimizedChange(!isMinimized);
             }}
             onMouseDown={(e) => e.stopPropagation()}
             title={isMinimized ? 'Expand' : 'Minimize'}

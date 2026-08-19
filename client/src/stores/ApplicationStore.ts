@@ -29,7 +29,7 @@
 // (`enforceActions: "always"` + the dev-only strictness flags) before any
 // observable in this tree is created.
 import "./configure";
-import { computed, makeObservable } from "mobx";
+import { computed, makeObservable, runInAction } from "mobx";
 import { SessionStore } from "./session/SessionStore";
 import {
   AutoSaveController,
@@ -50,6 +50,7 @@ import { VariantStore } from "./domain/VariantStore";
 import { PixelStore } from "./domain/PixelStore";
 import type { PixelMirror } from "./domain/PixelStore";
 import { SelectionUIStore } from "./ui/SelectionUIStore";
+import { ReferenceUIStore } from "./ui/ReferenceUIStore";
 import {
   createZustandProjectHost,
   createZustandDomainMirror,
@@ -69,6 +70,7 @@ import type {
   VariantGroup,
 } from "../types";
 import type { SelectionState } from "../store/storeTypes";
+import type { ReferenceImageData } from "../types/referenceImage";
 
 /** The resolved variant context — the shape `helpers.getCurrentVariant` returned. */
 export interface CurrentVariant {
@@ -233,6 +235,20 @@ export class ApplicationStore {
    */
   readonly lightingUI: LightingUIStore;
 
+  /**
+   * Task 29: the reference-image + trace-overlay slice, and the replacement
+   * for the module-level `persistentState` singleton that lived inside
+   * `ReferenceImageModal.tsx`.
+   *
+   * ⚠️ Constructed BEFORE `UIStore`, because `UIStore.traceNudgeAmount` is now
+   * a delegating accessor onto this store (one storage location, R6) and
+   * `UIStore`'s `persistedUIVersion` reaction reads `persistedSignature` — and
+   * therefore `traceNudgeAmount` — EAGERLY during construction. The same
+   * measured ordering constraint that hoisted `ViewportUIStore` (task 25) and
+   * `ToolUIStore` (task 27) out of `UIStore`.
+   */
+  readonly referenceUI: ReferenceUIStore;
+
   readonly options: Readonly<{
     api: unknown;
     autoSaveEnabled: boolean;
@@ -294,6 +310,18 @@ export class ApplicationStore {
     const tool = new ToolUIStore();
     const lightingUI = new LightingUIStore({ tool });
     this.lightingUI = lightingUI;
+    // ── task 29 ────────────────────────────────────────────────────────────
+    // Built here — after `tool`, before `this.ui` — for the ordering reason on
+    // the member declaration above. `save` is INJECTED rather than imported:
+    // `stores/ui/**` may not depend on `stores/domain/**` (ESLint, task 05),
+    // so the store reaches `project.referenceImage` through this one callback.
+    const referenceUI = new ReferenceUIStore({
+      tool,
+      save: (image, selection) => {
+        void this.domain.saveReferenceImageToProject(image, selection);
+      },
+    });
+    this.referenceUI = referenceUI;
     const zustandTimeline = createZustandTimelineContext();
     const timelineUI = new TimelineUIStore({
       viewport,
@@ -320,6 +348,7 @@ export class ApplicationStore {
       viewport,
       tool,
       lighting: lightingUI,
+      reference: referenceUI,
     });
     const uiRef = this.ui;
     // ⚠️ INJECTED, not imported: `DomainStore` may not depend on
@@ -581,8 +610,35 @@ export class ApplicationStore {
   }
 
   /** Storybook/Vitest teardown: stop the save reaction and its timers. */
+  /**
+   * Decode `project.referenceImage` into `ReferenceUIStore` (task 29).
+   *
+   * The composition point that replaces `App.tsx`'s old two-step dance:
+   * `restoreReferenceImageFromProject()` hydrated a module singleton and
+   * `getCurrentReferenceImageData()` read it straight back out, which is how a
+   * modal's global became the application root's data-transfer object.
+   *
+   * The decode lives on `DomainStore` (it owns `referenceImage`), the state
+   * lives on `ReferenceUIStore` (it owns the live DOM node), and neither
+   * imports the other — this method is the seam. Resolves the extracted pixels
+   * so the caller need not re-derive them.
+   */
+  async restoreReferenceImage(): Promise<ReferenceImageData | null> {
+    const restored = await this.domain.restoreReferenceImageFromProject();
+    if (!restored) return null;
+    runInAction(() => {
+      this.referenceUI.setImage(
+        restored.image,
+        restored.imageUrl,
+        restored.selection,
+      );
+    });
+    return this.referenceUI.currentReferenceImageData;
+  }
+
   dispose(): void {
     this.autoSave?.dispose();
     this.ui.dispose();
+    this.referenceUI.dispose();
   }
 }

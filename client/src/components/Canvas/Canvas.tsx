@@ -11,7 +11,7 @@ import {
   getSquarePixels,
   getCirclePixels,
 } from "./drawingUtils";
-import { ReferenceImageData } from "../ReferenceImageModal/ReferenceImageModal";
+import type { ReferenceImageData } from "../../types/referenceImage";
 import "./Canvas.css";
 
 // Helper to extract color from PixelData

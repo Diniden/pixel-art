@@ -13,14 +13,25 @@ import { ObjectLibraryContainer } from "./containers/ObjectLibraryContainer";
 // Task 14: Header is rendered through its observer container, which feeds it
 // `saveStatus` + `aiServiceUrl` from SessionStore.
 import { HeaderContainer } from "./containers/HeaderContainer";
-import {
-  ReferenceImageData,
-  restoreReferenceImageFromProject,
-  getCurrentReferenceImageData,
-  saveReferenceImageToProject,
-} from "./components/ReferenceImageModal/ReferenceImageModal";
-import { FrameReferencePanel } from "./components/FrameReferencePanel/FrameReferencePanel";
-import { ReferenceImagePanel } from "./components/ReferenceImagePanel/ReferenceImagePanel";
+// ⚠️ TASK 29 — GATE 1: this file imports NOTHING from the reference-image
+// modal's directory, and the gate is a literal grep, so that component's name
+// must not appear anywhere in this file — including in a comment.
+//
+// It used to import FOUR symbols from that modal — a type plus three functions
+// that read and wrote the modal's module-level `persistentState` singleton.
+// `App` called the restore function to hydrate that global and then the getter
+// to read it straight back out, i.e. the application ROOT used a leaf modal's
+// global as a data-transfer object. That inverted import direction is what this
+// task exists to remove.
+//
+// The type now comes from `types/`; the behaviour is `ApplicationStore
+// .restoreReferenceImage()`, which composes `DomainStore` (owns the persisted
+// base64) and `ReferenceUIStore` (owns the live image), neither importing the
+// other.
+import type { ReferenceImageData } from "./types/referenceImage";
+import { FrameReferencePanelContainer } from "./containers/FrameReferencePanelContainer";
+import { ReferenceImagePanelContainer } from "./containers/ReferenceImagePanelContainer";
+import { useStores } from "./stores/context";
 import { RightSidebarTopControls } from "./components/RightSidebarTopControls/RightSidebarTopControls";
 import "./App.css";
 
@@ -39,6 +50,15 @@ function App() {
     toggleFocusMode,
     setStudioMode,
   } = useEditorStore();
+  // Task 29: the MobX tree, for the reference-image restore/clear paths below.
+  const appStore = useStores();
+  // ⚠️ NOT the deleted mirror. Task 29 deletes `App`'s duplicate of
+  // `referenceImage` — the copy that was SEEDED FROM THE MODAL'S SINGLETON.
+  // This `useState` holds the EXTRACTED PIXELS (`ReferenceImageData`), which
+  // are a canvas read-back derived from the store's image + crop box, not a
+  // copy of any store field. Extraction is a pull, so the pulled result is
+  // cached here and invalidated by the handler below. The singleton it used to
+  // be seeded from is gone.
   const [referenceImage, setReferenceImage] =
     useState<ReferenceImageData | null>(null);
   const [overlayFrameIndex, setOverlayFrameIndex] = useState<number | null>(
@@ -60,8 +80,9 @@ function App() {
           setTool("pixel");
         }
 
-        // Clear from project
-        saveReferenceImageToProject(null, null);
+        // Clear from project (task 29: a DomainStore action, not a modal's
+        // module-level function reaching into the store via getState()).
+        void appStore.domain.saveReferenceImageToProject(null, null);
       }
     },
     [project?.uiState.selectedTool, setTool, resetReferenceOverlay],
@@ -76,26 +97,28 @@ function App() {
     initProject();
   }, [initProject]);
 
-  // Restore reference image from project when project first loads
+  // Restore reference image from project when project first loads.
+  //
+  // Task 29: the two-step "hydrate the modal's singleton, then read it back"
+  // dance is replaced by one store call that returns the extracted pixels.
   useEffect(() => {
     // Only restore once on initial load
     if (hasRestoredReferenceRef.current || !project) return;
     hasRestoredReferenceRef.current = true;
 
     if (project.referenceImage) {
-      restoreReferenceImageFromProject()
-        .then(() => {
-          // Extract the reference image data from the restored persistent state
-          const refData = getCurrentReferenceImageData();
+      appStore
+        .restoreReferenceImage()
+        .then((refData) => {
           if (refData) {
             setReferenceImage(refData);
           }
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
           console.error("Failed to restore reference image:", error);
         });
     }
-  }, [project]);
+  }, [project, appStore]);
 
   // Handle ESC key to clear color adjustment
   useEffect(() => {
@@ -228,18 +251,14 @@ function App() {
                 overlayFrameIndex={overlayFrameIndex}
               />
               {project.uiState.frameReferencePanelVisible !== false && (
-                <FrameReferencePanel
+                <FrameReferencePanelContainer
                   onOverlayChange={setOverlayFrameIndex}
                   overlayFrameIndex={overlayFrameIndex}
                 />
               )}
-              <ReferenceImagePanel
+              <ReferenceImagePanelContainer
                 referenceImage={referenceImage}
                 onReferenceImageChange={handleReferenceImageChange}
-                isReferenceTraceActive={
-                  project.uiState.selectedTool === "reference-trace"
-                }
-                zoom={project.uiState.zoom ?? 10}
               />
             </>
           )}

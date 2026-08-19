@@ -51,6 +51,14 @@ export function createReferenceActions(
     setFrameTraceActive: (active: boolean, frameIndex: number | null) => {
       // Trace modes should be mutually exclusive:
       // - Enabling frame trace exits the reference-trace tool (which is a tool-mode trace).
+      //
+      // ⚠️ TASK 29: this is the OTHER direction of the rule, and it is NOT the
+      // duplicate. `ReferenceUIStore.setFrameTraceActive` carries the same
+      // check as an action precondition rather than as a reaction, because
+      // making it a second reaction would put two reactions in a write cycle.
+      // The genuinely duplicated half is `toolActions.ts`'s — see the long note
+      // there for why BOTH legacy sites must stay until the six unbridged
+      // trace-overlay fields have a MobX consumer.
       const { project } = get();
       if (active && project?.uiState.selectedTool === "reference-trace") {
         updateProjectAndSave(

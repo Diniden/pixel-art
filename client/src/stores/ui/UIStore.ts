@@ -84,6 +84,7 @@ import { LightingUIStore } from "./LightingUIStore";
 import { ToolUIStore } from "./ToolUIStore";
 import { ViewportUIStore } from "./ViewportUIStore";
 import type { SessionStore } from "../session/SessionStore";
+import type { ReferenceUIStore } from "./ReferenceUIStore";
 
 /**
  * The lighting/studio fields in their COMPACT (packed) form.
@@ -177,6 +178,13 @@ export interface UIStoreDeps {
    * as before.
    */
   tool?: ToolUIStore;
+  /**
+   * Task 29: the owner of `traceNudgeAmount` (and the six trace-overlay
+   * fields). Optional for the same reason `lighting` is — the three task-24
+   * UI suites build a bare `UIStore`. When supplied, it is the SINGLE storage
+   * location for the field and the accessor above delegates to it.
+   */
+  reference?: ReferenceUIStore;
 }
 
 export class UIStore {
@@ -200,8 +208,39 @@ export class UIStore {
    */
   lighting: LightingUIFields | null = null;
 
-  /** `traceNudgeAmount` moves to a reference UI store in a later task. */
-  traceNudgeAmount: 10 | 20 | 25 | 50 | 100 = 10;
+  /**
+   * Task 29: `traceNudgeAmount` MOVED to {@link ReferenceUIStore}, which owns
+   * the six trace-overlay fields it belongs with.
+   *
+   * ⚠️ This is a DELEGATING ACCESSOR, not a copy. There is exactly one storage
+   * location — the reference store's field — so the two can never disagree
+   * (R6). The builder below still reads `this.traceNudgeAmount` and still
+   * emits the key as `traceNudgeAmount` at position 18: **the wire key is
+   * unchanged**, only the owner moved.
+   *
+   * The fallback field exists for the three task-24 UI suites, which construct
+   * a bare `UIStore` with no reference store — the same pattern
+   * {@link UIStore.lighting} uses. Deleted with the bridge in task 38.
+   */
+  /** @internal Not `private`: MobX's `AnnotationsMap` cannot name a private field. */
+  ownTraceNudgeAmount: 10 | 20 | 25 | 50 | 100 = 10;
+
+  get traceNudgeAmount(): 10 | 20 | 25 | 50 | 100 {
+    return this.referenceUI
+      ? this.referenceUI.traceNudgeAmount
+      : this.ownTraceNudgeAmount;
+  }
+
+  set traceNudgeAmount(amount: 10 | 20 | 25 | 50 | 100) {
+    if (this.referenceUI) {
+      this.referenceUI.setTraceNudgeAmount(amount);
+    } else {
+      this.ownTraceNudgeAmount = amount;
+    }
+  }
+
+  /** Task 29: the owner of `traceNudgeAmount`. `null` in the task-24 suites. */
+  readonly referenceUI: ReferenceUIStore | null;
 
   /**
    * Bumped by a reaction over every persisted field. `AutoSaveController`
@@ -219,10 +258,11 @@ export class UIStore {
     this.tool = deps.tool ?? new ToolUIStore();
     this.viewport = deps.viewport ?? new ViewportUIStore();
     this.lightingUI = deps.lighting ?? null;
+    this.referenceUI = deps.reference ?? null;
 
     makeObservable(this, {
       lighting: observableRef,
-      traceNudgeAmount: observable,
+      ownTraceNudgeAmount: observable,
       persistedUIVersion: observable,
       persistedSignature: computedStruct,
     });
@@ -373,6 +413,8 @@ export class UIStore {
   hydrate(ui: import("../../types").UIState): void {
     this.tool.hydrate(ui);
     this.viewport.hydrate(ui);
+    // Task 29: routes through the accessor into `ReferenceUIStore` when one is
+    // injected, so a loaded project hydrates the single owner.
     this.traceNudgeAmount = ui.traceNudgeAmount ?? 10;
     // ⚠️ `lightingUI` is deliberately NOT hydrated here — see
     // {@link UIStore.hydrateLighting}.

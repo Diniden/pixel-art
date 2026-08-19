@@ -18,7 +18,7 @@
  */
 import { observer } from "mobx-react-lite";
 import { Toolbar } from "../components/Toolbar/Toolbar";
-import type { ReferenceImageData } from "../components/ReferenceImageModal/ReferenceImageModal";
+import type { ReferenceImageData } from "../types/referenceImage";
 
 interface ToolbarContainerProps {
   onReferenceImageChange?: (data: ReferenceImageData | null) => void;
