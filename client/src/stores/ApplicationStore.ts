@@ -46,6 +46,7 @@ import { ObjectStore, type SelectionSink } from "./domain/ObjectStore";
 import { PaletteStore } from "./domain/PaletteStore";
 import { FrameStore } from "./domain/FrameStore";
 import { LayerStore } from "./domain/LayerStore";
+import { VariantStore } from "./domain/VariantStore";
 import { PixelStore } from "./domain/PixelStore";
 import type { PixelMirror } from "./domain/PixelStore";
 import { SelectionUIStore } from "./ui/SelectionUIStore";
@@ -190,6 +191,21 @@ export class ApplicationStore {
    */
   readonly timelineUI: TimelineUIStore;
 
+  /* ── task 28 ───────────────────────────────────────────────────────────── */
+  /**
+   * The 17 variant DOMAIN actions — the largest slice of the migration
+   * (`store/variantActions.ts`, 1,412 lines).
+   *
+   * ⚠️ It mutates `domain.objects` AND `domain.variants` in the same
+   * operation, which is the measurement behind the whole "behaviour modules
+   * over ONE tree" decision (see `DomainMutator`'s header). It reaches
+   * `TimelineUIStore` only through two injected callbacks — `selectLayer`
+   * (the store graph's last cross-module edge) and the two
+   * `variantFrameIndices` setters — so `stores/domain/**` still imports
+   * nothing from `stores/ui/**`.
+   */
+  readonly variants: VariantStore;
+
   /* ── task 26 ───────────────────────────────────────────────────────────── */
   /**
    * THE SOLE WRITER OF PIXEL GRIDS. Every pixel mutation in the application
@@ -283,6 +299,9 @@ export class ApplicationStore {
       viewport,
       context: {
         currentObject: () => this.currentObject,
+        // Task 28: `advanceVariantFrames` needs the current FRAME's variant
+        // layers to resolve each group's frame count.
+        currentFrame: () => this.currentFrame,
         currentLayer: () => this.currentLayer,
         variants: () => this.domain.variants,
         publishSelection:
@@ -352,6 +371,37 @@ export class ApplicationStore {
       },
       setVariantFrameIndex: (variantGroupId, index) =>
         timelineUI.setVariantFrameIndex(variantGroupId, index),
+    });
+
+    // ── task 28: the variant slice ─────────────────────────────────────────
+    //
+    // The same one-way seam every domain store uses: selection ids arrive as
+    // GETTERS, and the two UI writes as plain callbacks. `selectLayer` here
+    // is the retirement of `variantActions.ts`'s `get().selectLayer` — the
+    // store module graph's ONLY true cross-module edge, now an injected
+    // function that carries no store type across the boundary.
+    this.variants = new VariantStore({
+      domain: this.domain,
+      mutator,
+      source: {
+        get selectedObjectId() {
+          return timelineUI.selectedObjectId;
+        },
+        get selectedFrameId() {
+          return timelineUI.selectedFrameId;
+        },
+        get selectedLayerId() {
+          return timelineUI.selectedLayerId;
+        },
+        get variantFrameIndices() {
+          return timelineUI.variantFrameIndices;
+        },
+      },
+      selectLayer: (id) => timelineUI.selectLayer(id),
+      setVariantFrameIndex: (variantGroupId, index) =>
+        timelineUI.setVariantFrameIndex(variantGroupId, index),
+      replaceVariantFrameIndices: (next) =>
+        timelineUI.replaceVariantFrameIndices(next),
     });
 
     // ── task 26: the hot path ──────────────────────────────────────────────

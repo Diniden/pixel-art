@@ -1,11 +1,19 @@
 import { memo } from 'react';
 import './AnchorGrid.css';
+import type { AnchorPosition } from '../../utils/variantHelpers';
 
-// Anchor positions in a 3x3 grid
-export type AnchorPosition =
-  | 'top-left' | 'top-center' | 'top-right'
-  | 'middle-left' | 'middle-center' | 'middle-right'
-  | 'bottom-left' | 'bottom-center' | 'bottom-right';
+// ── The anchor math moved OUT of this file (REFRESH task 28, MASTER.md §9.5)
+//
+// `AnchorPosition` and `getAnchorPadding` now live in
+// `src/utils/variantHelpers.ts`. They were imported by three STORE modules
+// from here, which made the store depend on a React component — the layering
+// arrow backwards, and the violation W20's gate exists to close.
+//
+// Both names are RE-EXPORTED so every component-side importer keeps its
+// existing `from '.../AnchorGrid/AnchorGrid'` path unchanged. The store side
+// imports from `utils/variantHelpers` directly.
+export type { AnchorPosition };
+export { getAnchorPadding } from '../../utils/variantHelpers';
 
 interface AnchorGridProps {
   anchor: AnchorPosition;
@@ -150,48 +158,3 @@ export const AnchorGrid = memo(function AnchorGrid({
     </div>
   );
 });
-
-// Helper function to calculate padding offsets based on anchor position
-export function getAnchorPadding(
-  anchor: AnchorPosition,
-  widthDiff: number,
-  heightDiff: number
-): { left: number; top: number; right: number; bottom: number } {
-  const anchorRow = anchor.startsWith('top') ? 0 : anchor.startsWith('middle') ? 1 : 2;
-  const anchorCol = anchor.includes('left') ? 0 : anchor.includes('center') ? 1 : 2;
-
-  let leftPadding: number;
-  let topPadding: number;
-
-  // Horizontal padding based on anchor column
-  if (anchorCol === 0) {
-    // Anchored left - all padding goes to right
-    leftPadding = 0;
-  } else if (anchorCol === 2) {
-    // Anchored right - all padding goes to left
-    leftPadding = widthDiff;
-  } else {
-    // Anchored center - split padding, bias right/down for odd
-    leftPadding = Math.floor(widthDiff / 2);
-  }
-
-  // Vertical padding based on anchor row
-  if (anchorRow === 0) {
-    // Anchored top - all padding goes to bottom
-    topPadding = 0;
-  } else if (anchorRow === 2) {
-    // Anchored bottom - all padding goes to top
-    topPadding = heightDiff;
-  } else {
-    // Anchored middle - split padding, bias right/down for odd
-    topPadding = Math.floor(heightDiff / 2);
-  }
-
-  return {
-    left: leftPadding,
-    top: topPadding,
-    right: widthDiff - leftPadding,
-    bottom: heightDiff - topPadding
-  };
-}
-

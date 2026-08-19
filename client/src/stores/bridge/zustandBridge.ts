@@ -129,14 +129,29 @@ import type { ApplicationStore } from "../ApplicationStore";
 export const PHASE_A_FIELDS = [
   "aiServiceUrl", //           project.uiState.aiServiceUrl  → session.aiServiceUrl
   "colorHistory", //           EditorState.colorHistory      → session.colorHistory
-  // ── The 4 selection ids. STILL PHASE A after task 25 — deliberately. ────
+  // ── The 3 selection ids. STILL PHASE A after task 28 — deliberately. ────
   //
-  // `TimelineUIStore` now exists and owns `selectFrame`/`selectLayer`, but
-  // these four fields still have OTHER writers in files task 25 does not own:
-  // `store/objectActions.ts:58` (`selectObject`) writes all three ids, and
-  // `store/variantActions.ts` writes `variantFrameIndices` at 8 sites plus
-  // the ids at `:851-853`. Flipping them would give each field two writers,
-  // which R6 forbids. They flip with the task that migrates those two files.
+  // `variantFrameIndices` left this list in task 28 (see Phase B below).
+  // These THREE cannot follow it, because ONE writer outside every migrated
+  // store still writes all three:
+  //
+  //     store/objectActions.ts:65-67  — `selectObject`, the live Zustand
+  //                                     implementation, called by
+  //                                     `ObjectLibrary.tsx:237`.
+  //
+  // `selectObject` is pure UI state (it writes only these three ids) and
+  // `objectActions.ts`'s own header records that it was left in place
+  // deliberately, to be moved ONCE by the task that owns it. It is outside
+  // task 28's `Touches` list, and §10 rule 6 says stop rather than widen
+  // scope. Flipping while it still writes would give each id TWO writers,
+  // which is exactly what R6 forbids — the same reasoning that deferred the
+  // flip in W16, W17, W18 and W19.
+  //
+  // ⚠️ WHOEVER MIGRATES `selectObject` MUST FLIP THESE THREE IN THE SAME
+  // CHANGE. After task 28 that is the ONLY remaining blocker: no other file
+  // under `src/store` writes any of the three (verified by grep for
+  // `selectedObjectId:`/`selectedFrameId:`/`selectedLayerId:` across
+  // `src/store`, excluding tests and `storeTypes.ts`).
   //
   // Meanwhile there is still exactly ONE writer of the MobX copy: the bridge.
   // `TimelineUIStore`'s own selection writes go to ZUSTAND (through
@@ -145,7 +160,6 @@ export const PHASE_A_FIELDS = [
   "selectedObjectId", //   project.uiState.selectedObjectId  → timelineUI.selectedObjectId
   "selectedFrameId", //    project.uiState.selectedFrameId   → timelineUI.selectedFrameId
   "selectedLayerId", //    project.uiState.selectedLayerId   → timelineUI.selectedLayerId
-  "variantFrameIndices", //project.uiState.variantFrameIndices → timelineUI.variantFrameIndices
 ] as const;
 
 /* ── Phase B: MobX → Zustand. Fields whose ownership HAS flipped. ────────── */
@@ -252,6 +266,28 @@ export const PHASE_B_FIELDS = [
   "heightScale", //               lightingUI.heightScale               → uiState.heightScale
   "heightBrushValue", //          lightingUI.heightBrushValue          → uiState.heightBrushValue
   "normalBrushShape", //          lightingUI.normalBrushShape          → uiState.normalBrushShape
+  // ── Task 28: `variantFrameIndices` FLIPS A→B (R6) ──────────────────────
+  //
+  // It had TWO writers for five consecutive waves — `TimelineUIStore` and
+  // `store/variantActions.ts`, which wrote it at 9 sites inside the same
+  // `updateProjectAndSave` that mutated the domain. Task 28 migrated all
+  // twenty variant actions, so `variantActions.ts` is now throwing stubs
+  // behind bridge delegates and `TimelineUIStore` is the field's SINGLE
+  // writer: `VariantStore` reaches it only through the two injected callbacks
+  // (`setVariantFrameIndex`, `replaceVariantFrameIndices`).
+  //
+  // Its three siblings — `selectedObjectId`/`selectedFrameId`/
+  // `selectedLayerId` — do NOT flip with it, because
+  // `store/objectActions.ts`'s `selectObject` still writes all three and is
+  // outside this task's `Touches`. See the Phase A note above. A field flips
+  // when IT has one writer, not when its neighbours do.
+  //
+  // ⚠️ Mirrored by the `variantFrameIndices` reaction below, not by the
+  // scalar snapshot: like the task-25 trio and the task-27 nine, it lives
+  // INSIDE `project.uiState`. Compared key-by-key rather than by reference —
+  // `observableRef` means every write is a new record, so a reference compare
+  // would fire on every no-op rebuild.
+  "variantFrameIndices", // timelineUI.variantFrameIndices → uiState.variantFrameIndices
 ] as const;
 
 /**
@@ -302,13 +338,20 @@ function syncPhaseA(app: ApplicationStore, s: EditorState): void {
     // make Zustand a second writer (R6) and would clobber a fresh copy with
     // the stale mirror on the very next unrelated Zustand change.
     app.session.colorHistory = s.colorHistory;
-    // Task 23: the 4 selection ids the cross-store computeds depend on.
+    // Task 23: the selection ids the cross-store computeds depend on.
+    //
+    // ⚠️ Task 28: `variantFrameIndices` is NO LONGER adopted here. It flipped
+    // to Phase B, so MobX owns it and re-reading Zustand's copy on every
+    // store change would make Zustand a second writer — it would clobber a
+    // fresh variant-frame selection with the stale mirror on the very next
+    // tick, exactly the failure the lighting fields hit in W19. Its external
+    // writes (a project LOAD installs a whole new `uiState`) are handled by
+    // `adoptVariantFrameIndices` below, on the same echo-check seam.
     const uiState = s.project?.uiState;
     app.timelineUI.adopt({
       selectedObjectId: uiState?.selectedObjectId ?? null,
       selectedFrameId: uiState?.selectedFrameId ?? null,
       selectedLayerId: uiState?.selectedLayerId ?? null,
-      variantFrameIndices: uiState?.variantFrameIndices ?? {},
     });
   });
 }
@@ -439,6 +482,33 @@ function lightingEquals(
   );
 }
 
+/* ══ Task 28: the `variantFrameIndices` Phase B helper ════════════════════ */
+
+/**
+ * Key-by-key equality for `variantFrameIndices`.
+ *
+ * ⚠️ NOT a reference compare, and not `compareStructural`. The field is
+ * `observableRef`, so every write REPLACES the record — a reference compare
+ * would fire on every rebuild even when nothing changed, rewriting `project`
+ * on each one. And `compareStructural` is exactly the comparator shape that
+ * has bitten this migration three times (W17 clipboards, W18 selection mask,
+ * W19's near-miss); this record holds only numbers, so a deep compare would
+ * be SAFE here, but it is written out anyway so it stays safe.
+ */
+function variantIndicesEqual(
+  a: { [k: string]: number } | undefined,
+  b: { [k: string]: number } | undefined,
+): boolean {
+  if (a === b) return true;
+  const left = a ?? {};
+  const right = b ?? {};
+  const leftKeys = Object.keys(left);
+  if (leftKeys.length !== Object.keys(right).length) return false;
+  return leftKeys.every(
+    (k) => Object.prototype.hasOwnProperty.call(right, k) && left[k] === right[k],
+  );
+}
+
 /**
  * Install the bridge. Call once, from `main.tsx`, right after constructing
  * the `ApplicationStore`. Returns a disposer.
@@ -508,6 +578,35 @@ export function installBridge(app: ApplicationStore): () => void {
   };
   adoptLighting(useEditorStore.getState());
 
+  /* ── Task 28: the PHASE B `variantFrameIndices` ADOPTION seam (R6) ──────
+   *
+   * Identical in shape and rationale to `adoptLighting` above. The field is
+   * MobX-owned now, so it must NOT be re-read from Zustand on every store
+   * change — that would make Zustand a second writer and clobber a fresh
+   * variant-frame click with the stale mirror.
+   *
+   * External writes still exist during the bridge era: a project LOAD
+   * installs a whole new `uiState`, and the migration chain may fill in a
+   * default. So the same ECHO CHECK is used — remember what MobX last
+   * PUBLISHED and adopt only a Zustand value that differs from it.
+   *
+   * ⚠️ Keying on `project` IDENTITY does NOT work (measured in W19): every
+   * pixel edit publishes a new `project` object, so identity changes on every
+   * stroke and the field would be reverted each time.
+   */
+  let mirroredVariantIndices = app.timelineUI.variantFrameIndices;
+  const adoptVariantFrameIndices = (s: EditorState): void => {
+    const ui = s.project?.uiState;
+    if (!ui) return;
+    const incoming = ui.variantFrameIndices ?? {};
+    if (variantIndicesEqual(incoming, mirroredVariantIndices)) return;
+    runInAction(() => {
+      app.timelineUI.adoptVariantFrameIndices(incoming);
+      mirroredVariantIndices = app.timelineUI.variantFrameIndices;
+    });
+  };
+  adoptVariantFrameIndices(useEditorStore.getState());
+
   // The `domainVersion` bump — see item 3 in the module header.
   let lastProject = initialProject;
 
@@ -557,6 +656,8 @@ export function installBridge(app: ApplicationStore): () => void {
     // Task 27: adopt an EXTERNAL lighting write (a project load). A write
     // that came from MobX itself is recognised by the echo check and ignored.
     adoptLighting(s);
+    // Task 28: same seam for `variantFrameIndices`.
+    adoptVariantFrameIndices(s);
     if (s.project !== lastProject) {
       lastProject = s.project;
 
@@ -681,6 +782,35 @@ export function installBridge(app: ApplicationStore): () => void {
       });
     },
     { equals: lightingEquals },
+  );
+
+  // ── Task 28: the `variantFrameIndices` field that flipped A→B ───────────
+  //
+  // A FOURTH reaction, for the same reason the second and third exist: it
+  // lives INSIDE `project.uiState`, so it cannot ride the top-level scalar
+  // snapshot. Kept separate from the task-25 trio because it is a RECORD and
+  // needs key-by-key equality, not `compareStructural`.
+  //
+  // ⚠️ `mirroredVariantIndices` is updated HERE as well as in
+  // `adoptVariantFrameIndices`, which closes the loop: the value this
+  // reaction writes into Zustand comes straight back through `subscribe`, and
+  // the echo check then recognises it as the mirror's own.
+  const disposeVariantB = reaction(
+    () => app.timelineUI.variantFrameIndices,
+    (snap) => {
+      const { project } = useEditorStore.getState();
+      if (!project) return;
+      mirroredVariantIndices = snap;
+      const ui = project.uiState;
+      if (variantIndicesEqual(ui.variantFrameIndices, snap)) return;
+      useEditorStore.setState({
+        project: {
+          ...project,
+          uiState: { ...ui, variantFrameIndices: snap },
+        },
+      });
+    },
+    { equals: variantIndicesEqual },
   );
 
   // The lifecycle DELEGATES — see item 2 in the module header. The previous
@@ -1070,6 +1200,124 @@ export function installBridge(app: ApplicationStore): () => void {
     flipVertical: () => app.pixels.flipVertical(pixelWriteOptions()),
   });
 
+  // ── Task 28: the 20 VARIANT actions ────────────────────────────────────
+  //
+  // The same delegate technique tasks 23, 25, 26 and 27 used, and the reason
+  // this task migrates the largest module in the store without editing
+  // `LayerPanel.tsx` (owned by task 35) or `FrameTimeline.tsx`. Every
+  // consumer keeps calling `useEditorStore().resizeVariant(...)` and lands in
+  // `VariantStore`.
+  //
+  // 18 go to `VariantStore` (domain mutations) and 2 to `TimelineUIStore`
+  // (pure selection). See `store/variantActions.ts`'s header for why
+  // `selectVariant` is in the first group and not, as the spec has it, the
+  // second.
+  //
+  // ⚠️ Undo semantics are carried by the store, not here: 17 of the 18 pass
+  // `undoable = true` through `DomainMutator.commit`, and `selectVariant`
+  // passes `false` — the lone non-tracking domain action, pinned by task 08.
+  // The two `TimelineUIStore` actions hold no `HistoryStore` reference at all.
+  const previousVariantActions = {
+    makeVariant: useEditorStore.getState().makeVariant,
+    addVariant: useEditorStore.getState().addVariant,
+    deleteVariant: useEditorStore.getState().deleteVariant,
+    deleteVariantGroup: useEditorStore.getState().deleteVariantGroup,
+    selectVariant: useEditorStore.getState().selectVariant,
+    renameVariant: useEditorStore.getState().renameVariant,
+    renameVariantGroup: useEditorStore.getState().renameVariantGroup,
+    resizeVariant: useEditorStore.getState().resizeVariant,
+    setVariantOffset: useEditorStore.getState().setVariantOffset,
+    duplicateVariantFrame: useEditorStore.getState().duplicateVariantFrame,
+    deleteVariantFrame: useEditorStore.getState().deleteVariantFrame,
+    addVariantFrameTag: useEditorStore.getState().addVariantFrameTag,
+    removeVariantFrameTag: useEditorStore.getState().removeVariantFrameTag,
+    addVariantFrame: useEditorStore.getState().addVariantFrame,
+    moveVariantFrame: useEditorStore.getState().moveVariantFrame,
+    reorderVariantFrame: useEditorStore.getState().reorderVariantFrame,
+    addVariantLayerFromExisting:
+      useEditorStore.getState().addVariantLayerFromExisting,
+    removeVariantLayer: useEditorStore.getState().removeVariantLayer,
+    selectVariantFrame: useEditorStore.getState().selectVariantFrame,
+    advanceVariantFrames: useEditorStore.getState().advanceVariantFrames,
+  };
+  useEditorStore.setState({
+    /* 18 domain mutations → VariantStore */
+    makeVariant: (layerId) => app.variants.makeVariant(layerId),
+    addVariant: (variantGroupId, copyFromVariantId) =>
+      app.variants.addVariant(variantGroupId, copyFromVariantId),
+    deleteVariant: (variantGroupId, variantId) =>
+      app.variants.deleteVariant(variantGroupId, variantId),
+    deleteVariantGroup: (variantGroupId) =>
+      app.variants.deleteVariantGroup(variantGroupId),
+    selectVariant: (layerId, variantId) =>
+      app.variants.selectVariant(layerId, variantId),
+    renameVariant: (variantGroupId, variantId, name) =>
+      app.variants.renameVariant(variantGroupId, variantId, name),
+    renameVariantGroup: (variantGroupId, name) =>
+      app.variants.renameVariantGroup(variantGroupId, name),
+    resizeVariant: (variantGroupId, variantId, width, height, anchor) =>
+      app.variants.resizeVariant(
+        variantGroupId,
+        variantId,
+        width,
+        height,
+        anchor,
+      ),
+    setVariantOffset: (dx, dy, allFrames) =>
+      app.variants.setVariantOffset(dx, dy, allFrames),
+    duplicateVariantFrame: (variantGroupId, variantId, frameId) =>
+      app.variants.duplicateVariantFrame(variantGroupId, variantId, frameId),
+    deleteVariantFrame: (variantGroupId, variantId, frameId) =>
+      app.variants.deleteVariantFrame(variantGroupId, variantId, frameId),
+    addVariantFrameTag: (variantGroupId, variantId, frameId, tag) =>
+      app.variants.addVariantFrameTag(
+        variantGroupId,
+        variantId,
+        frameId,
+        tag,
+      ),
+    removeVariantFrameTag: (variantGroupId, variantId, frameId, tag) =>
+      app.variants.removeVariantFrameTag(
+        variantGroupId,
+        variantId,
+        frameId,
+        tag,
+      ),
+    addVariantFrame: (variantGroupId, variantId, copyPrevious) =>
+      app.variants.addVariantFrame(variantGroupId, variantId, copyPrevious),
+    moveVariantFrame: (variantGroupId, variantId, frameId, direction) =>
+      app.variants.moveVariantFrame(
+        variantGroupId,
+        variantId,
+        frameId,
+        direction,
+      ),
+    reorderVariantFrame: (variantGroupId, variantId, frameId, toIndex) =>
+      app.variants.reorderVariantFrame(
+        variantGroupId,
+        variantId,
+        frameId,
+        toIndex,
+      ),
+    addVariantLayerFromExisting: (
+      variantGroupId,
+      selectedVariantId,
+      addToAllFrames,
+    ) =>
+      app.variants.addVariantLayerFromExisting(
+        variantGroupId,
+        selectedVariantId,
+        addToAllFrames,
+      ),
+    removeVariantLayer: (layerId) => app.variants.removeVariantLayer(layerId),
+
+    /* 2 pure selections → TimelineUIStore */
+    selectVariantFrame: (variantGroupId, frameIndex) =>
+      app.timelineUI.selectVariantFrame(variantGroupId, frameIndex),
+    advanceVariantFrames: (delta) =>
+      app.timelineUI.advanceVariantFrames(delta),
+  });
+
   useEditorStore.setState({
     initProject: () => flowResult(app.domain.initProject()),
     createNewProject: (name) => flowResult(app.domain.createProject(name)),
@@ -1087,10 +1335,12 @@ export function installBridge(app: ApplicationStore): () => void {
     disposeB();
     disposeUIB();
     disposeLightingB();
+    disposeVariantB();
     useEditorStore.setState(previousActions);
     useEditorStore.setState(previousDomainActions);
     useEditorStore.setState(previousTimelineActions);
     useEditorStore.setState(previousPixelActions);
+    useEditorStore.setState(previousVariantActions);
     {
       // `setToolForStudioMode` is a capture, not a store field — strip it
       // before restoring so `dispose()` cannot invent a key on EditorState.

@@ -1,15 +1,18 @@
 /**
- * Characterisation tests for `getAnchorPadding` (`AnchorGrid.tsx:160`).
+ * Characterisation tests for `getAnchorPadding` — written by task 08 against
+ * its old home (`AnchorGrid.tsx:160`), MOVED here by task 28 along with the
+ * function itself (MASTER.md §9.5).
  *
- * This helper is exported from a React component module but is imported by
- * `client/src/store/variantActions.ts:14` — a store → UI-component import and a
- * layering violation that a later task removes. It is tested HERE, before it
- * moves, so the move can be proven behaviour-preserving.
+ * ⚠️ EVERY ASSERTION BELOW IS BYTE-IDENTICAL TO TASK 08's. Only the module
+ * header, the file name and the import specifier changed. That is the whole
+ * point: the helper used to be exported from a React component module and
+ * imported by three STORE modules — a store → UI-component import, and the
+ * layering violation W20's gate closes. These tests are the proof the move
+ * was behaviour-preserving, so their expectations must not be re-derived.
  *
- * Note the import pulls in `AnchorGrid.tsx` (which imports `react` and
- * `./AnchorGrid.css`). Vite resolves the CSS to an empty module and React is
- * never rendered, so this runs fine in the fast `unit` (node) project — no
- * jsdom needed.
+ * The import no longer pulls in `AnchorGrid.tsx` (and therefore neither
+ * `react` nor `./AnchorGrid.css`); `variantHelpers.ts` is pure TypeScript, so
+ * this runs in the fast `unit` (node) project with nothing stubbed at all.
  *
  * Coverage: all 9 anchors × grow/shrink × even/odd deltas, plus the invariants.
  */
@@ -17,7 +20,7 @@ import { describe, expect, it } from "vitest";
 import {
   getAnchorPadding,
   type AnchorPosition,
-} from "@/components/AnchorGrid/AnchorGrid";
+} from "@/utils/variantHelpers";
 
 const ANCHORS: AnchorPosition[] = [
   "top-left",

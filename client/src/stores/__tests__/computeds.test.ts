@@ -77,8 +77,12 @@ function makeApp(project: Project): {
       selectedObjectId: project.uiState.selectedObjectId,
       selectedFrameId: project.uiState.selectedFrameId,
       selectedLayerId: project.uiState.selectedLayerId,
-      variantFrameIndices: project.uiState.variantFrameIndices ?? {},
     });
+    // Task 28: `variantFrameIndices` flipped A→B, so `adopt()` no longer
+    // carries it — an EXTERNAL write lands through its own seam.
+    app.selection.adoptVariantFrameIndices(
+      project.uiState.variantFrameIndices ?? {},
+    );
   });
   return { app, published };
 }

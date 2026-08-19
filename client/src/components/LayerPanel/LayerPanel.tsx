@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useEditorStore } from '../../store';
-import { VariantSelectModal } from '../VariantSelectModal/VariantSelectModal';
+import { VariantSelectModalContainer } from '../../containers/VariantSelectModalContainer';
 import { CopyFromModalContainer } from '../../containers/CopyFromModalContainer';
-import { AddVariantModal } from '../AddVariantModal/AddVariantModal';
+import { AddVariantModalContainer } from '../../containers/AddVariantModalContainer';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Hexagon, ArrowDownToLine, ArrowUpToLine, Eye, EyeOff, ClipboardCopy, Wand2, Plus, X, Copy, ChevronUp, ChevronDown } from 'lucide-react';
 import './LayerPanel.css';
@@ -477,7 +477,7 @@ export function LayerPanel() {
         if (!modalLayer || !modalVariantGroup) return null;
 
         return (
-          <VariantSelectModal
+          <VariantSelectModalContainer
             layer={modalLayer}
             variantGroup={modalVariantGroup}
             onClose={() => setVariantModalLayerId(null)}
@@ -492,7 +492,7 @@ export function LayerPanel() {
 
       {/* Add Variant Modal */}
       {showAddVariantModal && (
-        <AddVariantModal onClose={() => setShowAddVariantModal(false)} />
+        <AddVariantModalContainer onClose={() => setShowAddVariantModal(false)} />
       )}
     </div>
   );

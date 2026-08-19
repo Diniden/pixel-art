@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useEditorStore } from '../../store';
-import { PixelObject } from '../../types';
+import { PixelObject, VariantGroup } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import { Icon } from '../../ui/primitives/Icon/Icon';
@@ -10,21 +9,48 @@ import './ObjectLibrary.css';
 
 const THUMB_SIZE = 32;
 
+/**
+ * ⚠️ THE MEMO COMPARATORS WERE REMOVED HERE (REFRESH task 28).
+ *
+ * `ObjectThumbnail` and `CompactObjectItem` each carried a hand-written
+ * `React.memo` comparator (79 and 0 lines) that threaded `project` internals
+ * — `project.uiState.variantFrameIndices`, `project.variants`, and every
+ * layer of every object's first frame. The task spec required them
+ * "rewritten or removed", and removal is the correct call for three measured
+ * reasons:
+ *
+ *  1. **One of them was already broken, and broken in exactly the way the
+ *     spec predicted.** Its final block iterated `prev.variantGroups` — the
+ *     OBJECT-level variant list, which the v1.1.0 migration sets to
+ *     `undefined` on load. The loop therefore never executed, so a
+ *     variant-frame change on a changed object never invalidated the
+ *     thumbnail. That is the stale-thumbnail regression, live in the code
+ *     before this task rather than introduced by it.
+ *  2. **`project` is the wrong dependency.** Every pixel edit publishes a NEW
+ *     `project` object (measured, W19), so a comparator keyed on it either
+ *     re-runs constantly or — as here — reaches for a sub-field that stopped
+ *     existing. The component now takes `variants` and `variantFrameIndices`
+ *     DIRECTLY, so React's default shallow compare sees the real inputs.
+ *  3. **`observer()` on `ObjectLibraryContainer` makes the coarse guard
+ *     redundant.** MobX invalidates on the observables actually read, which
+ *     is strictly finer-grained than a comparator scanning whole frames.
+ *
+ * Default shallow memo is retained on both: `obj` and `variants` are replaced
+ * by reference on a real change, and `variantFrameIndices` is `observableRef`
+ * so it too is a new record per change. No `project` reference is threaded.
+ */
 const ObjectThumbnail = memo(function ObjectThumbnail({
   obj,
-  project,
+  variants,
+  variantFrameIndices: liveVariantFrameIndices,
   isSelected,
   isFirstFrameSelected
 }: {
   obj: PixelObject;
-  project?: {
-    variants?: import('../../types').VariantGroup[];
-    uiState?: {
-      variantFrameIndices?: { [key: string]: number };
-      selectedObjectId?: string | null;
-      selectedFrameId?: string | null;
-    }
-  };
+  /** `DomainStore.variants` — project-level, never `obj.variantGroups`. */
+  variants?: VariantGroup[];
+  /** `TimelineUIStore.variantFrameIndices`. */
+  variantFrameIndices?: { [key: string]: number };
   isSelected: boolean;
   isFirstFrameSelected: boolean;
 }) {
@@ -37,17 +63,15 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
     if (!canvas || !ctx || obj.frames.length === 0) return;
 
     const frame = obj.frames[0];
-    const variants = project?.variants;
 
-    // Only use current variantFrameIndices if this object is selected AND the first frame is selected
-    // Otherwise, use static indices (frame index 0, so variant frame index 0)
+    // Only use the LIVE indices when this object is selected AND its first
+    // frame is the selected one; otherwise render the static index-0 pose.
+    // Behaviour unchanged from the pre-task-28 code.
     let variantFrameIndices: { [key: string]: number } | undefined;
 
     if (isSelected && isFirstFrameSelected) {
-      // Use current indices when editing the first frame (allows live updates)
-      variantFrameIndices = project?.uiState?.variantFrameIndices;
+      variantFrameIndices = liveVariantFrameIndices;
     } else if (variants) {
-      // Use static indices (all variant frames at index 0 for the thumbnail)
       variantFrameIndices = {};
       for (const vg of variants) {
         variantFrameIndices[vg.id] = 0;
@@ -62,87 +86,9 @@ const ObjectThumbnail = memo(function ObjectThumbnail({
       variants,
       variantFrameIndices
     });
-  }, [obj, project, isSelected, isFirstFrameSelected]);
+  }, [obj, variants, liveVariantFrameIndices, isSelected, isFirstFrameSelected]);
 
   return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="object-library__thumb-canvas" />;
-}, (prevProps, nextProps) => {
-  // Custom comparison: only re-render if object content actually changed
-  const prev = prevProps.obj;
-  const next = nextProps.obj;
-
-  if (prev === next) {
-    // Object is the same - only check variant frame indices if editing first frame
-    if (nextProps.isSelected && nextProps.isFirstFrameSelected) {
-      const prevIndices = prevProps.project?.uiState?.variantFrameIndices;
-      const nextIndices = nextProps.project?.uiState?.variantFrameIndices;
-      if (prevIndices !== nextIndices) {
-        // Check if any relevant variant frame indices changed
-        const variants = prevProps.project?.variants;
-        if (variants) {
-          for (const vg of variants) {
-            const prevIdx = prevIndices?.[vg.id] ?? 0;
-            const nextIdx = nextIndices?.[vg.id] ?? 0;
-            if (prevIdx !== nextIdx) return false;
-          }
-        }
-      }
-    }
-    // For non-selected objects or when not editing first frame, ignore variantFrameIndices changes
-    return true;
-  }
-
-  if (prev.id !== next.id) return false;
-  if (prev.gridSize.width !== next.gridSize.width || prev.gridSize.height !== next.gridSize.height) return false;
-  if (prev.frames.length !== next.frames.length) return false;
-
-  // Check if first frame changed
-  if (prev.frames.length > 0 && next.frames.length > 0) {
-    const prevFrame = prev.frames[0];
-    const nextFrame = next.frames[0];
-
-    if (prevFrame.id !== nextFrame.id) return false;
-    if (prevFrame.layers.length !== nextFrame.layers.length) return false;
-
-    // Check if layer pixels changed
-    for (let i = 0; i < prevFrame.layers.length; i++) {
-      const prevLayer = prevFrame.layers[i];
-      const nextLayer = nextFrame.layers[i];
-
-      if (prevLayer.visible !== nextLayer.visible) return false;
-      if (prevLayer.pixels !== nextLayer.pixels) return false;
-
-      // Check if variant layer's selectedVariantId or offset changed
-      if (prevLayer.isVariant && nextLayer.isVariant) {
-        if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
-          return false; // Variant selection changed, re-render
-        }
-        // Check new variantOffsets for the selected variant type
-        const prevOffset = prevLayer.variantOffsets?.[prevLayer.selectedVariantId ?? ''] ?? prevLayer.variantOffset;
-        const nextOffset = nextLayer.variantOffsets?.[nextLayer.selectedVariantId ?? ''] ?? nextLayer.variantOffset;
-        if (prevOffset?.x !== nextOffset?.x || prevOffset?.y !== nextOffset?.y) {
-          return false; // Variant offset changed, re-render
-        }
-      }
-    }
-  }
-
-  // Only check variant frame indices if editing first frame
-  if (nextProps.isSelected && nextProps.isFirstFrameSelected) {
-    const prevIndices = prevProps.project?.uiState?.variantFrameIndices;
-    const nextIndices = nextProps.project?.uiState?.variantFrameIndices;
-    if (prevIndices !== nextIndices) {
-      // Check if any relevant variant frame indices changed
-      if (prev.variantGroups && next.variantGroups) {
-        for (const vg of prev.variantGroups) {
-          const prevIdx = prevIndices?.[vg.id] ?? 0;
-          const nextIdx = nextIndices?.[vg.id] ?? 0;
-          if (prevIdx !== nextIdx) return false;
-        }
-      }
-    }
-  }
-
-  return true;
 });
 
 // Tooltip component for compact mode
@@ -166,20 +112,15 @@ function Tooltip({ children, visible, x, y }: { children: React.ReactNode; visib
 // Compact item with hover tooltip
 const CompactObjectItem = memo(function CompactObjectItem({
   obj,
-  project,
+  variants,
+  variantFrameIndices,
   isSelected,
   isFirstFrameSelected,
   onClick,
 }: {
   obj: PixelObject;
-  project?: {
-    variants?: import('../../types').VariantGroup[];
-    uiState?: {
-      variantFrameIndices?: { [key: string]: number };
-      selectedObjectId?: string | null;
-      selectedFrameId?: string | null;
-    }
-  };
+  variants?: VariantGroup[];
+  variantFrameIndices?: { [key: string]: number };
   isSelected: boolean;
   isFirstFrameSelected: boolean;
   onClick: () => void;
@@ -212,7 +153,8 @@ const CompactObjectItem = memo(function CompactObjectItem({
       >
         <ObjectThumbnail
           obj={obj}
-          project={project}
+          variants={variants}
+          variantFrameIndices={variantFrameIndices}
           isSelected={isSelected}
           isFirstFrameSelected={isFirstFrameSelected}
         />
@@ -227,17 +169,58 @@ const CompactObjectItem = memo(function CompactObjectItem({
   );
 });
 
-export function ObjectLibrary() {
-  const {
-    project,
-    addObject,
-    deleteObject,
-    renameObject,
-    resizeObject,
-    selectObject,
-    duplicateObject,
-    setObjectLibraryViewMode
-  } = useEditorStore();
+/**
+ * Props supplied by `ObjectLibraryContainer` (REFRESH task 28).
+ *
+ * This component had NO props at all — it was fully store-driven, reading
+ * `project` and seven actions off `useEditorStore()`. The container now
+ * injects the reads explicitly, which is also what let both memo comparators
+ * go: nothing threads a `project` reference any more.
+ *
+ * ⚠️ Its 15 `useState` calls (5 inline dialogs) are deliberately NOT
+ * extracted — the spec assigns that to the purification task, not this one.
+ */
+export interface ObjectLibraryProps {
+  /** `DomainStore.objects`. */
+  objects: PixelObject[];
+  /** `DomainStore.variants` — project-level, never `obj.variantGroups`. */
+  variants: VariantGroup[];
+  /** `TimelineUIStore.variantFrameIndices`. */
+  variantFrameIndices: { [key: string]: number };
+  selectedObjectId: string | null;
+  selectedFrameId: string | null;
+  objectLibraryViewMode: 'normal' | 'small-rows' | 'grid';
+  onAddObject: (name: string, width: number, height: number) => void;
+  onDeleteObject: (id: string) => void;
+  onRenameObject: (id: string, name: string) => void;
+  onResizeObject: (
+    id: string,
+    width: number,
+    height: number,
+    anchor: AnchorPosition,
+  ) => void;
+  onSelectObject: (id: string) => void;
+  onDuplicateObject: (id: string) => void;
+  onSetObjectLibraryViewMode: (
+    mode: 'normal' | 'small-rows' | 'grid',
+  ) => void;
+}
+
+export function ObjectLibrary({
+  objects,
+  variants,
+  variantFrameIndices,
+  selectedObjectId,
+  selectedFrameId,
+  objectLibraryViewMode: viewMode,
+  onAddObject: addObject,
+  onDeleteObject: deleteObject,
+  onRenameObject: renameObject,
+  onResizeObject: resizeObject,
+  onSelectObject: selectObject,
+  onDuplicateObject: duplicateObject,
+  onSetObjectLibraryViewMode: setObjectLibraryViewMode,
+}: ObjectLibraryProps) {
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -253,12 +236,6 @@ export function ObjectLibrary() {
   const [originalHeight, setOriginalHeight] = useState(32);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
 
-  const viewMode = project?.uiState.objectLibraryViewMode ?? 'normal';
-
-  if (!project) return null;
-
-  const { objects, uiState } = project;
-  const { selectedObjectId } = uiState;
 
   const handleAddObject = () => {
     const name = newName.trim() || `Object ${objects.length + 1}`;
@@ -394,13 +371,14 @@ export function ObjectLibrary() {
             {objects.map((obj) => {
               const isSelected = selectedObjectId === obj.id;
               const firstFrame = obj.frames[0];
-              const isFirstFrameSelected = isSelected && firstFrame && project.uiState.selectedFrameId === firstFrame.id;
+              const isFirstFrameSelected = isSelected && firstFrame && selectedFrameId === firstFrame.id;
 
               return (
                 <CompactObjectItem
                   key={obj.id}
                   obj={obj}
-                  project={project}
+                  variants={variants}
+                  variantFrameIndices={variantFrameIndices}
                   isSelected={isSelected}
                   isFirstFrameSelected={isFirstFrameSelected}
                   onClick={() => selectObject(obj.id)}
@@ -413,7 +391,7 @@ export function ObjectLibrary() {
             {objects.map((obj) => {
               const isSelected = selectedObjectId === obj.id;
               const firstFrame = obj.frames[0];
-              const isFirstFrameSelected = isSelected && firstFrame && project.uiState.selectedFrameId === firstFrame.id;
+              const isFirstFrameSelected = isSelected && firstFrame && selectedFrameId === firstFrame.id;
 
               return (
                 <div
@@ -424,7 +402,8 @@ export function ObjectLibrary() {
                   <div className="object-library__thumb-small">
                     <ObjectThumbnail
                       obj={obj}
-                      project={project}
+                      variants={variants}
+                  variantFrameIndices={variantFrameIndices}
                       isSelected={isSelected}
                       isFirstFrameSelected={isFirstFrameSelected}
                     />
@@ -460,7 +439,7 @@ export function ObjectLibrary() {
             {objects.map((obj) => {
               const isSelected = selectedObjectId === obj.id;
               const firstFrame = obj.frames[0];
-              const isFirstFrameSelected = isSelected && firstFrame && project.uiState.selectedFrameId === firstFrame.id;
+              const isFirstFrameSelected = isSelected && firstFrame && selectedFrameId === firstFrame.id;
 
               return (
               <div key={obj.id} className="object-library__entry">
@@ -471,7 +450,8 @@ export function ObjectLibrary() {
                   <div className="object-library__thumb">
                     <ObjectThumbnail
                       obj={obj}
-                      project={project}
+                      variants={variants}
+                  variantFrameIndices={variantFrameIndices}
                       isSelected={isSelected}
                       isFirstFrameSelected={isFirstFrameSelected}
                     />

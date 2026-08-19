@@ -19,7 +19,7 @@
  *
  * This module is deleted outright with the Zustand store (task 38).
  */
-import type { AnchorPosition } from "../components/AnchorGrid/AnchorGrid";
+import type { AnchorPosition } from "../utils/variantHelpers";
 import type { StoreGet, UpdateProjectAndSave } from "./storeTypes";
 
 function migrated(name: string): never {

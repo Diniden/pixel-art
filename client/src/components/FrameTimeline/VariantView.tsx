@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactNode } from 'react';
-import { useEditorStore } from '../../store';
 import { Project, PixelObject, Layer, Variant, VariantFrame, VariantGroup } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
@@ -91,6 +90,50 @@ interface VariantViewProps {
   showPreview: boolean;
   setShowPreview: (show: boolean) => void;
   viewModeDropdown: ReactNode;
+  /* ── the 9 actions, supplied by `VariantViewContainer` (task 28) ────────
+   *
+   * Every read this component makes already arrived as a prop; these nine
+   * were the last store coupling. Seven are `VariantStore` domain actions,
+   * `onSelectVariantFrame` is a `TimelineUIStore` selection action, and
+   * `onSelectFrame`/`onReorderFrame` came from tasks 25's stores.
+   */
+  onSelectFrame: (id: string, syncVariants?: boolean) => void;
+  onSelectVariantFrame: (variantGroupId: string, frameIndex: number) => void;
+  onDuplicateVariantFrame: (
+    variantGroupId: string,
+    variantId: string,
+    frameId: string,
+  ) => void;
+  onDeleteVariantFrame: (
+    variantGroupId: string,
+    variantId: string,
+    frameId: string,
+  ) => void;
+  onAddVariantFrame: (
+    variantGroupId: string,
+    variantId: string,
+    copyPrevious: boolean,
+  ) => void;
+  onMoveVariantFrame: (
+    variantGroupId: string,
+    variantId: string,
+    frameId: string,
+    direction: "left" | "right",
+  ) => void;
+  onReorderFrame: (frameId: string, toIndex: number) => void;
+  onReorderVariantFrame: (
+    variantGroupId: string,
+    variantId: string,
+    frameId: string,
+    toIndex: number,
+  ) => void;
+  onResizeVariant: (
+    variantGroupId: string,
+    variantId: string,
+    width: number,
+    height: number,
+    anchor: AnchorPosition,
+  ) => void;
 }
 
 export function VariantView({
@@ -101,19 +144,17 @@ export function VariantView({
   togglePlayback,
   showPreview,
   setShowPreview,
-  viewModeDropdown
+  viewModeDropdown,
+  onSelectFrame: selectFrame,
+  onSelectVariantFrame: selectVariantFrame,
+  onDuplicateVariantFrame: duplicateVariantFrame,
+  onDeleteVariantFrame: deleteVariantFrame,
+  onAddVariantFrame: addVariantFrame,
+  onMoveVariantFrame: moveVariantFrame,
+  onReorderFrame: reorderFrame,
+  onReorderVariantFrame: reorderVariantFrame,
+  onResizeVariant: resizeVariant,
 }: VariantViewProps) {
-  const {
-    selectFrame,
-    selectVariantFrame,
-    duplicateVariantFrame,
-    deleteVariantFrame,
-    addVariantFrame,
-    moveVariantFrame,
-    reorderFrame,
-    reorderVariantFrame,
-    resizeVariant
-  } = useEditorStore();
 
   const [newFrameName, setNewFrameName] = useState('');
   const [copyPrevious, setCopyPrevious] = useState(true);

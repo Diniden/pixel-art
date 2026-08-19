@@ -38,22 +38,31 @@ describe("the R6 ledger", () => {
     // unless their inputs are observable, so MobX keeps a read-only copy —
     // on `TimelineUIStore` since task 25 (it replaced `SelectionMirror`).
     //
-    // ⚠️ TASK 25 did NOT flip the four ids, deliberately. `TimelineUIStore`
-    // now owns `selectFrame`/`selectLayer`, but `store/objectActions.ts:58`
-    // (`selectObject`) still writes all three ids and `store/variantActions.ts`
-    // writes `variantFrameIndices` at 8 sites — both files belong to later
-    // tasks. Flipping would give each field two writers, which R6 forbids.
+    // ⚠️ TASK 28 flipped `variantFrameIndices` OUT of this list and left the
+    // three ids in it — a deliberately PARTIAL flip, and the reason matters.
     //
-    // Task 25 DID flip both clipboards out of this list: `LayerStore` is now
-    // their only writer, and their two readers (`LayerPanel`, `TimelineView`)
-    // are migrated by the same task per §9.8.
+    // A field flips when IT has one writer, not when its neighbours do:
+    //
+    //   `variantFrameIndices` — had two writers for five waves
+    //       (`TimelineUIStore` and `store/variantActions.ts`, 9 sites). Task
+    //       28 migrated all twenty variant actions, so `variantActions.ts`
+    //       is throwing stubs behind bridge delegates and `TimelineUIStore`
+    //       is now its single writer. FLIPPED.
+    //
+    //   the three ids — `store/objectActions.ts:65-67` (`selectObject`) is
+    //       STILL a live Zustand implementation writing all three, and it is
+    //       outside task 28's `Touches`. Flipping would give each id two
+    //       writers, which R6 forbids. NOT flipped — for the fifth
+    //       consecutive wave, and now for exactly ONE remaining reason.
+    //
+    // ⚠️ `selectObject` is the last blocker. No other file under `src/store`
+    // writes any of the three.
     expect([...PHASE_A_FIELDS]).toEqual([
       "aiServiceUrl",
       "colorHistory",
       "selectedObjectId",
       "selectedFrameId",
       "selectedLayerId",
-      "variantFrameIndices",
     ]);
   });
 
@@ -118,6 +127,13 @@ describe("the R6 ledger", () => {
       "heightScale",
       "heightBrushValue",
       "normalBrushShape",
+      // ── Task 28 ────────────────────────────────────────────────────────
+      // `variantFrameIndices`: `TimelineUIStore` is its single writer now
+      // that all twenty variant actions are bridge delegates into
+      // `VariantStore`/`TimelineUIStore`. Mirrored by its own reaction with
+      // KEY-BY-KEY equality — it is `observableRef`, so every write is a new
+      // record and a reference compare would fire on every no-op rebuild.
+      "variantFrameIndices",
     ]);
   });
 
