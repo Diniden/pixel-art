@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useEditorStore } from '../../store';
 import { Color } from '../../types';
-import { NormalPicker } from './NormalPicker';
+// Task 27: the LIGHT DIRECTION half of `NormalPicker`, through its own
+// container. The other half (`selectedNormal`) is
+// `SelectedNormalPickerContainer`, rendered by `LightingStudioPanel`. The
+// two fields are independent and must stay so — see `NormalPickerContainer`.
+import { LightDirectionPickerContainer } from '../../containers/NormalPickerContainer';
 import './LightControl.css';
 
 // HSL to RGB conversion
@@ -230,7 +234,7 @@ export function LightControl() {
   return (
     <div className="light-control">
       <div className="light-control__section">
-        <NormalPicker isLightDirection={true} />
+        <LightDirectionPickerContainer />
       </div>
 
       <div className="light-control__section">

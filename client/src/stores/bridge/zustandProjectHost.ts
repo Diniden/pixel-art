@@ -180,6 +180,14 @@ export function createZustandPixelMirror(): PixelMirror {
     reconcile: () => {
       reconcileHistory();
     },
+    // Task 27: the FLIPS only. Routed through the same Zustand action
+    // `createZustandDomainMirror` uses, because that action is the single
+    // writer of the `projectHistory`/`historyIndex` Phase B mirror (R6, task
+    // 17). See `PixelMirror.snapshot` for why the two flips are the one
+    // exception to this store's no-snapshot rule.
+    snapshot: (label: string) => {
+      useEditorStore.getState().saveCurrentStateToHistory(label);
+    },
   };
 }
 

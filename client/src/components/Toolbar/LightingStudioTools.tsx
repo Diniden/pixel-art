@@ -4,7 +4,7 @@ import { Tool, Normal } from "../../types";
 import { EdgeInterpolateModal } from "../EdgeInterpolateModal/EdgeInterpolateModal";
 import { HeightMapModalContainer } from "../../containers/HeightMapModalContainer";
 import { computeEdgeInterpolatedNormals } from "../../utils/edgeInterpolate";
-import { Pixel, PixelData } from "../../types";
+import { computeHeightMap, type HeightChannel } from "../../utils/normalCompute";
 import { Icon } from "../../ui/primitives/Icon/Icon";
 import type { LucideIcon } from "lucide-react";
 import { Sun, Wrench, Mountain } from "lucide-react";
@@ -20,65 +20,14 @@ const lightingTools: {
   { id: "height-map", icon: Mountain, label: "Height Map", hotkey: "3" },
 ];
 
-type ChannelType = "R" | "G" | "B" | "H" | "S" | "L";
-
-// Convert RGB to HSL
-function rgbToHsl(
-  r: number,
-  g: number,
-  b: number,
-): { h: number; s: number; l: number } {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h = 0;
-  let s = 0;
-  const l = (max + min) / 2;
-
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-
-    switch (max) {
-      case r:
-        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-        break;
-      case g:
-        h = ((b - r) / d + 2) / 6;
-        break;
-      case b:
-        h = ((r - g) / d + 4) / 6;
-        break;
-    }
-  }
-
-  return {
-    h: Math.round(h * 255), // Scale to 0-255
-    s: Math.round(s * 255),
-    l: Math.round(l * 255),
-  };
-}
-
-// Extract channel value from pixel
-function getChannelValue(pixel: Pixel, channel: ChannelType): number {
-  switch (channel) {
-    case "R":
-      return pixel.r;
-    case "G":
-      return pixel.g;
-    case "B":
-      return pixel.b;
-    case "H":
-    case "S":
-    case "L": {
-      const hsl = rgbToHsl(pixel.r, pixel.g, pixel.b);
-      return hsl[channel.toLowerCase() as "h" | "s" | "l"];
-    }
-  }
-}
+/**
+ * ⚠️ Task 27 (§9.5): `rgbToHsl`, `getChannelValue` and the whole height-map
+ * normalisation used to live HERE, as 90 lines of pure arithmetic inside a
+ * React component. They are now `utils/normalCompute.ts`, unit-tested
+ * independently of React and of any store — that extraction is exactly what
+ * §9.5 asked for. The behaviour is unchanged; see the module's header.
+ */
+type ChannelType = HeightChannel;
 
 export function LightingStudioTools() {
   const {
@@ -201,53 +150,17 @@ export function LightingStudioTools() {
       gridHeight = obj.gridSize.height;
     }
 
-    // Collect all channel values for normalization
-    const channelValues: number[] = [];
-    const pixelPositions: { x: number; y: number; pixel: Pixel }[] = [];
-
-    for (let y = 0; y < gridHeight; y++) {
-      const row = targetLayer.pixels[y];
-      if (!row) continue;
-      for (let x = 0; x < gridWidth; x++) {
-        const pixelData: PixelData | undefined = row[x];
-        if (
-          pixelData &&
-          pixelData.color !== 0 &&
-          typeof pixelData.color === "object"
-        ) {
-          const channelValue = getChannelValue(pixelData.color, params.channel);
-          channelValues.push(channelValue);
-          pixelPositions.push({ x, y, pixel: pixelData.color });
-        }
-      }
-    }
-
-    if (channelValues.length === 0) return;
-
-    // Find actual min/max in the data
-    const actualMin = Math.min(...channelValues);
-    const actualMax = Math.max(...channelValues);
-    const range = actualMax - actualMin;
-
-    // Compute height values
-    const pixelsToUpdate = pixelPositions.map(({ x, y, pixel }) => {
-      const channelValue = getChannelValue(pixel, params.channel);
-
-      // Normalize: map from [actualMin, actualMax] to [params.min, params.max]
-      let normalized: number;
-      if (range === 0) {
-        normalized = params.min;
-      } else {
-        // Map from [actualMin, actualMax] to [0, 1]
-        const t = (channelValue - actualMin) / range;
-        // Map to [params.min, params.max]
-        normalized = params.min + t * (params.max - params.min);
-      }
-
-      // Clamp to 0-255 and ensure at least 1 if non-zero (height 0 means no height data)
-      const heightValue = Math.max(0, Math.min(255, Math.round(normalized)));
-      return { x, y, height: heightValue === 0 ? 0 : Math.max(1, heightValue) };
-    });
+    // ⚠️ Task 27 (§9.5): 60 lines of pure arithmetic used to be inlined
+    // here. It is `computeHeightMap` now — same maths, same quirks, unit
+    // tested in `utils/__tests__/normalCompute.test.ts`. An empty result
+    // means "no coloured pixels", which the store treats as nothing to write.
+    const pixelsToUpdate = computeHeightMap(
+      targetLayer,
+      gridWidth,
+      gridHeight,
+      params,
+    );
+    if (pixelsToUpdate.length === 0) return;
 
     setHeightPixels(pixelsToUpdate);
   };

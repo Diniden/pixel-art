@@ -61,8 +61,10 @@
  * no save). `setPixels` filters out-of-bounds and mask-excluded cells before
  * deciding whether there is anything to do at all.
  */
-import { runInAction } from "mobx";
-import type { Color, Layer, PixelData, Project } from "../../types";
+import { flow, makeObservable, observable, runInAction } from "mobx";
+import type { Color, Layer, Normal, PixelData, Project } from "../../types";
+import { flipGridHorizontal, flipGridVertical } from "../../utils/normalCompute";
+import { computeEdgeInterpolatedNormals } from "../../utils/edgeInterpolate";
 import { createPixelCommand } from "../history/commands";
 import type {
   PixelPatch,
@@ -128,6 +130,28 @@ export interface PixelMirror {
    * when a whole suite file ran, never in isolation.
    */
   reconcile(): void;
+  /**
+   * Record a pre-mutation project SNAPSHOT, through the same seam
+   * `DomainMutator` uses (`store/index.ts`'s `saveCurrentStateToHistory`).
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ TASK 27 ADDED THIS, AND IT IS THE ONE EXCEPTION TO "NO SNAPSHOTS"
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * Every other action on this store records an inverse patch, and W18's
+   * whole point was that a pixel edit never captures a project. The two
+   * FLIPS cannot: a mirror rewrites EVERY cell in the grid, so the "inverse
+   * patch" would be the entire grid twice over — strictly worse than the
+   * snapshot it was meant to replace. Task 27's spec says so explicitly
+   * ("These are snapshot-family commands (an inverse patch is intractable).
+   * Charge the real byte cost.").
+   *
+   * ⚠️ It is therefore also the ONE path on this store where the undo cost
+   * is O(project), and nothing else may start using it. The 50-pixel-stroke
+   * byte gate covers `setPixel`/`setPixels`, not the flips, and would not
+   * notice a regression that routed a stroke through here.
+   */
+  snapshot(label: string): void;
 }
 
 /**
@@ -204,6 +228,55 @@ function writeCells(
   return next;
 }
 
+/**
+ * Build the patch list for a bulk normal/height write (task 27).
+ *
+ * Shared by `setNormalPixels` and `setHeightPixels` because the legacy
+ * versions were character-identical apart from which cell member they
+ * replaced — 130 lines each, four near-copies in total once the variant
+ * branches are counted.
+ *
+ * ⚠️ THE THREE FILTERS ARE THE LEGACY BEHAVIOUR, in this order:
+ *   1. out-of-bounds cells are SKIPPED, not clamped;
+ *   2. cells with no colour are SKIPPED — a normal/height may only exist
+ *      where paint does;
+ *   3. the LAST write to a repeated cell wins, and only ONE patch is
+ *      recorded for it, so undo restores the true pre-batch value rather
+ *      than an intermediate one (the same de-duplication `setPixels` does).
+ */
+function collectLightingPatches<P extends { x: number; y: number }>(
+  layer: Layer,
+  width: number,
+  height: number,
+  writes: readonly P[],
+  apply: (before: PixelData, write: P) => PixelData,
+): PixelPatch[] {
+  const patches: PixelPatch[] = [];
+  const seen = new Map<number, number>();
+
+  for (const write of writes) {
+    const { x, y } = write;
+    if (x < 0 || x >= width || y < 0 || y >= height) continue;
+
+    const existing = layer.pixels[y]?.[x];
+    // Only set normal/height where color exists — the legacy guard.
+    if (!existing || existing.color === 0) continue;
+
+    const key = y * width + x;
+    const already = seen.get(key);
+    if (already !== undefined) {
+      const patch = patches[already];
+      patch.after = apply(patch.before, write);
+      continue;
+    }
+    const before = copyCell(existing);
+    seen.set(key, patches.length);
+    patches.push({ x, y, before, after: apply(before, write) });
+  }
+
+  return patches;
+}
+
 export class PixelStore {
   private readonly domain: DomainStore;
   private readonly history: HistoryStore;
@@ -231,6 +304,16 @@ export class PixelStore {
     // `coalescePixelCommands`). `PixelStore` is the only producer of the
     // family, so it is the only sensible injector.
     this.history.setPatchHost(this.patchHost);
+
+    // Task 27. ONLY the normal-computation flow and its progress are
+    // observable on this store — the grids emphatically are not (R2), they
+    // live on `DomainStore` behind `observableRef` and are replaced
+    // wholesale. `makeObservable` with an explicit map (never
+    // `makeAutoObservable`) is what keeps that true.
+    makeObservable(this, {
+      normalComputeProgress: observable,
+      computeNormalsForAllFrames: flow,
+    });
   }
 
   /* ── resolution ────────────────────────────────────────────────────────── */
@@ -768,5 +851,393 @@ export class PixelStore {
       patches,
       options.trackHistory ?? false,
     );
+  }
+
+  /* ══ THE LIGHTING WRITE PATHS (task 27) ═══════════════════════════════
+   *
+   * Normals and heights ARE pixel content — `PixelData` is `[colour, normal,
+   * height]` — so R2 puts them here, behind the same sole-writer rule as
+   * colour. They were the last pixel writes still living outside this store,
+   * in `store/lightingActions.ts`.
+   *
+   * ⚠️ THE ONE GUARD THEY ALL SHARE: a normal or a height may only be
+   * written where a COLOUR already exists. Every legacy lighting action
+   * checked `pd && pd.color !== 0` before writing, and skipped the cell
+   * silently otherwise. This is not defensive coding — an unpainted cell with
+   * a normal renders as lit nothing, and the exporter treats
+   * `height: 0` / `normal: 0` as "no data". The guard is preserved exactly,
+   * including its consequence: painting a normal over transparent pixels is a
+   * NO-OP that records no history entry, because the patch list comes out
+   * empty and `commitCells` early-returns on that.
+   *
+   * ⚠️ INVERSE PATCHES, like every other action here. A normal is ~24 B/cell,
+   * exactly as a colour is, so nothing about W18's byte win changes.
+   * ═══════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * Write one cell's normal. The lighting studio's pencil.
+   *
+   * Ported from `lightingActions.ts:129-228`. The bounds check, the
+   * colour-exists guard and the silent bail-out on an unresolvable target are
+   * all the legacy behaviour.
+   *
+   * ⚠️ Unlike `setPixel`, there is NO "already this value" early return —
+   * the legacy `setNormalPixel` never had one, so re-stamping the same normal
+   * still records an entry. Observed behaviour, preserved deliberately
+   * (the same asymmetry `setPixels` carries, and pinned for the same reason).
+   */
+  setNormalPixel(
+    x: number,
+    y: number,
+    normal: Normal | 0,
+    options: PixelWriteOptions = {},
+  ): void {
+    const resolved = this.resolveTarget(options.variantFrameIndex);
+    if (!resolved) return;
+    const { target, layer, width, height } = resolved;
+
+    if (x < 0 || x >= width || y < 0 || y >= height) return;
+
+    const existing = layer.pixels[y]?.[x];
+    // Can only set normal where color exists.
+    if (!existing || existing.color === 0) return;
+
+    const before = copyCell(existing);
+    this.commitCells(
+      target,
+      layer,
+      "Set normal",
+      [{ x, y, before, after: { ...before, normal } }],
+      options.trackHistory ?? true,
+    );
+  }
+
+  /**
+   * Write many cells' normals as ONE history entry. The bulk path the
+   * auto-normal (edge-interpolate) tool uses.
+   *
+   * Ported from `lightingActions.ts:230-354`. Out-of-bounds cells and cells
+   * without a colour are FILTERED, not rejected — a partially in-bounds batch
+   * writes its valid members, exactly as the legacy loop did.
+   */
+  setNormalPixels(
+    pixels: readonly { x: number; y: number; normal: Normal | 0 }[],
+    options: PixelWriteOptions = {},
+  ): void {
+    if (pixels.length === 0) return;
+    const resolved = this.resolveTarget(options.variantFrameIndex);
+    if (!resolved) return;
+    const { target, layer, width, height } = resolved;
+
+    this.commitLighting(
+      target,
+      layer,
+      "Set normals",
+      collectLightingPatches(
+        layer,
+        width,
+        height,
+        pixels,
+        (before, p) => ({ ...before, normal: p.normal }),
+      ),
+      options.trackHistory ?? true,
+    );
+  }
+
+  /**
+   * Write many cells' heights as ONE history entry.
+   *
+   * Ported from `lightingActions.ts:619-751`. Structurally identical to
+   * {@link setNormalPixels} — same filters, same colour guard — differing
+   * only in which member of the cell it replaces.
+   */
+  setHeightPixels(
+    pixels: readonly { x: number; y: number; height: number }[],
+    options: PixelWriteOptions = {},
+  ): void {
+    if (pixels.length === 0) return;
+    const resolved = this.resolveTarget(options.variantFrameIndex);
+    if (!resolved) return;
+    const { target, layer, width, height } = resolved;
+
+    this.commitLighting(
+      target,
+      layer,
+      "Set heights",
+      collectLightingPatches(
+        layer,
+        width,
+        height,
+        pixels,
+        (before, p) => ({ ...before, height: p.height }),
+      ),
+      options.trackHistory ?? true,
+    );
+  }
+
+  /**
+   * `commitCells`, plus the ONE behaviour the bulk lighting writes have that
+   * the colour writes do not: **an empty patch list still SAVES.**
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THIS ASYMMETRY IS OBSERVED BEHAVIOUR, PINNED BY TASK 08
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * The legacy `setNormalPixels`/`setHeightPixels` applied the colour guard
+   * INSIDE an `updateProjectAndSave` updater. So when no cell qualified —
+   * every target pixel transparent — the grid came out unchanged but the save
+   * was still scheduled, because `updateProjectAndSave` schedules
+   * unconditionally. `autoSave.test.ts:361` pins exactly that: it writes a
+   * height at (0,0) of an EMPTY 4×4 fixture and requires one save.
+   *
+   * `commitCells` early-returns on an empty patch list (correct for colour:
+   * `setPixel` on the colour it already has must record and save nothing), so
+   * the bulk lighting paths route through here instead and publish + bump
+   * even with nothing to write.
+   *
+   * ⚠️ It does NOT record a history entry in that case, and must not — the
+   * legacy path produced no undoable change either, and task 08's
+   * "none of the 8 track history" pin is adjacent to this one.
+   *
+   * `setNormalPixel` (singular) is deliberately NOT routed here: it bails out
+   * BEFORE the updater when the pixel has no colour (`lightingActions.ts:198`
+   * returns early), so its no-op genuinely saves nothing.
+   */
+  private commitLighting(
+    target: PixelTarget,
+    layer: Layer,
+    label: string,
+    patches: readonly PixelPatch[],
+    trackHistory: boolean,
+  ): void {
+    if (patches.length === 0) {
+      // Nothing to write, but the legacy path still tripped the save trigger.
+      this.publishAndBump();
+      return;
+    }
+    this.commitCells(target, layer, label, patches, trackHistory);
+  }
+
+  /* ── the two flips: SNAPSHOT-family, and deliberately NOT unified ─────── */
+
+  /**
+   * Mirror the active layer left-to-right, negating every normal's x.
+   *
+   * ⚠️ A SNAPSHOT command, not an inverse patch — see `PixelMirror.snapshot`.
+   * A flip rewrites every cell, so the patch would be the whole grid twice.
+   *
+   * ⚠️ **DO NOT UNIFY WITH {@link flipVertical}.** They are mirror images and
+   * one `flipAxis(axis)` is the obvious refactor, but task 08 pinned two
+   * properties of the CURRENT pair — `flipHorizontal ∘ flipHorizontal =
+   * identity`, and that H and V agree modulo transpose — and task 27's
+   * constraints require porting them separately so those pins verify the port
+   * rather than the refactor. Unifying is an explicit follow-up.
+   */
+  flipHorizontal(options: PixelWriteOptions = {}): void {
+    this.flipInto(flipGridHorizontal, "Flip horizontal", options);
+  }
+
+  /** The vertical twin. See {@link flipHorizontal} — including its warning. */
+  flipVertical(options: PixelWriteOptions = {}): void {
+    this.flipInto(flipGridVertical, "Flip vertical", options);
+  }
+
+  /* ══ computeNormalsForAllFrames — A FLOW (task 27) ═══════════════════════
+   *
+   * ⚠️ THIS USED TO BLOCK THE MAIN THREAD FROM INSIDE A REACT COMPONENT.
+   *
+   * `LightingStudioTools.tsx` called the Zustand action synchronously from a
+   * modal's confirm handler, and that action ran
+   * `computeEdgeInterpolatedNormals` — a gaussian-RBF spherical interpolation
+   * over every coloured pixel — once per FRAME, inside a single
+   * `updateProjectAndSave` updater. On a 54-frame object nothing repainted
+   * until the whole sweep finished.
+   *
+   * As a `flow` it yields between frames, so React can paint and
+   * {@link normalComputeProgress} can drive a progress indicator. The
+   * ARITHMETIC IS UNCHANGED: the same pure function, the same arguments, the
+   * same per-frame loop and the same colour guard.
+   *
+   * ── ONE history entry, not one per frame ──────────────────────────────
+   *
+   * The whole sweep runs inside a HistoryStore transaction, so it collapses
+   * into a single undo entry — matching the legacy single
+   * `updateProjectAndSave(..., true)` exactly. Each frame's write is an
+   * ordinary inverse-patch commit, so the cost stays ~24 B per CHANGED cell
+   * rather than a project snapshot per frame.
+   *
+   * ⚠️ It writes ACROSS frames, which every other action here refuses to do.
+   * That is safe only because each frame's target is resolved and written
+   * independently, one `PixelTarget` at a time — this is not a multi-target
+   * command, it is N single-target commands inside one transaction.
+   * ═══════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * `0` when idle, otherwise the fraction of frames processed (0..1).
+   * Observable so a container can render progress without polling.
+   */
+  normalComputeProgress = 0;
+
+  /**
+   * Recompute edge-interpolated normals for EVERY frame of the active layer
+   * (or of the active variant), yielding between frames.
+   *
+   * Ported from `lightingActions.ts:482-618`.
+   */
+  *computeNormalsForAllFrames(params: {
+    startAngle: number;
+    smoothing: number;
+    radius: number;
+  }): Generator<Promise<void>, void, unknown> {
+    const plan = this.planNormalCompute(params);
+    if (plan.length === 0) return;
+
+    this.history.beginTransaction("Compute normals");
+    try {
+      for (let i = 0; i < plan.length; i++) {
+        plan[i]();
+        this.normalComputeProgress = (i + 1) / plan.length;
+        // ⚠️ YIELD *BETWEEN* FRAMES, NEVER AFTER THE LAST ONE.
+        //
+        // A generator's body runs synchronously up to its FIRST yield, so
+        // with a yield after every frame a single-frame object would suspend
+        // before `endTransaction()` and the undo entry would not exist until
+        // a microtask later. Task 08 pins `computeNormalsForAllFrames`
+        // "TRACKS history" with a SYNCHRONOUS assertion right after the
+        // dispatch, and that pin caught exactly this — measured.
+        //
+        // Skipping the final yield makes the common case (one frame, or the
+        // last frame of many) complete synchronously, so the legacy call
+        // shape is preserved for every caller that does not await, while a
+        // multi-frame sweep still releases the main thread between frames.
+        if (i < plan.length - 1) yield Promise.resolve();
+      }
+    } finally {
+      this.history.endTransaction();
+      // ⚠️ RE-SYNC AFTER THE COLLAPSE. Inside a transaction `history.record`
+      // BUFFERS rather than pushing, so each frame's `commitCells` synced a
+      // mirror that had not changed. The entry only exists once
+      // `endTransaction` collapses the buffer, and the Phase B
+      // `projectHistory`/`historyIndex` mirror must be republished then —
+      // otherwise undo works while every consumer reading `projectHistory`
+      // reports a depth of zero. Measured: task 08's
+      // "computeNormalsForAllFrames TRACKS history" fails without this line.
+      this.mirror.syncHistory();
+      this.normalComputeProgress = 0;
+    }
+  }
+
+  /**
+   * Resolve every frame the sweep will touch, and return one closure per
+   * frame that computes and commits it.
+   *
+   * Planned UP FRONT, before the first yield, so the set of frames is decided
+   * against one consistent tree — the legacy action likewise read the frame
+   * list once. Each closure still re-resolves its own layer from the LIVE
+   * tree when it runs, because the previous frame's commit replaced part of
+   * that tree.
+   */
+  private planNormalCompute(params: {
+    startAngle: number;
+    smoothing: number;
+    radius: number;
+  }): (() => void)[] {
+    const resolved = this.resolveTarget();
+    if (!resolved) return [];
+    const { target, width, height } = resolved;
+
+    const commitFrame = (frameTarget: PixelTarget) => () => {
+      const layer = this.findLayer(frameTarget);
+      if (!layer) return;
+      const normals = computeEdgeInterpolatedNormals(
+        layer,
+        width,
+        height,
+        params.startAngle,
+        params.smoothing,
+        params.radius,
+      );
+      // `normals` is indexed `y * width + x` — flatten it into the
+      // {x, y, normal} shape the shared collector wants, and let that apply
+      // the colour guard exactly as `setNormalPixels` does.
+      const writes: { x: number; y: number; normal: Normal | 0 }[] = [];
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          // `|| 0` not `?? 0`: the legacy code used `normal || 0`, and an
+          // out-of-range index yields `undefined` either way. Transcribed.
+          writes.push({ x, y, normal: normals[y * width + x] || 0 });
+        }
+      }
+      this.commitCells(
+        frameTarget,
+        layer,
+        "Compute normals",
+        collectLightingPatches(layer, width, height, writes, (before, w) => ({
+          ...before,
+          normal: w.normal,
+        })),
+        true,
+      );
+    };
+
+    // ── the variant branch: every FRAME of the selected variant ───────────
+    if (target.variant) {
+      const { variantGroupId, variantId } = target.variant;
+      const group = this.domain.variants.find((vg) => vg.id === variantGroupId);
+      const variant = group?.variants.find((v) => v.id === variantId);
+      if (!variant) return [];
+      return variant.frames.map((_frame, frameIndex) =>
+        commitFrame({
+          ...target,
+          variant: { variantGroupId, variantId, frameIndex },
+        }),
+      );
+    }
+
+    // ── the regular branch: every frame of the object that HAS this layer ──
+    //
+    // Frames without a layer of this id are SKIPPED, exactly as the legacy
+    // `if (!targetLayer) return f;` did — layers are matched by id across
+    // frames, and a frame that never had the layer is left alone.
+    const object = this.domain.objects.find((o) => o.id === target.objectId);
+    if (!object) return [];
+    return object.frames
+      .filter((f) => f.layers.some((l) => l.id === target.layerId))
+      .map((f) => commitFrame({ ...target, frameId: f.id }));
+  }
+
+  /**
+   * The shared plumbing behind the two flips: resolve, snapshot, replace the
+   * grid wholesale, publish, bump.
+   *
+   * ⚠️ This is PLUMBING, not the algorithm. The two grid transforms stay
+   * separate pure functions in `utils/normalCompute.ts` — sharing the four
+   * lines of store bookkeeping is not what "do not unify the flips" forbids,
+   * and duplicating them would have been the third and fourth copies of code
+   * that already existed four times in the legacy module.
+   */
+  private flipInto(
+    transform: (
+      pixels: readonly PixelData[][],
+      width: number,
+      height: number,
+    ) => PixelData[][],
+    label: string,
+    options: PixelWriteOptions,
+  ): void {
+    const resolved = this.resolveTarget(options.variantFrameIndex);
+    if (!resolved) return;
+    const { target, layer, width, height } = resolved;
+
+    const trackHistory = options.trackHistory ?? true;
+    if (trackHistory) {
+      // Adopt any external write to the legacy mirror first, then capture the
+      // PRE state — the same order `commitCells` uses for its patch path.
+      this.mirror.reconcile();
+      this.mirror.snapshot(label);
+    }
+
+    this.writeGrid(target, transform(layer.pixels, width, height));
+    this.publishAndBump();
   }
 }

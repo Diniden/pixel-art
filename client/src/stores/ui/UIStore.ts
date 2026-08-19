@@ -78,17 +78,25 @@
  */
 import { computedStruct, makeObservable, observable, observableRef, reaction } from "mobx";
 import type { IReactionDisposer } from "mobx";
-import { rgbaToHex } from "../../types";
+import { normalToPacked, rgbaToHex } from "../../types";
 import type { CompactUIState, Color } from "../../types";
+import { LightingUIStore } from "./LightingUIStore";
 import { ToolUIStore } from "./ToolUIStore";
 import { ViewportUIStore } from "./ViewportUIStore";
 import type { SessionStore } from "../session/SessionStore";
 
 /**
- * The lighting/studio fields. They migrate to `LightingUIStore` in task 27;
- * until then `UIStore` holds them so `toPersistedUIState()` can emit all 43
- * persisted fields from ONE place. Hydrated from the loaded project and
- * written by the legacy Zustand actions during the bridge era.
+ * The lighting/studio fields in their COMPACT (packed) form.
+ *
+ * ⚠️ TASK 27 SUPERSEDED THIS, but did not delete it. `LightingUIStore` now
+ * owns the nine fields as domain-typed observables and is the source the
+ * builder reads whenever one is injected (see {@link UIStoreDeps.lighting}).
+ *
+ * The `lighting` REF below remains as the fallback for the three task-24 UI
+ * suites, which construct a bare `UIStore` with no lighting store and assign
+ * this record directly. Keeping it costs one `??` in the builder and lets
+ * those suites — the R3 wire-format gate — stay byte-unmodified across the
+ * migration. It is deleted with the bridge in task 38.
  */
 export interface LightingUIFields {
   studioMode: CompactUIState["studioMode"];
@@ -143,6 +151,32 @@ export interface UIStoreDeps {
    * as before.
    */
   viewport?: ViewportUIStore;
+  /**
+   * Task 27: the real owner of the nine lighting settings.
+   *
+   * Optional for the same reason `viewport` is: the three task-24 UI suites
+   * build a bare `UIStore` and set the {@link UIStore.lighting} ref by hand.
+   * When it IS supplied — which `ApplicationStore` always does — the builder
+   * reads the store and the ref is ignored, so there is exactly ONE source
+   * for each of the nine fields at runtime (R6).
+   */
+  lighting?: LightingUIStore;
+  /**
+   * Task 27: an already-constructed `ToolUIStore`.
+   *
+   * ⚠️ Construction ORDER, exactly like `viewport` above and for the same
+   * measured reason. `LightingUIStore` writes `tool.selectedTool` from
+   * `setStudioMode`, so it needs the tool store; and `UIStore`'s
+   * `persistedUIVersion` reaction reads `persistedSignature` — and therefore
+   * the lighting store — EAGERLY during construction, so the lighting store
+   * must be fully built before `UIStore` runs. That is only possible if
+   * `UIStore` can adopt an existing tool store instead of always building
+   * its own.
+   *
+   * Omitted (the three task-24 UI suites do) it constructs its own, exactly
+   * as before.
+   */
+  tool?: ToolUIStore;
 }
 
 export class UIStore {
@@ -152,8 +186,17 @@ export class UIStore {
   private readonly selection: UISelectionSource;
 
   /**
-   * Task 27 owns these. Held as one `observable.ref` record so a lighting
-   * edit still bumps `persistedUIVersion` and still reaches the save payload.
+   * Task 27: the store that owns the nine lighting settings. `null` only in
+   * the three task-24 UI suites, which use the {@link UIStore.lighting} ref
+   * instead — see {@link LightingUIFields}.
+   */
+  readonly lightingUI: LightingUIStore | null;
+
+  /**
+   * The PRE-task-27 fallback: the nine fields as one packed `observable.ref`
+   * record. Read by the builder only when {@link UIStore.lightingUI} is
+   * absent. Retained so task 24's wire-format suites need no edit; deleted
+   * with the bridge in task 38.
    */
   lighting: LightingUIFields | null = null;
 
@@ -173,8 +216,9 @@ export class UIStore {
   constructor(deps: UIStoreDeps) {
     this.session = deps.session;
     this.selection = deps.selection;
-    this.tool = new ToolUIStore();
+    this.tool = deps.tool ?? new ToolUIStore();
     this.viewport = deps.viewport ?? new ViewportUIStore();
+    this.lightingUI = deps.lighting ?? null;
 
     makeObservable(this, {
       lighting: observableRef,
@@ -217,7 +261,14 @@ export class UIStore {
     const tool = this.tool;
     const viewport = this.viewport;
     const panels = viewport.panels;
-    const lighting = this.lighting;
+    // Task 27: the injected store wins; the packed ref is the task-24
+    // fallback. `compactLighting` performs the ONE conversion the wire format
+    // needs (domain `Normal`/`Color` → packed int / hex int) at exactly this
+    // boundary, so the UI layer never holds a packed value and the builder
+    // stays the single place the format is decided.
+    const lighting = this.lightingUI
+      ? compactLighting(this.lightingUI)
+      : this.lighting;
 
     // ⚠️ TYPE-vs-REALITY NOTE. `CompactUIState` declares `borderRadius:
     // number` (REQUIRED), but the real data disagrees: only 26 of the
@@ -323,12 +374,67 @@ export class UIStore {
     this.tool.hydrate(ui);
     this.viewport.hydrate(ui);
     this.traceNudgeAmount = ui.traceNudgeAmount ?? 10;
+    // ⚠️ `lightingUI` is deliberately NOT hydrated here — see
+    // {@link UIStore.hydrateLighting}.
+  }
+
+  /**
+   * Adopt a loaded project's LIGHTING fields — separately from
+   * {@link UIStore.hydrate} (task 27).
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ SEPARATE ON PURPOSE: THE 9 ARE PHASE **B**, THE REST ARE PHASE A
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * The bridge calls `hydrate()` on EVERY Zustand change, because the ~30
+   * Phase A fields are still Zustand-owned and MobX mirrors them. The nine
+   * lighting fields flipped to Phase B in the same change that created
+   * `LightingUIStore`, so MobX owns them — and re-adopting them from Zustand
+   * on every unrelated store change would make Zustand a SECOND writer (R6)
+   * and would clobber a fresh lighting edit with the stale mirror on the very
+   * next tick.
+   *
+   * They are therefore hydrated ONLY when a project is loaded or switched,
+   * which is exactly what this method exists to mark. Folding it back into
+   * `hydrate()` reintroduces the oscillation; measured while writing this.
+   */
+  hydrateLighting(ui: import("../../types").UIState): void {
+    this.lightingUI?.hydrate(ui);
   }
 
   /** Storybook/Vitest teardown. */
   dispose(): void {
     this.disposeVersionReaction();
   }
+}
+
+/**
+ * Project a {@link LightingUIStore} onto the packed {@link LightingUIFields}
+ * shape the builder emits.
+ *
+ * ⚠️ The FOUR packed fields are converted here and nowhere else. `Normal` →
+ * `normalToPacked`, `Color` → `rgbaToHex` — the exact two functions the
+ * legacy `projectToCompact` used (`codecs/serialize.ts:80-81`), so the bytes
+ * are identical by construction rather than by transcription.
+ *
+ * Reading all nine members makes every one of them a dependency of
+ * `persistedSignature`, which is what makes the `persistedUIVersion` bump
+ * STRUCTURAL: a lighting setter cannot fail to schedule a save, because the
+ * save trigger is derived from this projection rather than written by hand
+ * at each setter.
+ */
+function compactLighting(store: LightingUIStore): LightingUIFields {
+  return {
+    studioMode: store.studioMode,
+    lightingDataLayerEditMode: store.lightingDataLayerEditMode,
+    selectedNormal: normalToPacked(store.selectedNormal),
+    lightDirection: normalToPacked(store.lightDirection),
+    lightColor: rgbaToHex(store.lightColor),
+    ambientColor: rgbaToHex(store.ambientColor),
+    heightScale: store.heightScale,
+    heightBrushValue: store.heightBrushValue,
+    normalBrushShape: store.normalBrushShape,
+  };
 }
 
 /**

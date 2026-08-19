@@ -100,6 +100,24 @@ describe("the R6 ledger", () => {
       "layerSelectionCounter",
       "objectLibraryViewMode",
       "timelineThumbnailMode",
+      // ── Task 27: the 9 lighting settings ────────────────────────────────
+      //
+      // `LightingUIStore` is now their only writer — the eight legacy
+      // `lightingActions` setters and `toolActions.setNormalBrushShape` are
+      // bridge-installed delegates — and their five consumers are migrated by
+      // the same task, per §9.8. This flip is the STRUCTURAL half of live bug
+      // #2: eight of the nine never scheduled a save at all before W8 patched
+      // them by hand, and on a store whose fields feed `toPersistedUIState()`
+      // the save is scheduled by construction.
+      "studioMode",
+      "lightingDataLayerEditMode",
+      "selectedNormal",
+      "lightDirection",
+      "lightColor",
+      "ambientColor",
+      "heightScale",
+      "heightBrushValue",
+      "normalBrushShape",
     ]);
   });
 
