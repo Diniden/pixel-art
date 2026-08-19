@@ -10,6 +10,12 @@ import {
 import { getSquarePixels, getCirclePixels } from "./drawingUtils";
 import { Icon } from "../../ui/primitives/Icon/Icon";
 import { Lightbulb, ChevronUp, ChevronDown } from "lucide-react";
+import {
+  backgroundTheme,
+  paintCheckerboard,
+  strokeGrid,
+} from "../../ui/canvas/render/canvasBackground";
+import type { BackgroundGeometry } from "../../ui/canvas/render/canvasBackground";
 import "./LightingCanvas.css";
 
 export function LightingCanvas() {
@@ -294,15 +300,23 @@ export function LightingCanvas() {
     canvas.height = canvasHeight;
     ctx.imageSmoothingEnabled = false;
 
-    // Checkerboard background
-    ctx.fillStyle = "#1a1a25";
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-    for (let py = 0; py < gridHeight; py++) {
-      for (let px = 0; px < gridWidth; px++) {
-        ctx.fillStyle = (px + py) % 2 === 0 ? "#2a2a3a" : "#222230";
-        ctx.fillRect(px * zoom, py * zoom, zoom, zoom);
-      }
-    }
+    // Checkerboard background — shared with Canvas via ui/canvas/render.
+    // Replaces an uncached O(w·h) fillRect loop with the cached ImageData
+    // implementation. Same pixels: this canvas is dark-mode only (see the
+    // `lightGridMode` note on the grid stroke below), so it passes `false`.
+    const bgGeom: BackgroundGeometry = {
+      canvasWidth,
+      canvasHeight,
+      cellsX: gridWidth,
+      cellsY: gridHeight,
+      offsetX: 0,
+      offsetY: 0,
+      zoom,
+    };
+    const bgTheme = backgroundTheme(false);
+    const bgImage = ctx.createImageData(canvasWidth, canvasHeight);
+    paintCheckerboard(bgImage, bgGeom, bgTheme);
+    ctx.putImageData(bgImage, 0, 0);
 
     const img =
       editMode === "height"
@@ -318,19 +332,20 @@ export function LightingCanvas() {
       ctx.drawImage(tempCanvas, 0, 0, canvasWidth, canvasHeight);
     }
 
-    // Grid
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = 0; x <= gridWidth; x++) {
-      ctx.moveTo(x * zoom + 0.5, 0);
-      ctx.lineTo(x * zoom + 0.5, canvasHeight);
-    }
-    for (let y = 0; y <= gridHeight; y++) {
-      ctx.moveTo(0, y * zoom + 0.5);
-      ctx.lineTo(canvasWidth, y * zoom + 0.5);
-    }
-    ctx.stroke();
+    // Grid — shared with Canvas.
+    //
+    // ⚠️ Q3 / task 30: this stroke was hard-coded `rgba(255,255,255,0.08)` and
+    // now uses the shared dark theme's `rgba(255,255,255,0.05)`. That is the
+    // owner-approved unification onto Canvas's behaviour and it IS a visible
+    // change — the grid here becomes slightly fainter.
+    //
+    // ⚠️ SPEC CORRECTION: Q3 says both canvases should "honour lightGridMode".
+    // LightingCanvas never read `lightGridMode` at all — every colour in this
+    // file is a hard-coded dark value. Making it theme-aware is a real feature,
+    // not a call-site swap, and the task forbids changing this file beyond the
+    // background call site. So `false` is passed explicitly and the light-mode
+    // half of Q3 is reported as NOT DONE rather than half-implemented.
+    strokeGrid(ctx, bgGeom, bgTheme);
   }, [
     getEditLayer,
     gridWidth,

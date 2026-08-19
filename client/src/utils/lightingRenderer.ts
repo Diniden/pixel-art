@@ -1,4 +1,6 @@
 import { Frame, Layer, VariantGroup, Normal, Color, Pixel } from '../types';
+import { blendOverChannels } from './alphaBlend';
+import { resolveVariantOffset } from '../ui/canvas/model/variantOffset';
 
 export interface LightingParams {
   lightDirection: Normal;
@@ -41,25 +43,29 @@ function normalToVec3(normal: Normal, negateZ: boolean = false): [number, number
 }
 
 /**
- * Alpha blend a source pixel over a destination pixel
+ * Alpha blend a source pixel over a destination pixel.
+ *
+ * Task 30 (§9.12) deduplicated the FIVE alpha-compositing copies. This one is
+ * now a thin adapter over the shared `blendOverChannels` in `utils/alphaBlend`,
+ * so the Porter-Duff math lives in exactly one place.
+ *
+ * ⚠️ The ROUNDING and the transparent-cutoff behaviour are this copy's own and
+ * are preserved verbatim, because task 08's hash tripwires pin them: it rounds
+ * every channel with `Math.round` (the buffer copies do not, relying on
+ * `Uint8ClampedArray`'s round-half-to-even instead), and it returns a hard
+ * `[0,0,0,0]` when `outAlpha < 0.01` (the buffer copies leave the destination
+ * untouched). Those two differences are why this stayed a distinct wrapper
+ * rather than becoming a call to `blendOverInto`.
  */
 function alphaBlend(
   srcR: number, srcG: number, srcB: number, srcA: number,
   dstR: number, dstG: number, dstB: number, dstA: number
 ): [number, number, number, number] {
-  const srcAlpha = srcA / 255;
-  const dstAlpha = dstA / 255;
-  const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
-
-  if (outAlpha < 0.01) {
+  const blended = blendOverChannels(srcR, srcG, srcB, srcA, dstR, dstG, dstB, dstA);
+  if (!blended) {
     return [0, 0, 0, 0];
   }
-
-  const invOutAlpha = 1 / outAlpha;
-  const outR = (srcR * srcAlpha + dstR * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-  const outG = (srcG * srcAlpha + dstG * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-  const outB = (srcB * srcAlpha + dstB * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-
+  const [outR, outG, outB, outAlpha] = blended;
   return [Math.round(outR), Math.round(outG), Math.round(outB), Math.round(outAlpha * 255)];
 }
 
@@ -100,7 +106,7 @@ export function composeLayers(
         const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
         const vFrame = variant.frames[variantFrameIdx % variant.frames.length];
         // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
-        const vOffset = layer.variantOffsets?.[layer.selectedVariantId ?? ''] ?? layer.variantOffset ?? variant.baseFrameOffsets?.[baseFrameIndex] ?? { x: 0, y: 0 };
+        const vOffset = resolveVariantOffset(layer, variant, baseFrameIndex);
 
         if (vFrame) {
           // Render variant layers

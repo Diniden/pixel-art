@@ -1,4 +1,5 @@
 import { Pixel, PixelData, Layer, Frame, VariantGroup, VariantFrame, Variant } from '../types';
+import { resolveVariantOffset } from '../ui/canvas/model/variantOffset';
 
 // Helper to extract color from PixelData
 function getPixelColor(pd: PixelData | undefined): Pixel | null {
@@ -7,6 +8,27 @@ function getPixelColor(pd: PixelData | undefined): Pixel | null {
 }
 
 // Cached checkerboard backgrounds
+//
+// ⚠️ TASK 30 / SPEC CORRECTION — deliberately NOT unified with
+// `ui/canvas/render/canvasBackground.ts`.
+//
+// The task-30 spec lists this as a fourth copy of "the checkerboard" to be
+// replaced. It is not the same algorithm, and swapping it would change every
+// thumbnail in the app:
+//
+//   * Canvas draws ONE check per GRID CELL, sized `zoom` px, with parity from
+//     the cell's world coordinates.
+//   * This draws a fixed FOUR-PIXEL check in THUMBNAIL space, with parity from
+//     the thumbnail pixel coordinates. It is independent of the grid entirely —
+//     a 4×4 object and a 64×64 object get the same visual check size, which is
+//     the point at thumbnail scale.
+//   * It also paints no base-colour fill, because the caller always covers the
+//     full buffer.
+//
+// The shared module cannot express a check size decoupled from the cell size,
+// so unifying means either changing this behaviour or adding a parameter that
+// exists solely for one caller. Left alone; the divergence is intentional and
+// recorded here so the next reader does not "finish the job".
 const CHECKERBOARD_CACHE = new Map<number, Uint8ClampedArray>();
 
 function getCheckerboard(size: number): Uint8ClampedArray {
@@ -90,7 +112,7 @@ export function renderFramePreview(
 
       if (variant && vFrame) {
         // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
-        const variantOffset = layer.variantOffsets?.[layer.selectedVariantId ?? ''] ?? layer.variantOffset ?? variant.baseFrameOffsets?.[frameIndex] ?? { x: 0, y: 0 };
+        const variantOffset = resolveVariantOffset(layer, variant, frameIndex);
 
         renderVariantFrame(
           data,
