@@ -34,13 +34,21 @@ describe("the R6 ledger", () => {
     // SessionStore now, and the bridge mirrors it back to Zustand (Phase B).
     //
     // Task 23 ADDED the four `uiState` selection ids. They are UI fields that
-    // Zustand still owns (they move to TimelineUIStore in task 24), but the 6
-    // cross-store computeds cannot recompute unless their inputs are
-    // observable, so MobX keeps a read-only copy on `SelectionMirror`.
+    // Zustand still owns, but the 6 cross-store computeds cannot recompute
+    // unless their inputs are observable, so MobX keeps a read-only copy —
+    // on `TimelineUIStore` since task 25 (it replaced `SelectionMirror`).
+    //
+    // ⚠️ TASK 25 did NOT flip the four ids, deliberately. `TimelineUIStore`
+    // now owns `selectFrame`/`selectLayer`, but `store/objectActions.ts:58`
+    // (`selectObject`) still writes all three ids and `store/variantActions.ts`
+    // writes `variantFrameIndices` at 8 sites — both files belong to later
+    // tasks. Flipping would give each field two writers, which R6 forbids.
+    //
+    // Task 25 DID flip both clipboards out of this list: `LayerStore` is now
+    // their only writer, and their two readers (`LayerPanel`, `TimelineView`)
+    // are migrated by the same task per §9.8.
     expect([...PHASE_A_FIELDS]).toEqual([
       "aiServiceUrl",
-      "layerClipboard",
-      "timelineCellClipboard",
       "colorHistory",
       "selectedObjectId",
       "selectedFrameId",
@@ -70,6 +78,19 @@ describe("the R6 ledger", () => {
       "palettes",
       "variants",
       "referenceImage",
+      // ── Task 25 ────────────────────────────────────────────────────────
+      // Both clipboards: `LayerStore` is their single writer, and they stay
+      // on `SessionStore` (tab-scoped, no reset hook) so R14's cross-project
+      // survival is unchanged — pinned by the two CROSS-PROJECT tests in
+      // `src/store/__tests__/layers.test.ts`.
+      "layerClipboard",
+      "timelineCellClipboard",
+      // The three timeline/layer `uiState` fields with a single writer: every
+      // writer now routes into `TimelineUIStore` (`selectLayer` directly, the
+      // two view-mode setters as bridge delegates).
+      "layerSelectionCounter",
+      "objectLibraryViewMode",
+      "timelineThumbnailMode",
     ]);
   });
 

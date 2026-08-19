@@ -37,14 +37,18 @@ import {
 } from "./session/AutoSaveController";
 import { DomainStore, type ProjectHost } from "./domain/DomainStore";
 import { DomainMutator, type DomainMirror } from "./domain/DomainMutator";
-import { SelectionMirror } from "./SelectionMirror";
 import { UIStore } from "./ui/UIStore";
+import { ViewportUIStore } from "./ui/ViewportUIStore";
+import { TimelineUIStore, type TimelineContext } from "./ui/TimelineUIStore";
 import { ObjectStore, type SelectionSink } from "./domain/ObjectStore";
 import { PaletteStore } from "./domain/PaletteStore";
+import { FrameStore } from "./domain/FrameStore";
+import { LayerStore } from "./domain/LayerStore";
 import {
   createZustandProjectHost,
   createZustandDomainMirror,
   createZustandSelectionSink,
+  createZustandTimelineContext,
 } from "./bridge/zustandProjectHost";
 import { editorHistory } from "../store";
 import type { HistoryStore } from "./history/HistoryStore";
@@ -110,6 +114,17 @@ export interface ApplicationStoreOptions {
    * era (task 23). Defaults to the Zustand sink.
    */
   selectionSink?: SelectionSink;
+  /**
+   * How `TimelineUIStore` publishes a selection change and clears the pending
+   * colour adjustment during the bridge era (task 25). Defaults to the
+   * Zustand context; tests substitute a recorder. The `currentObject` /
+   * `currentLayer` / `variants` readers are always supplied by
+   * `ApplicationStore` itself, never overridden.
+   */
+  timelineContext?: Pick<
+    TimelineContext,
+    "publishSelection" | "clearColorAdjustment"
+  >;
 }
 
 const DEFAULT_HISTORY_BUDGET_BYTES = 64 * 1024 * 1024;
@@ -126,8 +141,13 @@ export class ApplicationStore {
   /** Behaviour modules over `DomainStore`'s tree (see `DomainMutator`). */
   readonly palettes: PaletteStore;
   readonly objects: ObjectStore;
-  /** The bridge-era home of the 4 `uiState` selection ids the computeds read. */
-  readonly selection: SelectionMirror;
+  /**
+   * The 4 `uiState` selection ids the computeds read. Task 25 replaced the
+   * `SelectionMirror` placeholder with the real `TimelineUIStore`, which is
+   * structurally identical for these four fields and additionally owns
+   * `selectFrame`/`selectLayer` and the three view-mode fields.
+   */
+  readonly selection: TimelineUIStore;
 
   /* ── task 24 ───────────────────────────────────────────────────────────── */
   /**
@@ -136,6 +156,21 @@ export class ApplicationStore {
    * the save payload wire-identical (R3).
    */
   readonly ui: UIStore;
+
+  /* ── task 25 ───────────────────────────────────────────────────────────── */
+  /** Frame CRUD (9 actions) over the tree. */
+  readonly frames: FrameStore;
+  /**
+   * Layer structure, the timeline cell ops and both clipboards (23 actions,
+   * absorbing `layerActions` + `timelineActions` + `layerClipboardActions`).
+   */
+  readonly layers: LayerStore;
+  /**
+   * The timeline/layer SELECTION state — the same instance as
+   * {@link selection}, exposed under its own name so consumers read
+   * `app.timelineUI.selectFrame(...)` rather than `app.selection`.
+   */
+  readonly timelineUI: TimelineUIStore;
 
   readonly options: Readonly<{
     api: unknown;
@@ -159,26 +194,108 @@ export class ApplicationStore {
     this.history.setBudgetBytes(this.options.historyBudgetBytes);
 
     // ── task 23: the tree's behaviour modules and the cross-store computeds ─
-    this.selection = new SelectionMirror();
     const mutator = new DomainMutator({
       domain: this.domain,
       history: this.history,
       mirror: options.domainMirror ?? createZustandDomainMirror(),
     });
+
+    // ── task 25: TimelineUIStore replaces the SelectionMirror placeholder ──
+    //
+    // ⚠️ CONSTRUCTION ORDER IS LOAD-BEARING: viewport → timeline → ui.
+    //
+    // There is a genuine cycle. `TimelineUIStore` delegates its three
+    // view-mode fields to `ViewportUIStore`, and `UIStore` reads the four
+    // selection ids OFF `TimelineUIStore` for `toPersistedUIState()`.
+    //
+    // It cannot be broken with a forward reference, which was tried first and
+    // measured to fail: `UIStore`'s constructor starts the
+    // `persistedUIVersion` reaction, and that reaction evaluates
+    // `persistedSignature` — hence every selection id — EAGERLY, before the
+    // constructor returns. A `let timelineUI!` still undefined at that moment
+    // throws inside the reaction.
+    //
+    // Building `ViewportUIStore` here and handing it to BOTH stores removes
+    // the cycle outright: by the time `UIStore` runs its reaction,
+    // `TimelineUIStore` is fully built.
+    //
+    // The `currentObject`/`currentLayer`/`variants` readers close over `this`
+    // so `selectFrame` sees the same computeds every consumer does — that is
+    // the injection seam `VariantStore` will reuse in task 28 to retire
+    // `variantActions.ts`'s `selectLayer` import.
+    const viewport = new ViewportUIStore();
+    const zustandTimeline = createZustandTimelineContext();
+    const timelineUI = new TimelineUIStore({
+      viewport,
+      context: {
+        currentObject: () => this.currentObject,
+        currentLayer: () => this.currentLayer,
+        variants: () => this.domain.variants,
+        publishSelection:
+          options.timelineContext?.publishSelection ??
+          zustandTimeline.publishSelection,
+        clearColorAdjustment:
+          options.timelineContext?.clearColorAdjustment ??
+          zustandTimeline.clearColorAdjustment,
+      },
+    });
+    this.timelineUI = timelineUI;
+    this.selection = timelineUI;
     this.ui = new UIStore({
       session: this.session,
-      selection: this.selection,
+      selection: timelineUI,
+      viewport,
     });
+    const uiRef = this.ui;
     // ⚠️ INJECTED, not imported: `DomainStore` may not depend on
     // `stores/ui/**` (ESLint, task 05). This is the seam that lets
     // `serialize()` emit the 43 UI fields without a domain→UI dependency.
     this.domain.setUIStateProvider(() => this.ui.toPersistedUIState());
 
     this.palettes = new PaletteStore({ domain: this.domain, mutator });
+    const selectionSink = options.selectionSink ?? createZustandSelectionSink();
     this.objects = new ObjectStore({
       domain: this.domain,
       mutator,
-      selection: options.selectionSink ?? createZustandSelectionSink(),
+      selection: selectionSink,
+    });
+
+    // ── task 25 ────────────────────────────────────────────────────────────
+    // Both take `DomainStore` + `HistoryStore` (through `DomainMutator`) by
+    // injection, and read the UI selection through plain getters rather than
+    // importing a UI store — `stores/domain/**` may not depend on
+    // `stores/ui/**` (ESLint, task 05).
+    this.frames = new FrameStore({
+      domain: this.domain,
+      mutator,
+      selection: selectionSink,
+      source: timelineUI,
+    });
+    this.layers = new LayerStore({
+      domain: this.domain,
+      mutator,
+      session: this.session,
+      selection: selectionSink,
+      source: {
+        get selectedObjectId() {
+          return timelineUI.selectedObjectId;
+        },
+        get selectedFrameId() {
+          return timelineUI.selectedFrameId;
+        },
+        get selectedLayerId() {
+          return timelineUI.selectedLayerId;
+        },
+        get variantFrameIndices() {
+          return timelineUI.variantFrameIndices;
+        },
+        // `moveAllLayers` is a TOOL setting, read (never written) here.
+        get moveAllLayers() {
+          return uiRef.tool.moveAllLayers;
+        },
+      },
+      setVariantFrameIndex: (variantGroupId, index) =>
+        timelineUI.setVariantFrameIndex(variantGroupId, index),
     });
     makeObservable(this, {
       currentObject: computed,

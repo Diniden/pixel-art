@@ -4,7 +4,8 @@ import { Project, PixelObject, Layer, Variant, VariantFrame, VariantGroup } from
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
 import { ResizeModal } from '../ResizeModal/ResizeModal';
-import { FrameTagsModal, tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
+import { tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
+import { FrameTagsModalContainer } from '../../containers/FrameTagsModalContainer';
 import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
 import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import { FrameThumbnail } from './FramesView';
@@ -594,7 +595,7 @@ export function VariantView({
 
       {/* Frame Tags Modal */}
       {tagsModalContext && (
-        <FrameTagsModal
+        <FrameTagsModalContainer
           isOpen
           onClose={() => setTagsModalContext(null)}
           context={tagsModalContext}

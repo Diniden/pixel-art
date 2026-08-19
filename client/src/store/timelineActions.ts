@@ -1,317 +1,59 @@
-import type { StoreGet, StoreSet, UpdateProjectAndSave } from "./storeTypes";
-import type { Layer, PixelData } from "../types";
-import { createDefaultLayer, generateId } from "../types";
+/**
+ * Timeline actions — ALL MIGRATED TO MobX (REFRESH task 25).
+ *
+ * All six live on `stores/domain/LayerStore`. They were never a distinct
+ * concern: `addLayerToAllFrames`, `addLayerToFrameAtPosition`,
+ * `deleteLayerFromFrame` and `reorderLayerInFrame` are layer operations with
+ * a FRAME SCOPE rather than the current-frame scope `layerActions` used, and
+ * `copyTimelineCell` / `pasteTimelineCell` are clipboard operations whose
+ * buffer (`timelineCellClipboard`) lives on `SessionStore` alongside
+ * `layerClipboard`.
+ *
+ * ⚠️ One divergence was ported FAITHFULLY rather than fixed:
+ * `addLayerToAllFrames` generated a `layerId` up front, selected it, and then
+ * gave each frame's new layer a SEPARATE `generateId()` — so the selected id
+ * matches no layer in the project. Observed behaviour, preserved in
+ * `LayerStore.addLayerToAllFrames`, not a transcription slip.
+ *
+ * The bridge replaces every entry below with a delegate at install time.
+ * There is exactly ONE implementation of each action.
+ *
+ * This module is deleted outright with the Zustand store (task 38).
+ */
+function migrated(name: string): never {
+  throw new Error(
+    `${name} moved to LayerStore (REFRESH task 25) and is reached through ` +
+      "the Zustand bridge. This store has no bridge installed — construct an " +
+      "ApplicationStore and call installBridge(), or call LayerStore directly.",
+  );
+}
 
-export function createTimelineActions(
-  get: StoreGet,
-  set: StoreSet,
-  updateProjectAndSave: UpdateProjectAndSave,
-) {
+export function createTimelineActions() {
   return {
-    addLayerToAllFrames: (name: string) => {
-      const obj = get().getCurrentObject();
-      if (!obj) return;
-
-      updateProjectAndSave((project) => {
-        const layerId = generateId();
-        return {
-          ...project,
-          objects: project.objects.map((o) =>
-            o.id === obj.id
-              ? {
-                  ...o,
-                  frames: o.frames.map((f) => {
-                    const newLayer = createDefaultLayer(
-                      generateId(),
-                      name,
-                      obj.gridSize.width,
-                      obj.gridSize.height,
-                    );
-                    // Add to top of layer stack
-                    return { ...f, layers: [...f.layers, newLayer] };
-                  }),
-                }
-              : o,
-          ),
-          uiState: {
-            ...project.uiState,
-            selectedLayerId: layerId,
-          },
-        };
-      }, true);
-    },
-
+    addLayerToAllFrames: (_name: string): void =>
+      migrated("addLayerToAllFrames"),
     addLayerToFrameAtPosition: (
-      frameId: string,
-      name: string,
-      position: number,
-      variantInfo?: {
+      _frameId: string,
+      _name: string,
+      _position: number,
+      _variantInfo?: {
         isVariant?: boolean;
         variantGroupId?: string;
         selectedVariantId?: string;
         variantOffsets?: { [variantId: string]: { x: number; y: number } };
         variantOffset?: { x: number; y: number };
       },
-    ) => {
-      const obj = get().getCurrentObject();
-      if (!obj) return "";
-
-      const layerId = generateId();
-      updateProjectAndSave((project) => {
-        return {
-          ...project,
-          objects: project.objects.map((o) =>
-            o.id === obj.id
-              ? {
-                  ...o,
-                  frames: o.frames.map((f) => {
-                    if (f.id !== frameId) return f;
-                    const newLayer: Layer = {
-                      ...createDefaultLayer(
-                        layerId,
-                        name,
-                        obj.gridSize.width,
-                        obj.gridSize.height,
-                      ),
-                      // Add variant information if provided
-                      ...(variantInfo?.isVariant
-                        ? {
-                            isVariant: true,
-                            variantGroupId: variantInfo.variantGroupId,
-                            selectedVariantId: variantInfo.selectedVariantId,
-                            variantOffsets: variantInfo.variantOffsets,
-                            variantOffset: variantInfo.variantOffset,
-                          }
-                        : {}),
-                    };
-                    // Insert at the specified position
-                    const newLayers = [...f.layers];
-                    newLayers.splice(position, 0, newLayer);
-                    return { ...f, layers: newLayers };
-                  }),
-                }
-              : o,
-          ),
-          uiState: {
-            ...project.uiState,
-            selectedLayerId: layerId,
-          },
-        };
-      }, true);
-      return layerId;
-    },
-
-    deleteLayerFromFrame: (frameId: string, layerId: string) => {
-      const obj = get().getCurrentObject();
-      if (!obj) return;
-
-      const frame = obj.frames.find((f) => f.id === frameId);
-      if (!frame || frame.layers.length <= 1) return;
-
-      updateProjectAndSave((project) => {
-        return {
-          ...project,
-          objects: project.objects.map((o) =>
-            o.id === obj.id
-              ? {
-                  ...o,
-                  frames: o.frames.map((f) =>
-                    f.id === frameId
-                      ? {
-                          ...f,
-                          layers: f.layers.filter((l) => l.id !== layerId),
-                        }
-                      : f,
-                  ),
-                }
-              : o,
-          ),
-          uiState: {
-            ...project.uiState,
-            // If the deleted layer was selected, select another layer
-            selectedLayerId:
-              project.uiState.selectedLayerId === layerId
-                ? (frame.layers.find((l) => l.id !== layerId)?.id ?? null)
-                : project.uiState.selectedLayerId,
-          },
-        };
-      }, true);
-    },
-
+    ): string => migrated("addLayerToFrameAtPosition"),
+    deleteLayerFromFrame: (_frameId: string, _layerId: string): void =>
+      migrated("deleteLayerFromFrame"),
     reorderLayerInFrame: (
-      frameId: string,
-      layerId: string,
-      newIndex: number,
-    ) => {
-      const obj = get().getCurrentObject();
-      if (!obj) return;
-
-      updateProjectAndSave(
-        (project) => ({
-          ...project,
-          objects: project.objects.map((o) =>
-            o.id === obj.id
-              ? {
-                  ...o,
-                  frames: o.frames.map((f) => {
-                    if (f.id !== frameId) return f;
-
-                    const currentIndex = f.layers.findIndex(
-                      (l) => l.id === layerId,
-                    );
-                    if (currentIndex === -1 || currentIndex === newIndex)
-                      return f;
-
-                    const newLayers = [...f.layers];
-                    const [removed] = newLayers.splice(currentIndex, 1);
-                    newLayers.splice(newIndex, 0, removed);
-                    return { ...f, layers: newLayers };
-                  }),
-                }
-              : o,
-          ),
-        }),
-        true,
-      );
-    },
-
-    copyTimelineCell: (frameId: string, layerId: string) => {
-      const obj = get().getCurrentObject();
-      if (!obj) return;
-
-      const frame = obj.frames.find((f) => f.id === frameId);
-      if (!frame) return;
-
-      const layer = frame.layers.find((l) => l.id === layerId);
-      if (!layer) return;
-
-      // Deep copy the pixels
-      const pixelsCopy: PixelData[][] = layer.pixels.map((row) =>
-        row.map(
-          (pd) =>
-            ({
-              color:
-                pd.color === 0
-                  ? 0
-                  : {
-                      r: pd.color.r,
-                      g: pd.color.g,
-                      b: pd.color.b,
-                      a: pd.color.a,
-                    },
-              normal:
-                pd.normal === 0
-                  ? 0
-                  : { x: pd.normal.x, y: pd.normal.y, z: pd.normal.z },
-              height: pd.height,
-            }) as PixelData,
-        ),
-      );
-
-      set({
-        timelineCellClipboard: {
-          layerName: layer.name,
-          pixels: pixelsCopy,
-          // Preserve variant information if this is a variant layer
-          isVariant: layer.isVariant,
-          variantGroupId: layer.variantGroupId,
-          selectedVariantId: layer.selectedVariantId,
-          variantOffsets: layer.variantOffsets,
-          variantOffset: layer.variantOffset,
-        },
-      });
-    },
-
-    pasteTimelineCell: (frameId: string, targetLayerId: string) => {
-      const { timelineCellClipboard } = get();
-      if (!timelineCellClipboard) return;
-
-      const obj = get().getCurrentObject();
-      if (!obj) return;
-
-      const frame = obj.frames.find((f) => f.id === frameId);
-      if (!frame) return;
-
-      const targetLayer = frame.layers.find((l) => l.id === targetLayerId);
-      if (!targetLayer) return;
-
-      // Deep copy clipboard pixels
-      const newPixels: PixelData[][] = timelineCellClipboard.pixels.map((row) =>
-        row.map(
-          (pd) =>
-            ({
-              color:
-                pd.color === 0
-                  ? 0
-                  : {
-                      r: pd.color.r,
-                      g: pd.color.g,
-                      b: pd.color.b,
-                      a: pd.color.a,
-                    },
-              normal:
-                pd.normal === 0
-                  ? 0
-                  : { x: pd.normal.x, y: pd.normal.y, z: pd.normal.z },
-              height: pd.height,
-            }) as PixelData,
-        ),
-      );
-
-      // Build updated layer with pixels and variant information if present
-      let updatedLayer: Layer;
-
-      // If clipboard contains variant information, preserve it
-      if (timelineCellClipboard.isVariant) {
-        updatedLayer = {
-          ...targetLayer,
-          pixels: newPixels,
-          isVariant: true,
-          variantGroupId: timelineCellClipboard.variantGroupId,
-          selectedVariantId: timelineCellClipboard.selectedVariantId,
-          variantOffsets: timelineCellClipboard.variantOffsets,
-          variantOffset: timelineCellClipboard.variantOffset,
-        };
-      } else {
-        // If clipboard doesn't have variant info, clear variant properties
-        // (in case we're pasting a normal layer over a variant layer)
-        const {
-          isVariant,
-          variantGroupId,
-          selectedVariantId,
-          variantOffsets,
-          variantOffset,
-          ...rest
-        } = targetLayer;
-        updatedLayer = {
-          ...rest,
-          pixels: newPixels,
-        } as Layer;
-      }
-
-      updateProjectAndSave(
-        (project) => ({
-          ...project,
-          objects: project.objects.map((o) =>
-            o.id === obj.id
-              ? {
-                  ...o,
-                  frames: o.frames.map((f) =>
-                    f.id === frameId
-                      ? {
-                          ...f,
-                          layers: f.layers.map((l) =>
-                            l.id === targetLayerId ? updatedLayer : l,
-                          ),
-                        }
-                      : f,
-                  ),
-                }
-              : o,
-          ),
-        }),
-        true,
-      );
-    },
+      _frameId: string,
+      _layerId: string,
+      _newIndex: number,
+    ): void => migrated("reorderLayerInFrame"),
+    copyTimelineCell: (_frameId: string, _layerId: string): void =>
+      migrated("copyTimelineCell"),
+    pasteTimelineCell: (_frameId: string, _targetLayerId: string): void =>
+      migrated("pasteTimelineCell"),
   };
 }

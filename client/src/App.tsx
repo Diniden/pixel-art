@@ -6,9 +6,9 @@ import { CanvasInfoContainer } from "./containers/CanvasInfoContainer";
 import { Toolbar } from "./components/Toolbar/Toolbar";
 import { PixelStudioPanel } from "./components/PixelStudioPanel/PixelStudioPanel";
 import { LightingStudioPanel } from "./components/LightingStudioPanel/LightingStudioPanel";
-import { LayerPanel } from "./components/LayerPanel/LayerPanel";
+import { LayerPanelContainer } from "./containers/LayerPanelContainer";
 import { LayerColors } from "./components/LayerColors/LayerColors";
-import { FrameTimeline } from "./components/FrameTimeline/FrameTimeline";
+import { FrameTimelineContainer } from "./containers/FrameTimelineContainer";
 import { ObjectLibrary } from "./components/ObjectLibrary/ObjectLibrary";
 // Task 14: Header is rendered through its observer container, which feeds it
 // `saveStatus` + `aiServiceUrl` from SessionStore.
@@ -207,7 +207,7 @@ function App() {
           <aside className="app__side-panel app__side-panel--left app__side-panel--open">
             <div className="app__panel-scroll">
               <ObjectLibrary />
-              <LayerPanel />
+              <LayerPanelContainer />
             </div>
           </aside>
         )}
@@ -259,7 +259,7 @@ function App() {
       {/* Bottom Panel - Frame Timeline */}
       {!isFocusMode && (
         <footer className="app__bottom">
-          <FrameTimeline />
+          <FrameTimelineContainer />
         </footer>
       )}
     </div>
