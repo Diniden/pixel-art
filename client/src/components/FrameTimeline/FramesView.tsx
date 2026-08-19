@@ -4,7 +4,8 @@ import { Frame, Project, PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { PreviewModal } from '../PreviewModal/PreviewModal';
 import { ResizeModal } from '../ResizeModal/ResizeModal';
-import { FrameTagsModal, tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
+import { tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
+import { FrameTagsModalContainer } from '../../containers/FrameTagsModalContainer';
 import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
 import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import { AIInterpolateModal } from '../AIInterpolateModal/AIInterpolateModal';
@@ -663,7 +664,7 @@ export function FramesView({
 
       {/* Frame Tags Modal */}
       {tagsModalContext && (
-        <FrameTagsModal
+        <FrameTagsModalContainer
           isOpen
           onClose={() => setTagsModalContext(null)}
           context={tagsModalContext}

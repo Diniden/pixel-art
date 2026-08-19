@@ -15,9 +15,23 @@
  * the source of truth; this class is a read-only copy with the bridge as its
  * only writer).
  *
- * When `TimelineUIStore` lands, `ApplicationStore` points its
- * `SelectionSource` at that store instead and this class is deleted — the
- * computeds themselves do not change.
+ * ── TASK 25 UPDATE: superseded in the app, RETAINED as a test double ──────
+ *
+ * `TimelineUIStore` landed and `ApplicationStore.selection` now points at it,
+ * exactly as this header predicted — and the computeds did not change, which
+ * was the point.
+ *
+ * The class is NOT deleted, deliberately. `UIStore`'s `selection` dependency
+ * was widened from this class to the structural `UISelectionSource`
+ * interface, so the three task-24 UI suites
+ * (`persistedUIState`, `persistedUIVersion`, `serializeWithUIStore`) keep
+ * constructing a bare `SelectionMirror` and were left UNTOUCHED — they test
+ * the wire-format builder, not the selection store, and re-pointing them at
+ * `TimelineUIStore` would drag `ViewportUIStore` and a `TimelineContext` into
+ * tests that need neither.
+ *
+ * It has no remaining production caller. Delete it with the Zustand store
+ * (task 38), or sooner if those three suites are rewritten.
  */
 import { action, makeObservable, observable, observableRef } from "mobx";
 

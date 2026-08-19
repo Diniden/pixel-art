@@ -82,7 +82,6 @@ import { rgbaToHex } from "../../types";
 import type { CompactUIState, Color } from "../../types";
 import { ToolUIStore } from "./ToolUIStore";
 import { ViewportUIStore } from "./ViewportUIStore";
-import type { SelectionMirror } from "../SelectionMirror";
 import type { SessionStore } from "../session/SessionStore";
 
 /**
@@ -103,17 +102,54 @@ export interface LightingUIFields {
   normalBrushShape: CompactUIState["normalBrushShape"];
 }
 
+/**
+ * The four selection ids the builder emits, as a STRUCTURAL interface (task
+ * 25).
+ *
+ * It was `SelectionMirror` (a class) until `TimelineUIStore` landed. Widening
+ * it to an interface lets `ApplicationStore` pass the real `TimelineUIStore`
+ * while the three task-24 UI suites keep passing a bare `SelectionMirror` —
+ * the builder cannot tell them apart, which is the point: `toPersistedUIState`
+ * reads four values and has no business knowing which store owns them.
+ */
+export interface UISelectionSource {
+  readonly selectedObjectId: string | null;
+  readonly selectedFrameId: string | null;
+  readonly selectedLayerId: string | null;
+  readonly variantFrameIndices: { [variantGroupId: string]: number };
+}
+
 /** The selection ids + trace nudge still owned elsewhere during the bridge. */
 export interface UIStoreDeps {
   session: SessionStore;
-  selection: SelectionMirror;
+  selection: UISelectionSource;
+  /**
+   * Task 25: an already-constructed `ViewportUIStore`.
+   *
+   * ⚠️ Construction ORDER, not a convenience. `TimelineUIStore` delegates
+   * `layerSelectionCounter` / `objectLibraryViewMode` /
+   * `timelineThumbnailMode` to the viewport store, while `UIStore` reads the
+   * selection ids OFF `TimelineUIStore` — a cycle. It is broken by building
+   * `ViewportUIStore` first, then `TimelineUIStore`, then `UIStore`, which is
+   * only possible if `UIStore` can adopt an existing viewport instead of
+   * always constructing its own.
+   *
+   * A forward reference does NOT work here: the `persistedUIVersion` reaction
+   * below reads `persistedSignature` — and therefore every selection id —
+   * EAGERLY during construction, so a not-yet-assigned `TimelineUIStore`
+   * throws inside the reaction. Measured.
+   *
+   * Omitted (the three task-24 UI suites do) it constructs its own, exactly
+   * as before.
+   */
+  viewport?: ViewportUIStore;
 }
 
 export class UIStore {
   readonly tool: ToolUIStore;
   readonly viewport: ViewportUIStore;
   private readonly session: SessionStore;
-  private readonly selection: SelectionMirror;
+  private readonly selection: UISelectionSource;
 
   /**
    * Task 27 owns these. Held as one `observable.ref` record so a lighting
@@ -138,7 +174,7 @@ export class UIStore {
     this.session = deps.session;
     this.selection = deps.selection;
     this.tool = new ToolUIStore();
-    this.viewport = new ViewportUIStore();
+    this.viewport = deps.viewport ?? new ViewportUIStore();
 
     makeObservable(this, {
       lighting: observableRef,

@@ -215,18 +215,13 @@ export const useEditorStore = create<EditorState>((set, get) => {
   const helpers = createHelpers(get);
   const projectActions = createProjectActions(historyControl);
   const objectActions = createObjectActions(get, updateProjectAndSave);
-  const frameActions = createFrameActions(get, updateProjectAndSave);
-  const layerActions = createLayerActions(get, set, updateProjectAndSave);
-  const layerClipboardActions = createLayerClipboardActions(
-    get,
-    set,
-    updateProjectAndSave,
-  );
-  const timelineActions = createTimelineActions(
-    get,
-    set,
-    updateProjectAndSave,
-  );
+  // Task 25: these four modules are throwing stubs; the real implementations
+  // are FrameStore / LayerStore / TimelineUIStore, installed as delegates by
+  // `installBridge`.
+  const frameActions = createFrameActions();
+  const layerActions = createLayerActions();
+  const layerClipboardActions = createLayerClipboardActions();
+  const timelineActions = createTimelineActions();
   const drawingActions = createDrawingActions(get, set, updateProjectAndSave, stroke);
   const toolActions = createToolActions(get, set, updateProjectAndSave);
   const paletteActions = createPaletteActions();

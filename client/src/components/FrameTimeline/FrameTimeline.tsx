@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useEditorStore } from '../../store';
-import { FramesView } from './FramesView';
-import { TimelineView } from './TimelineView';
-import { VariantView } from './VariantView';
+import { FramesViewContainer } from '../../containers/FramesViewContainer';
+import { TimelineViewContainer } from '../../containers/TimelineViewContainer';
+import { VariantViewContainer } from '../../containers/VariantViewContainer';
 import './FrameTimeline.css';
 
 type ViewMode = 'frames' | 'timeline' | 'variant';
@@ -214,7 +214,7 @@ export function FrameTimeline() {
   return (
     <div className="frame-timeline">
       {viewMode === 'variant' && variantData && layer ? (
-        <VariantView
+        <VariantViewContainer
           project={project}
           obj={obj}
           layer={layer}
@@ -226,7 +226,7 @@ export function FrameTimeline() {
           viewModeDropdown={viewModeDropdown}
         />
       ) : viewMode === 'timeline' ? (
-        <TimelineView
+        <TimelineViewContainer
           project={project}
           obj={obj}
           isPlaying={isPlaying}
@@ -236,7 +236,7 @@ export function FrameTimeline() {
           viewModeDropdown={viewModeDropdown}
         />
       ) : (
-        <FramesView
+        <FramesViewContainer
           project={project}
           obj={obj}
           isPlaying={isPlaying}

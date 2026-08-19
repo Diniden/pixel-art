@@ -100,3 +100,49 @@ export function createZustandSelectionSink(): SelectionSink {
     },
   };
 }
+
+/**
+ * How `TimelineUIStore` publishes a selection change during the bridge era
+ * (task 25).
+ *
+ * The four selection ids and `variantFrameIndices` are still PHASE A —
+ * `store/objectActions.ts` and `store/variantActions.ts` (both outside task
+ * 25's `Touches`) still write them, so MobX cannot be their single writer yet
+ * without violating R6. This sink is therefore the Zustand-ward half of that
+ * arrangement: the store computes the new selection, writes it to Zustand, and
+ * the bridge's Phase A `syncPhaseA` reads it straight back. One value, one
+ * round trip, no divergence.
+ *
+ * `trackHistory` is FALSE for every selection write — pinned by task 08
+ * ("selectLayer does NOT track history"), and the reason this goes through a
+ * plain `setState` rather than `updateProjectAndSave(..., true)`.
+ *
+ * ⚠️ It merges into the CURRENT project, not the one the action saw, so it
+ * composes correctly after a domain mutation has already published a new tree.
+ */
+export function createZustandTimelineContext(): {
+  publishSelection(patch: {
+    selectedFrameId?: string | null;
+    selectedLayerId?: string | null;
+    selectedObjectId?: string | null;
+    variantFrameIndices?: { [variantGroupId: string]: number };
+    layerSelectionCounter?: number;
+  }): void;
+  clearColorAdjustment(): void;
+} {
+  return {
+    publishSelection: (patch) => {
+      const { project } = useEditorStore.getState();
+      if (!project) return;
+      useEditorStore.setState({
+        project: { ...project, uiState: { ...project.uiState, ...patch } },
+      });
+    },
+
+    // Verbatim from `layerActions.ts:210` — `selectLayer` drops any pending
+    // colour adjustment when the layer changes.
+    clearColorAdjustment: () => {
+      useEditorStore.setState({ colorAdjustment: null });
+    },
+  };
+}

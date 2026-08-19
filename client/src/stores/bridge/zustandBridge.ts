@@ -127,17 +127,24 @@ import type { ApplicationStore } from "../ApplicationStore";
 /* ── Phase A: Zustand → MobX. Fields whose slice has NOT yet flipped. ────── */
 export const PHASE_A_FIELDS = [
   "aiServiceUrl", //           project.uiState.aiServiceUrl  → session.aiServiceUrl
-  "layerClipboard", //         EditorState.layerClipboard    → session.layerClipboard
-  "timelineCellClipboard", //  EditorState.timelineCellClipboard → session.timelineCellClipboard
   "colorHistory", //           EditorState.colorHistory      → session.colorHistory
-  // Task 23 — the 4 `uiState` selection ids the cross-store computeds read.
-  // They are UI fields (4 of the 43 persisted ones) and move to
-  // `TimelineUIStore` in task 24; until then Zustand owns them and MobX keeps
-  // a read-only copy on `SelectionMirror` so the computeds can recompute.
-  "selectedObjectId", //   project.uiState.selectedObjectId  → selection.selectedObjectId
-  "selectedFrameId", //    project.uiState.selectedFrameId   → selection.selectedFrameId
-  "selectedLayerId", //    project.uiState.selectedLayerId   → selection.selectedLayerId
-  "variantFrameIndices", //project.uiState.variantFrameIndices → selection.variantFrameIndices
+  // ── The 4 selection ids. STILL PHASE A after task 25 — deliberately. ────
+  //
+  // `TimelineUIStore` now exists and owns `selectFrame`/`selectLayer`, but
+  // these four fields still have OTHER writers in files task 25 does not own:
+  // `store/objectActions.ts:58` (`selectObject`) writes all three ids, and
+  // `store/variantActions.ts` writes `variantFrameIndices` at 8 sites plus
+  // the ids at `:851-853`. Flipping them would give each field two writers,
+  // which R6 forbids. They flip with the task that migrates those two files.
+  //
+  // Meanwhile there is still exactly ONE writer of the MobX copy: the bridge.
+  // `TimelineUIStore`'s own selection writes go to ZUSTAND (through
+  // `createZustandTimelineContext`) and are read straight back by
+  // `syncPhaseA` — a round trip, not a second writer.
+  "selectedObjectId", //   project.uiState.selectedObjectId  → timelineUI.selectedObjectId
+  "selectedFrameId", //    project.uiState.selectedFrameId   → timelineUI.selectedFrameId
+  "selectedLayerId", //    project.uiState.selectedLayerId   → timelineUI.selectedLayerId
+  "variantFrameIndices", //project.uiState.variantFrameIndices → timelineUI.variantFrameIndices
 ] as const;
 
 /* ── Phase B: MobX → Zustand. Fields whose ownership HAS flipped. ────────── */
@@ -166,6 +173,34 @@ export const PHASE_B_FIELDS = [
   "palettes", //        domain.palettes       → project.palettes
   "variants", //        domain.variants       → project.variants
   "referenceImage", //  domain.referenceImage → project.referenceImage
+  // ── Task 25: the three timeline/layer UI fields that DO have one writer ─
+  //
+  // Every writer of these three now routes into MobX: `selectLayer` is a
+  // `TimelineUIStore` action, and `setObjectLibraryViewMode` /
+  // `setTimelineThumbnailMode` are bridge-installed delegates into it (the
+  // legacy `toolActions` implementations are dead once the delegate is
+  // installed). Their consumers — `LayerPanel`, `FrameTimeline`,
+  // `TimelineView`, `ObjectLibrary` — read them off `project.uiState`, which
+  // the Phase B reaction below keeps in sync.
+  // ── Task 25: BOTH CLIPBOARDS FLIP A→B (R6, and R14 stays intact) ───────
+  //
+  // `LayerStore` is now the only writer of either buffer — the three legacy
+  // `layerClipboardActions` and the two `timelineActions` clipboard actions
+  // are throwing stubs behind bridge delegates. So Zustand can no longer be
+  // the source of truth, and leaving them in Phase A would mean a MobX write
+  // never reached the two consumers that read them (`LayerPanel`,
+  // `TimelineView` — both migrated by this same task, per §9.8).
+  //
+  // ⚠️ THE FLIP DOES NOT WEAKEN R14. The buffers still live on
+  // `SessionStore`, which is tab-scoped and has no reset/clear/switch hook by
+  // construction, and the Phase B reaction below mirrors them BY REFERENCE
+  // (never cloned — they hold pixel grids). A project switch touches neither
+  // store, so the two task-08 cross-project tests stay green.
+  "layerClipboard", //        session.layerClipboard        → EditorState.layerClipboard
+  "timelineCellClipboard", // session.timelineCellClipboard → EditorState.timelineCellClipboard
+  "layerSelectionCounter", // viewport.layerSelectionCounter → uiState.layerSelectionCounter
+  "objectLibraryViewMode", // viewport.objectLibraryViewMode → uiState.objectLibraryViewMode
+  "timelineThumbnailMode", // viewport.timelineThumbnailMode → uiState.timelineThumbnailMode
 ] as const;
 
 /**
@@ -218,12 +253,14 @@ function syncPhaseA(app: ApplicationStore, s: EditorState): void {
         normalBrushShape: s.project.uiState.normalBrushShape,
       };
     }
-    app.session.layerClipboard = s.layerClipboard;
-    app.session.timelineCellClipboard = s.timelineCellClipboard;
+    // Task 25: the two clipboards moved to Phase B — MobX owns them now and
+    // the reaction below mirrors them OUT. Reading them back in here would
+    // make Zustand a second writer (R6) and would clobber a fresh copy with
+    // the stale mirror on the very next unrelated Zustand change.
     app.session.colorHistory = s.colorHistory;
     // Task 23: the 4 selection ids the cross-store computeds depend on.
     const uiState = s.project?.uiState;
-    app.selection.adopt({
+    app.timelineUI.adopt({
       selectedObjectId: uiState?.selectedObjectId ?? null,
       selectedFrameId: uiState?.selectedFrameId ?? null,
       selectedLayerId: uiState?.selectedLayerId ?? null,
@@ -241,7 +278,39 @@ function phaseBSnapshot(app: ApplicationStore): Partial<EditorState> {
     projectName: app.domain.projectName,
     projectList: app.domain.projectList.slice(),
     saveStatus: app.session.saveStatus,
+    // Task 25 — mirrored BY REFERENCE. These carry `PixelData[][]` grids and
+    // `SessionStore` annotates them `observableRef`, so MobX never sees
+    // inside one. `compareStructural` on the snapshot below compares them by
+    // reference for the same reason: a deep compare of a pasted 300k-cell
+    // grid is the R2 catastrophe arriving through the back door.
+    layerClipboard: app.session.layerClipboard,
+    timelineCellClipboard: app.session.timelineCellClipboard,
   };
+}
+
+/**
+ * Shallow equality for {@link phaseBSnapshot}. See the note at its use site
+ * for why this replaced `compareStructural` in task 25.
+ */
+function phaseBEquals(
+  a: Partial<EditorState>,
+  b: Partial<EditorState>,
+): boolean {
+  if (a === b) return true;
+  const aList = a.projectList ?? [];
+  const bList = b.projectList ?? [];
+  return (
+    a.loadState === b.loadState &&
+    a.loadErrorMessage === b.loadErrorMessage &&
+    a.isLoading === b.isLoading &&
+    a.projectName === b.projectName &&
+    a.saveStatus === b.saveStatus &&
+    // By REFERENCE — never a deep compare, these hold pixel grids.
+    a.layerClipboard === b.layerClipboard &&
+    a.timelineCellClipboard === b.timelineCellClipboard &&
+    aList.length === bList.length &&
+    aList.every((name, i) => name === bList[i])
+  );
 }
 
 /**
@@ -257,11 +326,76 @@ export function installBridge(app: ApplicationStore): () => void {
   // immediately so the MobX tree never starts stale.
   syncPhaseA(app, useEditorStore.getState());
 
+  // ── Task 25: adopt the TREE eagerly too ─────────────────────────────────
+  //
+  // A latent gap, found by this task rather than introduced by it. Phase A
+  // was adopted on install, but the tree was adopted only inside the
+  // subscribe callback — i.e. only on the next `project` REFERENCE change.
+  // A bridge installed while a project is ALREADY loaded therefore started
+  // with an empty `DomainStore.objects` until something happened to replace
+  // the project.
+  //
+  // `PaletteStore` and `ObjectStore` never noticed: `addPalette`/`addObject`
+  // append unconditionally and never READ the tree first. Task 25's stores
+  // do — `FrameStore` and `LayerStore` both resolve `currentObject()` before
+  // mutating — so on a stale tree they silently bailed out and scheduled no
+  // save. Measured directly in `autoSave.test.ts` ("addLayer schedules
+  // exactly one save"), where the suite installs a SECOND ApplicationStore
+  // after the project is loaded.
+  //
+  // `adoptTree` assigns by reference, so this clones nothing and proxies no
+  // grid. It is a no-op when there is no project.
+  const initialProject = useEditorStore.getState().project;
+  if (initialProject) {
+    runInAction(() => app.domain.adoptTree(initialProject));
+  }
+
   // The `domainVersion` bump — see item 3 in the module header.
-  let lastProject = useEditorStore.getState().project;
+  let lastProject = initialProject;
+
+  // Task 25: the last clipboard values THIS bridge published, so an external
+  // Zustand write can be told apart from the mirror's own echo. See
+  // `adoptClipboards` below.
+  let mirroredLayerClipboard = app.session.layerClipboard;
+  let mirroredTimelineCellClipboard = app.session.timelineCellClipboard;
+
+  /**
+   * ── The clipboard ADOPTION seam (R6) ──────────────────────────────────
+   *
+   * The two clipboards are Phase B — `LayerStore` owns them — but external
+   * writes to the legacy Zustand fields still exist during the bridge era,
+   * exactly as they did for `projectHistory` (task 17) and the tree (task
+   * 23). The task 08 harness clears `layerClipboard` in its `afterEach`, and
+   * a second `ApplicationStore` installed over the same Zustand store
+   * publishes its own empty buffers.
+   *
+   * Rather than give the fields a second writer, the value is PULLED back:
+   * when Zustand's value differs from what this bridge last published, the
+   * external write wins and is adopted into `SessionStore`. One field, one
+   * direction, one writer — with a pull seam, the same technique task 17
+   * used for `reconcile()`.
+   *
+   * ⚠️ Assigns BY REFERENCE. These hold pixel grids and `SessionStore`
+   * annotates them `observableRef`; nothing here is cloned or proxied.
+   *
+   * ⚠️ R14 is untouched: this adopts what Zustand HAS, it never clears
+   * anything on a project switch. `projectActions` writes neither field, so a
+   * switch leaves both buffers exactly where they were.
+   */
+  const adoptClipboards = (s: EditorState): void => {
+    if (s.layerClipboard !== mirroredLayerClipboard) {
+      mirroredLayerClipboard = s.layerClipboard;
+      app.session.layerClipboard = s.layerClipboard;
+    }
+    if (s.timelineCellClipboard !== mirroredTimelineCellClipboard) {
+      mirroredTimelineCellClipboard = s.timelineCellClipboard;
+      app.session.timelineCellClipboard = s.timelineCellClipboard;
+    }
+  };
 
   const disposeZ = useEditorStore.subscribe((s) => {
     syncPhaseA(app, s);
+    runInAction(() => adoptClipboards(s));
     if (s.project !== lastProject) {
       lastProject = s.project;
 
@@ -298,7 +432,61 @@ export function installBridge(app: ApplicationStore): () => void {
   // `reaction` is already an action-safe context; the Zustand write is plain.
   const disposeB = reaction(
     () => phaseBSnapshot(app),
-    (snap) => useEditorStore.setState(snap),
+    (snap) => {
+      // Record what we published so `adoptClipboards` can distinguish this
+      // echo from a genuine external write.
+      mirroredLayerClipboard = snap.layerClipboard ?? null;
+      mirroredTimelineCellClipboard = snap.timelineCellClipboard ?? null;
+      useEditorStore.setState(snap);
+    },
+    // ⚠️ NOT `compareStructural` since task 25: the snapshot now carries the
+    // two clipboards, which hold `PixelData[][]` grids. A structural compare
+    // of a pasted 300k-cell grid on every unrelated Phase B change is exactly
+    // the R2 catastrophe the tree publication path was designed to avoid
+    // (module header, item 6) — arriving through the back door.
+    //
+    // The scalars are compared with `===` and the two clipboards by
+    // REFERENCE, which is correct for both: `SessionStore` replaces each
+    // buffer wholesale (`observableRef`), so a new copy is always a new
+    // object. `projectList` is the one array and is compared element-wise.
+    { equals: phaseBEquals },
+  );
+
+  // ── Task 25: the three `uiState` fields that flipped A→B ────────────────
+  //
+  // A SEPARATE reaction, because these three live INSIDE `project.uiState`
+  // rather than at the top level of `EditorState`, so they cannot ride the
+  // scalar snapshot above.
+  //
+  // ⚠️ It rebuilds `project` — but only when one of the three actually
+  // changes (`compareStructural` over a 3-key tuple), which is a user click,
+  // not a save-status flicker. It must NOT be folded into the tree
+  // publication path: that would deep-compare a 300k-cell tree (see item 6).
+  //
+  // The write is a no-op when the value is already correct, which is what
+  // keeps the round trip through `syncPhaseA` from oscillating: a value the
+  // legacy setter wrote first is simply re-written identically.
+  const disposeUIB = reaction(
+    () => ({
+      layerSelectionCounter: app.timelineUI.layerSelectionCounter,
+      objectLibraryViewMode: app.timelineUI.objectLibraryViewMode,
+      timelineThumbnailMode: app.timelineUI.timelineThumbnailMode,
+    }),
+    (snap) => {
+      const { project } = useEditorStore.getState();
+      if (!project) return;
+      const ui = project.uiState;
+      if (
+        ui.layerSelectionCounter === snap.layerSelectionCounter &&
+        ui.objectLibraryViewMode === snap.objectLibraryViewMode &&
+        ui.timelineThumbnailMode === snap.timelineThumbnailMode
+      ) {
+        return;
+      }
+      useEditorStore.setState({
+        project: { ...project, uiState: { ...ui, ...snap } },
+      });
+    },
     { equals: compareStructural },
   );
 
@@ -349,6 +537,131 @@ export function installBridge(app: ApplicationStore): () => void {
     setObjectOrigin: (id, origin) => app.objects.setObjectOrigin(id, origin),
   });
 
+  // ── Task 25: the 26 migrated timeline/frame/layer actions ──────────────
+  //
+  // Same DELEGATE technique task 23 used for the 11 domain actions, and the
+  // reason this task can migrate the STORE without editing `Canvas.tsx`,
+  // `LightingCanvas.tsx`, `CopyFromModal.tsx`, `ObjectLibrary.tsx` or
+  // `variantActions.ts` — five consumers owned by later tasks (30-32, 33-34,
+  // 35/36, and 28). Those files keep calling `useEditorStore().selectFrame(…)`
+  // and land in `TimelineUIStore` / `FrameStore` / `LayerStore`.
+  //
+  // This is what makes the migration honest rather than partial: there is now
+  // exactly ONE implementation of each action, so no consumer can observe
+  // divergent behaviour depending on which path it took. The legacy bodies in
+  // `store/{frame,layer,timeline,layerClipboard}Actions.ts` are replaced with
+  // throwing stubs (`migrated()`), exactly as `paletteActions`/`objectActions`
+  // were in task 23.
+  const previousTimelineActions = {
+    // FrameStore (9)
+    addFrame: useEditorStore.getState().addFrame,
+    deleteFrame: useEditorStore.getState().deleteFrame,
+    deleteSelectedFrame: useEditorStore.getState().deleteSelectedFrame,
+    renameFrame: useEditorStore.getState().renameFrame,
+    duplicateFrame: useEditorStore.getState().duplicateFrame,
+    moveFrame: useEditorStore.getState().moveFrame,
+    reorderFrame: useEditorStore.getState().reorderFrame,
+    addFrameTag: useEditorStore.getState().addFrameTag,
+    removeFrameTag: useEditorStore.getState().removeFrameTag,
+    // TimelineUIStore (2 + 2)
+    selectFrame: useEditorStore.getState().selectFrame,
+    selectLayer: useEditorStore.getState().selectLayer,
+    setObjectLibraryViewMode: useEditorStore.getState().setObjectLibraryViewMode,
+    setTimelineThumbnailMode: useEditorStore.getState().setTimelineThumbnailMode,
+    // LayerStore (14 + 4 + 2 + 3)
+    addLayer: useEditorStore.getState().addLayer,
+    duplicateLayer: useEditorStore.getState().duplicateLayer,
+    deleteLayer: useEditorStore.getState().deleteLayer,
+    renameLayer: useEditorStore.getState().renameLayer,
+    toggleLayerVisibility: useEditorStore.getState().toggleLayerVisibility,
+    toggleAllLayersVisibility: useEditorStore.getState().toggleAllLayersVisibility,
+    moveLayer: useEditorStore.getState().moveLayer,
+    moveLayerAcrossAllFrames: useEditorStore.getState().moveLayerAcrossAllFrames,
+    deleteLayerAcrossAllFrames: useEditorStore.getState().deleteLayerAcrossAllFrames,
+    squashLayerDown: useEditorStore.getState().squashLayerDown,
+    squashLayerUp: useEditorStore.getState().squashLayerUp,
+    squashLayerDownAcrossAllFrames:
+      useEditorStore.getState().squashLayerDownAcrossAllFrames,
+    squashLayerUpAcrossAllFrames:
+      useEditorStore.getState().squashLayerUpAcrossAllFrames,
+    moveLayerPixels: useEditorStore.getState().moveLayerPixels,
+    addLayerToAllFrames: useEditorStore.getState().addLayerToAllFrames,
+    addLayerToFrameAtPosition: useEditorStore.getState().addLayerToFrameAtPosition,
+    deleteLayerFromFrame: useEditorStore.getState().deleteLayerFromFrame,
+    reorderLayerInFrame: useEditorStore.getState().reorderLayerInFrame,
+    copyTimelineCell: useEditorStore.getState().copyTimelineCell,
+    pasteTimelineCell: useEditorStore.getState().pasteTimelineCell,
+    copyLayerToClipboard: useEditorStore.getState().copyLayerToClipboard,
+    pasteLayerFromClipboard: useEditorStore.getState().pasteLayerFromClipboard,
+    copyLayerFromObject: useEditorStore.getState().copyLayerFromObject,
+  };
+  useEditorStore.setState({
+    addFrame: (name, copyPrevious) => app.frames.addFrame(name, copyPrevious),
+    deleteFrame: (id) => app.frames.deleteFrame(id),
+    deleteSelectedFrame: () => app.frames.deleteSelectedFrame(),
+    renameFrame: (id, name) => app.frames.renameFrame(id, name),
+    duplicateFrame: (id) => app.frames.duplicateFrame(id),
+    moveFrame: (id, direction) => app.frames.moveFrame(id, direction),
+    reorderFrame: (frameId, toIndex) => app.frames.reorderFrame(frameId, toIndex),
+    addFrameTag: (frameId, tag) => app.frames.addFrameTag(frameId, tag),
+    removeFrameTag: (frameId, tag) => app.frames.removeFrameTag(frameId, tag),
+
+    selectFrame: (id, syncVariants) => app.timelineUI.selectFrame(id, syncVariants),
+    selectLayer: (id) => app.timelineUI.selectLayer(id),
+    setObjectLibraryViewMode: (mode) =>
+      app.timelineUI.setObjectLibraryViewMode(mode),
+    setTimelineThumbnailMode: (enabled) =>
+      app.timelineUI.setTimelineThumbnailMode(enabled),
+
+    addLayer: (name) => app.layers.addLayer(name),
+    duplicateLayer: (id) => app.layers.duplicateLayer(id),
+    deleteLayer: (id) => app.layers.deleteLayer(id),
+    renameLayer: (id, name) => app.layers.renameLayer(id, name),
+    toggleLayerVisibility: (id) => app.layers.toggleLayerVisibility(id),
+    toggleAllLayersVisibility: (visible) =>
+      app.layers.toggleAllLayersVisibility(visible),
+    moveLayer: (from, to) => app.layers.moveLayer(from, to),
+    moveLayerAcrossAllFrames: (layerId, direction) =>
+      app.layers.moveLayerAcrossAllFrames(layerId, direction),
+    deleteLayerAcrossAllFrames: (layerId) =>
+      app.layers.deleteLayerAcrossAllFrames(layerId),
+    squashLayerDown: (layerId) => app.layers.squashLayerDown(layerId),
+    squashLayerUp: (layerId) => app.layers.squashLayerUp(layerId),
+    squashLayerDownAcrossAllFrames: (layerId) =>
+      app.layers.squashLayerDownAcrossAllFrames(layerId),
+    squashLayerUpAcrossAllFrames: (layerId) =>
+      app.layers.squashLayerUpAcrossAllFrames(layerId),
+    moveLayerPixels: (dx, dy) => app.layers.moveLayerPixels(dx, dy),
+    addLayerToAllFrames: (name) => app.layers.addLayerToAllFrames(name),
+    addLayerToFrameAtPosition: (frameId, name, position, variantInfo) =>
+      app.layers.addLayerToFrameAtPosition(frameId, name, position, variantInfo),
+    deleteLayerFromFrame: (frameId, layerId) =>
+      app.layers.deleteLayerFromFrame(frameId, layerId),
+    reorderLayerInFrame: (frameId, layerId, newIndex) =>
+      app.layers.reorderLayerInFrame(frameId, layerId, newIndex),
+    copyTimelineCell: (frameId, layerId) =>
+      app.layers.copyTimelineCell(frameId, layerId),
+    pasteTimelineCell: (frameId, targetLayerId) =>
+      app.layers.pasteTimelineCell(frameId, targetLayerId),
+    copyLayerToClipboard: (layerId) => app.layers.copyLayerToClipboard(layerId),
+    pasteLayerFromClipboard: (currentFrameOnly) =>
+      app.layers.pasteLayerFromClipboard(currentFrameOnly),
+    copyLayerFromObject: (
+      sourceObjectId,
+      sourceLayerId,
+      isVariant,
+      variantGroupId,
+      variantId,
+    ) =>
+      app.layers.copyLayerFromObject(
+        sourceObjectId,
+        sourceLayerId,
+        isVariant,
+        variantGroupId,
+        variantId,
+      ),
+  });
+
   useEditorStore.setState({
     initProject: () => flowResult(app.domain.initProject()),
     createNewProject: (name) => flowResult(app.domain.createProject(name)),
@@ -364,7 +677,9 @@ export function installBridge(app: ApplicationStore): () => void {
   return () => {
     disposeZ();
     disposeB();
+    disposeUIB();
     useEditorStore.setState(previousActions);
     useEditorStore.setState(previousDomainActions);
+    useEditorStore.setState(previousTimelineActions);
   };
 }
