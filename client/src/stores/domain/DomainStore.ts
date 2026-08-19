@@ -107,7 +107,26 @@ export interface DomainStoreDeps {
   host: ProjectHost;
 }
 
+/**
+ * Supplies the persisted UI half of the save payload (task 24).
+ *
+ * ⚠️ It is INJECTED, never imported: `DomainStore` must not depend on
+ * `stores/ui/**` (ESLint-enforced, task 05), because the domain half of the
+ * app has to remain usable — and testable — without a UI store at all.
+ * `ApplicationStore` wires it with
+ * `domain.setUIStateProvider(() => this.ui.toPersistedUIState())`.
+ */
+export type UIStateProvider = () => CompactProject["uiState"];
+
 export class DomainStore {
+  /**
+   * The persisted UI half of the save payload (task 24). `null` until
+   * `ApplicationStore` injects it — and deliberately optional, so a
+   * domain-only test can serialize without constructing a UI store.
+   * NOT observable: it is wiring, set once at construction time.
+   */
+  private uiStateProvider: UIStateProvider | null = null;
+
   /** The 4-state load machine. See the module header. */
   loadState: LoadState = "idle";
   /** The typed failure of the LAST load attempt; `null` outside `failed`. */
@@ -332,7 +351,32 @@ export class DomainStore {
    */
   serialize(): CompactProject | null {
     const project = this.currentProject();
-    return project ? projectToCompact(project) : null;
+    if (!project) return null;
+    const compact = projectToCompact(project);
+    // Task 24: the 43 UI fields + `aiServiceUrl` now come from `UIStore`'s
+    // explicit builder rather than from the `uiState` the host happened to
+    // hold. `projectToCompact` still produces the domain half, so the two
+    // halves are recombined here.
+    //
+    // ⚠️ R3: the result must stay wire-identical. `UIStore` is hydrated from
+    // the same loaded project, and `persistedUIState.test.ts` pins the
+    // builder against `projectToCompact`'s own output across all 151 real
+    // corpus snapshots — key set and every value, zero permitted
+    // differences. When no provider is wired (domain-only tests, the
+    // pre-task-24 path) the host's `uiState` is used unchanged.
+    if (this.uiStateProvider) {
+      compact.uiState = this.uiStateProvider();
+    }
+    return compact;
+  }
+
+  /**
+   * Inject the persisted-UI provider. Called once by `ApplicationStore`; see
+   * {@link UIStateProvider} for why this is an injection rather than an
+   * import.
+   */
+  setUIStateProvider(provider: UIStateProvider | null): void {
+    this.uiStateProvider = provider;
   }
 
   /* ── the load path ─────────────────────────────────────────────────────── */

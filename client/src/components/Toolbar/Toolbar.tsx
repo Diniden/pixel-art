@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useEditorStore } from "../../store";
 import { ReferenceImageData } from "../ReferenceImageModal/ReferenceImageModal";
-import { PixelStudioTools } from "./PixelStudioTools";
+// Task 24: routed through its container so the `observer()` seam exists
+// before task 35/36 purifies the component itself.
+import { PixelStudioToolsContainer } from "../../containers/PixelStudioToolsContainer";
 import { LightingStudioTools } from "./LightingStudioTools";
 import { Icon } from "../../ui/primitives/Icon/Icon";
 import { Maximize2, Sun, Moon, Film, Palette, Lightbulb } from "lucide-react";
@@ -156,7 +158,7 @@ export function Toolbar({
       {isLightingMode ? (
         <LightingStudioTools />
       ) : (
-        <PixelStudioTools
+        <PixelStudioToolsContainer
           onReferenceImageChange={onReferenceImageChange}
           hasReferenceImage={hasReferenceImage}
         />
