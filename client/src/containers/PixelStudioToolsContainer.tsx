@@ -7,7 +7,7 @@
  */
 import { observer } from "mobx-react-lite";
 import { PixelStudioTools } from "../components/Toolbar/PixelStudioTools";
-import type { ReferenceImageData } from "../components/ReferenceImageModal/ReferenceImageModal";
+import type { ReferenceImageData } from "../types/referenceImage";
 
 interface PixelStudioToolsContainerProps {
   onReferenceImageChange?: (data: ReferenceImageData | null) => void;

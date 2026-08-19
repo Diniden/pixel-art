@@ -1,5 +1,5 @@
 import { useEditorStore } from "../../store";
-import { ReferenceImageData } from "../ReferenceImageModal/ReferenceImageModal";
+import type { ReferenceImageData } from "../../types/referenceImage";
 import type { PixelObject } from "../../types";
 import type { CurrentVariant } from "../../stores/ApplicationStore";
 import { Icon } from "../../ui/primitives/Icon/Icon";

@@ -1,31 +1,89 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useEditorStore } from '../../store';
-import { ReferenceImageData, adjustReferenceBoxSize, shiftReferenceSelection, shiftReferenceSelectionBySize } from '../ReferenceImageModal/ReferenceImageModal';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Camera, ChevronUp, ChevronDown, Target } from 'lucide-react';
+import type { ReferenceImageData } from '../../types/referenceImage';
 import './ReferenceImagePanel.css';
 
+/**
+ * ══════════════════════════════════════════════════════════════════════════
+ *  TASK 29: THIS PANEL NO LONGER MUTATES A MODAL'S MODULE-LEVEL SINGLETON
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * All 16 nudge/resize buttons below used to import three functions FROM
+ * `ReferenceImageModal.tsx` and call them directly. Those functions mutated a
+ * module-level object shared with the modal, which meant this panel and that
+ * modal communicated through a global with no reactivity at all — mutating it
+ * re-rendered nothing, so every handler had to thread the returned
+ * `ReferenceImageData` back up through `onReferenceImageChange` by hand.
+ *
+ * The three are now `ReferenceUIStore` actions, delivered as the three
+ * callbacks below. The hand-threading REMAINS, deliberately: extracting pixels
+ * is a canvas read-back, so the data is still pulled rather than observed. What
+ * is gone is the shared mutable module state.
+ *
+ * ⚠️ The component is now pure presentation — it imports no store (task 29
+ * deletes its `useEditorStore()` call). `ReferenceImagePanelContainer` supplies
+ * every value below.
+ */
 interface ReferenceImagePanelProps {
   referenceImage: ReferenceImageData | null;
   onReferenceImageChange: (data: ReferenceImageData | null) => void;
   isReferenceTraceActive: boolean;
   zoom: number;
+  /**
+   * ⚠️ NOT mirrored into local `useState` (task 29 constraint: the duplicate is
+   * DELETED, not migrated). It was `useState(project?.uiState...)` plus a
+   * `useEffect` that re-synced it — a copy that could disagree with the store
+   * for one render. Reading the prop directly removes both.
+   */
+  isMinimized: boolean;
+  onMinimizedChange: (minimized: boolean) => void;
+  /** The persisted position, as percentages of the canvas area. */
+  persistedPosition: { topPercent: number; leftPercent: number } | undefined;
+  onPositionChange: (position: { topPercent: number; leftPercent: number }) => void;
+  onSelectTool: (tool: 'pixel' | 'reference-trace') => void;
+  /** `ReferenceUIStore.adjustBoxSize` — was `adjustReferenceBoxSize`. */
+  onAdjustBoxSize: (
+    direction: 'up' | 'down' | 'left' | 'right',
+    increase: boolean,
+  ) => ReferenceImageData | null;
+  /** `ReferenceUIStore.shiftSelection` — was `shiftReferenceSelection`. */
+  onShiftSelection: (dx: number, dy: number) => ReferenceImageData | null;
+  /** `ReferenceUIStore.shiftSelectionBySize` — was `shiftReferenceSelectionBySize`. */
+  onShiftSelectionBySize: (
+    dx: number,
+    dy: number,
+    width: number,
+    height: number,
+  ) => ReferenceImageData | null;
 }
 
-export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, isReferenceTraceActive, zoom }: ReferenceImagePanelProps) {
+export function ReferenceImagePanel({
+  referenceImage,
+  onReferenceImageChange,
+  isReferenceTraceActive,
+  zoom,
+  isMinimized,
+  onMinimizedChange,
+  persistedPosition,
+  onPositionChange,
+  onSelectTool,
+  onAdjustBoxSize,
+  onShiftSelection,
+  onShiftSelectionBySize,
+}: ReferenceImagePanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  const {
-    project,
-    setReferenceImagePanelPosition,
-    setReferenceImagePanelMinimized,
-    setTool,
-  } = useEditorStore();
-
-  const [isMinimized, setIsMinimized] = useState(project?.uiState.referenceImagePanelMinimized ?? false);
+  /**
+   * ⚠️ `position` (PIXELS) is NOT the deleted mirror. The deleted duplicate was
+   * `isMinimized`; this one is a genuine DERIVED value — the persisted form is
+   * a percentage of the canvas area and must be recomputed against live element
+   * bounds on mount and on resize. It is local because it is a measurement, not
+   * a copy of store state.
+   */
   const [position, setPosition] = useState({ top: 20, left: 20 });
 
   // Helper to convert percentage to pixels
@@ -63,35 +121,29 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
 
   // Initialize position from project
   useEffect(() => {
-    const percentPos = project?.uiState.referenceImagePanelPosition;
-    if (percentPos) {
+    if (persistedPosition) {
       requestAnimationFrame(() => {
-        const pixelPos = percentageToPixels(percentPos);
+        const pixelPos = percentageToPixels(persistedPosition);
         setPosition(pixelPos);
       });
     }
-  }, [project?.uiState.referenceImagePanelPosition, percentageToPixels]);
+  }, [persistedPosition, percentageToPixels]);
 
-  // Sync minimized state
-  useEffect(() => {
-    if (project?.uiState.referenceImagePanelMinimized !== undefined) {
-      setIsMinimized(project.uiState.referenceImagePanelMinimized);
-    }
-  }, [project?.uiState.referenceImagePanelMinimized]);
+  /* The "sync minimized state" effect that used to sit here is DELETED — the
+   * value is a prop now, so there is nothing to sync. */
 
   // Recalculate position on window resize
   useEffect(() => {
     const handleResize = () => {
-      const percentPos = project?.uiState.referenceImagePanelPosition;
-      if (percentPos) {
-        const pixelPos = percentageToPixels(percentPos);
+      if (persistedPosition) {
+        const pixelPos = percentageToPixels(persistedPosition);
         setPosition(pixelPos);
       }
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [project?.uiState.referenceImagePanelPosition, percentageToPixels]);
+  }, [persistedPosition, percentageToPixels]);
 
   // Render the reference image
   useEffect(() => {
@@ -179,7 +231,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
             left: panelRect.left - canvasRect.left
           };
           const percentPosition = pixelsToPercentage(finalPixelPosition);
-          setReferenceImagePanelPosition(percentPosition);
+          onPositionChange(percentPosition);
         }
       }
     };
@@ -191,7 +243,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragStart, setReferenceImagePanelPosition, pixelsToPercentage]);
+  }, [isDragging, dragStart, onPositionChange, pixelsToPercentage]);
 
   if (!referenceImage) return null;
 
@@ -213,9 +265,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
           className="reference-image-panel__minimize"
           onClick={(e) => {
             e.stopPropagation();
-            const newMinimized = !isMinimized;
-            setIsMinimized(newMinimized);
-            setReferenceImagePanelMinimized(newMinimized);
+            onMinimizedChange(!isMinimized);
           }}
           onMouseDown={(e) => e.stopPropagation()}
           title={isMinimized ? 'Expand' : 'Minimize'}
@@ -235,7 +285,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--top-increase"
                     onClick={() => {
-                      const newData = adjustReferenceBoxSize('up', true);
+                      const newData = onAdjustBoxSize('up', true);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Increase Reference Box Up"
@@ -245,7 +295,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--top-decrease"
                     onClick={() => {
-                      const newData = adjustReferenceBoxSize('up', false);
+                      const newData = onAdjustBoxSize('up', false);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Decrease Reference Box Up"
@@ -257,7 +307,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--bottom-increase"
                     onClick={() => {
-                      const newData = adjustReferenceBoxSize('down', true);
+                      const newData = onAdjustBoxSize('down', true);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Increase Reference Box Down"
@@ -267,7 +317,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--bottom-decrease"
                     onClick={() => {
-                      const newData = adjustReferenceBoxSize('down', false);
+                      const newData = onAdjustBoxSize('down', false);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Decrease Reference Box Down"
@@ -279,7 +329,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--left-increase"
                     onClick={() => {
-                      const newData = adjustReferenceBoxSize('left', true);
+                      const newData = onAdjustBoxSize('left', true);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Increase Reference Box Left"
@@ -289,7 +339,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--left-decrease"
                     onClick={() => {
-                      const newData = adjustReferenceBoxSize('left', false);
+                      const newData = onAdjustBoxSize('left', false);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Decrease Reference Box Left"
@@ -301,7 +351,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--right-increase"
                     onClick={() => {
-                      const newData = adjustReferenceBoxSize('right', true);
+                      const newData = onAdjustBoxSize('right', true);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Increase Reference Box Right"
@@ -311,7 +361,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--right-decrease"
                     onClick={() => {
-                      const newData = adjustReferenceBoxSize('right', false);
+                      const newData = onAdjustBoxSize('right', false);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Decrease Reference Box Right"
@@ -335,7 +385,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = shiftReferenceSelection(-1, 0);
+                    const newData = onShiftSelection(-1, 0);
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Left"
@@ -345,7 +395,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = shiftReferenceSelection(1, 0);
+                    const newData = onShiftSelection(1, 0);
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Right"
@@ -355,7 +405,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = shiftReferenceSelectionBySize(-1, 0, referenceImage.width, referenceImage.height);
+                    const newData = onShiftSelectionBySize(-1, 0, referenceImage.width, referenceImage.height);
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Next Left"
@@ -365,7 +415,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = shiftReferenceSelectionBySize(1, 0, referenceImage.width, referenceImage.height);
+                    const newData = onShiftSelectionBySize(1, 0, referenceImage.width, referenceImage.height);
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Next Right"
@@ -375,7 +425,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = shiftReferenceSelection(0, -1);
+                    const newData = onShiftSelection(0, -1);
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Up"
@@ -385,7 +435,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = shiftReferenceSelection(0, 1);
+                    const newData = onShiftSelection(0, 1);
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Down"
@@ -395,7 +445,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = shiftReferenceSelectionBySize(0, -1, referenceImage.width, referenceImage.height);
+                    const newData = onShiftSelectionBySize(0, -1, referenceImage.width, referenceImage.height);
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Next Up"
@@ -405,7 +455,7 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = shiftReferenceSelectionBySize(0, 1, referenceImage.width, referenceImage.height);
+                    const newData = onShiftSelectionBySize(0, 1, referenceImage.width, referenceImage.height);
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Next Down"
@@ -418,9 +468,9 @@ export function ReferenceImagePanel({ referenceImage, onReferenceImageChange, is
                 onClick={() => {
                   // Toggle trace mode: if already active, switch to pixel tool
                   if (isReferenceTraceActive) {
-                    setTool('pixel');
+                    onSelectTool('pixel');
                   } else {
-                    setTool('reference-trace');
+                    onSelectTool('reference-trace');
                   }
                 }}
                 title="Trace Reference (WASD to align, click to copy)"

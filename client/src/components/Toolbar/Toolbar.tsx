@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useEditorStore } from "../../store";
-import { ReferenceImageData } from "../ReferenceImageModal/ReferenceImageModal";
+import type { ReferenceImageData } from "../../types/referenceImage";
 // Task 24: routed through its container so the `observer()` seam exists
 // before task 35/36 purifies the component itself.
 import { PixelStudioToolsContainer } from "../../containers/PixelStudioToolsContainer";

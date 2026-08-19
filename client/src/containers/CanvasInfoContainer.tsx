@@ -12,7 +12,7 @@
  */
 import { observer } from "mobx-react-lite";
 import { CanvasInfo } from "../components/Canvas/CanvasInfo";
-import type { ReferenceImageData } from "../components/ReferenceImageModal/ReferenceImageModal";
+import type { ReferenceImageData } from "../types/referenceImage";
 import { useStores } from "../stores/context";
 
 interface CanvasInfoContainerProps {

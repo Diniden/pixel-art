@@ -21,6 +21,36 @@ export function createToolActions(
 
       // Trace modes should be mutually exclusive:
       // - Entering reference-trace tool turns off frame trace mode.
+      //
+      // ⚠️ TASK 29 — WHY THIS ENFORCEMENT SITE IS STILL HERE.
+      //
+      // The task's step 6 asks for the duplicated tool/trace exclusivity
+      // (here, and `referenceActions.ts:52-63`) to be collapsed into ONE
+      // `reaction` in the MobX tree. That reaction EXISTS —
+      // `ReferenceUIStore`'s constructor observes `ToolUIStore.selectedTool`
+      // and clears frame trace. It is not yet the ONLY site, and deleting this
+      // one now would be a live regression, for a measured reason:
+      //
+      //   THE SIX TRACE-OVERLAY FIELDS ARE NOT BRIDGED IN EITHER DIRECTION.
+      //   `frameTraceActive`, `frameTraceFrameIndex`, `frameOverlayOffset`,
+      //   `referenceOverlayOffset` and `frameReferenceObjectId` appear in
+      //   NEITHER `PHASE_A_FIELDS` NOR `PHASE_B_FIELDS` (grep them in
+      //   `zustandBridge.ts` — no hits). Zustand's copies are the ONLY ones
+      //   any live consumer reads: `Canvas.tsx:127-132`, `CanvasInfo.tsx:28`,
+      //   `RightSidebarTopControls.tsx:45` and `FrameReferencePanel.tsx:37`.
+      //
+      // So a MobX-side reaction cannot yet turn Zustand's `frameTraceActive`
+      // off, and removing this block would let a user select the
+      // `reference-trace` tool with frame trace still live — both overlays
+      // drawn at once, which is the exact bug the duplication was papering
+      // over. All four consumers live in files outside task 29's `Touches`
+      // (`Canvas.tsx` belongs to task 32, the last and most dangerous file in
+      // the plan), and §10 rule 6 says to stop rather than widen scope.
+      //
+      // ⚠️ WHOEVER MIGRATES THE TRACE-OVERLAY CONSUMERS MUST DELETE THIS BLOCK
+      // AND `referenceActions.ts`'s twin IN THE SAME CHANGE, and bridge or flip
+      // the six fields at that point. Until then this is the single LIVE site
+      // and the MobX reaction is dormant — one live writer, so R6 holds.
       if (tool === "reference-trace") {
         set({
           frameTraceActive: false,
