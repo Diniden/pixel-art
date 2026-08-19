@@ -34,10 +34,13 @@ import {
   generateId,
 } from "../../types";
 import type { PixelObject } from "../../types";
+// ⚠️ Task 28 moved this OUT of `components/AnchorGrid/AnchorGrid`. A store
+// importing a React component module was the layering arrow backwards; the
+// pure math now lives in `utils/`, which both layers may depend on.
 import {
   getAnchorPadding,
   type AnchorPosition,
-} from "../../components/AnchorGrid/AnchorGrid";
+} from "../../utils/variantHelpers";
 import type { DomainMutator } from "./DomainMutator";
 import type { DomainStore } from "./DomainStore";
 

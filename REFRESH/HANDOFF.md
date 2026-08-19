@@ -141,7 +141,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W17** | 25 | W16 | ⚠️ | `8e53afb` | timeline matrix green · cross-project clipboard survives |
 | **W18** | 26 | W17 | ⚠️ | `78846c8` | a 50-pixel stroke command < 5 kB · task 08's suite unchanged · 100-pixel drag under 16 ms |
 | **W19** | 27 | W18 | ⚠️ | `7ebb120` | all 9 lighting fields bump `persistedUIVersion` and persist |
-| **W20** | 28 | W19 | ⬜ | — | no `src/stores` file imports from `components/` · variant matrix green |
+| **W20** | 28 | W19 | 🟡 | *(uncommitted)* | no `src/stores` file imports from `components/` · variant matrix green |
 | **W21** | 29 | W20 | ⬜ | — | `! grep -n ReferenceImageModal src/App.tsx` · zero `useEditorStore.getState()` remain |
 | **W22** | 30 | W21 | ⬜ | — | golden-hash render tests per mode · one client copy of the offset fallback |
 | **W23** | 31 | W22 | ⬜ | — | brushStamp mouse-vs-touch agreement test passes |
@@ -163,6 +163,8 @@ never `✅ DONE`. **Work through this before trusting any PARTIAL wave.**
 | Wave | Task | Unperformed check | Risk left unverified |
 | --- | --- | --- | --- |
 | ~~W6~~ | ~~10~~ | ~~**Open the Storybook and look at it.**~~ ✅ **CLEARED BY THE OWNER (2026-08-16)** — reviewed before W7 was dispatched, per §9.10's ordering. The baseline is now human-captured; task 12's substitution can be compared against it. | — |
+| W20 | 28 | ⭐ **The variant matrix, items 1–5 and 7, in the running app.** Make/add/delete/rename a variant and a group; resize across all 9 anchors; set an offset for one frame and for all frames; add/duplicate/delete/move/reorder variant frames and their tags; add/remove a variant layer; and confirm a layer with `variantOffsets`, one with only a legacy `variantOffset`, and one with only `baseFrameOffsets` all render where they did. | **Low residual risk.** Task 08's 47 variant tests dispatch through `installBridge`, so they now exercise `VariantStore`/`TimelineUIStore` end-to-end and passed **byte-unmodified** — the 9-anchor matrix and the 4-level precedence are covered there. What automation cannot see is on-canvas placement and the drag-and-drop gestures. |
+| ~~W20~~ | ~~28~~ | ~~**Matrix item 6 — `ObjectLibrary` thumbnails update on a variant-frame change.**~~ ✅ **AUTOMATED BY W20.** 5 DOM tests in `ObjectLibraryThumbnails.dom.test.tsx`, probe-verified (re-introducing the broken comparator fails 2 of them). | — |
 | W7 | 12 | ⭐⭐ **The R9 manual stacking pass.** Open every one of the 14 modals, both nested confirms (VariantSelect resize, BrowseBackups restore), all three tooltips, the view-mode dropdown, and **the AI-config popover while a modal is open** (the one real ordering bug this wave fixes — it moved from 1000 to `--z-popover`). | All 49 z-index sites moved onto the semantic scale and **no automated check covers stacking**. The full old→new table is in the family-3 commit message (`9892e85`) and the task 12 report. |
 | W7 | 12 | ⭐ **Visual pass against the reviewed Storybook baseline + the app itself.** The biggest deliberate shifts: AnchorGrid's expand/shrink semantic colours, AddVariantModal's confirm-button gradient flattening to one violet, the gray-ramp collapses (`#d0d0d0`/`#888`, up to 48/channel — the spec understated these as "1–6"), two `'Courier New'` → JetBrains Mono sites, and `FrameReferencePanel:117`'s greenish label mapped to `--text-tertiary` (the weakest fit in the whole substitution). | 585+ declarations changed value. Every collapse is listed with per-channel deltas in the task 12 report; `roundtrip-final.txt` (scratchpad) has the per-selector inventory. |
 | W7 | 12 | **Font-size mapping decision.** ~24 non-scale sizes (0.7/0.8/0.85/0.9rem, 13px, …) were left literal. | The spec says "30 sizes → 7 tokens" but gives no mapping, and e.g. 0.8rem is equidistant between two tokens. Collapsing app-wide text sizes without an owner mapping would be a bigger visual change than everything else in W7 combined. Needs an owner decision; not lint-enforced, so the gate stays green. |
@@ -326,6 +328,10 @@ starts. **A deviation recorded here is fine; an unrecorded one is a defect.**
 
 | Wave | Task | Deviation | Reason |
 | --- | --- | --- | --- |
+| W20 | 28 | **The A→B flip is PARTIAL: `variantFrameIndices` flipped, the 3 selection ids did NOT.** | `variantFrameIndices` had exactly two writers (`TimelineUIStore` + `variantActions.ts`, 9 sites); this task migrated all twenty variant actions, so it now has ONE and flipped. The three ids have a THIRD writer this task does not own — `store/objectActions.ts:65-67` (`selectObject`), outside the `Touches` list. Flipping them would give each id two writers (R6). **`selectObject` is now the ONLY remaining blocker**: no other file under `src/store` writes any of the three. Whoever migrates it must flip all three in the same change. Bridge now stands at **Phase A 5 / Phase B 27**. |
+| W20 | 28 | **`selectVariant` stayed a DOMAIN action on `VariantStore`; the spec routes it to `TimelineUIStore`.** | The spec lists it among "3 that write UI state". It writes `layer.selectedVariantId` across `project.objects` and writes no `uiState` field at all — putting it on a UI store would make `stores/ui/**` a writer of the objects tree. So `VariantStore` has **18** actions and `TimelineUIStore` gained **2**, not 17/3. |
+| W20 | 28 | **Both memo comparators in `ObjectLibrary.tsx` were REMOVED, not rewritten** (the spec allows either). | With `observer()` on the container and explicit `variants`/`variantFrameIndices` props, a hand-written comparator is redundant and was already a live hazard — see the finding below. |
+| W20 | 28 | Three files edited outside `Touches`, each a forced one-line import swap: `src/store/objectActions.ts`, `src/store/storeTypes.ts` (2 inline type imports), `src/App.tsx` (render `ObjectLibraryContainer`). | All three are demanded by the task's own Verification block (`! grep -rn "components/AnchorGrid" src/stores src/store`) or by the container it mandates. No behaviour changed in any of them. |
 | W16 | 24 | **Steps 6 & 7 deferred**: the 30 `toolActions` setters were NOT deleted and the A→B bridge flip was NOT performed. | Deleting the setters needs edits to **8 files owned by later tasks** (Canvas 30–32, Lighting 27, Reference 29, App 37, plus CanvasInfo/objectActions/ObjectStore). §10 rule 6 says stop rather than widen scope. The flip is deferred **with** it deliberately: flipping without migrating those consumers gives each field **two writers**, which is exactly what R6 forbids. Bridge stands at Phase A 8 / Phase B 11. **Whichever task migrates those consumers must do the flip in the same change.** |
 | — | — | *(none yet)* | — |
 
@@ -553,6 +559,58 @@ texture-pair was renamed `ExportedVariantFrameLayer`. **Additive only** — no e
 exported name changed meaning and no wire key changed, so `server/exports/lib/`'s external
 game-code consumers (Q33) are unaffected. Verified: `server/src/routes/export.ts` has its
 own independent declarations and was not touched.
+
+### 🔴 W20 found a LIVE stale-thumbnail bug in `ObjectLibrary`'s memo comparator
+
+Task 28's spec predicted the thumbnail regression as "the check most likely to
+fail". **It was already failing, before this task touched anything.**
+
+`ObjectThumbnail`'s 79-line comparator ended with a branch that iterated
+**`prev.variantGroups`** — the *object-level* variant list, which the v1.1.0
+migration sets to `undefined` on load. The loop therefore never executed, so on
+the path where the object identity had changed (i.e. after **any** pixel edit,
+since every edit publishes new identities) a `variantFrameIndices` change never
+invalidated the thumbnail.
+
+Both comparators were removed. The thumbnails now take `variants` and
+`variantFrameIndices` as direct props off `DomainStore`/`TimelineUIStore`, and
+`observer()` on `ObjectLibraryContainer` invalidates at the granularity of the
+observables actually read.
+
+**Pinned by 5 DOM tests** in
+`client/src/components/ObjectLibrary/__tests__/ObjectLibraryThumbnails.dom.test.tsx`,
+and — following the W3 lesson that a rule matching nothing looks exactly like a
+rule that passes — **the detector was probe-verified**: re-introducing the
+broken comparator shape fails the two starred tests, restoring it passes all 5.
+That converts the spec's manual check 6 into an automated one.
+
+### ✅ W20: task 08's 47 variant tests now run against `VariantStore` unmodified
+
+`src/store/__tests__/variants.test.ts` dispatches through `installBridge`, so
+after this task all 47 of its assertions — the 9-anchor resize matrix, the
+4-level offset ladder with its pinned truthiness divergence, and
+`makeVariant`'s bounding-box arithmetic — exercise the MobX implementations via
+the bridge delegates. **Byte-unmodified**, which is the parity proof for
+matrix items 1–5 and 7. `src/store/__tests__/` and `src/types/__tests__/` both
+remain `git status --porcelain`-clean for the fifth consecutive wave.
+
+### ⚠️ Two more task-28 spec corrections
+
+1. **The two `selectLayer` call sites are NOT where the spec says.** The spec
+   places the store graph's only cross-module edge in `makeVariant`
+   (`variantActions.ts:446`) and `removeVariantLayer` (`:1407`). Reading the
+   file at HEAD, `makeVariant` never calls `selectLayer`; the two real sites
+   are in **`deleteVariantGroup`** and `removeVariantLayer`. Both are now
+   injected callbacks, and both resolve the frame *after* the commit — the
+   legacy ordering, preserved deliberately so the selection sees the
+   post-delete frame.
+2. **`getAnchorPadding` had THREE store-side importers, not one.** The spec
+   names only `variantActions.ts:14`. `stores/domain/ObjectStore.ts:40` (added
+   by task 23) and `store/objectActions.ts:22` imported it too, and
+   `store/storeTypes.ts` had two inline type imports. `ObjectStore`'s was the
+   one the W20 gate actually measured. All are repointed at
+   `utils/variantHelpers`; `AnchorGrid.tsx` re-exports both names so the ~6
+   component-side importers were untouched.
 
 ---
 

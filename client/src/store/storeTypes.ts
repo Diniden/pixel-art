@@ -153,7 +153,7 @@ export interface EditorState {
     id: string,
     width: number,
     height: number,
-    anchor?: import("../components/AnchorGrid/AnchorGrid").AnchorPosition,
+    anchor?: import("../utils/variantHelpers").AnchorPosition,
   ) => void;
   selectObject: (id: string) => void;
   duplicateObject: (id: string) => void;
@@ -371,7 +371,7 @@ export interface EditorState {
     variantId: string,
     width: number,
     height: number,
-    anchor?: import("../components/AnchorGrid/AnchorGrid").AnchorPosition,
+    anchor?: import("../utils/variantHelpers").AnchorPosition,
   ) => void;
   setVariantOffset: (dx: number, dy: number, allFrames?: boolean) => void;
   selectVariantFrame: (variantGroupId: string, frameIndex: number) => void;

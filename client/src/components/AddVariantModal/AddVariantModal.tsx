@@ -1,14 +1,31 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { useEditorStore } from '../../store';
 import { VariantGroup } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Wand2, X, AlertTriangle } from 'lucide-react';
 import './AddVariantModal.css';
 
+/**
+ * Props supplied by `AddVariantModalContainer` (REFRESH task 28).
+ *
+ * Of the four variant consumers this is the only one whose single state read
+ * was not already prop-driven: it read `project?.variants` off the Zustand
+ * store. That becomes the `variants` prop, sourced from `DomainStore.variants`
+ * — the project-level source of truth since v1.1.0. Object-level
+ * `variantGroups` is NEVER read (the migration sets it to `undefined`).
+ */
 interface AddVariantModalProps {
   onClose: () => void;
+  /** `DomainStore.variants` — project-level, never `obj.variantGroups`. */
+  variants: VariantGroup[];
+  onAddVariantLayerFromExisting: (
+    variantGroupId: string,
+    selectedVariantId: string,
+    addToAllFrames: boolean,
+  ) => void;
+  onDeleteVariantGroup: (variantGroupId: string) => void;
+  onRenameVariantGroup: (variantGroupId: string, name: string) => void;
 }
 
 // Optimized thumbnail component with memoization
@@ -45,13 +62,13 @@ const VariantGroupThumbnail = memo(function VariantGroupThumbnail({
   return true;
 });
 
-export function AddVariantModal({ onClose }: AddVariantModalProps) {
-  const {
-    project,
-    addVariantLayerFromExisting,
-    deleteVariantGroup,
-    renameVariantGroup
-  } = useEditorStore();
+export function AddVariantModal({
+  onClose,
+  variants,
+  onAddVariantLayerFromExisting: addVariantLayerFromExisting,
+  onDeleteVariantGroup: deleteVariantGroup,
+  onRenameVariantGroup: renameVariantGroup,
+}: AddVariantModalProps) {
 
   const [addToAllFrames, setAddToAllFrames] = useState(true);
   const [selectedVariantGroupId, setSelectedVariantGroupId] = useState<string | null>(null);
@@ -60,7 +77,6 @@ export function AddVariantModal({ onClose }: AddVariantModalProps) {
   const [editingName, setEditingName] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<{ groupId: string; name: string } | null>(null);
 
-  const variants = project?.variants ?? [];
 
   const handleSelectVariantGroup = (groupId: string) => {
     const group = variants.find(vg => vg.id === groupId);

@@ -9,7 +9,7 @@ import { LightingStudioPanel } from "./components/LightingStudioPanel/LightingSt
 import { LayerPanelContainer } from "./containers/LayerPanelContainer";
 import { LayerColors } from "./components/LayerColors/LayerColors";
 import { FrameTimelineContainer } from "./containers/FrameTimelineContainer";
-import { ObjectLibrary } from "./components/ObjectLibrary/ObjectLibrary";
+import { ObjectLibraryContainer } from "./containers/ObjectLibraryContainer";
 // Task 14: Header is rendered through its observer container, which feeds it
 // `saveStatus` + `aiServiceUrl` from SessionStore.
 import { HeaderContainer } from "./containers/HeaderContainer";
@@ -206,7 +206,7 @@ function App() {
         {!isFocusMode && (
           <aside className="app__side-panel app__side-panel--left app__side-panel--open">
             <div className="app__panel-scroll">
-              <ObjectLibrary />
+              <ObjectLibraryContainer />
               <LayerPanelContainer />
             </div>
           </aside>

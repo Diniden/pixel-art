@@ -87,6 +87,8 @@ import type { ViewportUIStore } from "./ViewportUIStore";
 export interface TimelineContext {
   /** The selected object, or `null`. `ApplicationStore.currentObject`. */
   currentObject(): PixelObject | null;
+  /** The selected frame, or `null`. `ApplicationStore.currentFrame`. */
+  currentFrame(): Frame | null;
   /** The selected layer, or `null`. `ApplicationStore.currentLayer`. */
   currentLayer(): Frame["layers"][number] | null;
   /** The project's variant groups. `DomainStore.variants`. */
@@ -148,6 +150,10 @@ export class TimelineUIStore {
       setObjectLibraryViewMode: action,
       setTimelineThumbnailMode: action,
       setVariantFrameIndex: action,
+      replaceVariantFrameIndices: action,
+      selectVariantFrame: action,
+      advanceVariantFrames: action,
+      adoptVariantFrameIndices: action,
     });
   }
 
@@ -189,20 +195,58 @@ export class TimelineUIStore {
   }
 
   /**
-   * The bridge's Phase A write path for the four ids (see the header).
-   * Carried over unchanged from `SelectionMirror.adopt`, which this store
-   * replaces.
+   * REPLACE the whole record rather than merging into it.
+   *
+   * `setVariantFrameIndex` above merges, which cannot express a REMOVAL —
+   * and `VariantStore.deleteVariantGroup` needs exactly that: the legacy
+   * `variantActions.ts:424-430` rebuilt `variantFrameIndices` from
+   * `Object.entries(...).filter(([key]) => key !== variantGroupId)`, dropping
+   * the deleted group's key. Without a replacing setter the stale entry would
+   * survive every group deletion and accumulate in the save payload.
+   *
+   * `variantFrameIndices` is `observableRef`, so the caller's record is
+   * adopted wholesale, exactly as `setVariantFrameIndex` adopts its rebuild.
+   */
+  replaceVariantFrameIndices(next: {
+    [variantGroupId: string]: number;
+  }): void {
+    this.variantFrameIndices = next;
+    this.context.publishSelection({ variantFrameIndices: next });
+  }
+
+  /**
+   * The bridge's Phase A write path for the three ids (see the header).
+   * Carried over from `SelectionMirror.adopt`, which this store replaces.
+   *
+   * ⚠️ Task 28 REMOVED `variantFrameIndices` from this method. That field
+   * flipped to Phase B — MobX owns it — so adopting Zustand's copy on every
+   * store change would make Zustand a second writer and revert a fresh
+   * variant-frame selection on the next unrelated tick. External writes to it
+   * (a project load) arrive through the bridge's `adoptVariantFrameIndices`
+   * echo-check seam instead, and land on {@link adoptVariantFrameIndices}.
    */
   adopt(next: {
     selectedObjectId: string | null;
     selectedFrameId: string | null;
     selectedLayerId: string | null;
-    variantFrameIndices: { [variantGroupId: string]: number };
   }): void {
     this.selectedObjectId = next.selectedObjectId;
     this.selectedFrameId = next.selectedFrameId;
     this.selectedLayerId = next.selectedLayerId;
-    this.variantFrameIndices = next.variantFrameIndices;
+  }
+
+  /**
+   * Adopt an EXTERNAL `variantFrameIndices` write — a project load, or the
+   * migration chain filling in a default (task 28).
+   *
+   * Distinct from {@link replaceVariantFrameIndices} because it must NOT
+   * publish back into Zustand: the value came FROM Zustand, and echoing it
+   * would restart the loop. Same shape as `UIStore.hydrateLighting`.
+   */
+  adoptVariantFrameIndices(next: {
+    [variantGroupId: string]: number;
+  }): void {
+    this.variantFrameIndices = next;
   }
 
   /**
@@ -318,5 +362,174 @@ export class TimelineUIStore {
       selectedLayerId: id,
       layerSelectionCounter: this.viewport.layerSelectionCounter,
     });
+  }
+
+  /* ══ Task 28: the two VARIANT-TIMELINE selection actions ═══════════════
+   *
+   * Moved off `store/variantActions.ts`, where they were two of twenty. They
+   * belong here and not on `VariantStore` because they write NOTHING but UI
+   * selection — `variantFrameIndices` plus, for `selectVariantFrame`, the
+   * base frame and layer ids. Neither touches `project.objects` or
+   * `project.variants`, and both were already `trackHistory=false`.
+   *
+   * `selectVariant` is NOT here: it writes `layer.selectedVariantId` on the
+   * objects tree and is a domain action on `VariantStore`. The task spec
+   * lists it among the three that move; that is a spec error, recorded in
+   * `VariantStore`'s header.
+   */
+
+  /**
+   * Click a frame in a VARIANT timeline: move the variant to that frame, pull
+   * the BASE timeline along with it, and sync every other variant group.
+   *
+   * Ported from `variantActions.ts:773-855` with no behaviour change. The
+   * four pinned subtleties:
+   *
+   *  1. The base frame is chosen by `frameIndex % baseFrameCount` — the
+   *     variant timeline can be LONGER than the base one and wraps.
+   *  2. The clicked group gets the EXACT `frameIndex`, unwrapped. Only the
+   *     other groups are taken modulo their own frame counts. So a variant
+   *     with 3 frames clicked at index 5 stores 5, and every reader is
+   *     expected to wrap on read (`currentVariant` does:
+   *     `variant.frames[i % variant.frames.length]`).
+   *  3. Each other group's frame count comes from the TARGET frame's variant
+   *     LAYER's `selectedVariantId`, falling back to `vg.variants[0]` only
+   *     when no such layer exists — the same rule `selectFrame` uses.
+   *  4. When editing a variant, the layer selection is carried to the new
+   *     frame's layer with the same `variantGroupId`; otherwise the layer
+   *     selection is left exactly as it was.
+   *
+   * ⚠️ Unlike `selectFrame` this does NOT run the name-match / `layers[0]`
+   * carry-over ladder. A non-variant selection simply stays put.
+   */
+  selectVariantFrame(variantGroupId: string, frameIndex: number): void {
+    const obj = this.context.currentObject();
+    if (!obj) return;
+
+    const currentLayer = this.context.currentLayer();
+    const isEditingVariant =
+      currentLayer?.isVariant === true &&
+      currentLayer?.variantGroupId === variantGroupId;
+
+    // Sync base frame to match variant frame index.
+    const baseFrameCount = obj.frames.length;
+    let newBaseFrameId = this.selectedFrameId;
+    let newLayerId = this.selectedLayerId;
+    let targetFrame: Frame | null = null;
+
+    if (baseFrameCount > 0) {
+      const baseFrameIndex = frameIndex % baseFrameCount;
+      targetFrame = obj.frames[baseFrameIndex] ?? null;
+      if (targetFrame) {
+        newBaseFrameId = targetFrame.id;
+
+        if (isEditingVariant && currentLayer) {
+          const variantLayer = targetFrame.layers.find(
+            (l) => l.isVariant && l.variantGroupId === variantGroupId,
+          );
+          if (variantLayer) {
+            newLayerId = variantLayer.id;
+          }
+        }
+      }
+    }
+
+    // Sync ALL other variant groups to the same index, wrapped per group.
+    const newVariantFrameIndices: { [key: string]: number } = {
+      [variantGroupId]: frameIndex,
+    };
+
+    const variants = this.context.variants();
+    if (targetFrame && variants) {
+      for (const vg of variants) {
+        if (vg.id === variantGroupId) continue;
+
+        const variantLayer = targetFrame.layers.find(
+          (l) => l.isVariant && l.variantGroupId === vg.id,
+        );
+
+        let variantFrameCount = 1;
+        if (variantLayer?.selectedVariantId) {
+          const selectedVariant = vg.variants.find(
+            (v) => v.id === variantLayer.selectedVariantId,
+          );
+          variantFrameCount = selectedVariant?.frames.length ?? 1;
+        } else {
+          variantFrameCount = vg.variants[0]?.frames.length ?? 1;
+        }
+
+        if (variantFrameCount > 0) {
+          newVariantFrameIndices[vg.id] = frameIndex % variantFrameCount;
+        }
+      }
+    }
+
+    const nextLayerId = newLayerId ?? this.selectedLayerId;
+    const nextIndices = {
+      ...this.variantFrameIndices,
+      ...newVariantFrameIndices,
+    };
+
+    this.selectedFrameId = newBaseFrameId;
+    this.selectedLayerId = nextLayerId;
+    this.variantFrameIndices = nextIndices;
+
+    this.context.publishSelection({
+      selectedFrameId: newBaseFrameId,
+      selectedLayerId: nextLayerId,
+      variantFrameIndices: nextIndices,
+    });
+  }
+
+  /**
+   * Step every variant timeline by `delta`, wrapping within each group's own
+   * frame count. Drives variant playback.
+   *
+   * Ported from `variantActions.ts:857-901`. Two pinned details:
+   *
+   *  1. The wrap is `(current + delta + max * |delta|) % max`, not a plain
+   *     `%`. The `max * |delta|` term is what keeps a NEGATIVE delta positive
+   *     before the modulo — JavaScript's `%` returns a negative remainder for
+   *     a negative dividend, so a plain `%` would produce negative indices on
+   *     reverse playback.
+   *  2. Each group's frame count comes from the CURRENT frame's variant
+   *     layer's `selectedVariantId`, falling back to `vg.variants[0]`.
+   *
+   * It bails out entirely when there is no current frame, so a group with no
+   * host layer in view never advances.
+   */
+  advanceVariantFrames(delta: number): void {
+    const currentFrame = this.context.currentFrame();
+    if (!currentFrame) return;
+
+    const newIndices: { [key: string]: number } = {};
+    const currentIndices = this.variantFrameIndices ?? {};
+
+    for (const vg of this.context.variants() ?? []) {
+      const currentIdx = currentIndices[vg.id] ?? 0;
+
+      const variantLayer = currentFrame.layers.find(
+        (l) => l.isVariant && l.variantGroupId === vg.id,
+      );
+
+      let maxFrames = 1;
+      if (variantLayer?.selectedVariantId) {
+        const selectedVariant = vg.variants.find(
+          (v) => v.id === variantLayer.selectedVariantId,
+        );
+        maxFrames = selectedVariant?.frames.length ?? 1;
+      } else {
+        // Fallback to first variant if no layer found.
+        maxFrames = vg.variants[0]?.frames.length ?? 1;
+      }
+
+      const newIdx =
+        (currentIdx + delta + maxFrames * Math.abs(delta)) % maxFrames;
+      newIndices[vg.id] = newIdx;
+    }
+
+    const nextIndices = { ...this.variantFrameIndices, ...newIndices };
+    this.variantFrameIndices = nextIndices;
+    this.context.publishSelection({ variantFrameIndices: nextIndices });
   }
 }

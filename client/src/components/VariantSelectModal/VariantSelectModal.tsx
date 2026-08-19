@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { useEditorStore } from '../../store';
 import { Layer, VariantGroup, Variant } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
@@ -8,10 +7,35 @@ import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Hexagon, X, Scaling, Copy, Check } from 'lucide-react';
 import './VariantSelectModal.css';
 
+/**
+ * Props supplied by `VariantSelectModalContainer` (REFRESH task 28).
+ *
+ * The easiest of the four variant consumers: all 5 store members were
+ * ACTIONS and it had ZERO state coupling — every read already arrived
+ * through `layer` and `variantGroup`. So the container injects five
+ * callbacks and nothing else, and this component no longer touches a store
+ * at all.
+ */
 interface VariantSelectModalProps {
   layer: Layer;
   variantGroup: VariantGroup;
   onClose: () => void;
+  /** `VariantStore.selectVariant` — a DOMAIN action; it repoints host layers. */
+  onSelectVariant: (layerId: string, variantId: string) => void;
+  onAddVariant: (variantGroupId: string, copyFromVariantId?: string) => void;
+  onDeleteVariant: (variantGroupId: string, variantId: string) => void;
+  onRenameVariant: (
+    variantGroupId: string,
+    variantId: string,
+    name: string,
+  ) => void;
+  onResizeVariant: (
+    variantGroupId: string,
+    variantId: string,
+    width: number,
+    height: number,
+    anchor: AnchorPosition,
+  ) => void;
 }
 
 // Optimized thumbnail component with memoization
@@ -64,14 +88,16 @@ const VariantThumbnail = memo(function VariantThumbnail({ variant }: { variant: 
   return true;
 });
 
-export function VariantSelectModal({ layer, variantGroup, onClose }: VariantSelectModalProps) {
-  const {
-    selectVariant,
-    addVariant,
-    deleteVariant,
-    renameVariant,
-    resizeVariant
-  } = useEditorStore();
+export function VariantSelectModal({
+  layer,
+  variantGroup,
+  onClose,
+  onSelectVariant: selectVariant,
+  onAddVariant: addVariant,
+  onDeleteVariant: deleteVariant,
+  onRenameVariant: renameVariant,
+  onResizeVariant: resizeVariant,
+}: VariantSelectModalProps) {
 
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
