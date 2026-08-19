@@ -32,6 +32,11 @@ import {
   drawLasso,
   drawMarchingAnts,
 } from "../../ui/canvas/render/renderSelectionOverlay";
+import { stampAt, stampSegment } from "../../ui/canvas/tools/brushStamp";
+import { stampTrace } from "../../ui/canvas/tools/traceSampler";
+import { useCanvasKeyboard } from "../../ui/hooks/useCanvasKeyboard";
+import { useCanvasRender } from "../../ui/hooks/useCanvasRender";
+import { useCanvasViewport } from "../../ui/hooks/useCanvasViewport";
 import "./Canvas.css";
 
 // Helper to extract color from PixelData.
@@ -92,36 +97,11 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
   const gridCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgCacheKeyRef = useRef<string>("");
   const gridCacheKeyRef = useRef<string>("");
-  const renderRequestRef = useRef<number | null>(null);
 
-  // View zoom: CSS transform scale for pinch/gesture only. No re-render; buttery smooth.
-  const [viewZoom, setViewZoom] = useState(1);
-
-  // Two-finger pinch zoom (touch): track initial state so we can scale smoothly
-  const pinchStartRef = useRef<{
-    distance: number;
-    center: { x: number; y: number };
-    viewZoom: number;
-    pan: { x: number; y: number };
-  } | null>(null);
-
-  // Zoom anchor lock: use a fixed focal point for 100ms after each zoom step to avoid jitter from bounds
-  const ZOOM_ANCHOR_MS = 100;
-  const zoomAnchorLockRef = useRef<{
-    anchor: { x: number; y: number };
-    timeoutId: ReturnType<typeof setTimeout> | null;
-  } | null>(null);
-
-  // Refs for native wheel handler (passive: false so preventDefault works for pinch)
-  const wheelStateRef = useRef({
-    viewPanOffset: { x: 0, y: 0 },
-    canvasWidth: 320,
-    canvasHeight: 320,
-    viewZoom: 1,
-    setViewZoom: (_: number | ((prev: number) => number)) => {},
-    clampPanToViewport: (o: { x: number; y: number }, _w: number, _h: number) =>
-      o,
-  });
+  // View zoom, pan, the native wheel listener and the pinch math all live in
+  // `ui/hooks/useCanvasViewport` — the engine this file, LightingCanvas and
+  // ReferenceImageModal each carried a copy of. The hook is instantiated below,
+  // once `canvasWidth`/`canvasHeight` have been derived.
 
   const {
     project,
@@ -200,61 +180,6 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
   const selectionMode = project?.uiState.selectionMode ?? "rect";
   const selectionBehavior = project?.uiState.selectionBehavior ?? "movePixels";
 
-  // View pan (transform-only). We debounce-commit into the store so gestures don't cause heavy rerenders.
-  const [viewPanOffset, setViewPanOffset] = useState(panOffset);
-  const viewPanRef = useRef(viewPanOffset);
-  const panCommitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-
-  const scheduleCommitPan = useCallback(() => {
-    if (panCommitTimeoutRef.current) clearTimeout(panCommitTimeoutRef.current);
-    panCommitTimeoutRef.current = setTimeout(() => {
-      setPanOffset(viewPanRef.current);
-    }, 150);
-  }, [setPanOffset]);
-
-  useEffect(() => {
-    viewPanRef.current = viewPanOffset;
-  }, [viewPanOffset]);
-
-  // Sync local pan when switching objects/frames/modes (e.g. project context changes)
-  useEffect(() => {
-    viewPanRef.current = panOffset;
-    setViewPanOffset(panOffset);
-    if (panCommitTimeoutRef.current) {
-      clearTimeout(panCommitTimeoutRef.current);
-      panCommitTimeoutRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    project?.uiState.selectedObjectId,
-    project?.uiState.selectedFrameId,
-    project?.uiState.studioMode,
-  ]);
-
-  // Clamp pan so the canvas can move freely within the entire canvas-area viewport
-  const clampPanToViewport = useCallback(
-    (
-      offset: { x: number; y: number },
-      contentWidth: number,
-      contentHeight: number,
-    ) => {
-      const container = containerRef.current;
-      if (!container) return offset;
-      const viewW = container.clientWidth;
-      const viewH = container.clientHeight;
-      const minX = Math.min(0, viewW - contentWidth);
-      const maxX = Math.max(0, viewW - contentWidth);
-      const minY = Math.min(0, viewH - contentHeight);
-      const maxY = Math.max(0, viewH - contentHeight);
-      return {
-        x: Math.max(minX, Math.min(maxX, offset.x)),
-        y: Math.max(minY, Math.min(maxY, offset.y)),
-      };
-    },
-    [],
-  );
   const currentColor = project?.uiState.selectedColor ?? {
     r: 0,
     g: 0,
@@ -295,13 +220,48 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
   // Calculate canvas size - when editing variant, use expanded view so variant isn't clipped
   const canvasWidth = editingVariant ? viewWidth * zoom : gridWidth * zoom;
   const canvasHeight = editingVariant ? viewHeight * zoom : gridHeight * zoom;
-  wheelStateRef.current = {
-    viewPanOffset: viewPanRef.current,
+  // The viewport engine. `onCommitPan` is what gives this canvas the two extra
+  // `scheduleCommitPan()` calls in the wheel handler that LightingCanvas's copy
+  // lacked — the single real functional difference between them, preserved by
+  // supplying the callback here and omitting it there.
+  const {
+    viewZoom,
+    viewPanOffset,
+    setViewPanOffset,
+    viewPanRef,
+    scheduleCommitPan,
+    clampPanToViewport,
+    beginPinch,
+    updatePinch,
+    endPinch,
+    isPinching,
+  } = useCanvasViewport({
+    containerRef,
     canvasWidth,
     canvasHeight,
-    viewZoom,
-    setViewZoom,
-    clampPanToViewport,
+    panOffset,
+    onCommitPan: setPanOffset,
+    resyncKey: `${project?.uiState.selectedObjectId ?? ""}|${
+      project?.uiState.selectedFrameId ?? ""
+    }|${project?.uiState.studioMode ?? ""}`,
+  });
+
+  // One place that assembles the brush-stamp inputs. Both devices and both
+  // paint tools go through `stampAt` / `stampSegment`, which ALWAYS bounds-
+  // filter — that is the Q44 / R10 fix: the touch eraser used to skip the
+  // filter that the mouse path applied.
+  const brushStampOptions = (shape: "circle" | "square") => ({
+    gridWidth,
+    gridHeight,
+    brushSize,
+    shape: shape === "circle" ? getCirclePixels : getSquarePixels,
+    shapeColor: currentColor,
+  });
+
+  // Trace stamping maps grid-local cells into object space before sampling.
+  const traceSpace = {
+    editingVariant: Boolean(editingVariant && variantData),
+    variantOffset,
   };
 
   // Cache key for background/grid (only recreate when size changes; when editing variant use view size)
@@ -997,10 +957,6 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     );
   }, [drawOverlayCanvas, overlayFrame]);
 
-  // Use a ref to always have access to the latest render function
-  const renderRef = useRef(render);
-  renderRef.current = render;
-
   // Render frame trace overlay (transparent overlay on top of main canvas, similar to reference trace)
   const renderFrameTraceOverlay = useCallback(() => {
     drawOverlayCanvas(
@@ -1033,26 +989,13 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     renderFrameOverlay();
   }, [renderFrameOverlay, overlayFrameIndex]);
 
-  // Schedule render using requestAnimationFrame
-  useEffect(() => {
-    // Cancel any pending frame
-    if (renderRequestRef.current !== null) {
-      cancelAnimationFrame(renderRequestRef.current);
-    }
-
-    renderRequestRef.current = requestAnimationFrame(() => {
-      renderRequestRef.current = null;
-      renderRef.current();
-    });
-
-    return () => {
-      if (renderRequestRef.current !== null) {
-        cancelAnimationFrame(renderRequestRef.current);
-      }
-    };
-    // Note: project is included to ensure re-render on undo (which restores historical project reference)
-    // obj is included for variant group changes
-  }, [
+  // rAF-coalesced main render. The scheduling mechanism lives in
+  // `ui/hooks/useCanvasRender`; the dependency list below IS the invalidation
+  // signal and stays here, where it can be read against what `render` uses.
+  //
+  // Note: project is included to ensure re-render on undo (which restores
+  // historical project reference); obj is included for variant group changes.
+  useCanvasRender(render, [
     frame,
     previewPixels,
     currentColor,
@@ -1084,258 +1027,50 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     }
   }, [selection, gridWidth, gridHeight, clearSelection]);
 
-  // Keyboard event handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-
-      // Cmd/Ctrl + Z for undo
-      if ((e.metaKey || e.ctrlKey) && e.key === "z") {
-        e.preventDefault();
-        undo();
-        return;
-      }
-
-      // Delete key to delete selected frame
-      if (e.key === "Delete" || e.key === "Backspace") {
-        // Only if not in an input field
-        if (!(e.target instanceof HTMLInputElement)) {
-          e.preventDefault();
-          if (selection) {
-            deleteSelectionPixels();
-          } else {
-            deleteSelectedFrame();
-          }
-          return;
-        }
-      }
-
-      // Number keys 1-9,0 for tool selection, O for origin
-      const toolHotkeys: {
-        [key: string]:
-          | "pixel"
-          | "eraser"
-          | "eyedropper"
-          | "fill-square"
-          | "flood-fill"
-          | "gaussian-fill"
-          | "line"
-          | "rectangle"
-          | "ellipse"
-          | "move"
-          | "selection"
-          | "origin";
-      } = {
-        "1": "pixel",
-        "2": "eraser",
-        "3": "eyedropper",
-        "4": "fill-square",
-        "5": "flood-fill",
-        "6": "line",
-        "7": "rectangle",
-        "8": "ellipse",
-        "9": "move",
-        "0": "selection",
-        g: "gaussian-fill",
-        G: "gaussian-fill",
-        o: "origin",
-        O: "origin",
-      };
-
-      if (toolHotkeys[e.key]) {
-        e.preventDefault();
-        // Clear selection when switching away from selection tool
-        if (currentTool === "selection" && toolHotkeys[e.key] !== "selection") {
-          clearSelection();
-        }
-        setTool(toolHotkeys[e.key]);
-        return;
-      }
-
-      // WASD keys for reference trace tool - move reference overlay (priority over frame trace and variant offset)
-      if (
-        isReferenceTraceActive &&
-        ["w", "a", "s", "d", "W", "A", "S", "D"].includes(e.key)
-      ) {
-        e.preventDefault();
-        const key = e.key.toLowerCase();
-        let dx = 0,
-          dy = 0;
-        if (key === "w") dy = -1;
-        if (key === "s") dy = 1;
-        if (key === "a") dx = -1;
-        if (key === "d") dx = 1;
-        const step = e.shiftKey ? traceNudgeAmount : 1;
-        moveReferenceOverlay(dx * step, dy * step);
-        return;
-      }
-
-      // WASD keys for frame trace tool - move frame overlay (priority over variant offset)
-      if (
-        frameTraceActive &&
-        ["w", "a", "s", "d", "W", "A", "S", "D"].includes(e.key)
-      ) {
-        e.preventDefault();
-        const key = e.key.toLowerCase();
-        let dx = 0,
-          dy = 0;
-        if (key === "w") dy = -1;
-        if (key === "s") dy = 1;
-        if (key === "a") dx = -1;
-        if (key === "d") dx = 1;
-        const step = e.shiftKey ? traceNudgeAmount : 1;
-        moveFrameOverlay(dx * step, dy * step);
-        return;
-      }
-
-      // WASD keys for variant offset adjustment when editing a variant
-      if (
-        editingVariant &&
-        ["w", "a", "s", "d", "W", "A", "S", "D"].includes(e.key)
-      ) {
-        e.preventDefault();
-        const key = e.key.toLowerCase();
-        let dx = 0,
-          dy = 0;
-        if (key === "w") dy = -1;
-        if (key === "s") dy = 1;
-        if (key === "a") dx = -1;
-        if (key === "d") dx = 1;
-        setVariantOffset(dx, dy, e.shiftKey);
-        return;
-      }
-
-      // Arrow keys - move selection pixels if selection exists, otherwise move all pixels
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        e.preventDefault();
-
-        // Shift + Arrow for rectangle border radius adjustment
-        if (e.shiftKey && currentTool === "rectangle") {
-          if (e.key === "ArrowUp") {
-            setBorderRadius(borderRadius + 1);
-          } else if (e.key === "ArrowDown") {
-            setBorderRadius(borderRadius - 1);
-          }
-          return;
-        }
-
-        let dx = 0,
-          dy = 0;
-        if (e.key === "ArrowUp") dy = -1;
-        if (e.key === "ArrowDown") dy = 1;
-        if (e.key === "ArrowLeft") dx = -1;
-        if (e.key === "ArrowRight") dx = 1;
-
-        // If there's a selection, move only selected pixels
-        if (selection) {
-          if (selectionBehavior === "moveSelection") {
-            moveSelection(dx, dy);
-          } else if (selectionBehavior === "movePixels") {
-            moveSelectedPixels(dx, dy);
-          } else {
-            // editMask: arrows do nothing (prevents accidental moves)
-          }
-        } else {
-          // Otherwise move all layer pixels
-          moveLayerPixels(dx, dy);
-        }
-        return;
-      }
-
-      // Escape key - selection always clears first when active
-      // Note: Only changes the tool, does not affect variant editing mode
-      // Stop propagation to prevent FrameTimeline from handling ESC when exiting trace mode
-      if (e.key === "Escape") {
-        if (selection) {
-          e.preventDefault();
-          e.stopPropagation();
-          clearSelection();
-          return;
-        }
-        if (isReferenceTraceActive) {
-          e.preventDefault();
-          e.stopPropagation();
-          setTool("pixel");
-          return;
-        }
-        if (frameTraceActive) {
-          e.preventDefault();
-          e.stopPropagation();
-          setFrameTraceActive(false, null);
-          return;
-        }
-        return;
-      }
-
-      // Frame navigation: "." for next frame, "," for previous frame
-      if (e.key === "." || e.key === ",") {
-        e.preventDefault();
-        const currentObj = getCurrentObject();
-        if (!currentObj || currentObj.frames.length <= 1) return;
-
-        const currentFrameId = project?.uiState.selectedFrameId;
-        const currentIndex = currentObj.frames.findIndex(
-          (f) => f.id === currentFrameId,
-        );
-        if (currentIndex === -1) return;
-
-        let newIndex: number;
-        let delta: number;
-        if (e.key === ".") {
-          // Next frame (wrap around)
-          newIndex = (currentIndex + 1) % currentObj.frames.length;
-          delta = 1;
-        } else {
-          // Previous frame (wrap around)
-          newIndex =
-            (currentIndex - 1 + currentObj.frames.length) %
-            currentObj.frames.length;
-          delta = -1;
-        }
-
-        // Don't sync variants to base frames - advance them independently (same as playback)
-        selectFrame(currentObj.frames[newIndex].id, false);
-        advanceVariantFrames(delta);
-        return;
-      }
-    };
-
-    // Use capture phase to catch ESC before FrameTimeline handler
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [
+  // Keyboard shortcuts — tool hotkeys, WASD nudging, arrows, Escape, frame nav.
+  //
+  // Extracted wholesale to `ui/hooks/useCanvasKeyboard`, which preserves
+  // `useCapture = true` and all three precedence orderings, and ADDS the
+  // dialog guard: the legacy handler cleared the selection and called
+  // `stopPropagation()` in capture phase, so Escape never reached an open
+  // modal. See that hook's module comment.
+  useCanvasKeyboard({
     currentTool,
+    hasSelection: Boolean(selection),
+    selectionBehavior,
+    isReferenceTraceActive,
+    frameTraceActive,
+    editingVariant: Boolean(editingVariant),
+    traceNudgeAmount,
     borderRadius,
     undo,
-    deleteSelectedFrame,
     deleteSelectionPixels,
-    moveLayerPixels,
-    setBorderRadius,
-    isReferenceTraceActive,
-    moveReferenceOverlay,
-    frameTraceActive,
-    moveFrameOverlay,
-    setFrameTraceActive,
+    deleteSelectedFrame,
     setTool,
-    selection,
-    moveSelectedPixels,
-    moveSelection,
     clearSelection,
-    getCurrentObject,
-    project?.uiState.selectedFrameId,
-    selectFrame,
-    editingVariant,
+    moveReferenceOverlay,
+    moveFrameOverlay,
     setVariantOffset,
-    advanceVariantFrames,
-    selectionBehavior,
-    traceNudgeAmount,
-  ]);
+    setBorderRadius,
+    moveSelection,
+    moveSelectedPixels,
+    moveLayerPixels,
+    setFrameTraceActive,
+    stepFrame: (delta) => {
+      const currentObj = getCurrentObject();
+      if (!currentObj || currentObj.frames.length <= 1) return;
+      const currentFrameId = project?.uiState.selectedFrameId;
+      const currentIndex = currentObj.frames.findIndex(
+        (f) => f.id === currentFrameId,
+      );
+      if (currentIndex === -1) return;
+      const count = currentObj.frames.length;
+      const newIndex = (currentIndex + delta + count) % count;
+      // Don't sync variants to base frames - advance them independently (same as playback)
+      selectFrame(currentObj.frames[newIndex].id, false);
+      advanceVariantFrames(delta);
+    },
+  });
 
   // Get pixel color from reference image at a given canvas coordinate
   const getRefPixelAtCoord = useCallback(
@@ -1500,32 +1235,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       lastStrokePixelRef.current = coords;
 
       // Stamp a brush worth of pixels from the reference image.
-      const stamp =
-        brushSize <= 1
-          ? [{ x: coords.x, y: coords.y }]
-          : (pencilBrushShape === "circle"
-              ? getCirclePixels(coords, brushSize, currentColor)
-              : getSquarePixels(coords, brushSize, currentColor)
-            )
-              .map((p) => ({ x: p.x, y: p.y }))
-              .filter(
-                (p) =>
-                  p.x >= 0 && p.x < gridWidth && p.y >= 0 && p.y < gridHeight,
-              );
-
-      const out: Array<{ x: number; y: number; color: Pixel }> = [];
-      for (const p of stamp) {
-        // When in variant edit mode, coords are in variant grid space, but getRefPixelAtCoord
-        // expects canvas coordinates. Convert by adding variant offset.
-        const canvasX =
-          editingVariant && variantData ? p.x + variantOffset.x : p.x;
-        const canvasY =
-          editingVariant && variantData ? p.y + variantOffset.y : p.y;
-        const refPixel = getRefPixelAtCoord(canvasX, canvasY);
-        if (refPixel && refPixel.a > 0) {
-          out.push({ x: p.x, y: p.y, color: refPixel });
-        }
-      }
+      const out = stampTrace(
+        null,
+        coords,
+        getLinePixels,
+        brushStampOptions(pencilBrushShape),
+        traceSpace,
+        getRefPixelAtCoord,
+      );
       if (out.length > 0) setPixels(out);
       return;
     }
@@ -1536,32 +1253,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       setIsTracing(true);
       lastStrokePixelRef.current = coords;
 
-      const stamp =
-        brushSize <= 1
-          ? [{ x: coords.x, y: coords.y }]
-          : (pencilBrushShape === "circle"
-              ? getCirclePixels(coords, brushSize, currentColor)
-              : getSquarePixels(coords, brushSize, currentColor)
-            )
-              .map((p) => ({ x: p.x, y: p.y }))
-              .filter(
-                (p) =>
-                  p.x >= 0 && p.x < gridWidth && p.y >= 0 && p.y < gridHeight,
-              );
-
-      const out: Array<{ x: number; y: number; color: Pixel }> = [];
-      for (const p of stamp) {
-        // When in variant edit mode, coords are in variant grid space, but getFrameTracePixelAtCoord
-        // expects canvas coordinates. Convert by adding variant offset.
-        const canvasX =
-          editingVariant && variantData ? p.x + variantOffset.x : p.x;
-        const canvasY =
-          editingVariant && variantData ? p.y + variantOffset.y : p.y;
-        const framePixel = getFrameTracePixelAtCoord(canvasX, canvasY);
-        if (framePixel && framePixel.a > 0) {
-          out.push({ x: p.x, y: p.y, color: framePixel });
-        }
-      }
+      const out = stampTrace(
+        null,
+        coords,
+        getLinePixels,
+        brushStampOptions(pencilBrushShape),
+        traceSpace,
+        getFrameTracePixelAtCoord,
+      );
       if (out.length > 0) setPixels(out);
       return;
     }
@@ -1812,45 +1511,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
 
     // Handle reference trace dragging (continuous pixel copying)
     if (isTracing && isReferenceTraceActive) {
-      const prev = lastStrokePixelRef.current;
-      const segment =
-        prev && (prev.x !== coords.x || prev.y !== coords.y)
-          ? getLinePixels(prev, coords)
-          : [coords];
-
-      const seen = new Set<string>();
-      const out: Array<{ x: number; y: number; color: Pixel }> = [];
-
-      for (const s of segment) {
-        const stamp =
-          brushSize <= 1
-            ? [{ x: s.x, y: s.y }]
-            : (pencilBrushShape === "circle"
-                ? getCirclePixels(s, brushSize, currentColor)
-                : getSquarePixels(s, brushSize, currentColor)
-              )
-                .map((p) => ({ x: p.x, y: p.y }))
-                .filter(
-                  (p) =>
-                    p.x >= 0 && p.x < gridWidth && p.y >= 0 && p.y < gridHeight,
-                );
-
-        for (const p of stamp) {
-          const key = `${p.x},${p.y}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-
-          const canvasX =
-            editingVariant && variantData ? p.x + variantOffset.x : p.x;
-          const canvasY =
-            editingVariant && variantData ? p.y + variantOffset.y : p.y;
-          const refPixel = getRefPixelAtCoord(canvasX, canvasY);
-          if (refPixel && refPixel.a > 0) {
-            out.push({ x: p.x, y: p.y, color: refPixel });
-          }
-        }
-      }
-
+      const out = stampTrace(
+        lastStrokePixelRef.current,
+        coords,
+        getLinePixels,
+        brushStampOptions(pencilBrushShape),
+        traceSpace,
+        getRefPixelAtCoord,
+      );
       if (out.length > 0) setPixels(out);
       lastStrokePixelRef.current = coords;
       return;
@@ -1858,45 +1526,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
 
     // Handle frame trace dragging (continuous pixel copying)
     if (isTracing && frameTraceActive) {
-      const prev = lastStrokePixelRef.current;
-      const segment =
-        prev && (prev.x !== coords.x || prev.y !== coords.y)
-          ? getLinePixels(prev, coords)
-          : [coords];
-
-      const seen = new Set<string>();
-      const out: Array<{ x: number; y: number; color: Pixel }> = [];
-
-      for (const s of segment) {
-        const stamp =
-          brushSize <= 1
-            ? [{ x: s.x, y: s.y }]
-            : (pencilBrushShape === "circle"
-                ? getCirclePixels(s, brushSize, currentColor)
-                : getSquarePixels(s, brushSize, currentColor)
-              )
-                .map((p) => ({ x: p.x, y: p.y }))
-                .filter(
-                  (p) =>
-                    p.x >= 0 && p.x < gridWidth && p.y >= 0 && p.y < gridHeight,
-                );
-
-        for (const p of stamp) {
-          const key = `${p.x},${p.y}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-
-          const canvasX =
-            editingVariant && variantData ? p.x + variantOffset.x : p.x;
-          const canvasY =
-            editingVariant && variantData ? p.y + variantOffset.y : p.y;
-          const framePixel = getFrameTracePixelAtCoord(canvasX, canvasY);
-          if (framePixel && framePixel.a > 0) {
-            out.push({ x: p.x, y: p.y, color: framePixel });
-          }
-        }
-      }
-
+      const out = stampTrace(
+        lastStrokePixelRef.current,
+        coords,
+        getLinePixels,
+        brushStampOptions(pencilBrushShape),
+        traceSpace,
+        getFrameTracePixelAtCoord,
+      );
       if (out.length > 0) setPixels(out);
       lastStrokePixelRef.current = coords;
       return;
@@ -1984,23 +1621,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
               segment.map((p) => ({ x: p.x, y: p.y, color: currentColor })),
             );
           } else {
-            const seen = new Set<string>();
-            const out: { x: number; y: number; color: Color }[] = [];
-            for (const s of segment) {
-              const stamp =
-                pencilBrushShape === "circle"
-                  ? getCirclePixels(s, brushSize, currentColor)
-                  : getSquarePixels(s, brushSize, currentColor);
-              for (const p of stamp) {
-                if (p.x < 0 || p.x >= gridWidth || p.y < 0 || p.y >= gridHeight)
-                  continue;
-                const key = `${p.x},${p.y}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                out.push({ x: p.x, y: p.y, color: currentColor });
-              }
-            }
-            setPixels(out);
+            setPixels(
+              stampSegment(
+                prev,
+                coords,
+                getLinePixels,
+                brushStampOptions(pencilBrushShape),
+              ).map((p) => ({ x: p.x, y: p.y, color: currentColor })),
+            );
           }
           lastStrokePixelRef.current = coords;
         }
@@ -2018,26 +1646,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
               segment.map((p) => ({ x: p.x, y: p.y, color: 0 as const })),
             );
           } else {
-            const seen = new Set<string>();
-            const out: { x: number; y: number; color: 0 }[] = [];
-
-            for (const s of segment) {
-              const stamp =
-                eraserShape === "circle"
-                  ? getCirclePixels(s, brushSize, currentColor)
-                  : getSquarePixels(s, brushSize, currentColor);
-
-              for (const p of stamp) {
-                if (p.x < 0 || p.x >= gridWidth || p.y < 0 || p.y >= gridHeight)
-                  continue;
-                const key = `${p.x},${p.y}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                out.push({ x: p.x, y: p.y, color: 0 as const });
-              }
-            }
-
-            setPixels(out);
+            setPixels(
+              stampSegment(
+                prev,
+                coords,
+                getLinePixels,
+                brushStampOptions(eraserShape),
+              ).map((p) => ({ x: p.x, y: p.y, color: 0 as const })),
+            );
           }
 
           lastStrokePixelRef.current = coords;
@@ -2134,109 +1750,18 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
     endDrawing();
   };
 
-  // Native non-passive wheel listener: pinch = view zoom toward cursor, scroll = pan
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const handler = (e: WheelEvent) => {
-      const state = wheelStateRef.current;
-      if (e.ctrlKey) {
-        e.preventDefault();
-        const rect = container.getBoundingClientRect();
-        const cursorX = e.clientX - rect.left;
-        const cursorY = e.clientY - rect.top;
-        if (!zoomAnchorLockRef.current) {
-          zoomAnchorLockRef.current = {
-            anchor: { x: cursorX, y: cursorY },
-            timeoutId: null,
-          };
-        }
-        if (zoomAnchorLockRef.current.timeoutId)
-          clearTimeout(zoomAnchorLockRef.current.timeoutId);
-        zoomAnchorLockRef.current.timeoutId = setTimeout(() => {
-          zoomAnchorLockRef.current = null;
-        }, ZOOM_ANCHOR_MS);
-        const anchor = zoomAnchorLockRef.current.anchor;
-
-        const factor = Math.exp(-e.deltaY * 0.012);
-        const newViewZoom = Math.max(
-          0.25,
-          Math.min(4, state.viewZoom * factor),
-        );
-        const ratio = newViewZoom / state.viewZoom;
-        // Don't clamp during pinch — clamping fights the anchor and causes jitter/drift
-        const newPan = {
-          x: anchor.x * (1 - ratio) + state.viewPanOffset.x * ratio,
-          y: anchor.y * (1 - ratio) + state.viewPanOffset.y * ratio,
-        };
-        state.setViewZoom(newViewZoom);
-        viewPanRef.current = newPan;
-        setViewPanOffset(newPan);
-        scheduleCommitPan();
-      } else {
-        e.preventDefault();
-        const displayedW = state.canvasWidth * state.viewZoom;
-        const displayedH = state.canvasHeight * state.viewZoom;
-        const next = state.clampPanToViewport(
-          {
-            x: state.viewPanOffset.x - e.deltaX,
-            y: state.viewPanOffset.y - e.deltaY,
-          },
-          displayedW,
-          displayedH,
-        );
-        viewPanRef.current = next;
-        setViewPanOffset(next);
-        scheduleCommitPan();
-      }
-    };
-    container.addEventListener("wheel", handler, { passive: false });
-    return () => {
-      container.removeEventListener("wheel", handler);
-      if (zoomAnchorLockRef.current?.timeoutId)
-        clearTimeout(zoomAnchorLockRef.current.timeoutId);
-    };
-  }, [scheduleCommitPan]);
-
-  // Touch event handlers: two-finger = pan + pinch zoom (fluid, fractional)
-  const getTouchCenter = (touches: React.TouchList) => {
-    const container = containerRef.current;
-    if (!container || touches.length < 2) return { x: 0, y: 0 };
-    const rect = container.getBoundingClientRect();
-    const x = (touches[0].clientX + touches[1].clientX) / 2 - rect.left;
-    const y = (touches[0].clientY + touches[1].clientY) / 2 - rect.top;
-    return { x, y };
-  };
-  const getTouchDistance = (touches: React.TouchList) => {
-    if (touches.length < 2) return 0;
-    const dx = touches[1].clientX - touches[0].clientX;
-    const dy = touches[1].clientY - touches[0].clientY;
-    return Math.hypot(dx, dy);
-  };
+  // The native wheel listener and the touch-gesture math now live in
+  // `useCanvasViewport` (see the hook call above).
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       e.preventDefault();
-      const center = getTouchCenter(e.touches);
-      pinchStartRef.current = {
-        distance: getTouchDistance(e.touches),
-        center,
-        viewZoom,
-        pan: { ...viewPanRef.current },
-      };
-      if (zoomAnchorLockRef.current?.timeoutId)
-        clearTimeout(zoomAnchorLockRef.current.timeoutId);
-      zoomAnchorLockRef.current = {
-        anchor: center,
-        timeoutId: setTimeout(() => {
-          zoomAnchorLockRef.current = null;
-        }, ZOOM_ANCHOR_MS),
-      };
+      beginPinch(e.touches);
       setIsPanning(false);
       setLastPanPoint(null);
       return;
     }
-    pinchStartRef.current = null;
+    endPinch();
 
     const touch = e.touches[0];
     const coords = getPixelCoords(touch.clientX, touch.clientY);
@@ -2256,17 +1781,12 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       if (brushSize === 1) {
         setPixel(coords.x, coords.y, currentColor);
       } else {
-        const stamp =
-          pencilBrushShape === "circle"
-            ? getCirclePixels(coords, brushSize, currentColor)
-            : getSquarePixels(coords, brushSize, currentColor);
         setPixels(
-          stamp
-            .filter(
-              (p) =>
-                p.x >= 0 && p.x < gridWidth && p.y >= 0 && p.y < gridHeight,
-            )
-            .map((p) => ({ x: p.x, y: p.y, color: currentColor })),
+          stampAt(coords, brushStampOptions(pencilBrushShape)).map((p) => ({
+            x: p.x,
+            y: p.y,
+            color: currentColor,
+          })),
         );
       }
       lastStrokePixelRef.current = coords;
@@ -2276,12 +1796,17 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
         setPixel(coords.x, coords.y, 0);
         lastStrokePixelRef.current = coords;
       } else {
-        const erasePixels =
-          eraserShape === "circle"
-            ? getCirclePixels(coords, brushSize, currentColor)
-            : getSquarePixels(coords, brushSize, currentColor);
+        // 🔴 Q44 / R10 — THE DRIFT FIX (owner decision, 2026-08-16).
+        // This branch previously mapped the raw brush shape with NO bounds
+        // filter, while the mouse path filtered. `stampAt` always filters, so
+        // the two devices now produce identical cells. Touch behaviour changes
+        // at the grid edges; in-bounds strokes are unaffected.
         setPixels(
-          erasePixels.map((p) => ({ x: p.x, y: p.y, color: 0 as const })),
+          stampAt(coords, brushStampOptions(eraserShape)).map((p) => ({
+            x: p.x,
+            y: p.y,
+            color: 0 as const,
+          })),
         );
         lastStrokePixelRef.current = coords;
       }
@@ -2331,51 +1856,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
 
   const handleTouchMove = (e: React.TouchEvent) => {
     // Two-finger pinch = view zoom (transform only) + pan; use locked anchor to avoid jitter
-    if (e.touches.length === 2 && pinchStartRef.current) {
+    if (e.touches.length === 2 && isPinching()) {
       e.preventDefault();
-      const start = pinchStartRef.current;
-      const dist = getTouchDistance(e.touches);
-      const center = getTouchCenter(e.touches);
-      if (dist <= 0) return;
-      if (zoomAnchorLockRef.current?.timeoutId)
-        clearTimeout(zoomAnchorLockRef.current.timeoutId);
-      if (zoomAnchorLockRef.current) {
-        zoomAnchorLockRef.current.timeoutId = setTimeout(() => {
-          zoomAnchorLockRef.current = null;
-        }, ZOOM_ANCHOR_MS);
-      } else {
-        zoomAnchorLockRef.current = {
-          anchor: center,
-          timeoutId: setTimeout(() => {
-            zoomAnchorLockRef.current = null;
-          }, ZOOM_ANCHOR_MS),
-        };
-      }
-      const anchor = zoomAnchorLockRef.current.anchor;
-
-      const scale = Math.pow(dist / start.distance, 1.15);
-      const newViewZoom = Math.max(0.25, Math.min(4, start.viewZoom * scale));
-      const zoomRatio = newViewZoom / start.viewZoom;
-      // Don't clamp during pinch — clamping fights the anchor and causes jitter/drift
-      const newPan = {
-        x: anchor.x * (1 - zoomRatio) + start.pan.x * zoomRatio,
-        y: anchor.y * (1 - zoomRatio) + start.pan.y * zoomRatio,
-      };
-      setViewZoom(newViewZoom);
-      viewPanRef.current = newPan;
-      setViewPanOffset(newPan);
-      scheduleCommitPan();
-      pinchStartRef.current = {
-        distance: dist,
-        center,
-        viewZoom: newViewZoom,
-        pan: newPan,
-      };
+      updatePinch(e.touches);
       return;
     }
 
     if (e.touches.length < 2) {
-      pinchStartRef.current = null;
+      endPinch();
     }
 
     if (isPanning && lastPanPoint && e.touches.length >= 1) {
@@ -2430,23 +1918,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
           segment.map((p) => ({ x: p.x, y: p.y, color: currentColor })),
         );
       } else {
-        const seen = new Set<string>();
-        const out: { x: number; y: number; color: Color }[] = [];
-        for (const s of segment) {
-          const stamp =
-            pencilBrushShape === "circle"
-              ? getCirclePixels(s, brushSize, currentColor)
-              : getSquarePixels(s, brushSize, currentColor);
-          for (const p of stamp) {
-            if (p.x < 0 || p.x >= gridWidth || p.y < 0 || p.y >= gridHeight)
-              continue;
-            const key = `${p.x},${p.y}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            out.push({ x: p.x, y: p.y, color: currentColor });
-          }
-        }
-        setPixels(out);
+        setPixels(
+          stampSegment(
+            prev,
+            coords,
+            getLinePixels,
+            brushStampOptions(pencilBrushShape),
+          ).map((p) => ({ x: p.x, y: p.y, color: currentColor })),
+        );
       }
       lastStrokePixelRef.current = coords;
     } else if (currentTool === "eraser") {
@@ -2459,23 +1938,14 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
       if (brushSize === 1) {
         setPixels(segment.map((p) => ({ x: p.x, y: p.y, color: 0 as const })));
       } else {
-        const seen = new Set<string>();
-        const out: { x: number; y: number; color: 0 }[] = [];
-        for (const s of segment) {
-          const stamp =
-            eraserShape === "circle"
-              ? getCirclePixels(s, brushSize, currentColor)
-              : getSquarePixels(s, brushSize, currentColor);
-          for (const p of stamp) {
-            if (p.x < 0 || p.x >= gridWidth || p.y < 0 || p.y >= gridHeight)
-              continue;
-            const key = `${p.x},${p.y}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            out.push({ x: p.x, y: p.y, color: 0 as const });
-          }
-        }
-        setPixels(out);
+        setPixels(
+          stampSegment(
+            prev,
+            coords,
+            getLinePixels,
+            brushStampOptions(eraserShape),
+          ).map((p) => ({ x: p.x, y: p.y, color: 0 as const })),
+        );
       }
       lastStrokePixelRef.current = coords;
     } else if (currentTool === "fill-square") {
@@ -2486,7 +1956,7 @@ export function Canvas({ referenceImage, overlayFrameIndex }: CanvasProps) {
   const handleTouchEnd = (e: React.TouchEvent) => {
     lastStrokePixelRef.current = null;
     if (e.touches.length < 2) {
-      pinchStartRef.current = null;
+      endPinch();
     }
     if (isPanning) {
       setIsPanning(false);
