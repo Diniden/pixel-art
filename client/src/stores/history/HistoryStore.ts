@@ -61,8 +61,8 @@ import {
   observable,
   observableShallow,
 } from "mobx";
-import { createCompositeCommand } from "./commands";
-import type { Command } from "./commands";
+import { collapseTransaction } from "./commands";
+import type { Command, PixelPatchHost } from "./commands";
 
 /** 64 MB — roughly 50,000 inverse-patch undos (task 26) or 9 full snapshots. */
 export const MAX_HISTORY_BYTES = 64 * 1024 * 1024;
@@ -96,6 +96,12 @@ export class HistoryStore {
    *  store reset exactly like the `_strokeActive` closure it replaces. */
   private txn: { label: string; commands: Command[] } | null = null;
   private makeSnapshot: ((label: string) => Command | null) | null;
+  /**
+   * How a coalesced pixel command reaches the live project (task 26).
+   * Injected by `PixelStore`, which is the only producer of the family. Plain,
+   * never observable — it is wiring.
+   */
+  private patchHost: PixelPatchHost | null = null;
 
   constructor(options: HistoryStoreOptions = {}) {
     this.budgetBytes = options.budgetBytes ?? MAX_HISTORY_BYTES;
@@ -139,9 +145,35 @@ export class HistoryStore {
     return this.txn !== null;
   }
 
+  /**
+   * Whether the open transaction has buffered nothing yet (task 26).
+   *
+   * Used by the stroke seam to DEFER its snapshot: a drag that painted
+   * something needs no project clone (its inverse patches carry the
+   * pre-state), while an empty begin/end pair must still produce one entry —
+   * the behaviour task 08 pins as "beginStroke ALWAYS snapshots, even on a
+   * stroke that paints nothing". Deferring turned a 50-move stroke from
+   * 105,108 B into 1,684 B, measured.
+   *
+   * `false` when no transaction is open, so a caller cannot mistake "no
+   * transaction" for "empty transaction".
+   */
+  get isTransactionEmpty(): boolean {
+    return this.txn !== null && this.txn.commands.length === 0;
+  }
+
   /** Late injection seam for the bridge glue (`store/index.ts`). */
   setSnapshotProvider(make: (label: string) => Command | null): void {
     this.makeSnapshot = make;
+  }
+
+  /**
+   * Late injection seam for `PixelStore` (task 26): the host a COALESCED
+   * pixel command is rebuilt against when a transaction collapses. Set once,
+   * when `PixelStore` is constructed.
+   */
+  setPatchHost(host: PixelPatchHost): void {
+    this.patchHost = host;
   }
 
   setBudgetBytes(bytes: number): void {
@@ -171,11 +203,12 @@ export class HistoryStore {
     const { label, commands } = this.txn;
     this.txn = null;
     if (commands.length === 0) return;
-    this.push(
-      commands.length === 1
-        ? commands[0]
-        : createCompositeCommand(label, commands),
-    );
+    // Task 26: consecutive pixel patches on the same target are COALESCED
+    // into one packed command before the collapse — a 50-move pencil drag
+    // goes from 50 × 606 B to one 1,684 B command. See
+    // `coalescePixelCommands`. Without a patch host (a bare HistoryStore in a
+    // unit test) the commands pass through untouched.
+    this.push(collapseTransaction(label, commands, this.patchHost));
   }
 
   /**

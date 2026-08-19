@@ -44,11 +44,16 @@ import { ObjectStore, type SelectionSink } from "./domain/ObjectStore";
 import { PaletteStore } from "./domain/PaletteStore";
 import { FrameStore } from "./domain/FrameStore";
 import { LayerStore } from "./domain/LayerStore";
+import { PixelStore } from "./domain/PixelStore";
+import type { PixelMirror } from "./domain/PixelStore";
+import { SelectionUIStore } from "./ui/SelectionUIStore";
 import {
   createZustandProjectHost,
   createZustandDomainMirror,
   createZustandSelectionSink,
   createZustandTimelineContext,
+  createZustandPixelMirror,
+  createZustandSelectionPublisher,
 } from "./bridge/zustandProjectHost";
 import { editorHistory } from "../store";
 import type { HistoryStore } from "./history/HistoryStore";
@@ -60,6 +65,7 @@ import type {
   VariantFrame,
   VariantGroup,
 } from "../types";
+import type { SelectionState } from "../store/storeTypes";
 
 /** The resolved variant context — the shape `helpers.getCurrentVariant` returned. */
 export interface CurrentVariant {
@@ -125,6 +131,16 @@ export interface ApplicationStoreOptions {
     TimelineContext,
     "publishSelection" | "clearColorAdjustment"
   >;
+  /**
+   * Where `PixelStore` publishes a committed tree during the bridge era
+   * (task 26). Defaults to the Zustand mirror; tests substitute a recorder.
+   */
+  pixelMirror?: PixelMirror;
+  /**
+   * Where `SelectionUIStore` publishes the selection during the bridge era
+   * (task 26). Defaults to the Zustand `selection` field.
+   */
+  selectionPublisher?: (selection: SelectionState | null) => void;
 }
 
 const DEFAULT_HISTORY_BUDGET_BYTES = 64 * 1024 * 1024;
@@ -171,6 +187,20 @@ export class ApplicationStore {
    * `app.timelineUI.selectFrame(...)` rather than `app.selection`.
    */
   readonly timelineUI: TimelineUIStore;
+
+  /* ── task 26 ───────────────────────────────────────────────────────────── */
+  /**
+   * THE SOLE WRITER OF PIXEL GRIDS. Every pixel mutation in the application
+   * goes through here, records an inverse-patch command (~24 B/changed cell
+   * rather than a 6.9 MB project clone) and ends with `bumpPixelVersion()`.
+   */
+  readonly pixels: PixelStore;
+  /**
+   * The selection mask (`observableRef`, raw `Set`) and the 9 selection
+   * actions. `mode`/`behavior` are DELEGATED to `ToolUIStore`, which has
+   * owned them since task 24 — see `SelectionUIStore`'s header.
+   */
+  readonly selectionUI: SelectionUIStore;
 
   readonly options: Readonly<{
     api: unknown;
@@ -297,6 +327,50 @@ export class ApplicationStore {
       setVariantFrameIndex: (variantGroupId, index) =>
         timelineUI.setVariantFrameIndex(variantGroupId, index),
     });
+
+    // ── task 26: the hot path ──────────────────────────────────────────────
+    //
+    // `PixelStore` is THE SOLE WRITER of pixel grids. It takes `HistoryStore`
+    // DIRECTLY rather than going through `DomainMutator`, and that is the
+    // whole point of this task: `DomainMutator.commit()` always records a
+    // full-project SNAPSHOT (`mirror.snapshot(label)`), which is exactly the
+    // 6.9 MB-per-edit cost the inverse-patch family exists to remove. A pixel
+    // edit records its own ~24 B/cell `PixelCommand` and publishes the tree
+    // itself.
+    //
+    // It reads the selection ids through the same one-way getter seam
+    // `LayerStore` uses — `stores/domain/**` may not import `stores/ui/**`
+    // (ESLint, task 05), so mask/behaviour/variant-frame-index arrive as
+    // ARGUMENTS at each call site instead.
+    this.pixels = new PixelStore({
+      domain: this.domain,
+      history: this.history,
+      mirror: options.pixelMirror ?? createZustandPixelMirror(),
+      source: {
+        get selectedObjectId() {
+          return timelineUI.selectedObjectId;
+        },
+        get selectedFrameId() {
+          return timelineUI.selectedFrameId;
+        },
+        get selectedLayerId() {
+          return timelineUI.selectedLayerId;
+        },
+        get variantFrameIndices() {
+          return timelineUI.variantFrameIndices;
+        },
+      },
+    });
+
+    // `mode`/`behavior` are DELEGATED to `ToolUIStore` (which has owned them
+    // since task 24) rather than duplicated — see `SelectionUIStore`'s header
+    // for why the spec's "add them to toPersistedUIState()" step is already
+    // satisfied and must not be repeated.
+    this.selectionUI = new SelectionUIStore({
+      tool: this.ui.tool,
+      publish: options.selectionPublisher ?? createZustandSelectionPublisher(),
+    });
+
     makeObservable(this, {
       currentObject: computed,
       currentFrame: computed,

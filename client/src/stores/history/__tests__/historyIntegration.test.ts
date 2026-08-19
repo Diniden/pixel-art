@@ -256,11 +256,37 @@ describe("HistoryStore through the store actions", () => {
   /* ══ BYTE-BUDGET EVICTION through ApplicationStore's options ═══════════ */
 
   it("a small configured budget evicts entries from the FRONT", () => {
-    // tinyProject snapshot estimate: 16 cells × 24 B + 1024 + 4096 = 5,504 B.
-    // A 12,000 B budget therefore retains exactly 2 entries.
+    // ── ⚠️ RE-PINNED BY TASK 26, AND THE REASON IS THE POINT ──────────────
+    //
+    // This test's original arithmetic was:
+    //
+    //   "tinyProject snapshot estimate: 16 cells × 24 B + 1024 + 4096 =
+    //    5,504 B. A 12,000 B budget therefore retains exactly 2 entries."
+    //
+    // That held while `setPixel` recorded a full-project SNAPSHOT. Task 26
+    // converted the pixel family to INVERSE PATCHES, so a one-pixel edit now
+    // costs 256 B of base + 24 B for the single changed cell = 280 B. Under
+    // the old 12,000 B budget all 6 edits fit and NOTHING evicts — the test
+    // failed with "expected 6 to be 2", which is the memory win showing up as
+    // a red test rather than a regression.
+    //
+    // The budget is therefore scaled to the new entry size so the test keeps
+    // asserting what it was written to assert: that `historyBudgetBytes`
+    // reaches `HistoryStore` through `ApplicationStore` and evicts from the
+    // FRONT. A one-cell patch command is 584 B of typed-array views + 22 B of
+    // packed cell = 606 B, so a budget of 2 × 606 + 100 retains exactly 2 —
+    // the same shape the 12,000 B / 5,504 B snapshot arithmetic had.
+    //
+    // ⚠️ NOT part of task 08's characterisation baseline
+    // (`src/store/__tests__/`), which passes UNCHANGED — verified byte-clean.
+    // The eviction MECHANICS remain pinned independently by
+    // `HistoryStore.test.ts` ("evicts from the FRONT until under the byte
+    // budget", "a single over-budget entry is RETAINED", "setBudgetBytes
+    // shrinking the budget evicts immediately"), none of which changed.
+    const PATCH_COMMAND_BYTES = 584 + 22; // views + one packed cell = 606 B
     const app = new ApplicationStore({
       autoSaveEnabled: false,
-      historyBudgetBytes: 12_000,
+      historyBudgetBytes: PATCH_COMMAND_BYTES * 2 + 100,
     });
     expect(app.history).toBe(editorHistory); // the bridge-era shared instance
 

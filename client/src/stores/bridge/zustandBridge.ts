@@ -118,9 +118,9 @@
  *     keeps a read-only copy on `SelectionMirror`.
  */
 import { compareStructural, flowResult, reaction, runInAction } from "mobx";
-import { useEditorStore } from "../../store";
+import { strokeControl, useEditorStore } from "../../store";
 import type { EditorState } from "../../store/storeTypes";
-import type { Project } from "../../types";
+import type { PixelData, Project } from "../../types";
 import { normalToPacked, rgbaToHex } from "../../types";
 import type { ApplicationStore } from "../ApplicationStore";
 
@@ -198,6 +198,25 @@ export const PHASE_B_FIELDS = [
   // store, so the two task-08 cross-project tests stay green.
   "layerClipboard", //        session.layerClipboard        → EditorState.layerClipboard
   "timelineCellClipboard", // session.timelineCellClipboard → EditorState.timelineCellClipboard
+  // ── Task 26: the pixel SELECTION flips A→B (R6) ────────────────────────
+  //
+  // `SelectionUIStore` is now the only writer of the mask — the 9 legacy
+  // `selectionActions` are throwing stubs behind bridge delegates — so
+  // Zustand can no longer be the source of truth. Unusually for Phase B the
+  // writer is not the scalar reaction below but
+  // `createZustandSelectionPublisher`, called by the store on every selection
+  // change; `EditorState.selection` is a TOP-LEVEL field, not part of
+  // `project.uiState`, so it cannot ride the `uiState` reaction either.
+  //
+  // ⚠️ Mirrored BY REFERENCE. `SelectionState.mask` is a raw `Set<number>`
+  // that reaches 300,249 entries on a select-all over the owner's real
+  // project; it is `observableRef` on the store and must never be cloned or
+  // deep-compared here.
+  //
+  // NOT persisted — the selection is transient session state, so this flip
+  // has no wire-format consequence. `selectionMode`/`selectionBehavior`, which
+  // ARE persisted, stay on `ToolUIStore` (task 24) and are untouched.
+  "selection", //        selectionUI.selection → EditorState.selection
   "layerSelectionCounter", // viewport.layerSelectionCounter → uiState.layerSelectionCounter
   "objectLibraryViewMode", // viewport.objectLibraryViewMode → uiState.objectLibraryViewMode
   "timelineThumbnailMode", // viewport.timelineThumbnailMode → uiState.timelineThumbnailMode
@@ -662,6 +681,126 @@ export function installBridge(app: ApplicationStore): () => void {
       ),
   });
 
+  // ── Task 26: the 15 migrated pixel + selection actions ─────────────────
+  //
+  // Same delegate technique tasks 23 and 25 used, and the reason this task
+  // migrates THE HOT PATH without editing `Canvas.tsx` (3,062 lines, owned by
+  // tasks 30-32). Canvas keeps calling `useEditorStore().setPixel(...)` and
+  // lands in `PixelStore`.
+  //
+  // ⚠️ THIS IS WHERE THE ONE-DIRECTIONAL BOUNDARY IS ENFORCED IN CODE.
+  // `PixelStore` never reads a UI store; the mask, the behaviour and the
+  // variant frame index are read HERE, on the UI side, and passed DOWN as
+  // arguments. `app.selectionUI.writeOptions` is that bundle.
+  const pixelWriteOptions = () => app.selectionUI.writeOptions;
+
+  /**
+   * The options `moveSelectedPixels` / `deleteSelectionPixels` need. Unlike a
+   * draw, these two ALWAYS act on the mask — `selectionBehavior` does not gate
+   * them (the legacy code never consulted it in either action), so the
+   * behaviour field is deliberately omitted here.
+   */
+  const selectionWriteOptions = () => {
+    const selection = app.selectionUI.selection;
+    return {
+      mask: selection?.mask,
+      maskSize: selection
+        ? { width: selection.width, height: selection.height }
+        : undefined,
+    };
+  };
+
+  // The grid + dimensions the three pixel-sampling selects need. Read on the
+  // UI side and passed IN, so `SelectionUIStore` holds no domain reference
+  // and — critically — never keeps a 300k-cell grid alive.
+  const editableGrid = (): {
+    grid: PixelData[][];
+    dims: { width: number; height: number };
+  } | null => {
+    const layer = app.currentLayer;
+    const object = app.currentObject;
+    if (!layer || !object) return null;
+    if (layer.isVariant) {
+      const variant = app.currentVariant;
+      const variantLayer = app.selectedVariantLayer;
+      if (!variant || !variantLayer) return null;
+      return {
+        grid: variantLayer.pixels,
+        dims: {
+          width: variant.variant.gridSize.width,
+          height: variant.variant.gridSize.height,
+        },
+      };
+    }
+    return { grid: layer.pixels, dims: object.gridSize };
+  };
+
+  /** The grid dimensions a selection is expressed against. */
+  const selectionDims = () =>
+    editableGrid()?.dims ?? { width: 32, height: 32 };
+
+  const previousPixelActions = {
+    beginStroke: useEditorStore.getState().beginStroke,
+    endStroke: useEditorStore.getState().endStroke,
+    setPixel: useEditorStore.getState().setPixel,
+    setPixels: useEditorStore.getState().setPixels,
+    setSelection: useEditorStore.getState().setSelection,
+    setSelectionMask: useEditorStore.getState().setSelectionMask,
+    clearSelection: useEditorStore.getState().clearSelection,
+    moveSelection: useEditorStore.getState().moveSelection,
+    expandSelection: useEditorStore.getState().expandSelection,
+    shrinkSelection: useEditorStore.getState().shrinkSelection,
+    selectFloodFillAt: useEditorStore.getState().selectFloodFillAt,
+    selectAllByColorAt: useEditorStore.getState().selectAllByColorAt,
+    selectLasso: useEditorStore.getState().selectLasso,
+    deleteSelectionPixels: useEditorStore.getState().deleteSelectionPixels,
+    moveSelectedPixels: useEditorStore.getState().moveSelectedPixels,
+  };
+  useEditorStore.setState({
+    // Stroke batching runs the `store/index.ts` closure, which wraps the
+    // transaction in the mirror bookkeeping the Phase B `projectHistory`
+    // field needs. One drag stays exactly one undo entry.
+    beginStroke: () => strokeControl.begin(),
+    endStroke: () => strokeControl.end(),
+
+    setPixel: (x, y, color) =>
+      app.pixels.setPixel(x, y, color, pixelWriteOptions()),
+    setPixels: (pixels) => app.pixels.setPixels(pixels, pixelWriteOptions()),
+
+    setSelection: (box) => app.selectionUI.setSelection(box, selectionDims()),
+    setSelectionMask: (mask, dims, op) =>
+      app.selectionUI.setSelectionMask(mask, dims, op),
+    clearSelection: () => app.selectionUI.clearSelection(),
+    moveSelection: (dx, dy) => app.selectionUI.moveSelection(dx, dy),
+    expandSelection: (steps) => app.selectionUI.expandSelection(steps),
+    shrinkSelection: (steps) => app.selectionUI.shrinkSelection(steps),
+
+    selectFloodFillAt: (x, y) => {
+      const editable = editableGrid();
+      if (!editable) return;
+      app.selectionUI.selectFloodFillAt(x, y, editable.grid, editable.dims);
+    },
+    selectAllByColorAt: (x, y) => {
+      const editable = editableGrid();
+      if (!editable) return;
+      app.selectionUI.selectAllByColorAt(x, y, editable.grid, editable.dims);
+    },
+    selectLasso: (points) =>
+      app.selectionUI.selectLasso(points, selectionDims()),
+
+    deleteSelectionPixels: () =>
+      app.pixels.deleteSelectionPixels(selectionWriteOptions()),
+
+    // ⚠️ TWO STEPS, in this order — the legacy intra-module call at
+    // `selectionActions.ts:577,648`. The pixels move, then the MASK moves
+    // with them; without the second step the selection outline detaches from
+    // the art it describes.
+    moveSelectedPixels: (dx, dy) => {
+      app.pixels.moveSelectedPixels(dx, dy, selectionWriteOptions());
+      app.selectionUI.moveSelection(dx, dy);
+    },
+  });
+
   useEditorStore.setState({
     initProject: () => flowResult(app.domain.initProject()),
     createNewProject: (name) => flowResult(app.domain.createProject(name)),
@@ -681,5 +820,6 @@ export function installBridge(app: ApplicationStore): () => void {
     useEditorStore.setState(previousActions);
     useEditorStore.setState(previousDomainActions);
     useEditorStore.setState(previousTimelineActions);
+    useEditorStore.setState(previousPixelActions);
   };
 }
