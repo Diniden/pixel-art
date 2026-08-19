@@ -137,7 +137,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W13** | 20 | W12 | ⚠️ | `c1f0711` | `node scripts/check-classes.mjs` 0/0 · every class in the 7 converted sheets matches the BEM regex |
 | **W14** | 21, 22 | W13 | ⚠️ | `c333d78` | `bunx stylelint` on the converted sheets · zero `!important` in `Toolbar.css` · every class matches the regex · **2 agents** |
 | **W15** | 23 | W14 | ⚠️ | `e88860a` | 100-pixel drag under 16 ms/frame · corpus snapshots unchanged |
-| **W16** | 24 | W15 | ⬜ | — | the wire-format golden test · all 43 UI fields persist across a reload |
+| **W16** | 24 | W15 | ⚠️ | `df48d58` | the wire-format golden test · all 43 UI fields persist across a reload |
 | **W17** | 25 | W16 | ⬜ | — | timeline matrix green · cross-project clipboard survives |
 | **W18** | 26 | W17 | ⬜ | — | a 50-pixel stroke command < 5 kB · task 08's suite unchanged · 100-pixel drag under 16 ms |
 | **W19** | 27 | W18 | ⬜ | — | all 9 lighting fields bump `persistedUIVersion` and persist |
@@ -326,6 +326,7 @@ starts. **A deviation recorded here is fine; an unrecorded one is a defect.**
 
 | Wave | Task | Deviation | Reason |
 | --- | --- | --- | --- |
+| W16 | 24 | **Steps 6 & 7 deferred**: the 30 `toolActions` setters were NOT deleted and the A→B bridge flip was NOT performed. | Deleting the setters needs edits to **8 files owned by later tasks** (Canvas 30–32, Lighting 27, Reference 29, App 37, plus CanvasInfo/objectActions/ObjectStore). §10 rule 6 says stop rather than widen scope. The flip is deferred **with** it deliberately: flipping without migrating those consumers gives each field **two writers**, which is exactly what R6 forbids. Bridge stands at Phase A 8 / Phase B 11. **Whichever task migrates those consumers must do the flip in the same change.** |
 | — | — | *(none yet)* | — |
 
 ### ⚠️ Two corrections to task 02's spec — verified by execution, trust these over the spec
