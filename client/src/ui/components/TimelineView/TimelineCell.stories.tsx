@@ -10,7 +10,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { fn } from "storybook/test";
 import { TimelineCell, TIMELINE_THUMB_SIZE } from "./TimelineCell";
-import "../../../components/FrameTimeline/FrameTimeline.css";
+import "../FrameTimeline/FrameTimeline.css";
 
 /** A synthetic 20x20 sprite — a diagonal gradient with a transparent corner. */
 function drawSprite(ctx: CanvasRenderingContext2D, size: number) {

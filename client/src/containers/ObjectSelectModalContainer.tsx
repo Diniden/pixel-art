@@ -11,7 +11,7 @@
  * props and forwards them.
  */
 import { observer } from "mobx-react-lite";
-import { ObjectSelectModal } from "../components/ObjectSelectModal/ObjectSelectModal";
+import { ObjectSelectModal } from "../ui/components/ObjectSelectModal/ObjectSelectModal";
 import { useStores } from "../stores/context";
 
 interface ObjectSelectModalContainerProps {

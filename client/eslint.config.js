@@ -68,8 +68,54 @@ export default tseslint.config(
   // demoted to `warn` here, scoped to the legacy directories only — NOT
   // disabled, and NOT demoted globally. New code written under src/ui/,
   // src/containers/ and src/stores/ gets the rules at full `error` strength.
+  //
+  // ── W27 / task 36 AMENDMENT: the triage must follow the files ─────────────
+  //
+  // Task 36 physically relocates `src/components/*` into `src/ui/components/*`
+  // WITHOUT restructuring them — its spec is explicit: "Do not restructure any
+  // component beyond the extractions named in step 3 — the big splits were
+  // task 35."
+  //
+  // Measured during W27: moving the first seven components turned 18 of these
+  // already-triaged WARNINGS into hard ERRORS, on files whose content differs
+  // from HEAD only in import-path depth (`diff` confirmed: import lines only).
+  // The findings are the same pre-existing debt in a new directory — the move
+  // changed their severity, not the code.
+  //
+  // There were only two honest options, since the debt is real either way:
+  //   (a) restructure the components to satisfy the rules — forbidden by this
+  //       task's own spec, and exactly the "restructuring a component" that
+  //       task 05's triage rule says to demote rather than force; or
+  //   (b) let the triage follow the files it was written for.
+  //
+  // (b) is taken here. The paths below enumerate the RELOCATED components
+  // individually rather than demoting `src/ui/**` wholesale — a blanket
+  // demotion would silently weaken the rules for genuinely new `ui/` code,
+  // which is the one thing the original comment says not to do. New components
+  // written under `src/ui/` still get these rules at full `error` strength.
+  //
+  // ⚠️ This list is DEBT, not policy. Each entry should be deleted as its
+  // component is actually restructured; none should ever be added to for new
+  // code.
   {
-    files: ["src/components/**/*.{ts,tsx}", "src/store/**/*.ts"],
+    files: [
+      "src/components/**/*.{ts,tsx}",
+      "src/store/**/*.ts",
+      // Relocated by task 36 (W27), content otherwise unchanged:
+      "src/ui/components/AnchorGrid/**/*.{ts,tsx}",
+      "src/ui/components/ResizeModal/**/*.{ts,tsx}",
+      "src/ui/components/EdgeInterpolateModal/**/*.{ts,tsx}",
+      "src/ui/components/PreviewModal/**/*.{ts,tsx}",
+      "src/ui/components/ObjectSelectModal/**/*.{ts,tsx}",
+      "src/ui/components/ExportPreviewModal/**/*.{ts,tsx}",
+      "src/ui/components/BrowseBackupsModal/**/*.{ts,tsx}",
+      "src/ui/components/ColorPicker/**/*.{ts,tsx}",
+      "src/ui/components/FrameTagsModal/**/*.{ts,tsx}",
+      "src/ui/components/Header/**/*.{ts,tsx}",
+      "src/ui/components/FrameReferencePanel/**/*.{ts,tsx}",
+      "src/ui/components/FrameTimeline/**/*.{ts,tsx}",
+      "src/ui/components/ReferenceImageModal/**/*.{ts,tsx}",
+    ],
     rules: {
       // 13 findings: hooks called after an early return. Genuine, but the fix
       // is hoisting hooks above the guard in ColorPicker / NormalPicker /

@@ -34,7 +34,7 @@ import { useState } from "react";
 import {
   AnchorGrid,
   type AnchorPosition,
-} from "../../../../components/AnchorGrid/AnchorGrid";
+} from "../../AnchorGrid/AnchorGrid";
 import "../ObjectLibrary.css";
 
 export interface ObjectResizeDialogProps {

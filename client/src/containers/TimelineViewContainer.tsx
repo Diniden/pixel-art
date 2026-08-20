@@ -53,7 +53,7 @@ import type {
 } from "../ui/components/TimelineView/timelineTypes";
 import { TimelineCellContainer } from "./TimelineCellContainer";
 import { generateLayerColors } from "./hooks/timelineLayerColors";
-import { PreviewModal } from "../components/PreviewModal/PreviewModal";
+import { PreviewModal } from "../ui/components/PreviewModal/PreviewModal";
 import { useStores } from "../stores/context";
 import type { PixelObject, Project } from "../types";
 

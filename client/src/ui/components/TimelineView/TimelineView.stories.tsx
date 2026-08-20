@@ -20,7 +20,7 @@ import { TimelineView } from "./TimelineView";
 import { TimelineCell, TimelineEmptyCell } from "./TimelineCell";
 import { TYPICAL, EMPTY, DENSE } from "./storyFixtures";
 import type { TimelineCellData } from "./timelineTypes";
-import "../../../components/FrameTimeline/FrameTimeline.css";
+import "../FrameTimeline/FrameTimeline.css";
 
 const renderCell = (cell: TimelineCellData) => (
   <TimelineCell

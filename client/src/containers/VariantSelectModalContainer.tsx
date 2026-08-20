@@ -15,7 +15,7 @@
  */
 import { observer } from "mobx-react-lite";
 import type { Layer, VariantGroup } from "../types";
-import { VariantSelectModal } from "../components/VariantSelectModal/VariantSelectModal";
+import { VariantSelectModal } from "../ui/components/VariantSelectModal/VariantSelectModal";
 import { useStores } from "../stores/context";
 
 interface VariantSelectModalContainerProps {

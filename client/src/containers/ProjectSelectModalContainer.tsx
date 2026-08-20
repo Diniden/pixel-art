@@ -11,7 +11,7 @@
  */
 import { observer } from "mobx-react-lite";
 import { flowResult } from "mobx";
-import { ProjectSelectModal } from "../components/ProjectSelectModal/ProjectSelectModal";
+import { ProjectSelectModal } from "../ui/components/ProjectSelectModal/ProjectSelectModal";
 import { useDomainStore } from "../stores/context";
 
 interface ProjectSelectModalContainerProps {

@@ -11,17 +11,34 @@
  * `observer()` may only be imported under `src/containers/` — task 05's
  * ESLint boundary enforces it, and the boundary probe is re-run whenever the
  * config changes.
+ *
+ * ── REFRESH task 36 (W27) ─────────────────────────────────────────────────
+ *
+ * The component's last two Zustand reads (`uiState.selectedColor`, `setColor`)
+ * became the `selectedColor` prop and the `onSelectColor` callback, and the
+ * component moved to `ui/components/PaletteManager/`.
+ *
+ * ⚠️ The `if (!project) return null` guard MOVED HERE from the component.
+ * That is not cosmetic: without it the panel would render its "add palette"
+ * form against a project that does not exist yet. `hasProject` is the MobX
+ * equivalent of the old `project` truthiness test.
  */
 import { observer } from "mobx-react-lite";
-import { PaletteManager } from "../components/PaletteManager/PaletteManager";
+import { PaletteManager } from "../ui/components/PaletteManager/PaletteManager";
 import { useStores } from "../stores/context";
 
 export const PaletteManagerContainer = observer(
   function PaletteManagerContainer() {
-    const { domain, palettes } = useStores();
+    const { domain, palettes, ui } = useStores();
+
+    // Transcribed from the component's pre-move `if (!project) return null`.
+    if (!domain.hasProject) return null;
+
     return (
       <PaletteManager
         palettes={domain.palettes}
+        selectedColor={ui.tool.selectedColor}
+        onSelectColor={(color) => ui.tool.setColor(color)}
         onAddPalette={(name) => palettes.addPalette(name)}
         onDeletePalette={(id) => palettes.deletePalette(id)}
         onRenamePalette={(id, name) => palettes.renamePalette(id, name)}

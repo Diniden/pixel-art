@@ -21,10 +21,21 @@
  * pinned in `LightingUIStore.test.ts` ("NormalPicker's two fields are
  * INDEPENDENT"), in both directions and at the wire-format level.
  *
- * Thin by design — see `LightingStudioPanelContainer`.
+ * ── REFRESH task 36 (W27) ─────────────────────────────────────────────────
+ *
+ * The component no longer chooses the field. It used to read
+ * `project.uiState[isLightDirection ? "lightDirection" : "selectedNormal"]`
+ * ITSELF and pick between two setters; now each container passes the `normal`
+ * and the `onNormalChange` callback directly.
+ *
+ * That upgrades task 27's warning from a tested invariant to a STRUCTURAL
+ * one: the component cannot reach the wrong field any more, because it can no
+ * longer reach any field. `isLightDirection` survives as presentation only —
+ * header label and indicator colour.
  */
 import { observer } from "mobx-react-lite";
-import { NormalPicker } from "../components/LightingStudioPanel/NormalPicker";
+import { NormalPicker } from "../ui/components/LightingStudioPanel/NormalPicker";
+import { useStores } from "../stores/context";
 
 interface NormalPickerContainerProps {
   /** Mouse-wheel adjusts the normal's z. Off by default, as in the component. */
@@ -39,10 +50,13 @@ export const SelectedNormalPickerContainer = observer(
   function SelectedNormalPickerContainer({
     enableScrollControl,
   }: NormalPickerContainerProps) {
+    const { lightingUI } = useStores();
     return (
       <NormalPicker
         isLightDirection={false}
         enableScrollControl={enableScrollControl}
+        normal={lightingUI.selectedNormal}
+        onNormalChange={(normal) => lightingUI.setSelectedNormal(normal)}
       />
     );
   },
@@ -56,10 +70,13 @@ export const LightDirectionPickerContainer = observer(
   function LightDirectionPickerContainer({
     enableScrollControl,
   }: NormalPickerContainerProps) {
+    const { lightingUI } = useStores();
     return (
       <NormalPicker
         isLightDirection
         enableScrollControl={enableScrollControl}
+        normal={lightingUI.lightDirection}
+        onNormalChange={(normal) => lightingUI.setLightDirection(normal)}
       />
     );
   },

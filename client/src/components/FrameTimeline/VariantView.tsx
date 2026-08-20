@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactNode } from 'react';
 import { Project, PixelObject, Layer, Variant, VariantFrame, VariantGroup } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
-import { PreviewModal } from '../PreviewModal/PreviewModal';
-import { ResizeModal } from '../ResizeModal/ResizeModal';
-import { tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
+import { PreviewModal } from '../../ui/components/PreviewModal/PreviewModal';
+import { ResizeModal } from '../../ui/components/ResizeModal/ResizeModal';
+import { tagColorForTag } from '../../ui/components/FrameTagsModal/FrameTagsModal';
 import { FrameTagsModalContainer } from '../../containers/FrameTagsModalContainer';
-import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
-import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
+import type { FrameTagsContext } from '../../ui/components/FrameTagsModal/FrameTagsModal';
+import { AnchorPosition } from '../../ui/components/AnchorGrid/AnchorGrid';
 import { FrameThumbnail } from './FramesView';
 import { AIInterpolateContainer } from '../../containers/AIInterpolateContainer';
 import { Icon } from '../../ui/primitives/Icon/Icon';

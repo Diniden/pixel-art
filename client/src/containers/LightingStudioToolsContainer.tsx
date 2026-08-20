@@ -1,38 +1,156 @@
 /**
- * LightingStudioToolsContainer (REFRESH task 27).
+ * LightingStudioToolsContainer (REFRESH task 27; PURIFIED task 36, W27).
  *
- * `LightingStudioTools` reads 11 store members and used to run the FULL
- * normal/height-map computation inside the component body. Task 27 moved both
- * halves out:
- *
- *  - the all-frames normal sweep is now `PixelStore.computeNormalsForAllFrames`,
- *    a MobX `flow` that yields between frames instead of blocking the main
- *    thread from a modal's confirm handler;
- *  - the height-map arithmetic is `utils/normalCompute.computeHeightMap`, a
- *    pure unit-tested function (§9.5).
- *
- * Thin by design — see `LightingStudioPanelContainer`.
+ * Task 27 created this as a thin `observer()` seam and noted it was "CREATED
+ * BUT NOT YET WIRED", because its render site (`Toolbar`) was outside that
+ * task's `Touches`. Task 36 owns `Toolbar`, so the container is now both
+ * purified and actually wired: `ToolbarContainer` injects it.
  *
  * ══════════════════════════════════════════════════════════════════════════
- *  ⚠️ CREATED BUT NOT YET WIRED — ITS RENDER SITE IS OUTSIDE THIS TASK
+ *  ⚠️ THE TWO CONFIRM HANDLERS ARE PIXEL WORK — THAT IS WHY THEY ARE HERE
  * ══════════════════════════════════════════════════════════════════════════
  *
- * `LightingStudioTools` is rendered by `components/Toolbar/Toolbar.tsx:159`.
- * That file is NOT in task 27's `Touches` list, and §10 rule 6 says to stop
- * rather than widen scope — the collision matrix is only valid if `Touches`
- * is accurate. The container is therefore complete and ready; the one-line
- * import swap belongs to the task that owns the render site.
+ * Both resolve the current layer/object/frame/variant, compute a full grid of
+ * values, and write it back. R2 bars that from `ui/`; W26 set the precedent
+ * of moving it into the container tier.
  *
- * ⚠️ Nothing is broken by the delay. The component still renders and still
- * works — it reads Zustand, whose lighting fields the bridge keeps mirrored
- * from MobX (Phase B). What is deferred is only the `observer()` boundary,
- * i.e. the render-granularity win, not correctness.
+ * Every branch is transcribed verbatim:
+ *
+ *  - **`applyToAllFrames` short-circuits.** It delegates to
+ *    `computeNormalsForAllFrames` (a `flow` since task 27) and RETURNS —
+ *    it does not also run the single-frame path. Running both would apply the
+ *    current frame's normals twice.
+ *  - **The variant branch retargets BOTH the grid size and the layer.** When
+ *    editing a variant it uses the VARIANT's `gridSize` and
+ *    `variantFrame.layers[0]`, not the object's. Using the object's grid
+ *    against a variant layer writes normals at the wrong coordinates.
+ *  - **`targetLayer` may be missing** on a variant frame with no layers; the
+ *    early return is preserved.
+ *  - **An empty `computeHeightMap` result means "no coloured pixels"** and is
+ *    dropped before reaching the store, which treats it as nothing to write.
  */
 import { observer } from "mobx-react-lite";
-import { LightingStudioTools } from "../components/Toolbar/LightingStudioTools";
+import { LightingStudioTools } from "../ui/components/Toolbar/LightingStudioTools";
+import type {
+  EdgeInterpolateParams,
+  HeightMapParams,
+} from "../ui/components/Toolbar/LightingStudioTools";
+import { HeightMapModalContainer } from "./HeightMapModalContainer";
+import { computeEdgeInterpolatedNormals } from "../utils/edgeInterpolate";
+import { computeHeightMap } from "../utils/normalCompute";
+import { useStores } from "../stores/context";
+import type { Layer, Normal } from "../types";
 
 export const LightingStudioToolsContainer = observer(
   function LightingStudioToolsContainer() {
-    return <LightingStudioTools />;
+    const app = useStores();
+    const { domain, ui, lightingUI, pixels } = app;
+
+    // Transcribed from the component's pre-purification `if (!project) return null`.
+    if (!domain.hasProject) return null;
+
+    /**
+     * Resolves the grid the compute should run against. Shared by both
+     * handlers — they had byte-identical copies of this block.
+     */
+    const resolveTarget = ():
+      | { layer: Layer; gridWidth: number; gridHeight: number }
+      | null => {
+      const layer = app.currentLayer;
+      const obj = app.currentObject;
+      const frame = app.currentFrame;
+      if (!layer || !obj || !frame) return null;
+
+      if (app.isEditingVariant) {
+        const variantData = app.currentVariant;
+        if (!variantData) {
+          return {
+            layer,
+            gridWidth: obj.gridSize.width,
+            gridHeight: obj.gridSize.height,
+          };
+        }
+        // ⚠️ Variant grid AND variant layer — see the note above.
+        const targetLayer = variantData.variantFrame.layers[0];
+        if (!targetLayer) return null;
+        return {
+          layer: targetLayer,
+          gridWidth: variantData.variant.gridSize.width,
+          gridHeight: variantData.variant.gridSize.height,
+        };
+      }
+
+      return {
+        layer,
+        gridWidth: obj.gridSize.width,
+        gridHeight: obj.gridSize.height,
+      };
+    };
+
+    const handleEdgeInterpolateConfirm = (params: EdgeInterpolateParams) => {
+      // ⚠️ Short-circuits — must NOT fall through to the single-frame path.
+      if (params.applyToAllFrames) {
+        pixels.computeNormalsForAllFrames({
+          startAngle: params.startAngle,
+          smoothing: params.smoothing,
+          radius: params.radius,
+        });
+        return;
+      }
+
+      const target = resolveTarget();
+      if (!target) return;
+      const { layer, gridWidth, gridHeight } = target;
+
+      const normals = computeEdgeInterpolatedNormals(
+        layer,
+        gridWidth,
+        gridHeight,
+        params.startAngle,
+        params.smoothing,
+        params.radius,
+      );
+
+      const pixelsToUpdate = normals.map((normal, index) => {
+        const y = Math.floor(index / gridWidth);
+        const x = index % gridWidth;
+        return { x, y, normal: (normal || 0) as Normal | 0 };
+      });
+
+      pixels.setNormalPixels(pixelsToUpdate);
+    };
+
+    const handleHeightMapConfirm = (params: HeightMapParams) => {
+      const target = resolveTarget();
+      if (!target) return;
+      const { layer, gridWidth, gridHeight } = target;
+
+      // Task 27 (§9.5): the 60 lines of arithmetic this used to inline are
+      // `computeHeightMap` now — same maths, same quirks, unit tested.
+      const pixelsToUpdate = computeHeightMap(
+        layer,
+        gridWidth,
+        gridHeight,
+        params,
+      );
+      // An empty result means "no coloured pixels" — nothing to write.
+      if (pixelsToUpdate.length === 0) return;
+
+      pixels.setHeightPixels(pixelsToUpdate);
+    };
+
+    return (
+      <LightingStudioTools
+        selectedTool={ui.tool.selectedTool}
+        editMode={lightingUI.lightingDataLayerEditMode ?? "normals"}
+        onSelectTool={(tool) => ui.tool.setTool(tool)}
+        onEditModeChange={(mode) =>
+          lightingUI.setLightingDataLayerEditMode(mode)
+        }
+        onEdgeInterpolateConfirm={handleEdgeInterpolateConfirm}
+        onHeightMapConfirm={handleHeightMapConfirm}
+        heightMapModal={(props) => <HeightMapModalContainer {...props} />}
+      />
+    );
   },
 );

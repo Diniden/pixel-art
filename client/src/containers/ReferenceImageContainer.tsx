@@ -18,7 +18,7 @@
  * `observer()` lives here and only here (ESLint, task 05).
  */
 import { observer } from "mobx-react-lite";
-import { ReferenceImageModal } from "../components/ReferenceImageModal/ReferenceImageModal";
+import { ReferenceImageModal } from "../ui/components/ReferenceImageModal/ReferenceImageModal";
 import { useStores } from "../stores/context";
 import type { ReferenceImageData } from "../types/referenceImage";
 

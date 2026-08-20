@@ -51,7 +51,7 @@ import { ObjectCreateDialog } from "./dialogs/ObjectCreateDialog";
 import { ObjectRenameDialog } from "./dialogs/ObjectRenameDialog";
 import { ObjectResizeDialog } from "./dialogs/ObjectResizeDialog";
 import { ObjectDeleteDialog } from "./dialogs/ObjectDeleteDialog";
-import type { AnchorPosition } from "../../../components/AnchorGrid/AnchorGrid";
+import type { AnchorPosition } from "../AnchorGrid/AnchorGrid";
 import "./ObjectLibrary.css";
 
 export type ObjectLibraryViewMode = "normal" | "small-rows" | "grid";

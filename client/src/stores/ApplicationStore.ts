@@ -67,24 +67,22 @@ import {
 import { editorHistory } from "../store";
 import type { HistoryStore } from "./history/HistoryStore";
 import type {
+  CurrentVariant,
   Frame,
   Layer,
   PixelObject,
-  Variant,
-  VariantFrame,
-  VariantGroup,
 } from "../types";
 import type { SelectionState } from "../store/storeTypes";
 import type { ReferenceImageData } from "../types/referenceImage";
 
-/** The resolved variant context — the shape `helpers.getCurrentVariant` returned. */
-export interface CurrentVariant {
-  variantGroup: VariantGroup;
-  variant: Variant;
-  variantFrame: VariantFrame;
-  baseFrameIndex: number;
-  offset: { x: number; y: number };
-}
+/**
+ * The resolved variant context — the shape `helpers.getCurrentVariant` returned.
+ *
+ * Moved to `types/domain.ts` in REFRESH task 36 so `ui/` components may name
+ * it (the purity boundary bans `stores/` even for type imports). Re-exported
+ * here so existing importers are unaffected.
+ */
+export type { CurrentVariant };
 
 /**
  * The UI selection the computeds read. Until the UIStore lands (task 24)
