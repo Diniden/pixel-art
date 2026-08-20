@@ -1,0 +1,97 @@
+/* CanvasSurface.css — the `canvas` block.
+   Moved from `components/Canvas/Canvas.css` by REFRESH task 32, which split
+   that sheet's two documented blocks (task 20 R1) along the component split:
+   `canvas` came here with `CanvasSurface`, `canvas-info` went to
+   `ui/components/CanvasInfo/CanvasInfo.css`.
+
+   ⚠️ NO CLASS WAS RENAMED AND NO DECLARATION CHANGED. BEM conversion is tasks
+   20-22's work and is complete; this is a file move, byte-for-byte, verified
+   by `diff` against the original at split time. The one structural change is
+   that the `@media (pointer: coarse)` block, which contained only a `canvas`
+   rule, came here whole.
+
+   Original header, preserved:
+     Task 20 note: this sheet previously duplicated ReferenceImagePanel's
+     `.ref-box-btn` family, `.reference-canvas-wrapper`, `.reference-navigation`
+     and `.reference-nav-btn`. Canvas.tsx renders NONE of those elements — the
+     copies only ever matched ReferenceImagePanel's markup, and that panel's own
+     later-emitted rules won every conflict. The duplicates were deleted, not
+     renamed (zero consumers). */
+
+.canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+}
+
+.canvas__viewport {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  background:
+    radial-gradient(
+      circle at center,
+      var(--accent-primary-02) 0%,
+      transparent 70%
+    ),
+    var(--bg-primary);
+}
+
+.canvas__layout {
+  position: relative;
+  transition: none;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+}
+
+.canvas__frame {
+  position: relative;
+}
+
+.canvas__surface {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 2px solid var(--border-accent);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-canvas);
+  cursor: crosshair;
+}
+
+.canvas__surface:active {
+  cursor: crosshair;
+}
+
+/* Reference trace overlay canvases */
+.canvas__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  z-index: var(--z-canvas-overlay);
+}
+
+/* Touch-friendly adjustments */
+@media (pointer: coarse) {
+  .canvas__surface {
+    touch-action: none;
+  }
+}
