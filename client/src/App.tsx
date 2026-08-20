@@ -40,7 +40,7 @@ import type { ReferenceImageData } from "./types/referenceImage";
 import { FrameReferencePanelContainer } from "./containers/FrameReferencePanelContainer";
 import { ReferenceImagePanelContainer } from "./containers/ReferenceImagePanelContainer";
 import { useStores } from "./stores/context";
-import { RightSidebarTopControls } from "./components/RightSidebarTopControls/RightSidebarTopControls";
+import { RightSidebarTopControlsContainer } from "./containers/RightSidebarTopControlsContainer";
 import "./App.css";
 
 function App() {
@@ -277,7 +277,7 @@ function App() {
         {/* Right Panel - Colors & Palettes (Pixel) or Normal/Light Controls (Lighting) */}
         <aside className="app__side-panel app__side-panel--right app__side-panel--open">
           <div className="app__panel-scroll">
-            <RightSidebarTopControls />
+            <RightSidebarTopControlsContainer />
             {isLightingMode ? <LightingStudioPanel /> : <PixelStudioPanel />}
           </div>
         </aside>
