@@ -1,30 +1,31 @@
-/* AI Interpolation Modal */
-.ai-interpolate-modal__backdrop {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-85);
-  z-index: var(--z-modal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: ai-fade-in 0.15s ease-out;
-}
-
-@keyframes ai-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/*
+ * ai-interpolate-modal — the AI frame-interpolation modal's component block.
+ *
+ * Task 22 converted this file to BEM; task 34 decomposed the component and
+ * MOVED the file here, next to the pure shell it styles
+ * (`ui/components/AIInterpolate/`).
+ *
+ * ── The chrome now comes from the `modal` block (tasks 18/19) ─────────────
+ *
+ * Adopting the `Modal` primitive means `modal__overlay`, `modal`,
+ * `modal__header`, `modal__close`, `modal__body` and `modal__footer` supply
+ * the backdrop, panel, header, close button, scroll area and footer. The rules
+ * that used to do that here — `__backdrop`, the bare `.ai-interpolate-modal`
+ * box, `__header`, `__close`, `__content`, `__actions` — are GONE rather than
+ * left to fight the block over specificity.
+ *
+ * What a component class is still for, per `styles/blocks/modal.css`'s
+ * comment, is WIDTH and ANIMATION. That is all `.ai-interpolate-modal` does
+ * below.
+ *
+ * ⚠️ The header ICON rule stays: it is this modal's own gradient treatment,
+ * rendered inside the block's `h2`, and has no equivalent in the block.
+ */
 
 .ai-interpolate-modal {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
   width: 90vw;
   max-width: 720px;
   max-height: 85vh;
-  display: flex;
-  flex-direction: column;
   animation: ai-slide-up 0.2s ease-out;
 }
 
@@ -33,53 +34,12 @@
   to { transform: translateY(0); opacity: 1; }
 }
 
-/* Header */
-.ai-interpolate-modal__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--border-primary);
-  flex-shrink: 0;
-}
-
-.ai-interpolate-modal__title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2-5);
-  font-size: 1.1rem;
-  font-weight: var(--weight-bold);
-  color: var(--text-primary);
-  margin: 0;
-}
-
 .ai-interpolate-modal__icon {
   font-size: 1.2rem;
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-variant));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-
-.ai-interpolate-modal__close {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  color: var(--text-tertiary);
-  font-size: 1.2rem;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.ai-interpolate-modal__close:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--border-secondary);
-  color: var(--text-primary);
 }
 
 /* Error */
@@ -93,12 +53,7 @@
   font-size: 0.85rem;
 }
 
-/* Content */
-.ai-interpolate-modal__content {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-5);
-}
+/* Content: the scroll area is `modal__body` (task 19 primitive). */
 
 /* Heartbeat: checking (loading) */
 .ai-interpolate-modal__heartbeat {
@@ -520,12 +475,18 @@
   font-size: 0.8rem;
 }
 
-/* dynamic: ai-interpolate-modal__gen-pair--{pending|queued|processing|completed|failed} built at
-   AIInterpolateModal.tsx:1074 (`ai-interpolate-modal__gen-pair ai-interpolate-modal__gen-pair--${pj.status}`), and
-   __gen-pair-status--{...} at :1080. The modifier suffix is interpolated, so these
-   names are never literals anywhere. Bounded by the PairJobState union at line 33:
-   five members, of which `pending` intentionally has no rule and renders the base
-   style. Do not delete as dead. */
+/* ⚠️ dynamic: ai-interpolate-modal__gen-pair--{pending|queued|processing|completed|failed}
+   and __gen-pair-status--{...} are built by RUNTIME INTERPOLATION in
+   `steps/GeneratingStep.tsx` (task 34 moved them there from
+   AIInterpolateModal.tsx:1074/:1080):
+
+       `ai-interpolate-modal__gen-pair--${pj.status}`
+
+   so the full names are literals NOWHERE and no static search finds them.
+   Bounded by the `GenPairStatus` union — FIVE members, of which `pending` is
+   client-side only and intentionally has no rule, falling through to the base
+   style. Task 09 deleted 8 classes on the opposite reading and task 22 had to
+   restore them. DO NOT DELETE AS DEAD. */
 .ai-interpolate-modal__gen-pair--processing,
 .ai-interpolate-modal__gen-pair--queued {
   border-left-color: var(--accent-primary);
@@ -694,11 +655,12 @@
   border-radius: var(--radius-sm);
 }
 
-/* dynamic: ai-interpolate-modal__preview-item--{keyframe|generated} built at
-   AIInterpolateModal.tsx:1166 (`ai-interpolate-modal__preview-item ai-interpolate-modal__preview-item--${item.type}`),
-   union-typed at line 517. The old `.placeholder` rule was deleted in task 09:
-   `item.type` cannot produce 'placeholder', so it was unreachable.
-   Do not delete as dead. */
+/* ⚠️ dynamic: ai-interpolate-modal__preview-item--{keyframe|generated} is built by
+   RUNTIME INTERPOLATION in `steps/ReviewStep.tsx` (task 34 moved it from
+   AIInterpolateModal.tsx:1166) over the `SequenceItem["type"]` union. No static
+   search finds these names. The old `.placeholder` rule was deleted in task 09:
+   `item.type` cannot produce 'placeholder', so it was genuinely unreachable —
+   these two are not. DO NOT DELETE AS DEAD. */
 .ai-interpolate-modal__preview-item--keyframe {
   border: 1px solid var(--accent-primary);
 }
@@ -800,16 +762,8 @@
   letter-spacing: 0.04em;
 }
 
-/* Actions */
-.ai-interpolate-modal__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2-5);
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--border-primary);
-  flex-shrink: 0;
-}
+/* Actions: the footer row is `modal__footer` + `modal__actions`. The three
+   button modifiers below are this component's own and stay. */
 
 .ai-interpolate-modal__btn--neutral {
   padding: var(--space-2) var(--space-4);

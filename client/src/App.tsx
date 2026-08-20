@@ -6,7 +6,10 @@ import { useEditorStore } from "./store";
 // consequence of the deletion, not a scope expansion — see the task 32
 // report. `App.tsx` itself is decomposed by task 37.
 import { CanvasContainer } from "./containers/CanvasContainer";
-import { LightingCanvas } from "./components/Canvas/LightingCanvas";
+// ⚠️ REFRESH task 33: `components/Canvas/LightingCanvas.tsx` is DELETED too.
+// Same shape as task 32's swap above, and the same justification — the gate is
+// the deletion, so the one-line import change is a required consequence.
+import { LightingCanvasContainer } from "./containers/LightingCanvasContainer";
 import { CanvasInfoContainer } from "./containers/CanvasInfoContainer";
 import { Toolbar } from "./components/Toolbar/Toolbar";
 import { PixelStudioPanel } from "./components/PixelStudioPanel/PixelStudioPanel";
@@ -247,7 +250,7 @@ function App() {
             hasReferenceImage={referenceImage !== null}
           />
           {isLightingMode ? (
-            <LightingCanvas />
+            <LightingCanvasContainer />
           ) : (
             <>
               <CanvasContainer
