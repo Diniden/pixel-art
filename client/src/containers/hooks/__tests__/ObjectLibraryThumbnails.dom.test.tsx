@@ -4,9 +4,9 @@
  * Task 28's spec names this "the check most likely to fail": *`ObjectLibrary`
  * thumbnails must update when a variant frame changes.* It was gated by a
  * 79-line hand-written `React.memo` comparator threading `project` internals,
- * which this task removed.
+ * which task 28 removed.
  *
- * ── What was actually wrong BEFORE this task ──────────────────────────────
+ * ── What was actually wrong BEFORE task 28 ────────────────────────────────
  *
  * The comparator's variant-frame branch iterated **`prev.variantGroups`** —
  * the OBJECT-level variant list, which the v1.1.0 migration sets to
@@ -15,17 +15,29 @@
  * invalidated the thumbnail. The regression was live in the code, not
  * introduced by the removal.
  *
+ * ── ⚠️ WHY THIS FILE MOVED (task 35) ──────────────────────────────────────
+ *
+ * These five assertions are unchanged in CONTRACT and moved in LOCATION.
+ * Task 35 split `ObjectLibrary` and made it pure: `renderFramePreview` walks
+ * `frame.layers[].pixels` (R2) and may not run under `ui/`, so the paint
+ * decision moved to `containers/hooks/objectThumbnailDraw.ts` and reaches the
+ * component as a bound `draw` closure.
+ *
+ * The seam the comparator used to control is therefore
+ * `makeObjectThumbnailDraw` rather than a React render, and the tests point
+ * at it directly. That makes them STRONGER, not weaker: they no longer need a
+ * DOM, a canvas stub or a render pass to state what the thumbnail is painted
+ * with, and the "object identity changed" case is now expressed as the two
+ * distinct object arrays it always meant.
+ *
  * ── What this test asserts ────────────────────────────────────────────────
  *
  * `renderFramePreview` is the single paint call; the comparator's whole job
- * was deciding whether it re-runs. So the contract is stated at that seam:
- * change the variant frame index, and the thumbnail must repaint WITH THE NEW
- * INDEX. jsdom has no canvas, so the paint itself is stubbed — what matters
- * here is that the effect fires and what it is handed, which is exactly the
- * surface the comparator controlled.
+ * was deciding whether it re-runs and with what. So the contract is stated at
+ * that seam: change the variant frame index, and the next paint must use THE
+ * NEW INDEX.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
 
 const renderFramePreview = vi.fn();
 vi.mock("@/utils/previewRenderer", () => ({
@@ -33,16 +45,11 @@ vi.mock("@/utils/previewRenderer", () => ({
   renderVariantFramePreview: vi.fn(),
 }));
 
-// jsdom returns null from getContext; give it a context object so the
-// component's early-return guard does not swallow the call under test.
 beforeEach(() => {
   renderFramePreview.mockClear();
-  HTMLCanvasElement.prototype.getContext = vi.fn(
-    () => ({}) as unknown as CanvasRenderingContext2D,
-  ) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 });
 
-import { ObjectLibrary } from "../ObjectLibrary";
+import { makeObjectThumbnailDraw } from "../objectThumbnailDraw";
 import type { PixelData, PixelObject, VariantGroup } from "@/types";
 
 /** The `0` sentinel form of an empty cell. */
@@ -50,6 +57,7 @@ const EMPTY_CELL: PixelData = { color: 0, normal: 0, height: 0 };
 
 const GROUP_ID = "vg-1";
 const VARIANT_ID = "v-1";
+const THUMB = 32;
 
 function variantGroup(): VariantGroup {
   const frame = (id: string) => ({
@@ -103,25 +111,22 @@ function objectWithVariantHost(): PixelObject {
   };
 }
 
-const noop = () => {};
+/** A stand-in context — the paint itself is mocked. */
+const ctx = {} as CanvasRenderingContext2D;
 
-function props(overrides: Partial<Parameters<typeof ObjectLibrary>[0]> = {}) {
-  return {
+function paint(
+  overrides: Partial<Parameters<typeof makeObjectThumbnailDraw>[0]> = {},
+) {
+  const draw = makeObjectThumbnailDraw({
+    objectId: "obj-1",
     objects: [objectWithVariantHost()],
     variants: [variantGroup()],
     variantFrameIndices: { [GROUP_ID]: 0 },
     selectedObjectId: "obj-1",
     selectedFrameId: "frame-1",
-    objectLibraryViewMode: "normal" as const,
-    onAddObject: noop,
-    onDeleteObject: noop,
-    onRenameObject: noop,
-    onResizeObject: noop,
-    onSelectObject: noop,
-    onDuplicateObject: noop,
-    onSetObjectLibraryViewMode: noop,
     ...overrides,
-  };
+  });
+  draw(ctx, THUMB);
 }
 
 /** The `variantFrameIndices` the last paint was handed. */
@@ -134,20 +139,18 @@ function lastPaintedIndices(): Record<string, number> | undefined {
 
 describe("ObjectLibrary thumbnails — the memo-comparator regression", () => {
   it("paints the selected object's thumbnail with the LIVE variant frame index", () => {
-    render(<ObjectLibrary {...props()} />);
+    paint();
     expect(renderFramePreview).toHaveBeenCalled();
     expect(lastPaintedIndices()).toEqual({ [GROUP_ID]: 0 });
   });
 
   it("⭐ REPAINTS with the new index when the variant frame changes", () => {
-    const { rerender } = render(<ObjectLibrary {...props()} />);
+    paint();
     const paintsBefore = renderFramePreview.mock.calls.length;
 
     // Exactly what `TimelineUIStore.selectVariantFrame` produces: a NEW
     // record (the field is `observableRef`), same object identity otherwise.
-    rerender(
-      <ObjectLibrary {...props({ variantFrameIndices: { [GROUP_ID]: 1 } })} />,
-    );
+    paint({ variantFrameIndices: { [GROUP_ID]: 1 } });
 
     expect(renderFramePreview.mock.calls.length).toBeGreaterThan(paintsBefore);
     expect(lastPaintedIndices()).toEqual({ [GROUP_ID]: 1 });
@@ -158,17 +161,13 @@ describe("ObjectLibrary thumbnails — the memo-comparator regression", () => {
     // `prev.variantGroups`, which the migration sets to `undefined`, so the
     // index change was never noticed. Every pixel edit publishes new object
     // identities, so this is the common case, not the corner one.
-    const { rerender } = render(<ObjectLibrary {...props()} />);
+    paint();
     const paintsBefore = renderFramePreview.mock.calls.length;
 
-    rerender(
-      <ObjectLibrary
-        {...props({
-          objects: [objectWithVariantHost()], // a fresh identity
-          variantFrameIndices: { [GROUP_ID]: 1 },
-        })}
-      />,
-    );
+    paint({
+      objects: [objectWithVariantHost()], // a fresh identity
+      variantFrameIndices: { [GROUP_ID]: 1 },
+    });
 
     expect(renderFramePreview.mock.calls.length).toBeGreaterThan(paintsBefore);
     expect(lastPaintedIndices()).toEqual({ [GROUP_ID]: 1 });
@@ -177,21 +176,17 @@ describe("ObjectLibrary thumbnails — the memo-comparator regression", () => {
   it("an UNSELECTED object renders the static index-0 pose, not the live one", () => {
     // Behaviour preserved from before the comparator removal: only the
     // selected object on its selected first frame follows the live index.
-    render(
-      <ObjectLibrary
-        {...props({
-          selectedObjectId: "other",
-          variantFrameIndices: { [GROUP_ID]: 1 },
-        })}
-      />,
-    );
+    paint({
+      selectedObjectId: "other",
+      variantFrameIndices: { [GROUP_ID]: 1 },
+    });
     expect(lastPaintedIndices()).toEqual({ [GROUP_ID]: 0 });
   });
 
   it("is handed the PROJECT-level variants, never object-level variantGroups", () => {
-    render(<ObjectLibrary {...props()} />);
+    paint();
     const calls = renderFramePreview.mock.calls;
-  const call = calls[calls.length - 1];
+    const call = calls[calls.length - 1];
     const arg = call?.[1] as { variants?: VariantGroup[] };
     expect(arg.variants?.map((v) => v.id)).toEqual([GROUP_ID]);
   });
