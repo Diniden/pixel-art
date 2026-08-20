@@ -147,7 +147,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W23** | 31 | W22 | ⚠️ | `003aadf` | brushStamp mouse-vs-touch agreement test passes |
 | **W24** | 32 | W23 | ⚠️ | `687e3ea` | `Canvas.tsx` deleted · `CanvasSurface` stories render with **no** store provider |
 | **W25** | 33, 34 | W24 | ⚠️ | `688733d` | `LightingCanvas.tsx` deleted · `frameEncoding` byte-equality · nothing in `ui/` imports a store · **2 agents** |
-| **W26** | 35 | W25 | ⬜ | — | the four splits are pure · 3 stories each |
+| **W26** | 35 | W25 | ⚠️ | `f967f77` | the four splits are pure · 3 stories each |
 | **W27** | 36 | W26 | ⬜ | — | the `ui/` boundary grep returns nothing |
 | **W28** | 37 | W27 | ⬜ | — | `App.tsx` deleted · layout stories render with no store provider |
 | **W29** | 38 | W28 | ⬜ | — | **`! grep -rl useEditorStore client/src`** and **`bun run verify` exits 0** |
