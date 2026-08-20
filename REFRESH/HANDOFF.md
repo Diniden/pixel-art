@@ -149,7 +149,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W25** | 33, 34 | W24 | ⚠️ | `688733d` | `LightingCanvas.tsx` deleted · `frameEncoding` byte-equality · nothing in `ui/` imports a store · **2 agents** |
 | **W26** | 35 | W25 | ⚠️ | `f967f77` | the four splits are pure · 3 stories each |
 | **W27** | 36 | W26 | ⚠️ | `94aedcc` | the `ui/` boundary grep returns nothing |
-| **W28** | 37 | W27 | ⬜ | — | `App.tsx` deleted · layout stories render with no store provider |
+| **W28** | 37 | W27 | ⚠️ | `6d4aa61` | `App.tsx` deleted · layout stories render with no store provider |
 | **W29** | 38 | W28 | ⬜ | — | **`! grep -rl useEditorStore client/src`** and **`bun run verify` exits 0** |
 
 ---
