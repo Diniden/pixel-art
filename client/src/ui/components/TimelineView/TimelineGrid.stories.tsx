@@ -12,7 +12,7 @@ import { TimelineGrid } from "./TimelineGrid";
 import { TimelineCell, TimelineEmptyCell } from "./TimelineCell";
 import { TYPICAL, EMPTY, DENSE, COLLIDING_HEADERS } from "./storyFixtures";
 import type { TimelineCellData } from "./timelineTypes";
-import "../../../components/FrameTimeline/FrameTimeline.css";
+import "../FrameTimeline/FrameTimeline.css";
 
 const renderCell = (cell: TimelineCellData) => (
   <TimelineCell

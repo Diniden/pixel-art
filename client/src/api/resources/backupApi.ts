@@ -5,14 +5,16 @@
  * `BrowseBackupsModal` render "no backups" for a server error — the user would
  * conclude their backups were gone. Failures now throw.
  */
-import type { CompactProject } from "../../types";
+import type { BackupEntry, CompactProject } from "../../types";
 import { request } from "../client/httpClient";
 
-export interface BackupEntry {
-  date: string;
-  time: string;
-  filename: string;
-}
+/**
+ * `BackupEntry` moved to `src/types/domain.ts` in REFRESH task 36 so that
+ * `BrowseBackupsModal` (now in `ui/`, where importing `api/` is a lint error
+ * even for types) can name it. Re-exported here so existing importers of
+ * `../../api` are unaffected.
+ */
+export type { BackupEntry };
 
 export interface MigrationBackupResult {
   success: true;

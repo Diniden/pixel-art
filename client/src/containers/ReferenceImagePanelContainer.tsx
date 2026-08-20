@@ -30,7 +30,7 @@
  * `observer()` lives here and only here (ESLint, task 05).
  */
 import { observer } from "mobx-react-lite";
-import { ReferenceImagePanel } from "../components/ReferenceImagePanel/ReferenceImagePanel";
+import { ReferenceImagePanel } from "../ui/components/ReferenceImagePanel/ReferenceImagePanel";
 import { useStores } from "../stores/context";
 import type { ReferenceImageData } from "../types/referenceImage";
 

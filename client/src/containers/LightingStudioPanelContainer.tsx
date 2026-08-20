@@ -1,39 +1,62 @@
 /**
- * LightingStudioPanelContainer (REFRESH task 27).
+ * LightingStudioPanelContainer (REFRESH task 27; PURIFIED task 36, W27).
  *
- * `LightingStudioPanel` reads 4 store members (`project`, `setBrushSize`,
- * `setNormalBrushShape`, `setHeightBrushValue`) and composes `NormalPicker` +
- * `LightControl`.
+ * `LightingStudioPanel` used to read 4 store members through
+ * `useEditorStore()`. Task 36 made it pure and moved it to
+ * `ui/components/LightingStudioPanel/`; this container is now the only place
+ * that touches a store on its behalf.
  *
- * Deliberately thin, exactly like the task-24/25/26 containers: this task
- * migrates the STORE slice and establishes the `observer()` seam. Making the
- * component pure — props in, callbacks out, no `useEditorStore` — is task
- * 35/36's job, and doing it here would edit these files twice (§9.8).
+ * ── Why the children are passed as ELEMENTS ───────────────────────────────
  *
- * What the `observer()` buys today is real even so: the panel now re-renders
- * from a MobX read rather than from the whole-store Zustand subscription, and
- * `dev`'s `observableRequiresReaction` stops warning for this subtree.
+ * Task 27 deliberately gave `NormalPicker` and `LightControl` their OWN
+ * containers so each is an independent `observer()` boundary — `NormalPicker`
+ * especially, since it drives two independent store fields.
  *
- * ══════════════════════════════════════════════════════════════════════════
- *  ⚠️ CREATED BUT NOT YET WIRED — ITS RENDER SITE IS OUTSIDE THIS TASK
- * ══════════════════════════════════════════════════════════════════════════
+ * A pure `ui/` component cannot import those containers: `containers/` imports
+ * `mobx-react-lite`, so the import would pull MobX across the purity boundary
+ * transitively (ESLint catches the direct import; the transitive one is a
+ * design error the boundary probe would NOT catch). Passing them as
+ * `normalPicker` / `lightControl` render props keeps the panel store-free AND
+ * preserves the per-child observer seams exactly as task 27 built them.
  *
- * `LightingStudioPanel` is rendered by `App.tsx:254`.
- * That file is NOT in task 27's `Touches` list, and §10 rule 6 says to stop
- * rather than widen scope — the collision matrix is only valid if `Touches`
- * is accurate. The container is therefore complete and ready; the one-line
- * import swap belongs to the task that owns the render site.
+ * ⚠️ Rendering them here rather than inside the panel does NOT widen the
+ * re-render surface: each child is still its own `observer()`, and this
+ * container re-renders only on the 4 fields it actually reads.
  *
- * ⚠️ Nothing is broken by the delay. The component still renders and still
- * works — it reads Zustand, whose lighting fields the bridge keeps mirrored
- * from MobX (Phase B). What is deferred is only the `observer()` boundary,
- * i.e. the render-granularity win, not correctness.
+ * ── The defaults live HERE, not in the component ──────────────────────────
+ *
+ * `lightingDataLayerEditMode ?? "normals"` and `heightBrushValue ?? 128` were
+ * inline in the component. They are applied here so there is exactly one
+ * source of truth for each default — the component's props are non-optional.
+ * Both fallbacks are transcribed unchanged from the pre-move component.
  */
 import { observer } from "mobx-react-lite";
-import { LightingStudioPanel } from "../components/LightingStudioPanel/LightingStudioPanel";
+import { LightingStudioPanel } from "../ui/components/LightingStudioPanel/LightingStudioPanel";
+import { SelectedNormalPickerContainer } from "./NormalPickerContainer";
+import { LightControlContainer } from "./LightControlContainer";
+import { useStores } from "../stores/context";
 
 export const LightingStudioPanelContainer = observer(
   function LightingStudioPanelContainer() {
-    return <LightingStudioPanel />;
+    const { ui, lightingUI } = useStores();
+
+    return (
+      <LightingStudioPanel
+        brushSize={ui.tool.brushSize}
+        normalBrushShape={lightingUI.normalBrushShape}
+        // Defaults transcribed from the pre-purification component.
+        editMode={lightingUI.lightingDataLayerEditMode ?? "normals"}
+        heightBrushValue={lightingUI.heightBrushValue ?? 128}
+        onBrushSizeChange={(size) => ui.tool.setBrushSize(size)}
+        onNormalBrushShapeChange={(shape) =>
+          lightingUI.setNormalBrushShape(shape)
+        }
+        onHeightBrushValueChange={(value) =>
+          lightingUI.setHeightBrushValue(value)
+        }
+        normalPicker={<SelectedNormalPickerContainer enableScrollControl />}
+        lightControl={<LightControlContainer />}
+      />
+    );
   },
 );

@@ -16,7 +16,7 @@
  * `observer()` lives here and only here (ESLint, task 05).
  */
 import { observer } from "mobx-react-lite";
-import { AddVariantModal } from "../components/AddVariantModal/AddVariantModal";
+import { AddVariantModal } from "../ui/components/AddVariantModal/AddVariantModal";
 import { useStores } from "../stores/context";
 
 interface AddVariantModalContainerProps {

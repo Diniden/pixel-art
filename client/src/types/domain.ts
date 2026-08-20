@@ -231,3 +231,39 @@ export interface Point {
   x: number;
   y: number;
 }
+
+/**
+ * A single timestamped backup file on disk.
+ *
+ * REFRESH task 36 (W27): this interface used to live in
+ * `src/api/resources/backupApi.ts`. `BrowseBackupsModal` moved into `ui/`,
+ * where the ESLint purity boundary bans every `api` path — and it bans them for TYPE
+ * imports too, since a `import type` still names the forbidden module.
+ *
+ * It is a plain three-string DTO with no transport concerns, so it belongs in
+ * the domain layer rather than the API layer. `backupApi` re-exports it from
+ * here, which keeps every existing `from "../../api"` import working unchanged.
+ */
+export interface BackupEntry {
+  date: string;
+  time: string;
+  filename: string;
+}
+
+/**
+ * The resolved variant context — the shape `helpers.getCurrentVariant` returned.
+ *
+ * REFRESH task 36 (W27): moved here from `stores/ApplicationStore.ts` so that
+ * `HeightMapModal` — now pure and living in `ui/` — can name it. The `ui/`
+ * purity boundary bans every `stores` path for type imports too, and this interface
+ * is a pure composition of domain types with no store behaviour, so the domain
+ * layer is where it belongs. `ApplicationStore` re-exports it, leaving every
+ * existing importer unchanged.
+ */
+export interface CurrentVariant {
+  variantGroup: VariantGroup;
+  variant: Variant;
+  variantFrame: VariantFrame;
+  baseFrameIndex: number;
+  offset: { x: number; y: number };
+}

@@ -2,12 +2,12 @@ import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactN
 import { useEditorStore } from '../../store';
 import { Frame, Project, PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
-import { PreviewModal } from '../PreviewModal/PreviewModal';
-import { ResizeModal } from '../ResizeModal/ResizeModal';
-import { tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
+import { PreviewModal } from '../../ui/components/PreviewModal/PreviewModal';
+import { ResizeModal } from '../../ui/components/ResizeModal/ResizeModal';
+import { tagColorForTag } from '../../ui/components/FrameTagsModal/FrameTagsModal';
 import { FrameTagsModalContainer } from '../../containers/FrameTagsModalContainer';
-import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
-import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
+import type { FrameTagsContext } from '../../ui/components/FrameTagsModal/FrameTagsModal';
+import { AnchorPosition } from '../../ui/components/AnchorGrid/AnchorGrid';
 import { AIInterpolateContainer } from '../../containers/AIInterpolateContainer';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Tag, SquareIcon, Play, Zap, Maximize, Wand2, Copy, ChevronLeft, ChevronRight, X } from 'lucide-react';

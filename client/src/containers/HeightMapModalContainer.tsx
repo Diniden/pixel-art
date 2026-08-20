@@ -14,7 +14,7 @@ import { observer } from "mobx-react-lite";
 import {
   HeightMapModal,
   type ChannelType,
-} from "../components/HeightMapModal/HeightMapModal";
+} from "../ui/components/HeightMapModal/HeightMapModal";
 import { useStores } from "../stores/context";
 
 interface HeightMapModalContainerProps {

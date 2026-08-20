@@ -19,7 +19,8 @@
  * `observer()` lives here and only here (ESLint, task 05).
  */
 import { observer } from "mobx-react-lite";
-import { FrameReferencePanel } from "../components/FrameReferencePanel/FrameReferencePanel";
+import { FrameReferencePanel } from "../ui/components/FrameReferencePanel/FrameReferencePanel";
+import { ObjectSelectModalContainer } from "./ObjectSelectModalContainer";
 import { useStores } from "../stores/context";
 
 interface FrameReferencePanelContainerProps {
@@ -32,8 +33,25 @@ export const FrameReferencePanelContainer = observer(
     onOverlayChange,
     overlayFrameIndex,
   }: FrameReferencePanelContainerProps) {
-    const { ui } = useStores();
+    const app = useStores();
+    const { ui, domain, referenceUI, selection } = app;
     const panel = ui.viewport.panels.frameReference;
+
+    /**
+     * ⚠️ Transcribed from `store/referenceActions.ts:99-113`
+     * (`getFrameReferenceObject`), INCLUDING the fallback:
+     *
+     *   - an explicit `frameReferenceObjectId` wins, and resolving it to a
+     *     missing object yields null rather than falling through;
+     *   - otherwise the panel references the CURRENTLY SELECTED object.
+     *
+     * Dropping the fallback makes the panel render blank until the user picks
+     * an object, which is not how it behaves today.
+     */
+    const frameReferenceObjectId = referenceUI.frameReferenceObjectId;
+    const referenceObject = frameReferenceObjectId
+      ? (domain.objects.find((o) => o.id === frameReferenceObjectId) ?? null)
+      : (app.currentObject ?? null);
 
     return (
       <FrameReferencePanel
@@ -43,6 +61,26 @@ export const FrameReferencePanelContainer = observer(
         onMinimizedChange={(minimized) =>
           ui.viewport.setPanel("frameReference", { minimized })
         }
+        currentObject={app.currentObject}
+        referenceObject={referenceObject}
+        variants={domain.variants}
+        selectedFrameId={selection.selectedFrameId}
+        // ⚠️ This panel's OWN position key — the three floating panels are
+        // deliberately not unified (task 29 constraint, restated by task 36).
+        panelPosition={panel.position}
+        onPanelPositionChange={(position) =>
+          ui.viewport.setPanel("frameReference", { position })
+        }
+        frameTraceActive={referenceUI.frameTraceActive}
+        frameTraceFrameIndex={referenceUI.frameTraceFrameIndex}
+        onFrameTraceActiveChange={(active, frameIndex) =>
+          referenceUI.setFrameTraceActive(active, frameIndex ?? null)
+        }
+        frameReferenceObjectId={frameReferenceObjectId}
+        onFrameReferenceObjectIdChange={(objectId) =>
+          referenceUI.setFrameReferenceObjectId(objectId)
+        }
+        objectSelectModal={(props) => <ObjectSelectModalContainer {...props} />}
       />
     );
   },

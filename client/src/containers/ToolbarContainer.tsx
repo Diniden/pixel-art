@@ -1,23 +1,33 @@
 /**
- * ToolbarContainer (REFRESH task 24).
+ * ToolbarContainer (REFRESH task 24; PURIFIED task 36, W27).
  *
- * `Toolbar` reads 5 store members (`project`, `setStudioMode`,
- * `toggleFocusMode`, `toggleLightGridMode`,
- * `toggleFrameReferencePanelVisible`). This container is the `observer()`
- * seam that will feed them as props once the component is purified.
+ * Task 24 created this as a deliberately thin `observer()` seam and said so
+ * explicitly: relocating `Toolbar` into `ui/`, adopting the `Tooltip`
+ * primitive, and converting its reads to props were "the purification task's
+ * job (35/36)". This is that task.
  *
- * ⚠️ Deliberately thin. The spec is explicit that this task gives the four
- * consumers a container and stops there — physically relocating them into
- * `ui/components/`, adopting the `Tooltip` primitive in place of `Toolbar`'s
- * bespoke portal tooltip, and converting their reads to props are the
- * purification task's job (35/36), interleaved per file exactly as
- * `MASTER.md` §9.8 requires so no consumer is edited twice in one wave.
+ * All five store members are now projected to flat props. The two child tool
+ * groups are passed as ELEMENTS rather than imported by the component: both
+ * are containers, and a `ui/` module importing a container would pull MobX
+ * across the purity boundary transitively — ESLint catches the direct import,
+ * but not the transitive one, so the discipline has to be deliberate.
  *
- * `observer()` lives here and only here — nothing under `components/` or
- * `ui/` may carry it (ESLint, task 05).
+ * ⚠️ `frameReferencePanelVisible` has NO getter on `ViewportUIStore`; the flag
+ * lives at `panels.frameReference.visible` and is `undefined` until first
+ * toggled. The `?? true` default is transcribed from
+ * `ViewportUIStore.toggleFrameReferencePanelVisible`, which computes its next
+ * value the same way. Reading it without the fallback makes the Frame
+ * Reference button render inactive on a fresh project while the panel is in
+ * fact showing.
+ *
+ * ⚠️ `if (!hasProject) return null` is transcribed from the component's
+ * pre-purification `if (!project) return null`.
  */
 import { observer } from "mobx-react-lite";
-import { Toolbar } from "../components/Toolbar/Toolbar";
+import { Toolbar } from "../ui/components/Toolbar/Toolbar";
+import { PixelStudioToolsContainer } from "./PixelStudioToolsContainer";
+import { LightingStudioToolsContainer } from "./LightingStudioToolsContainer";
+import { useStores } from "../stores/context";
 import type { ReferenceImageData } from "../types/referenceImage";
 
 interface ToolbarContainerProps {
@@ -29,10 +39,33 @@ export const ToolbarContainer = observer(function ToolbarContainer({
   onReferenceImageChange,
   hasReferenceImage,
 }: ToolbarContainerProps) {
+  const { domain, ui, lightingUI } = useStores();
+
+  if (!domain.hasProject) return null;
+
+  const viewport = ui.viewport;
+
   return (
     <Toolbar
-      onReferenceImageChange={onReferenceImageChange}
-      hasReferenceImage={hasReferenceImage}
+      isLightingMode={lightingUI.studioMode === "lighting"}
+      isFocusMode={viewport.focusMode}
+      isLightGrid={viewport.lightGridMode ?? false}
+      isFrameReferenceVisible={
+        viewport.panels.frameReference.visible ?? true
+      }
+      onSetStudioMode={(mode) => lightingUI.setStudioMode(mode)}
+      onToggleFocusMode={() => viewport.toggleFocusMode()}
+      onToggleLightGridMode={() => viewport.toggleLightGridMode()}
+      onToggleFrameReferencePanelVisible={() =>
+        viewport.toggleFrameReferencePanelVisible()
+      }
+      pixelStudioTools={
+        <PixelStudioToolsContainer
+          onReferenceImageChange={onReferenceImageChange}
+          hasReferenceImage={hasReferenceImage}
+        />
+      }
+      lightingStudioTools={<LightingStudioToolsContainer />}
     />
   );
 });

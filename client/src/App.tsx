@@ -11,11 +11,11 @@ import { CanvasContainer } from "./containers/CanvasContainer";
 // the deletion, so the one-line import change is a required consequence.
 import { LightingCanvasContainer } from "./containers/LightingCanvasContainer";
 import { CanvasInfoContainer } from "./containers/CanvasInfoContainer";
-import { Toolbar } from "./components/Toolbar/Toolbar";
-import { PixelStudioPanel } from "./components/PixelStudioPanel/PixelStudioPanel";
-import { LightingStudioPanel } from "./components/LightingStudioPanel/LightingStudioPanel";
+import { ToolbarContainer as Toolbar } from "./containers/ToolbarContainer";
+import { PixelStudioPanelContainer as PixelStudioPanel } from "./containers/PixelStudioPanelContainer";
+import { LightingStudioPanelContainer as LightingStudioPanel } from "./containers/LightingStudioPanelContainer";
 import { LayerPanelContainer } from "./containers/LayerPanelContainer";
-import { LayerColors } from "./components/LayerColors/LayerColors";
+import { LayerColorsContainer as LayerColors } from "./containers/LayerColorsContainer";
 import { FrameTimelineContainer } from "./containers/FrameTimelineContainer";
 import { ObjectLibraryContainer } from "./containers/ObjectLibraryContainer";
 // Task 14: Header is rendered through its observer container, which feeds it
