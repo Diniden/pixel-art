@@ -34,13 +34,16 @@ import { handlers } from "../src/api/__mocks__/handlers";
  *     reset.css sets `html, body, #root { height: 100% }`; Storybook's canvas
  *     root is not `#root`, so layout-level stories need a full-height ancestor
  *     supplied explicitly.
- *  8. App-level CSS        -> src/App.css (shell classes used by layout stories)
+ *  8. App-level CSS        -> src/ui/components/AppShell/AppShell.css
+ *     The `app` block: shell chrome AND the `app__loading*` rules. Task 37
+ *     moved it out of `src/App.css` when `App.tsx` was deleted. Layout stories
+ *     depend on it for the flex column, the 320px sidebars and the spinner.
  *
  * Import order below is load-bearing: src/index.css is task 09's manifest and
- * emits tokens BEFORE reset, and App.css must land after both.
+ * emits tokens BEFORE reset, and AppShell.css must land after both.
  */
 import "../src/index.css";
-import "../src/App.css";
+import "../src/ui/components/AppShell/AppShell.css";
 
 /** The literal value of `--bg-primary` in src/styles/tokens.css. */
 const BG_PRIMARY = "#0a0a0f";
