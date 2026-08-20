@@ -1318,6 +1318,58 @@ export function installBridge(app: ApplicationStore): () => void {
       app.timelineUI.advanceVariantFrames(delta),
   });
 
+  // ── Task 32: the 5 GESTURE actions → CanvasInteractionStore ─────────────
+  //
+  // The same delegate technique tasks 23, 25, 26, 27 and 28 used. These five
+  // are the last residents of `store/drawingActions.ts` — the part task 26
+  // deliberately left behind because the fields belong to a canvas store, not
+  // to `PixelStore`.
+  //
+  // ⚠️ THE THREE FIELDS ARE IN NEITHER PHASE LIST, AND THAT IS CORRECT.
+  // `isDrawing`, `drawStartPoint` and `previewPixels` are transient gesture
+  // scratch state with exactly ONE consumer — `CanvasContainer`, which this
+  // task migrates and which reads them straight off MobX. They are never
+  // persisted, never serialized and never read by any unmigrated component,
+  // so there is nothing to mirror in either direction. Adding them to
+  // PHASE_B would mean mirroring a per-mousemove array write into Zustand and
+  // re-rendering all 34 legacy consumers on every frame — the precise
+  // opposite of what the migration is for.
+  //
+  // The legacy Zustand FIELDS still exist on `EditorState` (defaults in
+  // `store/index.ts:502-504`) and stay frozen at their initial values with
+  // the bridge installed. Nothing reads them: verified by grep — after this
+  // task the only references outside `store/` are in
+  // `store/__tests__/storeContract.ts`, which asserts the DEFAULT shape (that
+  // an untouched store has `isDrawing: false`), not gesture behaviour.
+  //
+  // ⚠️ `startDrawing` IS A COUPLED WRITE and the second half is NOT ours.
+  // Legacy `drawingActions.ts:63` set `colorAdjustment: null` alongside the
+  // gesture fields. `colorAdjustment` belongs to the colour slice, which no
+  // store owns yet, so the coupling is preserved HERE rather than being
+  // pulled into `CanvasInteractionStore` (which would give a canvas store a
+  // reason to know about the palette). Task 08 pins it: "startDrawing CLEARS
+  // any active colour adjustment" (`drawing.test.ts:520`) fails if this
+  // second `setState` is dropped.
+  const previousDrawingActions = {
+    startDrawing: useEditorStore.getState().startDrawing,
+    updateDrawing: useEditorStore.getState().updateDrawing,
+    endDrawing: useEditorStore.getState().endDrawing,
+    setPreviewPixels: useEditorStore.getState().setPreviewPixels,
+    clearPreviewPixels: useEditorStore.getState().clearPreviewPixels,
+  };
+  useEditorStore.setState({
+    startDrawing: (point) => {
+      app.canvasInteraction.startDrawing(point);
+      // The Phase-A half of the coupled write — see above.
+      useEditorStore.setState({ colorAdjustment: null });
+    },
+    updateDrawing: (point) => app.canvasInteraction.updateDrawing(point),
+    endDrawing: () => app.canvasInteraction.endDrawing(),
+    setPreviewPixels: (pixels) =>
+      app.canvasInteraction.setPreviewPixels(pixels),
+    clearPreviewPixels: () => app.canvasInteraction.clearPreviewPixels(),
+  });
+
   useEditorStore.setState({
     initProject: () => flowResult(app.domain.initProject()),
     createNewProject: (name) => flowResult(app.domain.createProject(name)),
@@ -1341,6 +1393,7 @@ export function installBridge(app: ApplicationStore): () => void {
     useEditorStore.setState(previousTimelineActions);
     useEditorStore.setState(previousPixelActions);
     useEditorStore.setState(previousVariantActions);
+    useEditorStore.setState(previousDrawingActions);
     {
       // `setToolForStudioMode` is a capture, not a store field — strip it
       // before restoring so `dispose()` cannot invent a key on EditorState.

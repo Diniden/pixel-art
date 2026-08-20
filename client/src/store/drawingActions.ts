@@ -1,27 +1,32 @@
-import type { Point } from "../types";
 import type { StoreSet } from "./storeTypes";
 
 /**
- * Drawing actions — THE PIXEL WRITES ARE MIGRATED (REFRESH task 26).
+ * Drawing actions — FULLY MIGRATED (REFRESH tasks 26 and 32).
  *
  * `setPixel` and `setPixels` moved to `stores/domain/PixelStore`, the sole
  * writer of pixel grids. `beginStroke`/`endStroke` moved to
- * `HistoryStore.beginTransaction`/`endTransaction`. All four are installed as
- * bridge delegates, so `Canvas.tsx` (owned by tasks 30-32) keeps its
- * `useEditorStore()` seam and reaches the MobX implementation unchanged —
- * there is exactly ONE implementation of each action.
+ * `HistoryStore.beginTransaction`/`endTransaction` (task 26).
  *
- * ── What stays, and why ───────────────────────────────────────────────────
+ * The five GESTURE actions (`startDrawing`, `updateDrawing`, `endDrawing`,
+ * `setPreviewPixels`, `clearPreviewPixels`) moved to
+ * `stores/ui/CanvasInteractionStore` in task 32 — the task that finally owned
+ * their one consumer. All nine are installed as bridge delegates, so any
+ * remaining `useEditorStore()` seam reaches the MobX implementation unchanged
+ * and there is exactly ONE implementation of each action.
  *
- * The five GESTURE actions below (`startDrawing`, `updateDrawing`,
- * `endDrawing`, `setPreviewPixels`, `clearPreviewPixels`) are NOT migrated
- * here. They write `isDrawing`, `drawStartPoint` and `previewPixels`, which
- * the spec assigns to a `CanvasInteractionStore` in the Canvas task, not to
- * `PixelStore`. They touch no pixel grid and record no history.
+ * ── The three transient fields ────────────────────────────────────────────
  *
- * ⚠️ Note for that task: `previewPixels` is rewritten on EVERY mousemove. When
- * it moves it must be `observableRef` with whole-array replacement — a deep
- * observable array there is a per-frame allocation storm on the hot path.
+ * `isDrawing`, `drawStartPoint` and `previewPixels` are now owned by
+ * `CanvasInteractionStore`. They are in NEITHER bridge phase list, because
+ * they have no unmigrated consumer to mirror to — `CanvasContainer` reads
+ * them straight off MobX. `previewPixels` is `observableRef` there, which the
+ * old note below demanded: it is rewritten on EVERY mousemove, and a deeply
+ * observable array on that path is a per-frame allocation storm.
+ *
+ * The legacy Zustand FIELDS still exist on `EditorState` (defaults in
+ * `store/index.ts:502-504`) and are now inert: with the bridge installed no
+ * writer touches them, and `storeContract.ts` asserts only their default
+ * shape. They are deleted with the rest of the Zustand store (task 38).
  *
  * ── The stroke closure is gone ────────────────────────────────────────────
  *
@@ -37,46 +42,47 @@ import type { StoreSet } from "./storeTypes";
  * now passed DOWN as arguments (`PixelWriteOptions`), which is what keeps
  * `stores/domain/**` free of any `stores/ui/**` import.
  *
+ * ⚠️ `startDrawing`'s COUPLED WRITE lives at the bridge, not in
+ * `CanvasInteractionStore`. The legacy action also cleared `colorAdjustment`,
+ * which belongs to the colour slice; keeping that half at the delegate is
+ * what stops a canvas store having to know about the palette. Task 08 pins
+ * the coupling.
+ *
  * This module is deleted outright with the Zustand store (task 38).
  */
-function migrated(name: string): never {
+function migrated(name: string, destination: string, task: string): never {
   throw new Error(
-    `${name} moved to PixelStore/HistoryStore (REFRESH task 26) and is ` +
+    `${name} moved to ${destination} (REFRESH ${task}) and is ` +
       "reached through the Zustand bridge. This store has no bridge " +
       "installed — construct an ApplicationStore and call installBridge(), " +
       "or use the test harness, which does it for you.",
   );
 }
 
-export function createDrawingActions(set: StoreSet) {
+// `set` is retained in the signature so the call site in `store/index.ts` is
+// untouched; nothing in this module writes state any more.
+export function createDrawingActions(_set: StoreSet) {
+  void _set;
   return {
-    /* ── migrated: PixelStore + HistoryStore transactions ─────────────────── */
-    beginStroke: () => migrated("beginStroke"),
-    endStroke: () => migrated("endStroke"),
-    setPixel: () => migrated("setPixel"),
-    setPixels: () => migrated("setPixels"),
+    /* ── migrated task 26: PixelStore + HistoryStore transactions ─────────── */
+    beginStroke: () =>
+      migrated("beginStroke", "PixelStore/HistoryStore", "task 26"),
+    endStroke: () =>
+      migrated("endStroke", "PixelStore/HistoryStore", "task 26"),
+    setPixel: () => migrated("setPixel", "PixelStore/HistoryStore", "task 26"),
+    setPixels: () =>
+      migrated("setPixels", "PixelStore/HistoryStore", "task 26"),
 
-    /* ── NOT migrated: gesture state (Canvas task) ────────────────────────── */
-
-    startDrawing: (point: Point) => {
-      // Clear color adjustment when starting to draw
-      set({ isDrawing: true, drawStartPoint: point, colorAdjustment: null });
-    },
-
-    updateDrawing: (point: Point) => {
-      set({ drawStartPoint: point });
-    },
-
-    endDrawing: () => {
-      set({ isDrawing: false, drawStartPoint: null, previewPixels: [] });
-    },
-
-    setPreviewPixels: (pixels: Point[]) => {
-      set({ previewPixels: pixels });
-    },
-
-    clearPreviewPixels: () => {
-      set({ previewPixels: [] });
-    },
+    /* ── migrated task 32: the gesture fields → CanvasInteractionStore ────── */
+    startDrawing: () =>
+      migrated("startDrawing", "CanvasInteractionStore", "task 32"),
+    updateDrawing: () =>
+      migrated("updateDrawing", "CanvasInteractionStore", "task 32"),
+    endDrawing: () =>
+      migrated("endDrawing", "CanvasInteractionStore", "task 32"),
+    setPreviewPixels: () =>
+      migrated("setPreviewPixels", "CanvasInteractionStore", "task 32"),
+    clearPreviewPixels: () =>
+      migrated("clearPreviewPixels", "CanvasInteractionStore", "task 32"),
   };
 }

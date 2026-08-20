@@ -51,6 +51,7 @@ import { PixelStore } from "./domain/PixelStore";
 import type { PixelMirror } from "./domain/PixelStore";
 import { SelectionUIStore } from "./ui/SelectionUIStore";
 import { ReferenceUIStore } from "./ui/ReferenceUIStore";
+import { CanvasInteractionStore } from "./ui/CanvasInteractionStore";
 import {
   createZustandProjectHost,
   createZustandDomainMirror,
@@ -249,6 +250,22 @@ export class ApplicationStore {
    */
   readonly referenceUI: ReferenceUIStore;
 
+  /* ── task 32 ───────────────────────────────────────────────────────────── */
+  /**
+   * The three TRANSIENT canvas-gesture fields (`isDrawing`, `drawStartPoint`,
+   * `previewPixels`).
+   *
+   * ⚠️ It is NOT part of `UIStore` and is NOT read by `toPersistedUIState()`.
+   * Nothing here is persisted, nothing here enters history, and
+   * `previewPixels` is `observableRef` because it is rewritten on every
+   * mousemove (R2). See `CanvasInteractionStore`'s header.
+   *
+   * Construction order is unconstrained — it has no dependencies and nothing
+   * depends on it, which is exactly what a store of pure gesture scratch
+   * state should look like.
+   */
+  readonly canvasInteraction: CanvasInteractionStore;
+
   readonly options: Readonly<{
     api: unknown;
     autoSaveEnabled: boolean;
@@ -322,6 +339,9 @@ export class ApplicationStore {
       },
     });
     this.referenceUI = referenceUI;
+    // ── task 32 ────────────────────────────────────────────────────────────
+    // No dependencies in either direction; see the member declaration.
+    this.canvasInteraction = new CanvasInteractionStore();
     const zustandTimeline = createZustandTimelineContext();
     const timelineUI = new TimelineUIStore({
       viewport,

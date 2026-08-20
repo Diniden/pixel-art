@@ -1,6 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useEditorStore } from "./store";
-import { Canvas } from "./components/Canvas/Canvas";
+// ⚠️ REFRESH task 32: `components/Canvas/Canvas.tsx` is DELETED. The canvas
+// is now `containers/CanvasContainer` (the observer) rendering
+// `ui/components/CanvasSurface` (pure). This import swap is a REQUIRED
+// consequence of the deletion, not a scope expansion — see the task 32
+// report. `App.tsx` itself is decomposed by task 37.
+import { CanvasContainer } from "./containers/CanvasContainer";
 import { LightingCanvas } from "./components/Canvas/LightingCanvas";
 import { CanvasInfoContainer } from "./containers/CanvasInfoContainer";
 import { Toolbar } from "./components/Toolbar/Toolbar";
@@ -245,7 +250,7 @@ function App() {
             <LightingCanvas />
           ) : (
             <>
-              <Canvas
+              <CanvasContainer
                 referenceImage={referenceImage}
                 onReferenceImageChange={handleReferenceImageChange}
                 overlayFrameIndex={overlayFrameIndex}
