@@ -50,6 +50,10 @@ import { VariantStore } from "./domain/VariantStore";
 import { PixelStore } from "./domain/PixelStore";
 import type { PixelMirror } from "./domain/PixelStore";
 import { SelectionUIStore } from "./ui/SelectionUIStore";
+import {
+  applyInterpolation as applyInterpolationAction,
+  type ApplyInterpolationInput,
+} from "./domain/applyInterpolation";
 import { ReferenceUIStore } from "./ui/ReferenceUIStore";
 import { CanvasInteractionStore } from "./ui/CanvasInteractionStore";
 import {
@@ -223,6 +227,16 @@ export class ApplicationStore {
    */
   readonly selectionUI: SelectionUIStore;
 
+  /* ── task 34 ───────────────────────────────────────────────────────────── */
+  /**
+   * The shared write seam, retained so {@link applyInterpolation} can reach
+   * it. Every other consumer receives it by constructor injection; this one
+   * is an ApplicationStore-level ACTION rather than a sub-store because it
+   * spans both `objects` and `variants` (the same cross-slice reason
+   * `DomainMutator`'s header gives for not splitting the data).
+   */
+  private readonly mutator: DomainMutator;
+
   /* ── task 27 ───────────────────────────────────────────────────────────── */
   /**
    * The lighting studio's 9 persisted settings.
@@ -293,6 +307,7 @@ export class ApplicationStore {
       history: this.history,
       mirror: options.domainMirror ?? createZustandDomainMirror(),
     });
+    this.mutator = mutator;
 
     // ── task 25: TimelineUIStore replaces the SelectionMirror placeholder ──
     //
@@ -627,6 +642,23 @@ export class ApplicationStore {
    */
   get isEditingVariant(): boolean {
     return this.currentLayer?.isVariant === true;
+  }
+
+  /**
+   * Apply an accepted AI interpolation — the 182-line `handleAccept` that used
+   * to live in `AIInterpolateModal` (task 34).
+   *
+   * ONE undo entry however many frames land: `DomainMutator.commit` snapshots
+   * exactly once. See `domain/applyInterpolation.ts` for the splice rules and
+   * for the W1/W8 findings it preserves.
+   *
+   * @returns `true` when a mutation was committed.
+   */
+  applyInterpolation(input: ApplyInterpolationInput): boolean {
+    return applyInterpolationAction(
+      { domain: this.domain, mutator: this.mutator },
+      input,
+    );
   }
 
   /** Storybook/Vitest teardown: stop the save reaction and its timers. */

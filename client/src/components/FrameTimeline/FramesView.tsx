@@ -8,7 +8,7 @@ import { tagColorForTag } from '../FrameTagsModal/FrameTagsModal';
 import { FrameTagsModalContainer } from '../../containers/FrameTagsModalContainer';
 import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
 import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
-import { AIInterpolateModal } from '../AIInterpolateModal/AIInterpolateModal';
+import { AIInterpolateContainer } from '../../containers/AIInterpolateContainer';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Tag, SquareIcon, Play, Zap, Maximize, Wand2, Copy, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
@@ -672,12 +672,11 @@ export function FramesView({
       )}
 
       {/* AI Frame Interpolation Modal */}
-      <AIInterpolateModal
+      <AIInterpolateContainer
         isOpen={showAIModal}
         onClose={() => setShowAIModal(false)}
         mode="base"
         object={obj}
-        project={project}
       />
     </>
   );

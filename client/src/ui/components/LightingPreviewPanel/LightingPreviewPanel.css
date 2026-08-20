@@ -1,0 +1,28 @@
+/* LightingPreviewPanel.css — the panel-specific half of what was
+   `components/Canvas/LightingCanvas.css`'s `lighting-canvas__preview*` family
+   (REFRESH task 33).
+
+   The surface, header, grab handle and minimise button are the `floating-panel`
+   primitive's (task 19) and are NOT restated here — adopting the primitive is
+   the point. What remains is the one thing that was genuinely specific: the
+   framed 200x200 thumbnail well, carried over declaration-for-declaration from
+   `.lighting-canvas__preview-content`. */
+
+.lighting-preview-panel__content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  border: 2px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+}
+
+.lighting-preview-panel__content canvas {
+  display: block;
+  width: 200px;
+  height: 200px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: var(--radius-base);
+}

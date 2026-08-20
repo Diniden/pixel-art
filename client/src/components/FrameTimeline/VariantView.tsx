@@ -8,7 +8,7 @@ import { FrameTagsModalContainer } from '../../containers/FrameTagsModalContaine
 import type { FrameTagsContext } from '../FrameTagsModal/FrameTagsModal';
 import { AnchorPosition } from '../AnchorGrid/AnchorGrid';
 import { FrameThumbnail } from './FramesView';
-import { AIInterpolateModal } from '../AIInterpolateModal/AIInterpolateModal';
+import { AIInterpolateContainer } from '../../containers/AIInterpolateContainer';
 import { Icon } from '../../ui/primitives/Icon/Icon';
 import { Tag, Copy, SquareIcon, Play, Zap, Maximize, Wand2, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
@@ -644,12 +644,11 @@ export function VariantView({
       )}
 
       {/* AI Frame Interpolation Modal */}
-      <AIInterpolateModal
+      <AIInterpolateContainer
         isOpen={showAIModal}
         onClose={() => setShowAIModal(false)}
         mode="variant"
         object={obj}
-        project={project}
         variantData={variantData}
       />
     </div>
