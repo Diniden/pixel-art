@@ -145,7 +145,7 @@ them. Run them from the repo root unless the command says otherwise.
 | **W21** | 29 | W20 | ⚠️ | `7807830` | `! grep -n ReferenceImageModal src/App.tsx` · zero `useEditorStore.getState()` remain |
 | **W22** | 30 | W21 | ⚠️ | `748058a` | golden-hash render tests per mode · one client copy of the offset fallback |
 | **W23** | 31 | W22 | ⚠️ | `003aadf` | brushStamp mouse-vs-touch agreement test passes |
-| **W24** | 32 | W23 | ⬜ | — | `Canvas.tsx` deleted · `CanvasSurface` stories render with **no** store provider |
+| **W24** | 32 | W23 | ⚠️ | `687e3ea` | `Canvas.tsx` deleted · `CanvasSurface` stories render with **no** store provider |
 | **W25** | 33, 34 | W24 | ⬜ | — | `LightingCanvas.tsx` deleted · `frameEncoding` byte-equality · nothing in `ui/` imports a store · **2 agents** |
 | **W26** | 35 | W25 | ⬜ | — | the four splits are pure · 3 stories each |
 | **W27** | 36 | W26 | ⬜ | — | the `ui/` boundary grep returns nothing |
