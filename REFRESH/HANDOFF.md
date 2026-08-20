@@ -8,6 +8,69 @@ not the task files. Every session updates it before finishing. Read
 
 ## Current position
 
+> ## 🛑 W29 (task 38) IS BLOCKED — the parity proof was never built
+>
+> **Status:** W0–W28 merged. **Task 38 was dispatched, investigated, and correctly
+> STOPPED with zero code changes.** The tree is clean at `main`.
+>
+> ### The blocker, verified independently by the coordinator
+>
+> `src/store/__tests__/storeContract.ts:8` describes the migration's own design:
+>
+> > *"The MobX migration (tasks 17 and 26) adds a `createMobxHarness` alongside
+> > `createZustandHarness`, both entries run under the same `describe.each`, and when the
+> > Zustand harness is finally deleted the assertions are **untouched**. That is the parity
+> > proof."*
+>
+> **`createMobxHarness` was never built.** Grep finds it in exactly two comments describing
+> what should exist. `HARNESSES` at `:356` has one row: `[["zustand", createZustandHarness]]`.
+>
+> **Measured consequence:** **4 files, 315 `it()` blocks** in the frozen task-08 baseline
+> construct their subject through `useEditorStore`. Deleting Zustand deletes the only
+> harness those 315 tests run against. There is no documentation-scrub path — the frozen
+> suite is Zustand-dependent *by construction*, and the mechanism intended to free it was
+> never delivered by task 17 or task 26.
+>
+> ### Two further gaps the plan did not account for
+>
+> - **`FramesView.tsx` is a 684-line component still on Zustand** (verified). W27 stopped at
+>   it for a sound reason — live `React.memo` comparators over the project node — but no
+>   later task picked it up.
+> - **`adjustColor`'s all-frames mode is a NO-OP, not a partial break.**
+>   `colorAdjustmentActions.ts` sets `affectedPixels: []` in all-frames mode and
+>   `PixelStore.ts:825` early-returns on `cells.length === 0` (both verified). W18's note
+>   said wiring it would "silently break all-frames"; measured, it does nothing at all. It
+>   also has **zero test coverage in either implementation** — every test passes
+>   `allFrames: false` — so migrating it would move unpinned behaviour on the owner's real
+>   artwork.
+>
+> ### 🐛 A live defect found while investigating (pre-existing, unrelated to task 38)
+>
+> `GlobalHotkeys.tsx:78` reads `tool.colorAdjustment` from **MobX**, which is never set
+> non-null in production — the live flag is Zustand's. So `hasColorAdjustment` is
+> permanently `false` and **Escape no longer exits colour-adjustment mode**. Masked because
+> four other paths clear it. Worth fixing regardless of what happens with task 38.
+>
+> ### Recommended split — task 38 is not executable as one wave
+>
+> 1. **Build `createMobxHarness`** and add the second `describe.each` row; both rows green.
+>    This is the parity proof the whole design assumed, and it unblocks everything else.
+> 2. **Characterise `adjustColor` all-frames** against synthetic fixtures, then migrate the
+>    lifecycle (`startColorAdjustment`/`clearColorAdjustment` need a UI-store home, plus the
+>    explicit `selectedColor` write).
+> 3. **Migrate `FramesView.tsx`** and the 37 `actions.*` call sites in the canvas containers.
+> 4. **Then task 38 proper:** `selectObject` + the A→B flip, delete the bridge, Sweep B,
+>    stylelint BEM, `bun run verify`.
+>
+> **Everything else is green and unaffected:** 1530 client + 48 server tests, tsc 0,
+> eslint 0, stylelint 0, 0 dead classes, 0 real `!important`, `ui/` boundary clean, corpus
+> digests byte-identical, no lockfiles. **The app works.** Zustand and MobX still run side
+> by side through the bridge, which is exactly the state the plan designed to be safe.
+
+---
+
+## Superseded position
+
 > **Next wave: W10 — task 16 (DomainStore lifecycle, AutoSaveController, THE LOAD-STATE GATE)**
 >
 > **Status:** W0–W9 all merged (see wave table). MobX chain in progress.
