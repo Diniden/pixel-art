@@ -75,6 +75,26 @@
  * When task 38 retires Zustand it retires these call sites with it, in one
  * place. See the task 32 report.
  *
+ * ── W29c RE-VERIFIED THIS AND LEFT IT ALONE, DELIBERATELY ─────────────────
+ *
+ * W29c's job was to migrate the remaining Zustand consumers, so it tested the
+ * claim above rather than inheriting it. The claim holds: of the ~37
+ * `actions.*` names dispatched here, the pixel/selection ones resolve to
+ * bridge delegates that CLOSE OVER `app` to assemble arguments —
+ * `pixelWriteOptions()`, `selectionWriteOptions()`, `selectionDims()` and
+ * `editableGrid()` (which alone branches on variant-vs-object to pick the
+ * right grid AND its dimensions), plus the two-step `moveSelectedPixels`
+ * that moves the mask AFTER the pixels. Those helpers exist ONLY inside
+ * `stores/bridge/zustandBridge.ts`.
+ *
+ * Calling `app.pixels.*` / `app.selectionUI.*` directly from this container
+ * means re-deriving all four here — a SECOND implementation of each, which is
+ * the duplication the migration exists to remove, and it would silently drift
+ * from the bridge's copy. The correct sequencing is task 38's: delete the
+ * bridge and these call sites TOGETHER, moving the helpers to their store
+ * homes once. Contrast `FramesView`'s eight actions, which W29c DID migrate
+ * precisely because they were pass-throughs with no argument assembly.
+ *
  * ── Gesture arbitration stays here, and `useCanvasPointer` handles the rest ─
  *
  * `toolHandlers` (task 31) covers the eight tools that are pure pixel

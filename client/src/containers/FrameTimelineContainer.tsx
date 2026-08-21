@@ -59,6 +59,39 @@ export const FrameTimelineContainer = observer(function FrameTimelineContainer()
    * against the real project.
    *
    * `FrameTimeline` itself is pure: it only FORWARDS these values.
+   *
+   * ── W29c: the comparator was MEASURED, and it is LIVE ───────────────────
+   *
+   * W29c did the measurement this note asks for, against the owner's real
+   * project (`server/src/data/Base Unit.json`, v1.1.0):
+   *
+   *     variants:                     7 groups
+   *     uiState.variantFrameIndices:  9 populated entries
+   *
+   * and `TimelineUIStore.setVariantFrameIndex` rebuilds the record as a NEW
+   * object on every write (it is `observableRef`), so the by-reference
+   * comparison in `FramesView`'s `FrameThumbnail` comparator is meaningful
+   * and really does gate re-renders. This is the OPPOSITE of W20's
+   * `ObjectThumbnail` result, where the guard read a field the v1.1.0
+   * migration leaves `undefined` and the branch was dead. Same shape,
+   * different answer — only measuring separates them.
+   *
+   * So `project` STAYS. W29c migrated `FramesView`'s eight ACTIONS to props
+   * (all were pass-through bridge delegates) without touching the read path,
+   * which is the part the comparators observe.
+   *
+   * ⚠️ AND THERE IS A SECOND, HARDER REASON THIS LINE CANNOT MOVE YET:
+   * there is no MobX `project` to read. Task 23 split the tree into five
+   * observable members specifically so no reader could take the whole thing.
+   * `DomainStore` has NO `project` field, and `currentProject()` is a METHOD
+   * (`DomainStore.ts:323`) that REBUILDS the 300,249-cell tree through
+   * `treeToProject()` on every call. Calling it in render — inside an
+   * `observer()`, on every timeline re-render — is exactly the modelling
+   * error the "never deep-observe a pixel grid" rule exists to prevent.
+   *
+   * Removing this read therefore needs `FramesView`/`VariantView` to stop
+   * needing a whole `Project`, i.e. the comparator redesign above — NOT a
+   * different store call.
    */
   const project = useEditorStore((s) => s.project);
 

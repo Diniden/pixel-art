@@ -31,26 +31,49 @@
  * which re-renders this container). The 500ms re-poll after a save is
  * transcribed from the component — it gives the write time to round-trip
  * before health is re-checked.
+ *
+ * ── W29c: three of the four Zustand members migrated; ONE could not ───────
+ *
+ * `projectName`, `projectList` and `renameCurrentProject` now read/dispatch
+ * straight off `DomainStore`. All three were already MobX-owned — the first
+ * two are PHASE_B_FIELDS (Zustand held a read-only mirror) and
+ * `renameCurrentProject` was a pass-through bridge delegate to
+ * `domain.renameProject`. Nothing is duplicated by calling them directly.
+ *
+ * ⚠️ `setAiServiceUrl` STAYS ON ZUSTAND, and this is not an oversight.
+ * It is PHASE A — Zustand is the source of truth — and the legacy action
+ * (`store/toolActions.ts:514`) does NOT merely set a field: it runs
+ * `updateProjectAndSave`, writing `project.uiState.aiServiceUrl` so the value
+ * PERSISTS. `SessionStore.setAiServiceUrl` only assigns the observable, which
+ * the bridge would then overwrite on the next Phase A sync from
+ * `project.uiState.aiServiceUrl`. Swapping it would silently make the AI
+ * service URL stop persisting across reloads. Migrating it needs the
+ * `uiState` write to move into MobX first — the Phase A flip that owns
+ * `aiServiceUrl`, not a call-site change.
  */
 import { useState, useEffect, useCallback } from "react";
 import { observer } from "mobx-react-lite";
+import { flowResult } from "mobx";
 import { Header } from "../ui/components/Header/Header";
 import type { AiHealthStatus } from "../ui/components/AiConfigPopover/AiConfigPopover";
 import { ProjectSelectModalContainer } from "./ProjectSelectModalContainer";
 import { BrowseBackupsModalContainer } from "./BrowseBackupsModalContainer";
 import { ExportPreviewModalContainer } from "./ExportPreviewModalContainer";
-import { useSessionStore } from "../stores/context";
+import { useSessionStore, useStores } from "../stores/context";
 import { useEditorStore } from "../store";
 import { aiApi, exportApi } from "../api";
 
 export const HeaderContainer = observer(function HeaderContainer() {
+  const { domain } = useStores();
   const session = useSessionStore();
   const aiServiceUrl = session.aiServiceUrl;
 
-  // Phase A: these still live on Zustand — see the note above.
-  const projectName = useEditorStore((s) => s.projectName);
-  const projectList = useEditorStore((s) => s.projectList);
-  const renameCurrentProject = useEditorStore((s) => s.renameCurrentProject);
+  // Phase B — MobX owns these; Zustand only held a mirror (W29c).
+  const projectName = domain.projectName;
+  const projectList = domain.projectList;
+
+  // ⚠️ The one that could NOT move — it persists into `project.uiState`.
+  // See the note above.
   const setAiServiceUrl = useEditorStore((s) => s.setAiServiceUrl);
 
   const [aiHealthStatus, setAiHealthStatus] = useState<AiHealthStatus>("unknown");
@@ -113,7 +136,7 @@ export const HeaderContainer = observer(function HeaderContainer() {
       aiServiceUrl={aiServiceUrl}
       projectName={projectName}
       projectList={projectList}
-      onRenameProject={(name) => renameCurrentProject(name)}
+      onRenameProject={(name) => flowResult(domain.renameProject(name))}
       aiHealthStatus={aiHealthStatus}
       aiHealthDetail={aiHealthDetail}
       serverDefaultUrl={serverDefaultUrl}
