@@ -94,6 +94,15 @@ export interface TimelineContext {
   /** The project's variant groups. `DomainStore.variants`. */
   variants(): VariantGroup[];
   /**
+   * The project's objects. `DomainStore.objects`.
+   *
+   * Needed by {@link TimelineUIStore.selectObject}, which resolves an
+   * ARBITRARY object id — unlike `currentObject()`, which only ever returns
+   * the already-selected one. Same injection shape as `variants()`: a plain
+   * function, so `stores/ui/**` still imports nothing from `stores/domain/**`.
+   */
+  objects(): PixelObject[];
+  /**
    * Publish the new selection wherever it currently lives. During the bridge
    * era this writes `project.uiState` in Zustand (Phase A for the ids); after
    * the flip it becomes a no-op. `trackHistory` is always `false` for
@@ -145,6 +154,7 @@ export class TimelineUIStore {
       selectedLayerId: observable,
       variantFrameIndices: observableRef,
       adopt: action,
+      selectObject: action,
       selectFrame: action,
       selectLayer: action,
       setObjectLibraryViewMode: action,
@@ -247,6 +257,52 @@ export class TimelineUIStore {
     [variantGroupId: string]: number;
   }): void {
     this.variantFrameIndices = next;
+  }
+
+  /**
+   * Select an object — ported from `store/objectActions.ts:58-71` (W29f,
+   * task 38) with NO behaviour change. It writes ONLY the three selection
+   * ids, which is why it belongs here and not on `ObjectStore`.
+   *
+   * ── This is the flip the bridge waited five waves for ──────────────────
+   *
+   * `objectActions.ts`'s `selectObject` was the LAST unbridged writer of
+   * `selectedObjectId`/`selectedFrameId`/`selectedLayerId`, and the bridge's
+   * Phase A note names it as the sole remaining blocker. Moving it here and
+   * installing the delegate makes `TimelineUIStore` the single writer of all
+   * three, so the same change moves them A→B (R6: move, never copy).
+   *
+   * The three pinned behaviours, preserved verbatim:
+   *
+   *  1. **An unknown id still selects.** The legacy body does
+   *     `objects.find(...)` and uses `obj?.frames[0]?.id ?? null` — so
+   *     `selectObject("nope")` sets `selectedObjectId` to `"nope"` and NULLS
+   *     the frame and layer ids. There is no guard and none may be added;
+   *     this is the same "accepts an id that does not exist" shape task 08
+   *     pinned for `selectLayer`.
+   *  2. **It always resets to `frames[0]` / `layers[0]`**, never to a
+   *     name-matched layer — unlike `selectFrame`'s carry-over ladder.
+   *  3. **Selection is never undoable** (`trackHistory=false`), which is why
+   *     it publishes through `publishSelection` rather than a tracked commit.
+   *
+   * ⚠️ It does NOT touch `variantFrameIndices`, and must not start: the
+   * legacy body left them alone, and that field is Phase B with
+   * `TimelineUIStore` already its single writer.
+   */
+  selectObject(id: string): void {
+    const obj = this.context.objects().find((o) => o.id === id);
+    const nextFrameId = obj?.frames[0]?.id ?? null;
+    const nextLayerId = obj?.frames[0]?.layers[0]?.id ?? null;
+
+    this.selectedObjectId = id;
+    this.selectedFrameId = nextFrameId;
+    this.selectedLayerId = nextLayerId;
+
+    this.context.publishSelection({
+      selectedObjectId: id,
+      selectedFrameId: nextFrameId,
+      selectedLayerId: nextLayerId,
+    });
   }
 
   /**

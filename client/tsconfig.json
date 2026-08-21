@@ -13,6 +13,55 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
+    /* REFRESH task 38, step 8 — the two CHEAP strictness flags.
+     *
+     * `noImplicitOverride` is free now that the MobX store classes exist:
+     * it makes an override of a base member explicit, which matters most in
+     * exactly the store hierarchy this refresh built.
+     *
+     * `noPropertyAccessFromIndexSignature` catches `uiState[k]` typos by
+     * forcing index access through brackets when the key is not declared.
+     *
+     * ⚠️ `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` are
+     * DELIBERATELY NOT ENABLED, and must not be added here (task 38's
+     * constraints + OPEN-QUESTIONS):
+     *   - noUncheckedIndexedAccess: this codebase indexes `pixels[y][x]` end
+     *     to end, so it produces several hundred errors and belongs in a
+     *     per-directory sequence of its own.
+     *   - exactOptionalPropertyTypes: `migrateLayerVariantOffset` DELIBERATELY
+     *     sets `variantOffset: undefined` as its migration signal. Under this
+     *     flag that becomes a type error and the migration must be rewritten
+     *     to `delete` the key — a behaviour-affecting change to migration
+     *     code, which touches the owner's real data. Not during this refresh.
+     *
+     * ⚠️ `noPropertyAccessFromIndexSignature` is ALSO deferred — MEASURED in
+     * W29f, not assumed. It is cheap in principle (`.x` -> `['x']`, 21
+     * errors, semantically identical in JS), but the 21 sites fall in exactly
+     * the three places task 38 may not touch:
+     *
+     *     src/types/__tests__/roundtrip.test.ts   2   the CORPUS suite. Task
+     *                                                 38's constraints require
+     *                                                 `git status --porcelain
+     *                                                 src/types/__tests__/` to
+     *                                                 stay CLEAN.
+     *     lib/parse-pixel-project.ts, lib/versions/v1.ts
+     *                                             6   `client/lib/` is copied
+     *                                                 VERBATIM into exports and
+     *                                                 is public API for
+     *                                                 generated projects
+     *                                                 ("do not delete anything
+     *                                                 under client/lib/").
+     *     src/types/codecs/migrate.ts            10   the MIGRATION CHAIN, the
+     *                                                 code standing between the
+     *                                                 owner's 1.1 MB of real
+     *                                                 work and corruption.
+     *
+     * Enabling it means a 21-site sweep across the migration chain and the
+     * published export library to satisfy a lint-grade flag. That trade is
+     * wrong at the end of a store migration; it wants its own task that can
+     * re-verify the corpus digests deliberately.
+     */
+    "noImplicitOverride": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,

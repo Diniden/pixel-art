@@ -1,17 +1,20 @@
 #!/usr/bin/env bun
-/* eslint-env node */
-/* global URL, process, console */
 /**
  * check-classes.mjs — CSS class-usage auditor.
  *
- * NOTE ON THE ESLint DIRECTIVES ABOVE: client/eslint.config.js scopes
- * `globals.node` to `files: ["*.{js,ts}"]`, which matches only the WORKSPACE
- * ROOT — not `scripts/**` and not `.mjs`. This CLI script would therefore be
- * linted as browser code and fail `no-undef` on URL/process/console. Declaring
- * the globals here keeps the fix inside this file; eslint.config.js belongs to
- * another task's `Touches` list (task 09 owns only .css, styles/, main.tsx and
- * scripts/). A follow-up should widen the config block to
- * `["*.{js,ts}", "scripts/**"]` instead.
+ * ── The `/* global *\/` directive is GONE (task 38) ───────────────────────
+ *
+ * This file used to carry `/* eslint-env node *\/` + `/* global URL, process,
+ * console *\/` and a note explaining that `eslint.config.js` scoped
+ * `globals.node` to `files: ["*.{js,ts}"]` — the workspace ROOT only — so a
+ * `scripts/**` `.mjs` file was linted as browser code. That note asked for
+ * exactly one follow-up: "widen the config block to
+ * `["*.{js,ts}", "scripts/**"]` instead."
+ *
+ * Task 38 did it (it added `scripts/check-boundaries.mjs`, which hit the same
+ * wall), so the local workaround is removed and the globals now come from the
+ * config where they belong. Re-adding a `/* global *\/` line here would be a
+ * regression, not a fix.
  *
  * RUNTIME: bun only. `node` is not on PATH in this repo (CLAUDE.md).
  *   bun scripts/check-classes.mjs --dead

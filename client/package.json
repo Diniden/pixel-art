@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "lint:css": "stylelint \"src/**/*.css\"",
     "lint:css:fix": "stylelint \"src/**/*.css\" --fix",
+    "lint:boundaries": "bun scripts/check-boundaries.mjs",
     "preview": "vite preview",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",

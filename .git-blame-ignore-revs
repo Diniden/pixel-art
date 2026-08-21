@@ -15,4 +15,28 @@
 b78aeafe5b6856394cf5df460e21cdc1e409fbf7
 
 # ── Task 38 — Prettier Sweep B (everything else) ─────────────────────────────
-# TODO: append the Sweep B commit SHA when that task lands.
+# STILL PENDING after W29f (task 38). NOT run, and deliberately so.
+#
+# W29f measured the collision: Sweep B reformats 216 files, and FIVE of them
+# are files the task-38 store migration itself edits —
+#   client/src/containers/CanvasContainer.tsx
+#   client/src/store/objectActions.ts
+#   client/src/stores/ApplicationStore.ts
+#   client/src/stores/bridge/zustandBridge.ts
+#   client/src/stores/ui/TimelineUIStore.ts
+# W29f leaves its work UNCOMMITTED (the coordinator commits), so running the
+# sweep would have blended a 216-file formatting diff into a 14-file migration
+# diff inside one working tree, with no way to separate them afterwards. That
+# is precisely what R13 exists to prevent, so the sweep was left for a commit
+# boundary that can hold it alone.
+#
+# TO RUN IT (after the migration commit lands, as its OWN commit):
+#   cd <repo root>
+#   bunx tsc --noEmit                      # record the error count: must be 0
+#   bunx prettier --write "client/src/**/*.{ts,tsx,css}" "server/src/**/*.ts"
+#   bunx tsc --noEmit                      # MUST still be 0 — behaviour-neutral
+#   bunx vitest run                        # in client/
+#   git commit -am "chore: Prettier Sweep B (formatting only)"
+#   # then append that commit's SHA below, and widen the root `format:check`
+#   # script from the Sweep A scope to the full tree.
+# Spot-check three files by hand before committing (R13).

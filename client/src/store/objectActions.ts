@@ -7,10 +7,13 @@
  * The bridge replaces the Zustand entries with delegates at install time, so
  * the unmigrated consumers keep their `useEditorStore()` seam unchanged.
  *
- * ── `selectObject` deliberately STAYS ──────────────────────────────────────
+ * ── `selectObject` MIGRATED IN W29f (task 38) ─────────────────────────────
  * It is pure UI state — it writes only the three `uiState` selection ids and
- * touches no domain data — so it belongs to `TimelineUIStore` (task 24), not
- * to `ObjectStore`. It is left here, working, rather than being moved twice.
+ * touches no domain data — so it belongs to `TimelineUIStore`, not to
+ * `ObjectStore`, and it was left here working rather than being moved twice.
+ * W29f moved it: `TimelineUIStore.selectObject` is the implementation, the
+ * bridge installs the delegate, and the three ids flipped A→B in that same
+ * change. This body is now a throwing stub like its six siblings.
  * (`setOriginColor` is likewise a tool setting and was never in this module's
  * migration set.)
  *
@@ -24,7 +27,8 @@ import type { StoreGet, UpdateProjectAndSave } from "./storeTypes";
 
 function migrated(name: string): never {
   throw new Error(
-    `${name} moved to ObjectStore (REFRESH task 23) and is reached through ` +
+    `${name} moved to ObjectStore (REFRESH task 23) / TimelineUIStore ` +
+      "(task 38) and is reached through " +
       "the Zustand bridge. This store has no bridge installed — construct an " +
       "ApplicationStore and call installBridge(), or call ObjectStore directly.",
   );
@@ -32,7 +36,11 @@ function migrated(name: string): never {
 
 export function createObjectActions(
   _get: StoreGet,
-  updateProjectAndSave: UpdateProjectAndSave,
+  // W29f (task 38): unused since `selectObject` — the module's last real
+  // implementation — moved to `TimelineUIStore`. The parameter stays so the
+  // factory's call signature in `store/index.ts` is unchanged; this whole
+  // module is deleted with the Zustand store.
+  _updateProjectAndSave: UpdateProjectAndSave,
 ) {
   return {
     addObject: (_name: string, _width: number, _height: number): void =>
@@ -52,22 +60,11 @@ export function createObjectActions(
     ): void => migrated("setObjectOrigin"),
 
     /**
-     * UI state, NOT a domain mutation — stays on Zustand until task 24.
-     * `trackHistory=false`: selection changes are deliberately not undoable.
+     * UI state, NOT a domain mutation. Migrated to `TimelineUIStore` by W29f
+     * (task 38) and reached through the bridge delegate, exactly like the six
+     * `ObjectStore` actions above. `trackHistory=false` — selection changes
+     * are deliberately not undoable — is preserved there.
      */
-    selectObject: (id: string) => {
-      updateProjectAndSave((project) => {
-        const obj = project.objects.find((o) => o.id === id);
-        return {
-          ...project,
-          uiState: {
-            ...project.uiState,
-            selectedObjectId: id,
-            selectedFrameId: obj?.frames[0]?.id ?? null,
-            selectedLayerId: obj?.frames[0]?.layers[0]?.id ?? null,
-          },
-        };
-      }, false);
-    },
+    selectObject: (_id: string): void => migrated("selectObject"),
   };
 }
