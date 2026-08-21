@@ -49,8 +49,30 @@ export function createToolActions(
       //
       // ⚠️ WHOEVER MIGRATES THE TRACE-OVERLAY CONSUMERS MUST DELETE THIS BLOCK
       // AND `referenceActions.ts`'s twin IN THE SAME CHANGE, and bridge or flip
-      // the six fields at that point. Until then this is the single LIVE site
-      // and the MobX reaction is dormant — one live writer, so R6 holds.
+      // the six fields at that point.
+      //
+      // ── W29e CORRECTION: the note above this line is now STALE ──────────
+      //
+      // It said the MobX reaction is "dormant" and named `Canvas.tsx`,
+      // `CanvasInfo.tsx`, `RightSidebarTopControls.tsx` and
+      // `FrameReferencePanel.tsx` as Zustand readers of the six fields. Both
+      // claims have since stopped being true and were re-measured in W29e:
+      //
+      //   - `Canvas.tsx` NO LONGER EXISTS, and the other three read
+      //     `app.referenceUI`, not Zustand. Grepping the six field names
+      //     outside `src/store`/`src/stores` finds only `referenceUI` reads.
+      //     There is no live Zustand READER of them left.
+      //   - The MobX reaction is NOT dormant. It observes
+      //     `ToolUIStore.selectedTool`, and a legacy `setTool` dispatch
+      //     reaches that store through the bridge's Phase A adoption, so the
+      //     reaction DOES fire today. Pinned in
+      //     `rehydrationClobber.test.ts` ("trace exclusivity survives the
+      //     fix" / "a MobX setTool also triggers exclusivity").
+      //
+      // So this block is now a write to a copy nobody reads, kept only
+      // because deleting it belongs to the same change that flips the six
+      // fields. It is dead weight, not a load-bearing guard — but it is still
+      // the only writer of the ZUSTAND copies, so R6 holds either way.
       if (tool === "reference-trace") {
         set({
           frameTraceActive: false,

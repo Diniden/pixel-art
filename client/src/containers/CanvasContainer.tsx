@@ -89,30 +89,36 @@
  * `LightingCanvasContainer` migrated on the strength of exactly that.
  *
  * ══════════════════════════════════════════════════════════════════════════
- *  ⚠️ THIS CONTAINER STILL CANNOT MOVE, AND THE REASON IS MEASURED
+ *  W29e: THE RE-HYDRATION CLOBBER IS FIXED — WHAT REMAINS, AND WHY
  * ══════════════════════════════════════════════════════════════════════════
  *
- * `zustandBridge.ts:334` calls `app.ui.hydrate(s.project.uiState)` on EVERY
- * Zustand change — not only on load. So the ~30 UI fields it covers are
- * Zustand-SOURCED: a MobX-only write to any of them is reverted by the next
- * unrelated Zustand change.
+ * W29d recorded that `zustandBridge.ts` called `app.ui.hydrate(...)` on EVERY
+ * Zustand change, so a MobX-only write to any of the ~30 UI fields was
+ * reverted by the next unrelated change. W29e fixed that: `hydrate` now runs
+ * behind the same ECHO-CHECK seam the clipboards, the nine lighting settings
+ * and `variantFrameIndices` already use, so it adopts a genuine external
+ * write (a load, a legacy setter) and ignores the mirror's own echo.
+ * `rehydrationClobber.test.ts` pins it — the four repros FAILED before it.
  *
- * MEASURED W29d, bridge installed: `app.ui.tool.setColor(RED)` held RED, then
- * a single unrelated `saveStatus` write put it back to black.
- * `session.addToColorHistory` went 1 -> 0 the same way.
+ * Consequently `setTool`, `revertToPreviousTool` and `setBorderRadius` are no
+ * longer clobber hazards: a MobX write to them now survives. W29e ALSO fixed
+ * the fourth name on W29d's list, which turned out to be a DIFFERENT defect —
+ * see the overlay note at the shortcut wiring below.
  *
- * Of the ~31 distinct `actions.*` names here, FOUR write such a field —
- * `setTool`, `revertToPreviousTool`, `setBorderRadius`, `setFrameTraceActive`
- * — and `setColorAndAddToHistory` writes two of them. Each needs its own
- * source-writing sink (the pattern `ApplicationStore.setAiServiceUrl` and
- * `setColorAndAddToHistory` establish) or the Phase A flip that makes MobX
- * authoritative. That is an OWNERSHIP decision per field, not a mechanical
- * seam, and it is the same decision task 38 makes wholesale when it deletes
- * the bridge and replaces every hydration point at once.
+ * ── What still keeps `useEditorStore` in this file ────────────────────────
  *
- * A partial migration would be worse than none: the container would compile,
- * pass every unit test that does not install the bridge, and revert the
- * user's tool selection on the next keystroke.
+ * NOT the clobber. Of the 28 `actions.*` names left, 21 are bridge DELEGATES
+ * that already reach the MobX stores. The remaining handful — `setTool`,
+ * `revertToPreviousTool`, `setBorderRadius`, `setColorAndAddToHistory`,
+ * `addToColorHistory`, `undo` — are live Phase A implementations, i.e.
+ * Zustand is still their legitimate single writer (R6). Calling the MobX
+ * setter INSTEAD would make MobX a second writer of a Phase A field, which is
+ * the mirror image of the bug just fixed.
+ *
+ * Moving them means the A→B ownership flip, and that flip is only safe once
+ * every consumer of those fields is migrated in the SAME change — task 38's
+ * wholesale job. So this container keeps the legacy handle deliberately, and
+ * it is now a scope boundary rather than a correctness hazard.
  *
  * ── Gesture arbitration stays here, and `useCanvasPointer` handles the rest ─
  *
@@ -1103,14 +1109,31 @@ export const CanvasContainer = observer(function CanvasContainer({
     deleteSelectedFrame: actions.deleteSelectedFrame,
     setTool: actions.setTool,
     clearSelection: actions.clearSelection,
-    moveReferenceOverlay: actions.moveReferenceOverlay,
-    moveFrameOverlay: actions.moveFrameOverlay,
+    // ── W29e: the three overlay actions route to their MobX OWNER ───────
+    //
+    // `ReferenceUIStore` owns `overlayOffset`, `frameOverlayOffset`,
+    // `frameTraceActive` and `frameTraceFrameIndex`; this container READS all
+    // four off it (lines ~298-300). But the legacy `referenceActions` write
+    // only the Zustand copies and are NOT bridge delegates — the four fields
+    // appear in neither phase list, so nothing carries a legacy write across.
+    //
+    // Measured W29e: with the bridge installed,
+    // `dispatch("setFrameTraceActive", true, 2)` left
+    // `app.referenceUI.frameTraceActive === false`, so the keyboard shortcut
+    // moved an overlay this component never re-read. `FrameReferencePanel-
+    // Container` already calls `referenceUI.setFrameTraceActive` directly, so
+    // the two entry points had drifted onto different stores.
+    //
+    // Read and write now agree on one owner.
+    moveReferenceOverlay: (dx, dy) => referenceUI.moveOverlay(dx, dy),
+    moveFrameOverlay: (dx, dy) => referenceUI.moveFrameOverlay(dx, dy),
     setVariantOffset: actions.setVariantOffset,
     setBorderRadius: actions.setBorderRadius,
     moveSelection: actions.moveSelection,
     moveSelectedPixels: actions.moveSelectedPixels,
     moveLayerPixels: actions.moveLayerPixels,
-    setFrameTraceActive: actions.setFrameTraceActive,
+    setFrameTraceActive: (active, frameIndex) =>
+      referenceUI.setFrameTraceActive(active, frameIndex),
     stepFrame: (delta) => {
       const currentObj = app.currentObject;
       if (!currentObj || currentObj.frames.length <= 1) return;

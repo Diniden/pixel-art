@@ -120,7 +120,14 @@
 import { compareStructural, flowResult, reaction, runInAction } from "mobx";
 import { strokeControl, useEditorStore } from "../../store";
 import type { EditorState } from "../../store/storeTypes";
-import type { Color, Normal, PixelData, Project, StudioMode } from "../../types";
+import type {
+  Color,
+  Normal,
+  PixelData,
+  Project,
+  StudioMode,
+  UIState,
+} from "../../types";
 // (task 27 removed the last packing call site here — `UIStore` owns the
 // domain→compact conversion now, at the one boundary where it belongs.)
 import type { ApplicationStore } from "../ApplicationStore";
@@ -311,7 +318,11 @@ export function assertDisjointPhases(
  * Mirror every Phase A field from a Zustand snapshot into the MobX tree.
  * The single writer of these MobX fields during Phase A.
  */
-function syncPhaseA(app: ApplicationStore, s: EditorState): void {
+function syncPhaseA(
+  app: ApplicationStore,
+  s: EditorState,
+  adoptUIState: (s: EditorState) => void,
+): void {
   runInAction(() => {
     app.session.aiServiceUrl = s.project?.uiState.aiServiceUrl ?? null;
     // ── Task 24: keep `UIStore` hydrated from the authoritative `uiState` ──
@@ -326,13 +337,33 @@ function syncPhaseA(app: ApplicationStore, s: EditorState): void {
     // save would overwrite the project's UI state with the constructor
     // defaults. `persistedUIState.test.ts` pins the shape; this keeps the
     // VALUES right.
-    if (s.project) {
-      // `UIStore.hydrate` now forwards the nine lighting fields to
-      // `LightingUIStore` (task 27), so the packed block this used to build
-      // by hand is gone — and with it the conversion that had to be kept in
-      // step with the builder's own packing.
-      app.ui.hydrate(s.project.uiState);
-    }
+    // ── W29e: THE RE-HYDRATION CLOBBER, FIXED ──────────────────────────
+    //
+    // This used to call `app.ui.hydrate(s.project.uiState)` UNCONDITIONALLY,
+    // on every Zustand change. That is correct on a LOAD and wrong on every
+    // subsequent change: it re-read ~30 UI fields off the stale `uiState`
+    // mirror and wrote them over whatever MobX currently held.
+    //
+    // The hazard is the one the clipboards were pulled out of hydrate for in
+    // task 25, stated in the comment a few lines below — "reading them back
+    // in here would make Zustand a second writer (R6) and would clobber a
+    // fresh copy with the stale mirror on the very next unrelated Zustand
+    // change". The same reasoning had never been applied to the ~30 fields
+    // inside `hydrate`, and the migrated containers ALREADY write them
+    // through the MobX setters (`tool.setBrushSize`, `viewport.setZoom`, …),
+    // so the second writer was live: `app.ui.tool.setColor(RED)` held RED
+    // until one unrelated `saveStatus` write reverted it to black.
+    //
+    // Fixed with the ECHO-CHECK seam tasks 17/25/27/28 already use for
+    // `projectHistory`, the clipboards, the nine lighting settings and
+    // `variantFrameIndices` — adopt only a `uiState` that DIFFERS from what
+    // MobX holds. A load differs and is adopted; the mirror's own echo does
+    // not and is ignored.
+    //
+    // ⚠️ NOT keyed on `project` identity: W19 measured that every pixel edit
+    // publishes a new `project` object, so an identity-keyed adoption reverts
+    // these fields on every stroke.
+    adoptUIState(s);
     // Task 25: the two clipboards moved to Phase B — MobX owns them now and
     // the reaction below mirrors them OUT. Reading them back in here would
     // make Zustand a second writer (R6) and would clobber a fresh copy with
@@ -509,6 +540,129 @@ function variantIndicesEqual(
   );
 }
 
+/* ══ W29e: the hydrate ECHO-CHECK helpers ═════════════════════════════════ */
+
+/**
+ * The fields `UIStore.hydrate()` writes, read back OFF THE MOBX STORES.
+ *
+ * This is the echo basis for {@link installBridge}'s `adoptUIState`: it is
+ * what MobX currently holds, so an incoming `uiState` that matches it is the
+ * mirror's own echo and must be ignored, while one that differs is a genuine
+ * external write (a project LOAD) and is adopted.
+ *
+ * ⚠️ Only the fields `hydrate()` actually writes appear here. The nine
+ * lighting settings and `variantFrameIndices` are Phase B with their own
+ * seams, and the three selection ids are adopted separately by
+ * `timelineUI.adopt` — including them would make this compare fields the
+ * hydrate path does not own.
+ */
+function hydratedUISnapshot(app: ApplicationStore): Record<string, unknown> {
+  const t = app.ui.tool;
+  const v = app.ui.viewport;
+  const panels = v.panels;
+  return {
+    selectedTool: t.selectedTool,
+    selectedColor: t.selectedColor,
+    brushSize: t.brushSize,
+    bitDepth: t.bitDepth,
+    shapeMode: t.shapeMode,
+    borderRadius: t.borderRadius,
+    eraserShape: t.eraserShape,
+    pencilBrushShape: t.pencilBrushShape,
+    pencilBrushMax: t.pencilBrushMax,
+    moveAllLayers: t.moveAllLayers,
+    selectionMode: t.selectionMode,
+    selectionBehavior: t.selectionBehavior,
+    originColor: t.originColor,
+    gaussianFill: t.gaussianFill,
+    zoom: v.zoom,
+    panOffset: v.panOffset,
+    focusMode: v.focusMode,
+    lightGridMode: v.lightGridMode,
+    canvasInfoHidden: v.canvasInfoHidden,
+    objectLibraryViewMode: v.objectLibraryViewMode,
+    timelineThumbnailMode: v.timelineThumbnailMode,
+    layerSelectionCounter: v.layerSelectionCounter,
+    frameReferencePanelPosition: panels.frameReference.position,
+    frameReferencePanelMinimized: panels.frameReference.minimized,
+    frameReferencePanelVisible: panels.frameReference.visible,
+    referenceImagePanelPosition: panels.referenceImage.position,
+    referenceImagePanelMinimized: panels.referenceImage.minimized,
+    lightingPreviewPanelPosition: panels.lightingPreview.position,
+    lightingPreviewPanelMinimized: panels.lightingPreview.minimized,
+    traceNudgeAmount: app.ui.traceNudgeAmount,
+  };
+}
+
+/**
+ * The SAME projection, taken off an incoming Zustand `uiState`.
+ *
+ * `hydrate()` applies `?? default` to the fields it guards, so the raw
+ * `uiState` value and the store value differ whenever a field is ABSENT.
+ * This normalises the incoming record through the same defaults, so an
+ * absent field compares equal to the default the store holds for it and a
+ * load of an old project does not read as a change on every tick.
+ */
+function incomingUISnapshot(
+  ui: UIState,
+  current: Record<string, unknown>,
+): Record<string, unknown> {
+  const pick = (key: string): unknown => {
+    const value = (ui as unknown as Record<string, unknown>)[key];
+    // `hydrate()` guards these with `if (x !== undefined)`, so an absent
+    // field leaves the store's value untouched — i.e. it compares equal.
+    return value === undefined ? current[key] : value;
+  };
+  // The fields `hydrate()` assigns UNCONDITIONALLY: absent must stay absent,
+  // so `undefined` is a real value for them and is NOT defaulted away.
+  const unconditional = new Set([
+    "borderRadius",
+    "originColor",
+    "gaussianFill",
+    "lightGridMode",
+    "canvasInfoHidden",
+    "layerSelectionCounter",
+    "frameReferencePanelPosition",
+    "frameReferencePanelMinimized",
+    "frameReferencePanelVisible",
+    "referenceImagePanelPosition",
+    "referenceImagePanelMinimized",
+    "lightingPreviewPanelPosition",
+    "lightingPreviewPanelMinimized",
+  ]);
+  const raw = ui as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(current)) {
+    if (key === "traceNudgeAmount") {
+      // `hydrate()` applies `?? 10`.
+      out[key] = ui.traceNudgeAmount ?? 10;
+    } else if (unconditional.has(key)) {
+      out[key] = raw[key];
+    } else {
+      out[key] = pick(key);
+    }
+  }
+  return out;
+}
+
+/**
+ * Structural equality over the hydrated UI fields.
+ *
+ * ⚠️ `JSON.stringify` rather than `compareStructural`, and deliberately —
+ * the comparator shape has bitten this migration three times (W17 clipboards,
+ * W18 selection mask, W19's near-miss). Nothing in this projection is a pixel
+ * grid: it is scalars plus small `{x,y}` / `{r,g,b,a}` / panel records, which
+ * is exactly the shape `UIStore.persistedSignature` already stringifies for
+ * the `persistedUIVersion` bump. Key ORDER is stable because both records are
+ * built from the same key list.
+ */
+function hydratedUIEquals(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 /**
  * Install the bridge. Call once, from `main.tsx`, right after constructing
  * the `ApplicationStore`. Returns a disposer.
@@ -518,9 +672,42 @@ export function installBridge(app: ApplicationStore): () => void {
     assertDisjointPhases();
   }
 
+  /* ── W29e: the UI-state ADOPTION seam (R6) ─────────────────────────────
+   *
+   * The echo basis for the ~30 hydrated UI fields. See the long note in
+   * `syncPhaseA` for why the unconditional `hydrate()` it replaces was a
+   * live clobber.
+   *
+   * `mirroredUI` is what MobX last held. An incoming `uiState` equal to it is
+   * the mirror's own echo — a legacy Zustand setter writing the value MobX
+   * already has, or an unrelated store change carrying the same `uiState`
+   * along — and is ignored. One that differs is a genuine external write (a
+   * project LOAD, or a legacy `updateProjectAndSave` UI setter that no
+   * container has been migrated off yet) and is adopted.
+   *
+   * ⚠️ Recomputed AFTER hydrating, not set to the incoming record: `hydrate`
+   * clamps and defaults, so the store's post-hydrate value is the only
+   * correct echo basis. Setting it to the input would leave the two out of
+   * step for any clamped field and re-adopt forever.
+   */
+  let mirroredUI = hydratedUISnapshot(app);
+  const adoptUIState = (s: EditorState): void => {
+    const ui = s.project?.uiState;
+    if (!ui) return;
+    if (hydratedUIEquals(incomingUISnapshot(ui, mirroredUI), mirroredUI)) {
+      return;
+    }
+    runInAction(() => {
+      // `UIStore.hydrate` forwards nothing to `LightingUIStore` (task 27);
+      // the nine lighting fields keep their own Phase B seam below.
+      app.ui.hydrate(ui);
+      mirroredUI = hydratedUISnapshot(app);
+    });
+  };
+
   // Zustand's `subscribe` fires only on CHANGES; adopt the current state
   // immediately so the MobX tree never starts stale.
-  syncPhaseA(app, useEditorStore.getState());
+  syncPhaseA(app, useEditorStore.getState(), adoptUIState);
 
   // ── Task 25: adopt the TREE eagerly too ─────────────────────────────────
   //
@@ -651,7 +838,7 @@ export function installBridge(app: ApplicationStore): () => void {
   };
 
   const disposeZ = useEditorStore.subscribe((s) => {
-    syncPhaseA(app, s);
+    syncPhaseA(app, s, adoptUIState);
     runInAction(() => adoptClipboards(s));
     // Task 27: adopt an EXTERNAL lighting write (a project load). A write
     // that came from MobX itself is recognised by the echo check and ignored.
