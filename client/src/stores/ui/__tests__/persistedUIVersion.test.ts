@@ -160,7 +160,16 @@ describe("persistedUIVersion — the inverse: session-only fields do NOT bump", 
   it("colorAdjustment does not schedule a save", () => {
     const ui = makeUI();
     const before = ui.persistedUIVersion;
-    runInAction(() => ui.tool.setColorAdjustment(new Map()));
+    // W29d typed `colorAdjustment` as `ColorAdjustmentState | null`. The bare
+    // `new Map()` here was filler for "any non-null value" — the assertion is
+    // that setting it does NOT bump, and that is unchanged.
+    runInAction(() =>
+      ui.tool.setColorAdjustment({
+        originalColor: { r: 1, g: 2, b: 3, a: 255 },
+        allFrames: false,
+        affectedPixels: [{ x: 0, y: 0 }],
+      }),
+    );
     expect(ui.persistedUIVersion).toBe(before);
     ui.dispose();
   });

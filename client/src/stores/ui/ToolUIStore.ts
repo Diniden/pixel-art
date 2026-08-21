@@ -30,6 +30,7 @@ import type {
   ShapeMode,
   Tool,
 } from "../../types";
+import type { ColorAdjustmentState } from "../../store/storeTypes";
 import { DEFAULT_UI_STATE } from "../../types";
 
 /** The gaussian (bucket) fill options, replaced wholesale. */
@@ -99,7 +100,7 @@ export class ToolUIStore {
    * `observableRef`: holds a `Map<string, Map<string, {x,y}[]>>`. Keeping it
    * a ref keeps MobX out of the Map entirely. Not persisted.
    */
-  colorAdjustment: unknown = null;
+  colorAdjustment: ColorAdjustmentState | null = null;
 
   constructor() {
     makeObservable(this, {
@@ -133,6 +134,7 @@ export class ToolUIStore {
       setMoveAllLayers: action,
       setSelectionMode: action,
       setSelectionBehavior: action,
+      clearColorAdjustment: action,
       setOriginColor: action,
       setGaussianFillParams: action,
       setColorAdjustment: action,
@@ -243,8 +245,35 @@ export class ToolUIStore {
     };
   }
 
-  setColorAdjustment(value: unknown): void {
+  /**
+   * W29d: TYPED. This held `unknown` while the only writer was Zustand's
+   * `set({ colorAdjustment })` and the only reader was a `Boolean(...)`
+   * projection in a container. Now that `ApplicationStore.startColorAdjustment`
+   * builds the value, the tagged union is the honest type — and it is what
+   * makes `allFrames`/`affectedPixelsByFrame` reachable without a cast.
+   *
+   * ⚠️ Still `observableRef` (see the header): the value carries a
+   * `Map<string, Map<string, {x,y}[]>>` whose leaf arrays can hold one entry
+   * per matching pixel across every frame. MobX must stay out of it entirely.
+   */
+  setColorAdjustment(value: ColorAdjustmentState | null): void {
     this.colorAdjustment = value;
+  }
+
+  /**
+   * Clear any pending colour adjustment — W29d.
+   *
+   * A named action rather than `setColorAdjustment(null)` at each call site,
+   * because it has a REAL HOME requirement: `TimelineUIStore` needs to drop
+   * the adjustment when the layer changes (`layerActions.ts:210`), and it
+   * reached that behaviour through an injected `clearColorAdjustment`
+   * callback which `zustandProjectHost.ts:150` implemented as
+   * `useEditorStore.setState({ colorAdjustment: null })` — MobX reaching back
+   * into Zustand for a field MobX already owns. This is that callback's MobX
+   * implementation.
+   */
+  clearColorAdjustment(): void {
+    this.colorAdjustment = null;
   }
 
   /**

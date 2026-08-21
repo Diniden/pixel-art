@@ -75,25 +75,44 @@
  * When task 38 retires Zustand it retires these call sites with it, in one
  * place. See the task 32 report.
  *
- * ── W29c RE-VERIFIED THIS AND LEFT IT ALONE, DELIBERATELY ─────────────────
+ * ── W29c LEFT IT ALONE; W29d REMOVED THE ARGUMENT-ASSEMBLY BLOCKER BUT
+ *    FOUND A SECOND, LARGER ONE ────────────────────────────────────────────
  *
- * W29c's job was to migrate the remaining Zustand consumers, so it tested the
- * claim above rather than inheriting it. The claim holds: of the ~37
- * `actions.*` names dispatched here, the pixel/selection ones resolve to
- * bridge delegates that CLOSE OVER `app` to assemble arguments —
- * `pixelWriteOptions()`, `selectionWriteOptions()`, `selectionDims()` and
- * `editableGrid()` (which alone branches on variant-vs-object to pick the
- * right grid AND its dimensions), plus the two-step `moveSelectedPixels`
- * that moves the mask AFTER the pixels. Those helpers exist ONLY inside
- * `stores/bridge/zustandBridge.ts`.
+ * W29c's stated blocker was argument assembly: four helpers
+ * (`pixelWriteOptions()`, `selectionWriteOptions()`, `selectionDims()`,
+ * `editableGrid()`) existed ONLY as closures in `zustandBridge.ts`, so calling
+ * `app.pixels.*` here meant a second implementation of each. **W29d resolved
+ * that**: `pixelWriteOptions` was already a one-line delegation to
+ * `app.selectionUI.writeOptions`, and the other three now live on their store
+ * homes as `SelectionUIStore.maskWriteOptions`,
+ * `ApplicationStore.editableGrid` and `ApplicationStore.selectionDims`.
+ * `LightingCanvasContainer` migrated on the strength of exactly that.
  *
- * Calling `app.pixels.*` / `app.selectionUI.*` directly from this container
- * means re-deriving all four here — a SECOND implementation of each, which is
- * the duplication the migration exists to remove, and it would silently drift
- * from the bridge's copy. The correct sequencing is task 38's: delete the
- * bridge and these call sites TOGETHER, moving the helpers to their store
- * homes once. Contrast `FramesView`'s eight actions, which W29c DID migrate
- * precisely because they were pass-throughs with no argument assembly.
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ THIS CONTAINER STILL CANNOT MOVE, AND THE REASON IS MEASURED
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * `zustandBridge.ts:334` calls `app.ui.hydrate(s.project.uiState)` on EVERY
+ * Zustand change — not only on load. So the ~30 UI fields it covers are
+ * Zustand-SOURCED: a MobX-only write to any of them is reverted by the next
+ * unrelated Zustand change.
+ *
+ * MEASURED W29d, bridge installed: `app.ui.tool.setColor(RED)` held RED, then
+ * a single unrelated `saveStatus` write put it back to black.
+ * `session.addToColorHistory` went 1 -> 0 the same way.
+ *
+ * Of the ~31 distinct `actions.*` names here, FOUR write such a field —
+ * `setTool`, `revertToPreviousTool`, `setBorderRadius`, `setFrameTraceActive`
+ * — and `setColorAndAddToHistory` writes two of them. Each needs its own
+ * source-writing sink (the pattern `ApplicationStore.setAiServiceUrl` and
+ * `setColorAndAddToHistory` establish) or the Phase A flip that makes MobX
+ * authoritative. That is an OWNERSHIP decision per field, not a mechanical
+ * seam, and it is the same decision task 38 makes wholesale when it deletes
+ * the bridge and replaces every hydration point at once.
+ *
+ * A partial migration would be worse than none: the container would compile,
+ * pass every unit test that does not install the bridge, and revert the
+ * user's tool selection on the next keystroke.
  *
  * ── Gesture arbitration stays here, and `useCanvasPointer` handles the rest ─
  *

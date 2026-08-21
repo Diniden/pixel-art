@@ -40,16 +40,32 @@
  * `renameCurrentProject` was a pass-through bridge delegate to
  * `domain.renameProject`. Nothing is duplicated by calling them directly.
  *
- * ⚠️ `setAiServiceUrl` STAYS ON ZUSTAND, and this is not an oversight.
- * It is PHASE A — Zustand is the source of truth — and the legacy action
- * (`store/toolActions.ts:514`) does NOT merely set a field: it runs
+ * ── W29d: the fourth member moved too — through a NEW seam ───────────────
+ *
+ * W29c left `setAiServiceUrl` on Zustand and was right to: the legacy action
+ * (`store/toolActions.ts:514`) does not merely set a field, it runs
  * `updateProjectAndSave`, writing `project.uiState.aiServiceUrl` so the value
- * PERSISTS. `SessionStore.setAiServiceUrl` only assigns the observable, which
- * the bridge would then overwrite on the next Phase A sync from
- * `project.uiState.aiServiceUrl`. Swapping it would silently make the AI
- * service URL stop persisting across reloads. Migrating it needs the
- * `uiState` write to move into MobX first — the Phase A flip that owns
- * `aiServiceUrl`, not a call-site change.
+ * PERSISTS, while `SessionStore.setAiServiceUrl` only assigns the observable —
+ * which the next Phase A sync then overwrites from `project.uiState`. A naive
+ * swap compiles and silently stops the URL persisting across reloads.
+ *
+ * W29d built the missing seam rather than performing the naive swap:
+ * `ApplicationStore.setAiServiceUrl` writes the Phase A SOURCE and lets the
+ * established mirror carry it into `SessionStore`. That is one writer, not
+ * two. **This container must call THAT method, never `session.setAiServiceUrl`.**
+ *
+ * ⚠️ W29d also found and fixed the OTHER half of this blocker, which nothing
+ * had measured: `AutoSaveController`'s trigger tuple did not observe
+ * `UIStore.persistedUIVersion`, so a MobX-owned UI write bumped the counter
+ * and produced ZERO saves. Every UI setting persisted only because a legacy
+ * Zustand setter ran `updateProjectAndSave` beside it. See
+ * `AutoSaveController`'s header.
+ *
+ * ⚠️ `aiServiceUrl` REMAINS IN `PHASE_A_FIELDS`. It did NOT flip. Every
+ * MobX-side hydration point is still bridge-driven, so an authoritative
+ * `session.aiServiceUrl` would never be populated from a loaded project.
+ * Task 38 replaces those hydration points when it deletes the bridge; the
+ * list move belongs there, in one piece.
  */
 import { useState, useEffect, useCallback } from "react";
 import { observer } from "mobx-react-lite";
@@ -60,11 +76,11 @@ import { ProjectSelectModalContainer } from "./ProjectSelectModalContainer";
 import { BrowseBackupsModalContainer } from "./BrowseBackupsModalContainer";
 import { ExportPreviewModalContainer } from "./ExportPreviewModalContainer";
 import { useSessionStore, useStores } from "../stores/context";
-import { useEditorStore } from "../store";
 import { aiApi, exportApi } from "../api";
 
 export const HeaderContainer = observer(function HeaderContainer() {
-  const { domain } = useStores();
+  const app = useStores();
+  const { domain } = app;
   const session = useSessionStore();
   const aiServiceUrl = session.aiServiceUrl;
 
@@ -72,9 +88,14 @@ export const HeaderContainer = observer(function HeaderContainer() {
   const projectName = domain.projectName;
   const projectList = domain.projectList;
 
-  // ⚠️ The one that could NOT move — it persists into `project.uiState`.
-  // See the note above.
-  const setAiServiceUrl = useEditorStore((s) => s.setAiServiceUrl);
+  // ⚠️ W29d: THE LAST ONE MOVED — but read
+  // `ApplicationStore.setAiServiceUrl`'s header before touching it. It is NOT
+  // `session.setAiServiceUrl`, and the difference is silent data loss: the
+  // session setter assigns the observable only, while this one also writes
+  // the PHASE A SOURCE (`project.uiState.aiServiceUrl`), which is what makes
+  // the URL survive a reload and what stops the next `syncPhaseA` from
+  // overwriting it.
+  const setAiServiceUrl = (url: string) => app.setAiServiceUrl(url);
 
   const [aiHealthStatus, setAiHealthStatus] = useState<AiHealthStatus>("unknown");
   const [aiHealthDetail, setAiHealthDetail] = useState<string | null>(null);

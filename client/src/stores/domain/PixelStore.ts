@@ -385,6 +385,54 @@ export class PixelStore {
   }
 
   /**
+   * Resolve an EXPLICITLY ADDRESSED frame + layer within the selected object
+   * — W29d, the seam the all-frames colour adjustment needs.
+   *
+   * {@link resolveTarget} is hard-wired to the current selection: object,
+   * frame and layer all come from `this.source`. That is correct for every
+   * gesture-driven write (a brush writes where the user is looking), and it
+   * is exactly why the multi-target colour adjustment could not be expressed
+   * on this store. This method varies the frame and the layer while keeping
+   * the OBJECT from the selection, which is the axis the adjustment needs and
+   * the only axis it needs — `colorAdjustmentActions.ts:346` maps over
+   * `o.id === obj.id` alone, never across objects.
+   *
+   * ⚠️ DELIBERATELY NOT the variant branch. `resolveTarget`'s variant path
+   * keys off `this.source.selectedLayerId`'s own `variantGroupId` /
+   * `selectedVariantId`, and the legacy all-frames variant path
+   * (`colorAdjustmentActions.ts:280-333`) does something structurally
+   * different: it replays ONE flat `affectedPixels` list into every variant
+   * frame rather than a per-frame Map. Expressing that here would be
+   * inventing behaviour, so this method returns `null` for a variant layer
+   * and {@link adjustColorAcross} refuses the variant case outright rather
+   * than half-implementing it. See that method's header.
+   *
+   * `null` on any missing link — the same silent bail-out as `resolveTarget`.
+   */
+  private resolveTargetFor(
+    frameId: string,
+    layerId: string,
+  ): { target: PixelTarget; layer: Layer; width: number; height: number } | null {
+    const objectId = this.source.selectedObjectId;
+    if (!objectId) return null;
+
+    const object = this.domain.objects.find((o) => o.id === objectId);
+    if (!object) return null;
+    const frame = object.frames.find((f) => f.id === frameId);
+    if (!frame) return null;
+    const layer = frame.layers.find((l) => l.id === layerId);
+    if (!layer) return null;
+    if (layer.isVariant) return null; // see the header
+
+    return {
+      target: { objectId, frameId, layerId },
+      layer,
+      width: object.gridSize.width,
+      height: object.gridSize.height,
+    };
+  }
+
+  /**
    * The edit-mask gate, ported verbatim from `drawingActions.ts:11-24`.
    * Returns true when the write is ALLOWED.
    *
@@ -851,6 +899,123 @@ export class PixelStore {
       patches,
       options.trackHistory ?? false,
     );
+  }
+
+  /**
+   * The MULTI-TARGET colour adjustment — W29d, the seam `allFrames` mode
+   * needs and the second half of what left `adjustColor` unwired.
+   *
+   * Recolours a pre-computed set of cells across many frames and many layers
+   * of the SELECTED OBJECT, addressed by the
+   * `Map<frameId, Map<layerId, {x,y}[]>>` that
+   * `startColorAdjustment` snapshots when the mode opens.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ ONE HISTORY ENTRY, HOWEVER MANY LAYERS — AND WHY IT NEEDS A
+   *     TRANSACTION RATHER THAN A LOOP
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * {@link commitCells} calls `publishAndBump()` AND `history.record()` once
+   * per invocation. Looping it over N layers would therefore produce N undo
+   * entries, where the legacy implementation produces exactly ONE (it is a
+   * single `updateProjectAndSave(..., trackHistory)` over the whole tree) and
+   * where `colorAdjustment.test.ts` pins one. `HistoryStore`'s
+   * `beginTransaction`/`endTransaction` is the primitive that closes that gap:
+   * commands recorded while a transaction is open BUFFER into it, and
+   * `endTransaction` collapses them to a single entry.
+   *
+   * The transaction is opened only when `trackHistory` is set. Opening one
+   * unconditionally would be wrong in a subtler way than it looks: a
+   * transaction opened while another is already open COMMITS the outer one
+   * first (the pinned legacy nested-`beginStroke` behaviour), so an untracked
+   * adjustment dragged mid-stroke would silently cut the user's stroke in two.
+   *
+   * `endTransaction` runs from a `finally`, so a throw part-way through the
+   * frames cannot strand an open transaction and swallow every subsequent
+   * edit into it.
+   *
+   * ── ⚠️ VARIANTS ARE NOT HANDLED HERE, DELIBERATELY ────────────────────
+   *
+   * The legacy variant all-frames path replays ONE flat `affectedPixels` list
+   * into EVERY variant frame — a different addressing model from the per-frame
+   * Map this method takes, not a special case of it. See
+   * {@link resolveTargetFor}. A frame/layer pair that resolves to a variant
+   * layer is SKIPPED rather than guessed at.
+   *
+   * ── What this deliberately does NOT do ────────────────────────────────
+   *
+   * It does not re-match the current colour. The affected set is snapshotted
+   * at START and replayed verbatim — that is pin 3 of the W29b contract, and
+   * it is what makes slider-dragging recolour the same cells each time. It
+   * also writes NO UI field: `uiState.selectedColor` is the caller's to write
+   * (`PixelStore` never touches UI state), which is the other half of why
+   * `adjustColor` was left unwired.
+   *
+   * @param byFrame  frameId → layerId → the cells to recolour.
+   * @returns the number of layers actually written.
+   */
+  adjustColorAcross(
+    byFrame: ReadonlyMap<string, ReadonlyMap<string, readonly { x: number; y: number }[]>>,
+    newColor: Color,
+    options: PixelWriteOptions = {},
+  ): number {
+    const trackHistory = options.trackHistory ?? false;
+    if (byFrame.size === 0) return 0;
+
+    // Resolve EVERYTHING before writing anything. A resolve reads the live
+    // tree, and `commitCells` replaces the spine down to each layer — so
+    // resolving lazily inside the write loop would read a tree that earlier
+    // iterations had already rebuilt. The `Layer` objects captured here are
+    // the pre-write ones, which is precisely what the inverse patches need.
+    const work: {
+      target: PixelTarget;
+      layer: Layer;
+      patches: PixelPatch[];
+    }[] = [];
+
+    for (const [frameId, byLayer] of byFrame) {
+      for (const [layerId, cells] of byLayer) {
+        if (cells.length === 0) continue;
+        const resolved = this.resolveTargetFor(frameId, layerId);
+        if (!resolved) continue; // missing, or a variant layer — see header
+        const { target, layer, width, height } = resolved;
+
+        const patches: PixelPatch[] = [];
+        for (const { x, y } of cells) {
+          if (x < 0 || x >= width || y < 0 || y >= height) continue;
+          const existing = layer.pixels[y]?.[x];
+          if (sameColor(existing?.color, newColor)) continue;
+          patches.push({
+            x,
+            y,
+            before: copyCell(existing),
+            after: {
+              color: newColor,
+              normal: existing?.normal ?? 0,
+              height: existing?.height ?? 1,
+            },
+          });
+        }
+        if (patches.length > 0) work.push({ target, layer, patches });
+      }
+    }
+
+    if (work.length === 0) return 0;
+
+    // A single layer needs no transaction — `commitCells` already produces
+    // exactly one entry, and wrapping it would commit an enclosing stroke for
+    // nothing (see the header).
+    const needsTransaction = trackHistory && work.length > 1;
+    if (needsTransaction) this.history.beginTransaction("Adjust color");
+    try {
+      for (const { target, layer, patches } of work) {
+        this.commitCells(target, layer, "Adjust color", patches, trackHistory);
+      }
+    } finally {
+      if (needsTransaction) this.history.endTransaction();
+    }
+
+    return work.length;
   }
 
   /* ══ THE LIGHTING WRITE PATHS (task 27) ═══════════════════════════════

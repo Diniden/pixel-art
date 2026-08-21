@@ -19,11 +19,12 @@ import {
   useEditorStore,
 } from "../../store";
 import { compactToProject, projectToCompact } from "../../types";
-import type { Project } from "../../types";
+import type { Color, Project } from "../../types";
 import type { ProjectHost } from "../domain/DomainStore";
 import type { DomainMirror } from "../domain/DomainMutator";
 import type { SelectionSink } from "../domain/ObjectStore";
 import type { PixelMirror } from "../domain/PixelStore";
+import { MAX_COLOR_HISTORY } from "../../store/storeTypes";
 import type { SelectionState } from "../../store/storeTypes";
 
 export function createZustandProjectHost(): ProjectHost {
@@ -135,6 +136,8 @@ export function createZustandTimelineContext(): {
     layerSelectionCounter?: number;
   }): void;
   clearColorAdjustment(): void;
+  publishAiServiceUrl(url: string): void;
+  publishColorAndHistory(color: Color): void;
 } {
   return {
     publishSelection: (patch) => {
@@ -149,6 +152,79 @@ export function createZustandTimelineContext(): {
     // colour adjustment when the layer changes.
     clearColorAdjustment: () => {
       useEditorStore.setState({ colorAdjustment: null });
+    },
+
+    /**
+     * W29d — the PERSISTING half of `setAiServiceUrl`.
+     *
+     * `SessionStore.setAiServiceUrl` only assigns the observable. The legacy
+     * `store/toolActions.ts:514` did more: it ran `updateProjectAndSave`, so
+     * the value landed in `project.uiState.aiServiceUrl` and SURVIVED A
+     * RELOAD. That is the whole reason `HeaderContainer` could not simply
+     * swap to the MobX setter — the value would set, look right, and quietly
+     * vanish on the next load.
+     *
+     * ⚠️ THIS IS NOT A SECOND WRITER (R6). `aiServiceUrl` is a PHASE A field:
+     * Zustand's `project.uiState` is the source of truth and `syncPhaseA`
+     * mirrors it into `session.aiServiceUrl` on EVERY Zustand change. So the
+     * MobX observable is not independently writable at all — assigning it
+     * alone is overwritten by the very next sync. Writing the Phase A SOURCE
+     * here is the only write that sticks, and the mirror then carries it back
+     * into MobX, which is precisely the direction Phase A defines.
+     *
+     * `trackHistory` is false, matching the legacy action: an AI endpoint is
+     * configuration, not an edit, and it must not consume an undo slot.
+     */
+    publishAiServiceUrl: (url) => {
+      const { project } = useEditorStore.getState();
+      if (!project) return;
+      useEditorStore.setState({
+        project: { ...project, uiState: { ...project.uiState, aiServiceUrl: url } },
+      });
+    },
+
+    /**
+     * W29d — the Zustand-sourced half of `setColorAndAddToHistory`.
+     *
+     * ⚠️ MEASURED: both fields it touches are Zustand-sourced during the
+     * bridge era. `colorHistory` is a `PHASE_A_FIELDS` member mirrored at
+     * `zustandBridge.ts:340`, and `selectedColor` is re-hydrated wholesale
+     * from `project.uiState` at `:334` on EVERY Zustand change. Writing only
+     * the MobX stores held for one tick and then reverted — the MobX
+     * `selectedColor` went back to black after a single unrelated
+     * `saveStatus` write. This writes the source so the value survives.
+     *
+     * The de-duplicate-and-cap rule is `toolActions.ts:111` verbatim: an
+     * existing colour moves to the FRONT (it is not left in place), a new one
+     * is prepended, and the list is trimmed to `MAX_COLOR_HISTORY`.
+     * `SessionStore.addToColorHistory` carries the identical rule — the two
+     * therefore agree by construction rather than by transcription luck.
+     */
+    publishColorAndHistory: (color) => {
+      const state = useEditorStore.getState();
+      const { project, colorHistory } = state;
+      const existingIndex = colorHistory.findIndex(
+        (c) =>
+          c.r === color.r &&
+          c.g === color.g &&
+          c.b === color.b &&
+          c.a === color.a,
+      );
+      const nextHistory =
+        existingIndex !== -1
+          ? [color, ...colorHistory.filter((_, i) => i !== existingIndex)]
+          : [color, ...colorHistory].slice(0, MAX_COLOR_HISTORY);
+      useEditorStore.setState({
+        colorHistory: nextHistory,
+        ...(project
+          ? {
+              project: {
+                ...project,
+                uiState: { ...project.uiState, selectedColor: color },
+              },
+            }
+          : {}),
+      });
     },
   };
 }
