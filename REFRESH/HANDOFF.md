@@ -36,13 +36,17 @@ not the task files. Every session updates it before finishing. Read
 > - **`FramesView.tsx` is a 684-line component still on Zustand** (verified). W27 stopped at
 >   it for a sound reason — live `React.memo` comparators over the project node — but no
 >   later task picked it up.
-> - **`adjustColor`'s all-frames mode is a NO-OP, not a partial break.**
->   `colorAdjustmentActions.ts` sets `affectedPixels: []` in all-frames mode and
->   `PixelStore.ts:825` early-returns on `cells.length === 0` (both verified). W18's note
->   said wiring it would "silently break all-frames"; measured, it does nothing at all. It
->   also has **zero test coverage in either implementation** — every test passes
->   `allFrames: false` — so migrating it would move unpinned behaviour on the owner's real
->   artwork.
+> - ~~**`adjustColor`'s all-frames mode is a NO-OP**~~ ❌ **THIS CLAIM WAS WRONG —
+>   CORRECTED BY W29b.** All-frames works correctly today, on both harness rows, and is now
+>   pinned by 34 tests. The error was chaining two individually-true facts that never meet:
+>   `ColorAdjustmentState` is a **tagged union** (`storeTypes.ts:37` flat `affectedPixels`
+>   for single-frame, `:39` `affectedPixelsByFrame` Map for all-frames), the all-frames path
+>   branches on the **Map**, and `PixelStore.ts:825`'s early-return is **unreachable** because
+>   `PixelStore.adjustColor` has no delegate and no `migrated()` stub. The `[]` is the
+>   unused half of the union, not a lost payload.
+>   **Lesson: two true facts do not compose into a true conclusion without tracing the
+>   actual code path.** The remaining work is a `resolveTargetFor(frameId, layerId)` seam
+>   plus a transaction wrapper, not a rescue.
 >
 > ### 🐛 A live defect found while investigating (pre-existing, unrelated to task 38)
 >
