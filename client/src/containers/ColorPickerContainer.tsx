@@ -35,6 +35,30 @@
  * tests it for truthiness, and passing the raw object would leak a store node
  * into `ui/` — the container rule is "project to a flat view-model, never pass
  * a domain node".
+ *
+ * ── W29c RE-VERIFIED this and left all three on Zustand ───────────────────
+ *
+ * W29c migrated the other Zustand consumers and stopped here, confirming the
+ * above by direct measurement rather than inheriting it:
+ *
+ *  - `adjustColor` has NO bridge delegate at all (unlike the four other pixel
+ *    actions, which `zustandBridge.ts` replaces at install time). Nothing in
+ *    `stores/` implements it. `PixelStore.adjustColor` is single-target only.
+ *  - `startColorAdjustment` / `clearColorAdjustment` have no MobX
+ *    implementation either. The `clearColorAdjustment` found in `stores/` is
+ *    NOT one — `zustandProjectHost.ts:150` is a callback that writes
+ *    `useEditorStore.setState({ colorAdjustment: null })`, i.e. MobX reaching
+ *    BACK into Zustand. The state itself lives only in Zustand.
+ *  - `saveCurrentStateToHistory` wraps `HistoryStore.snapshot`, but the
+ *    `store/index.ts:355` closure also runs `reconcile()` and
+ *    `set(computeMirror())` — the Phase B mirror bookkeeping that keeps
+ *    `projectHistory`/`historyIndex` correct while the bridge exists.
+ *    Calling `history.snapshot()` directly would skip it.
+ *
+ * The unblocking work is W29b's stated remainder: a
+ * `resolveTargetFor(frameId, layerId)` seam plus a transaction wrapper, and a
+ * UI-store home for the lifecycle flag. That is a store-building task, not a
+ * call-site change, so it was correctly out of W29c's scope.
  */
 import { observer } from "mobx-react-lite";
 import { ColorPicker } from "../ui/components/ColorPicker/ColorPicker";

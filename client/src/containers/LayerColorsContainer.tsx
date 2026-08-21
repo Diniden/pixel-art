@@ -37,6 +37,13 @@
  * measured reason (`PixelStore.adjustColor` is implemented but deliberately
  * unwired because `allFrames` is a multi-target write). Everything else comes
  * from MobX.
+ *
+ * W29c re-verified this and left it: neither function has a MobX
+ * implementation, and `startColorAdjustment` in particular is a ~190-line
+ * multi-frame/multi-layer SCAN (`store/colorAdjustmentActions.ts:10`) that
+ * builds the `affectedPixelsByFrame` Map the all-frames write consumes.
+ * Re-deriving it here would be a second implementation of the exact thing the
+ * migration exists to remove. See `ColorPickerContainer`'s W29c note.
  */
 import { useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";

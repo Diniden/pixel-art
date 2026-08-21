@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactNode } from 'react';
-import { useEditorStore } from '../../store';
 import { Frame, Project, PixelObject } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { PreviewModal } from '../../ui/components/PreviewModal/PreviewModal';
@@ -336,6 +335,33 @@ interface FramesViewProps {
   showPreview: boolean;
   setShowPreview: (show: boolean) => void;
   viewModeDropdown: ReactNode;
+  /* ── The 8 former `useEditorStore()` members, now props (W29c) ──────────
+   *
+   * All eight were PASS-THROUGH bridge delegates — five to `FrameStore`, one
+   * to `TimelineUIStore.selectFrame`, one to `ObjectStore.resizeObject` — with
+   * no argument assembly of the kind `pixelWriteOptions()` /
+   * `selectionWriteOptions()` / `editableGrid()` do for the canvas containers.
+   * That is why they lift cleanly here and those do not.
+   *
+   * ⚠️ `project` deliberately STAYS a domain node. See the note in
+   * `FramesViewContainer` — `FrameThumbnail`'s comparator reads
+   * `project.uiState.variantFrameIndices` BY REFERENCE and it is LIVE
+   * (measured W29c against the real project: 7 variant groups, 9 populated
+   * indices). Flattening it is a render-behaviour change, not a refactor.
+   */
+  addFrame: (name: string, copyPrevious?: boolean) => void;
+  deleteFrame: (id: string) => void;
+  renameFrame: (id: string, name: string) => void;
+  selectFrame: (id: string, syncVariants?: boolean) => void;
+  duplicateFrame: (id: string) => void;
+  moveFrame: (id: string, direction: 'left' | 'right') => void;
+  reorderFrame: (frameId: string, toIndex: number) => void;
+  resizeObject: (
+    id: string,
+    width: number,
+    height: number,
+    anchor?: AnchorPosition
+  ) => void;
 }
 
 export function FramesView({
@@ -345,19 +371,16 @@ export function FramesView({
   togglePlayback,
   showPreview,
   setShowPreview,
-  viewModeDropdown
+  viewModeDropdown,
+  addFrame,
+  deleteFrame,
+  renameFrame,
+  selectFrame,
+  duplicateFrame,
+  moveFrame,
+  reorderFrame,
+  resizeObject
 }: FramesViewProps) {
-  const {
-    addFrame,
-    deleteFrame,
-    renameFrame,
-    selectFrame,
-    duplicateFrame,
-    moveFrame,
-    reorderFrame,
-    resizeObject
-  } = useEditorStore();
-
   const [showResizeModal, setShowResizeModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [dragFrameId, setDragFrameId] = useState<string | null>(null);

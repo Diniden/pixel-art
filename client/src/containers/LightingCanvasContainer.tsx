@@ -90,6 +90,23 @@
  * `stores/bridge/zustandBridge.ts` (`pixelWriteOptions()`). Task 38 retires
  * these call sites with Zustand, in one place. `zustandBridge.ts` is owned by
  * task 34 this wave and is not touched.
+ *
+ * ── W29c RE-VERIFIED THIS AND LEFT IT ALONE ──────────────────────────────
+ *
+ * Seven `actions.*` names are dispatched here, and each is blocked for a
+ * concrete, measured reason:
+ *
+ *  - `setNormalPixels` / `setHeightPixels` — bridge delegates that pass
+ *    `pixelWriteOptions()`, a helper closing over `app` inside
+ *    `zustandBridge.ts`. Calling `app.pixels.*` here means re-deriving it.
+ *  - `undo` and `getCurrentObject` — NOT delegated at all. They have no entry
+ *    in the bridge's `setState` blocks and still run the legacy Zustand
+ *    implementations, so there is nothing on MobX to call yet.
+ *  - `setHeightBrushValue`, `selectFrame`, `advanceVariantFrames` are clean
+ *    pass-throughs, but lifting only those would leave the container reading
+ *    `useEditorStore.getState()` anyway for the four above — the import site
+ *    would NOT close, which is the metric this migration is measured by. They
+ *    retire together with the bridge in task 38.
  */
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { observer } from "mobx-react-lite";
