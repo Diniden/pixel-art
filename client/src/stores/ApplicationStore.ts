@@ -64,15 +64,23 @@ import {
   createZustandPixelMirror,
   createZustandSelectionPublisher,
 } from "./bridge/zustandProjectHost";
-import { editorHistory } from "../store";
+import {
+  editorHistory,
+  historyControl as legacyHistoryControl,
+} from "../store";
 import type { HistoryStore } from "./history/HistoryStore";
 import type {
+  Color,
   CurrentVariant,
   Frame,
   Layer,
+  PixelData,
   PixelObject,
 } from "../types";
-import type { SelectionState } from "../store/storeTypes";
+import type {
+  ColorAdjustmentState,
+  SelectionState,
+} from "../store/storeTypes";
 import type { ReferenceImageData } from "../types/referenceImage";
 
 /**
@@ -139,6 +147,24 @@ export interface ApplicationStoreOptions {
     TimelineContext,
     "publishSelection" | "clearColorAdjustment"
   >;
+  /**
+   * Where {@link ApplicationStore.setAiServiceUrl} writes the PERSISTING half
+   * (W29d). Defaults to the Zustand host, which writes the Phase A source
+   * `project.uiState.aiServiceUrl`; tests substitute a recorder.
+   */
+  publishAiServiceUrl?: (url: string) => void;
+  /**
+   * The bridge-era undo/redo glue (W29d). Defaults to `store/index.ts`'s
+   * published `historyControl`, the single writer of the Phase B history
+   * mirror; tests substitute a recorder. See {@link ApplicationStore.undo}.
+   */
+  historyControl?: { undo(): void; redo(): void };
+  /**
+   * Where {@link ApplicationStore.setColorAndAddToHistory} writes the
+   * Zustand-sourced half (W29d). Defaults to the Zustand host; tests
+   * substitute a recorder.
+   */
+  publishColorAndHistory?: (color: Color) => void;
   /**
    * Where `PixelStore` publishes a committed tree during the bridge era
    * (task 26). Defaults to the Zustand mirror; tests substitute a recorder.
@@ -234,6 +260,15 @@ export class ApplicationStore {
    * `DomainMutator`'s header gives for not splitting the data).
    */
   private readonly mutator: DomainMutator;
+
+  /** W29d — see {@link ApplicationStore.setAiServiceUrl}. */
+  private readonly aiServiceUrlSink: (url: string) => void;
+
+  /** W29d — see {@link ApplicationStore.undo}. */
+  private readonly historyOps: { undo(): void; redo(): void };
+
+  /** W29d — see {@link ApplicationStore.setColorAndAddToHistory}. */
+  private readonly colorSink: (color: Color) => void;
 
   /* ── task 27 ───────────────────────────────────────────────────────────── */
   /**
@@ -356,6 +391,17 @@ export class ApplicationStore {
     // No dependencies in either direction; see the member declaration.
     this.canvasInteraction = new CanvasInteractionStore();
     const zustandTimeline = createZustandTimelineContext();
+    this.aiServiceUrlSink =
+      options.publishAiServiceUrl ?? zustandTimeline.publishAiServiceUrl;
+    this.colorSink =
+      options.publishColorAndHistory ?? zustandTimeline.publishColorAndHistory;
+    // Read through a closure, never captured: `historyControl` is a mutable
+    // module binding assigned when the Zustand store is created, which may be
+    // AFTER this constructor runs.
+    this.historyOps = options.historyControl ?? {
+      undo: () => legacyHistoryControl.undo(),
+      redo: () => legacyHistoryControl.redo(),
+    };
     const timelineUI = new TimelineUIStore({
       viewport,
       context: {
@@ -368,9 +414,32 @@ export class ApplicationStore {
         publishSelection:
           options.timelineContext?.publishSelection ??
           zustandTimeline.publishSelection,
-        clearColorAdjustment:
-          options.timelineContext?.clearColorAdjustment ??
-          zustandTimeline.clearColorAdjustment,
+        // ── W29d: the MobX half is now UNCONDITIONAL ──────────────────
+        //
+        // This callback used to be ONLY `zustandProjectHost.ts:150`'s
+        // `useEditorStore.setState({ colorAdjustment: null })` — MobX
+        // reaching back into Zustand for a field MobX already stores
+        // (`ToolUIStore.colorAdjustment`). That is the wrong direction
+        // through the bridge and it left the MobX copy permanently stale,
+        // which is the mechanism behind the ledger's `GlobalHotkeys.tsx:78`
+        // defect (`tool.colorAdjustment` never non-null, so Escape cannot
+        // exit the mode).
+        //
+        // ⚠️ IT CLEARS BOTH, and that is NOT two writers of one field —
+        // they are two DIFFERENT storage locations. `colorAdjustment` is in
+        // NEITHER `PHASE_A_FIELDS` nor `PHASE_B_FIELDS`: the bridge does not
+        // mirror it in either direction, so Zustand's copy and MobX's copy
+        // are independent, and the live Zustand `colorAdjustmentActions.ts`
+        // still reads its own. Clearing only MobX would stop `selectLayer`
+        // dropping the LIVE adjustment — a real regression. Task 38 deletes
+        // the Zustand half along with the store, leaving the MobX line.
+        clearColorAdjustment: () => {
+          this.ui.tool.clearColorAdjustment();
+          const legacy =
+            options.timelineContext?.clearColorAdjustment ??
+            zustandTimeline.clearColorAdjustment;
+          legacy();
+        },
       },
     });
     this.timelineUI = timelineUI;
@@ -516,17 +585,33 @@ export class ApplicationStore {
       currentVariant: computed,
       selectedVariantLayer: computed,
       isEditingVariant: computed,
+      // W29d. `computed` (not `computed.struct`): both return a fresh object
+      // literal per evaluation, but `editableGrid` holds a GRID REFERENCE, and
+      // a structural comparator would walk 300,249 cells to decide whether it
+      // changed (R2). Reference identity is the correct — and only safe —
+      // comparison for a grid.
+      editableGrid: computed,
+      selectionDims: computed,
     });
 
     // The save reaction — constructed LAST so it observes fully-built stores.
     // `history` is the live replay guard (task 17): the trigger is `null`
     // while `isReplaying` is set, so undo/redo never schedules a save.
+    //
+    // ⚠️ W29d ADDED THE FOURTH ARGUMENT, and it is a bug fix, not a tidy-up.
+    // MEASURED: before it, a UI-only write bumped `ui.persistedUIVersion`
+    // 1 -> 2 and produced ZERO saves — the counter task 24 built was never in
+    // the trigger tuple. Every UI setting appeared to persist only because the
+    // legacy Zustand setter ran `updateProjectAndSave` alongside it, so the
+    // FIRST setting whose ownership flipped to MobX would have silently
+    // stopped persisting. `setAiServiceUrl` is that setting.
     this.autoSave = this.options.autoSaveEnabled
       ? new AutoSaveController(
           this.domain,
           this.session,
           this.history,
           options.autoSave,
+          this.ui,
         )
       : null;
   }
@@ -640,6 +725,379 @@ export class ApplicationStore {
    */
   get isEditingVariant(): boolean {
     return this.currentLayer?.isVariant === true;
+  }
+
+  /* ── W29d: the two GRID-RESOLUTION seams ───────────────────────────────
+   *
+   * Both were closures inside `zustandBridge.ts` (`editableGrid()` at :1020,
+   * `selectionDims()` at :1043) and had no other home, which is the single
+   * reason `CanvasContainer` and `LightingCanvasContainer` still dispatch
+   * through `useEditorStore` — calling `app.selectionUI.*` directly meant
+   * re-deriving them at the call site, a SECOND implementation of each (R6).
+   *
+   * They live HERE, not on `DomainStore` and not on a UI store, for exactly
+   * the reason the six computeds above do: they span both halves. They read
+   * the domain tree (the object, the variant, the layer grids) AND the UI
+   * selection ids, and no single-slice store may reach across that line.
+   */
+
+  /**
+   * The grid a pixel-sampling read should look at, plus the dimensions that
+   * grid is expressed in — branching variant-vs-object for BOTH.
+   *
+   * ⚠️ The dimensions are NOT the object's when a variant is being edited:
+   * a variant carries its own `gridSize`, and sampling a variant grid against
+   * the object's dimensions indexes the wrong cells. That coupled branch is
+   * why this returns grid and dims together rather than as two accessors.
+   *
+   * ⚠️ RETURNS THE GRID BY REFERENCE. `layer.pixels` is `observable.ref`
+   * (R2) and is replaced wholesale by `PixelStore`; nothing here copies,
+   * clones or iterates it. Reading the reference is O(1) and creates no
+   * proxies — the 300,249-cell tree is never walked.
+   *
+   * `null` when anything in the chain is missing, which is the silent bail-out
+   * every legacy caller already handles.
+   */
+  get editableGrid(): {
+    grid: PixelData[][];
+    dims: { width: number; height: number };
+  } | null {
+    const layer = this.currentLayer;
+    const object = this.currentObject;
+    if (!layer || !object) return null;
+    if (layer.isVariant) {
+      const variant = this.currentVariant;
+      const variantLayer = this.selectedVariantLayer;
+      if (!variant || !variantLayer) return null;
+      return {
+        grid: variantLayer.pixels,
+        dims: {
+          width: variant.variant.gridSize.width,
+          height: variant.variant.gridSize.height,
+        },
+      };
+    }
+    return { grid: layer.pixels, dims: object.gridSize };
+  }
+
+  /**
+   * The grid dimensions a SELECTION is expressed against.
+   *
+   * ⚠️ The `32 x 32` floor is transcribed, not invented. `zustandBridge.ts`'s
+   * `selectionDims()` fell back to it when `editableGrid()` returned `null`,
+   * so a selection made with no resolvable layer still produced a mask of a
+   * definite size rather than throwing. Preserved verbatim — a selection
+   * store that received `undefined` dims would pack indices against `NaN`.
+   */
+  get selectionDims(): { width: number; height: number } {
+    return this.editableGrid?.dims ?? { width: 32, height: 32 };
+  }
+
+  /* ══ W29d: THE COLOUR-ADJUSTMENT LIFECYCLE ═══════════════════════════════
+   *
+   * `startColorAdjustment` is the ~190-line multi-frame SCAN that had no MobX
+   * home at all — the last thing blocking `LayerColorsContainer` and
+   * `ColorPickerContainer`. It lands HERE, not on `ToolUIStore` and not on
+   * `PixelStore`, and the reason is the boundary rather than convenience:
+   *
+   *  - it READS the domain tree (every frame, every same-named layer, every
+   *    cell) — so it cannot live on `ToolUIStore`, which may not import a
+   *    domain store;
+   *  - it WRITES a UI field (`ToolUIStore.colorAdjustment`) — so it cannot
+   *    live on `PixelStore`, which is forbidden to touch UI state and whose
+   *    `stores/domain/**` directory may not import `stores/ui/**` at all
+   *    (ESLint, task 05).
+   *
+   * That is exactly the cross-slice signature of the six computeds above, and
+   * this class is the one place both halves are legally in scope.
+   *
+   * ⚠️ IT WRITES NO PIXELS. The scan only records WHICH cells match; the
+   * recolour is `PixelStore.adjustColor` / `adjustColorAcross`. `PixelStore`
+   * remains the sole writer of pixel content (R2).
+   *
+   * ── The four pinned semantics, transcribed verbatim (W29b, 34 tests) ──
+   *
+   *  1. TWO DISJOINT PAYLOADS. All-frames mode fills `affectedPixelsByFrame`
+   *     and leaves `affectedPixels` an EMPTY ARRAY — it is the unused half of
+   *     a tagged union, not a lost payload. Flattening the Map into the flat
+   *     list would write frame 2..N's coordinates onto frame 1.
+   *  2. LAYERS MATCH BY NAME, WITH `filter` NOT `find`. Ids are per-frame and
+   *     do not correspond across frames, so name is the only cross-frame
+   *     identity the model has. Two consequences are pinned and preserved:
+   *     several same-named layers in ONE frame are ALL recoloured, and a
+   *     RENAMED layer is silently stranded.
+   *  3. THE SNAPSHOT IS TAKEN AT START. The set is computed once here and
+   *     replayed verbatim by every later `adjustColor` — which is what makes
+   *     slider-dragging recolour the same cells rather than chasing the
+   *     colour it just wrote.
+   *  4. THE EXACT-MATCH TEST IS ON ALL FOUR CHANNELS, and a cell whose
+   *     `color` is the sentinel `0` (transparent) never matches, because
+   *     `typeof 0 === "object"` is false. Preserved as the `typeof` guard
+   *     rather than "cleaned up" to a truthiness check.
+   *
+   * ⚠️ THE VARIANT FRAME KEY IS NOT A FRAME ID. The variant branch keys the
+   * Map by the synthetic string `variant-frame-<index>`, which matches no
+   * `frame.id` anywhere in the tree. That is why `PixelStore.adjustColorAcross`
+   * refuses the variant case rather than resolving those keys — see its header.
+   *
+   * ⚠️ Reading every cell of every layer is O(frames x layers x w x h) and is
+   * why this is an ACTION, never a computed. It runs once when the user opens
+   * the mode. A computed would re-run it on any tree change, and observing the
+   * grids to know when to do so is the exact modelling error R2 forbids.
+   */
+  startColorAdjustment(color: Color, allFrames: boolean): void {
+    const layer = this.currentLayer;
+    const obj = this.currentObject;
+    if (!layer || !obj) return;
+
+    /** Does this cell hold EXACTLY `color`? Pin 4 — all four channels. */
+    const matches = (grid: PixelData[][], x: number, y: number): boolean => {
+      const pColor = grid[y]?.[x]?.color;
+      if (!pColor || typeof pColor !== "object") return false;
+      return (
+        pColor.r === color.r &&
+        pColor.g === color.g &&
+        pColor.b === color.b &&
+        pColor.a === color.a
+      );
+    };
+
+    /** Every matching cell of one grid, in row-major order. */
+    const scan = (
+      grid: PixelData[][],
+      width: number,
+      height: number,
+    ): { x: number; y: number }[] => {
+      const found: { x: number; y: number }[] = [];
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (matches(grid, x, y)) found.push({ x, y });
+        }
+      }
+      return found;
+    };
+
+    const variantData = this.currentVariant;
+    const variantLayer = this.selectedVariantLayer;
+    const isEditingVariant = layer.isVariant && variantData && variantLayer;
+
+    let next: ColorAdjustmentState;
+
+    if (isEditingVariant) {
+      const { variant } = variantData;
+      const { width, height } = variant.gridSize;
+
+      if (allFrames) {
+        const affectedPixelsByFrame = new Map<
+          string,
+          Map<string, { x: number; y: number }[]>
+        >();
+        for (let frameIdx = 0; frameIdx < variant.frames.length; frameIdx++) {
+          const variantFrame = variant.frames[frameIdx];
+          // ⚠️ Synthetic key, NOT a frame id — see the header.
+          const frameKey = `variant-frame-${frameIdx}`;
+          for (const vLayer of variantFrame.layers) {
+            const pixels = scan(vLayer.pixels, width, height);
+            if (pixels.length > 0) {
+              if (!affectedPixelsByFrame.has(frameKey)) {
+                affectedPixelsByFrame.set(frameKey, new Map());
+              }
+              affectedPixelsByFrame.get(frameKey)!.set(vLayer.id, pixels);
+            }
+          }
+        }
+        next = {
+          originalColor: color,
+          allFrames: true,
+          affectedPixels: [], // pin 1 — the unused half of the union
+          affectedPixelsByFrame,
+        };
+      } else {
+        next = {
+          originalColor: color,
+          allFrames: false,
+          affectedPixels: scan(variantLayer.pixels, width, height),
+        };
+      }
+    } else {
+      const { width, height } = obj.gridSize;
+
+      if (allFrames) {
+        const affectedPixelsByFrame = new Map<
+          string,
+          Map<string, { x: number; y: number }[]>
+        >();
+        for (const frame of obj.frames) {
+          // pin 2 — `filter`, by NAME. Every same-named layer, not the first.
+          const matchingLayers = frame.layers.filter(
+            (l) => l.name === layer.name,
+          );
+          for (const matchingLayer of matchingLayers) {
+            const pixels = scan(matchingLayer.pixels, width, height);
+            if (pixels.length > 0) {
+              if (!affectedPixelsByFrame.has(frame.id)) {
+                affectedPixelsByFrame.set(frame.id, new Map());
+              }
+              affectedPixelsByFrame.get(frame.id)!.set(matchingLayer.id, pixels);
+            }
+          }
+        }
+        next = {
+          originalColor: color,
+          allFrames: true,
+          affectedPixels: [], // pin 1
+          affectedPixelsByFrame,
+        };
+      } else {
+        next = {
+          originalColor: color,
+          allFrames: false,
+          affectedPixels: scan(layer.pixels, width, height),
+        };
+      }
+    }
+
+    runInAction(() => {
+      this.ui.tool.setColorAdjustment(next);
+      // ⚠️ THE COUPLED WRITE, and it is pinned (W29b pin 4): starting an
+      // adjustment ALSO moves the colour picker to the colour being adjusted,
+      // with `trackHistory: false`. Without it the picker shows the previous
+      // colour while the user drags, and the first drag jumps.
+      this.ui.tool.setColor(color);
+    });
+  }
+
+  /**
+   * Drop any pending colour adjustment — W29d.
+   *
+   * A pass-through to `ToolUIStore`, which OWNS the field. It exists on this
+   * class so consumers have one lifecycle surface (`start…`/`clear…`) rather
+   * than reaching for the scan here and the clear two stores down, and so the
+   * `TimelineUIStore` callback that `zustandProjectHost.ts:150` implemented as
+   * `useEditorStore.setState({ colorAdjustment: null })` has a MobX target.
+   */
+  clearColorAdjustment(): void {
+    runInAction(() => this.ui.tool.clearColorAdjustment());
+  }
+
+  /**
+   * Set the AI service URL — W29d, and the seam `HeaderContainer` was blocked
+   * on.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THE NAIVE SWAP COMPILES AND SILENTLY STOPS THE URL PERSISTING
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * `SessionStore.setAiServiceUrl` assigns the observable and stops. The
+   * legacy `store/toolActions.ts:514` ran `updateProjectAndSave`, writing
+   * `project.uiState.aiServiceUrl` so the value survived a reload. Pointing
+   * `HeaderContainer` at the MobX setter would therefore type-check, look
+   * correct in the UI, and lose the value on the next load — and worse, be
+   * overwritten mid-session by the very next `syncPhaseA`, which mirrors
+   * `project.uiState.aiServiceUrl` into `session.aiServiceUrl` on EVERY
+   * Zustand change.
+   *
+   * ── Why this is ONE writer, not two (R6) ──────────────────────────────
+   *
+   * `aiServiceUrl` is a PHASE A field. Zustand's `project.uiState` is the
+   * SOURCE and `session.aiServiceUrl` is its MIRROR. This method writes the
+   * source — the only write that sticks — and lets the established mirror
+   * carry it into MobX. The `session.setAiServiceUrl` call below is an
+   * EAGER mirror update so the observer re-renders on this tick rather than
+   * on the bridge's next sync; the bridge overwrites it with the identical
+   * value moments later. It is not a competing writer: it can only ever
+   * assign what the source was just set to.
+   *
+   * ── Why it could not simply FLIP to Phase B in this wave ─────────────
+   *
+   * MEASURED: every MobX-side hydration point today is bridge-driven
+   * (`zustandBridge.ts:316` for this field, `:334` for the rest). Flipping
+   * would make `session.aiServiceUrl` authoritative with NO load-time
+   * hydration of its own — a loaded project's URL would never reach MobX at
+   * all. Building that path is task 38's, which deletes the bridge and
+   * replaces every one of those hydration points at once. The list move is
+   * therefore deliberately NOT made here; what this wave removes is the
+   * OTHER blocker, which was real and separate: `AutoSaveController`'s
+   * trigger did not observe `persistedUIVersion`, so nothing a MobX UI store
+   * wrote was ever saved. See that class's header.
+   */
+  setAiServiceUrl(url: string): void {
+    this.aiServiceUrlSink(url);
+    runInAction(() => this.session.setAiServiceUrl(url));
+  }
+
+  /* ── W29d: undo / redo ──────────────────────────────────────────────────
+   *
+   * ⚠️ NOT `this.history.undo()`. During the bridge era an undo is
+   * `reconcile()` -> `HistoryStore.undo()` -> `computeMirror()`: the Phase B
+   * `projectHistory`/`historyIndex` mirror has exactly ONE writer (R6, task
+   * 17), the glue in `store/index.ts`, and a consumer calling `HistoryStore`
+   * directly would undo the command and leave the mirror describing the
+   * pre-undo stack.
+   *
+   * So this delegates to that single writer through the published
+   * `historyControl` seam — the same technique `strokeControl`,
+   * `syncHistoryMirror` and `reconcileHistory` already use, and for the same
+   * reason. The point is that a migrated container gets undo WITHOUT
+   * importing `useEditorStore`, not that the glue has moved: it has not, and
+   * task 38 retires it along with the mirror, at which point these two
+   * methods become bare `HistoryStore` calls.
+   */
+
+  /** Undo one entry, keeping the bridge-era history mirror consistent. */
+  undo(): void {
+    this.historyOps.undo();
+  }
+
+  /** Redo one entry, keeping the bridge-era history mirror consistent. */
+  redo(): void {
+    this.historyOps.redo();
+  }
+
+  /**
+   * Pick a colour AND record it in the recent-colours trail — W29d.
+   *
+   * A COUPLED write, and the reason it needs a home on this class: it spans
+   * two stores that may not reach each other. `SessionStore` owns
+   * `colorHistory` (a cross-project buffer that must survive a project
+   * switch, R14) and `ToolUIStore` owns `selectedColor`. Neither imports the
+   * other, and duplicating the pair at each call site is what the migration
+   * exists to avoid — `CanvasContainer` dispatches it from three places.
+   *
+   * ⚠️ ORDER IS TRANSCRIBED FROM `toolActions.ts:111`: the history entry is
+   * added FIRST, then the colour is set. `SessionStore.addToColorHistory`
+   * already carries that action's exact de-duplicate-and-cap semantics (an
+   * existing colour moves to the front; a new one is prepended and the list
+   * trimmed to `MAX_COLOR_HISTORY`), so nothing is re-implemented here.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ IT MUST WRITE THE ZUSTAND SOURCE, AND THIS WAS MEASURED
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * BOTH fields are Zustand-sourced during the bridge era, by two different
+   * mechanisms: `colorHistory` is a `PHASE_A_FIELDS` member mirrored at
+   * `zustandBridge.ts:340`, and `selectedColor` is one of the ~30 fields the
+   * bridge re-hydrates wholesale from `project.uiState` at `:334` — on EVERY
+   * Zustand change, not only on load.
+   *
+   * MEASURED W29d with the bridge installed: a MobX-only
+   * `ui.tool.setColor(RED)` held RED, and after ONE unrelated Zustand change
+   * (`saveStatus`) it was back to black. `session.addToColorHistory` went
+   * 1 -> 0 the same way. A seam that wrote only MobX would therefore appear
+   * to work, pass a unit test that never touched Zustand, and revert in the
+   * real app on the next keystroke.
+   *
+   * So the sink writes the SOURCE, and the eager MobX writes below exist only
+   * so the observer re-renders on this tick; the bridge then re-asserts the
+   * identical values. One writer, not two — the same reasoning as
+   * {@link ApplicationStore.setAiServiceUrl}, which has the full note.
+   */
+  setColorAndAddToHistory(color: Color): void {
+    this.colorSink(color);
+    runInAction(() => {
+      this.session.addToColorHistory(color);
+      this.ui.tool.setColor(color);
+    });
   }
 
   /**

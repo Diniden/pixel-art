@@ -82,36 +82,40 @@
  * had — a behaviour change, not a refactor — so the small effect stays here.
  * Reported as a deliberate non-reuse.
  *
- * ── The action seam, as in `CanvasContainer` ──────────────────────────────
+ * ── W29d: STORE-FREE. The seven `actions.*` names are gone ───────────────
  *
- * Values are read off MobX directly (the R7 granularity win). ACTIONS go
- * through `useEditorStore.getState()`, whose names are all bridge DELEGATES
- * landing in MobX, because several assemble arguments that live in
- * `stores/bridge/zustandBridge.ts` (`pixelWriteOptions()`). Task 38 retires
- * these call sites with Zustand, in one place. `zustandBridge.ts` is owned by
- * task 34 this wave and is not touched.
+ * W29c left all seven on `useEditorStore.getState()` and named the blocker
+ * precisely: four of them needed something that existed ONLY as a closure
+ * inside `stores/bridge/zustandBridge.ts`, so calling `app.pixels.*` here
+ * meant re-deriving it — a SECOND implementation, which is the duplication
+ * the migration exists to remove. W29d built the missing homes instead of
+ * duplicating, and each name then had somewhere real to go:
  *
- * ── W29c RE-VERIFIED THIS AND LEFT IT ALONE ──────────────────────────────
+ *  - `setNormalPixels` / `setHeightPixels` — needed `pixelWriteOptions()`,
+ *    which turned out to be a ONE-LINE delegation to `app.selectionUI
+ *    .writeOptions`, an existing MobX computed. Passed directly now. It is
+ *    NOT optional: it carries the mask and `selectionBehavior` across the
+ *    one-directional boundary, since `PixelStore` may not read a UI store.
+ *  - `undo` — had no delegate at all, and `app.history.undo()` is NOT a
+ *    substitute: the bridge-era Phase B history mirror has exactly one writer
+ *    and a bare `HistoryStore` call leaves it stale. W29d published
+ *    `store/index.ts`'s existing glue as `historyControl` (the same technique
+ *    `strokeControl` already used) and `ApplicationStore.undo` routes through
+ *    it. Task 38 retires the mirror and the seam together.
+ *  - `getCurrentObject` — `app.currentObject`, one of the six cross-store
+ *    computeds since task 23. It never needed a delegate.
+ *  - `setHeightBrushValue`, `selectFrame`, `advanceVariantFrames` — clean
+ *    pass-throughs to `LightingUIStore` / `TimelineUIStore` all along. W29c
+ *    declined to lift only these because the import site would not have
+ *    closed; now it does.
  *
- * Seven `actions.*` names are dispatched here, and each is blocked for a
- * concrete, measured reason:
- *
- *  - `setNormalPixels` / `setHeightPixels` — bridge delegates that pass
- *    `pixelWriteOptions()`, a helper closing over `app` inside
- *    `zustandBridge.ts`. Calling `app.pixels.*` here means re-deriving it.
- *  - `undo` and `getCurrentObject` — NOT delegated at all. They have no entry
- *    in the bridge's `setState` blocks and still run the legacy Zustand
- *    implementations, so there is nothing on MobX to call yet.
- *  - `setHeightBrushValue`, `selectFrame`, `advanceVariantFrames` are clean
- *    pass-throughs, but lifting only those would leave the container reading
- *    `useEditorStore.getState()` anyway for the four above — the import site
- *    would NOT close, which is the metric this migration is measured by. They
- *    retire together with the bridge in task 38.
+ * Values are still read off MobX directly — that is the R7 granularity win
+ * and it is unchanged.
  */
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { observer } from "mobx-react-lite";
+import { runInAction } from "mobx";
 import { useStores } from "../stores/context";
-import { useEditorStore } from "../store";
 import type { Point } from "../types";
 // The four fallbacks below are the SAME constants `LightingCanvas.tsx:64-89`
 // inlined by hand (`{x:0,y:0,z:255}`, `{x:-64,y:-64,z:180}`,
@@ -208,8 +212,7 @@ export const LightingCanvasContainer = observer(
     // mutation; the 300k-cell tree is never observed.
     const pixelVersion = app.domain.pixelVersion;
 
-    /* ── actions, through the bridge seam (see the module header) ────────── */
-    const actions = useEditorStore.getState();
+    /* ── actions, straight onto MobX (W29d — see the module header) ─────── */
 
     /* ── geometry ────────────────────────────────────────────────────────── */
     const objWidth = obj?.gridSize.width ?? 32;
@@ -290,21 +293,28 @@ export const LightingCanvasContainer = observer(
     /* ── painting (concern c) ────────────────────────────────────────────── */
     const paintNormals = useCallback(
       (cells: ReadonlyArray<Point>) => {
-        actions.setNormalPixels(
+        // ⚠️ `app.selectionUI.writeOptions` is NOT optional here. It is what
+        // carries the selection mask and `selectionBehavior` down to
+        // `PixelStore`, which is the ONE-DIRECTIONAL boundary: the domain
+        // store never reads a UI store, so the caller assembles the bundle.
+        // The bridge delegate this replaced passed exactly the same computed.
+        app.pixels.setNormalPixels(
           cells.map((p) => ({ x: p.x, y: p.y, normal: selectedNormal })),
+          app.selectionUI.writeOptions,
         );
       },
-      [actions, selectedNormal],
+      [app, selectedNormal],
     );
 
     const paintHeights = useCallback(
       (cells: ReadonlyArray<Point>, erase: boolean) => {
         const value = erase ? 0 : heightBrushValue;
-        actions.setHeightPixels(
+        app.pixels.setHeightPixels(
           cells.map((p) => ({ x: p.x, y: p.y, height: value })),
+          app.selectionUI.writeOptions,
         );
       },
-      [actions, heightBrushValue],
+      [app, heightBrushValue],
     );
 
     const {
@@ -512,7 +522,8 @@ export const LightingCanvasContainer = observer(
         if (editMode === "height" && e.altKey) {
           const editLayer = getEditLayer();
           const h = editLayer?.pixels[coords.y]?.[coords.x]?.height;
-          if (typeof h === "number") actions.setHeightBrushValue(h);
+          if (typeof h === "number")
+            runInAction(() => app.lightingUI.setHeightBrushValue(h));
           return;
         }
 
@@ -527,7 +538,7 @@ export const LightingCanvasContainer = observer(
         getPixelCoordsFromClient,
         editMode,
         getEditLayer,
-        actions,
+        app,
         resolveBrushCells,
         beginStroke,
       ],
@@ -625,12 +636,15 @@ export const LightingCanvasContainer = observer(
           return;
         if ((e.metaKey || e.ctrlKey) && e.key === "z") {
           e.preventDefault();
-          actions.undo();
+          // ⚠️ `app.undo()`, NOT `app.history.undo()` — the bridge-era Phase B
+          // history mirror has one writer and a bare `HistoryStore` call would
+          // leave it stale. See `ApplicationStore.undo`.
+          app.undo();
           return;
         }
         if (e.key === "." || e.key === ",") {
           e.preventDefault();
-          const currentObj = actions.getCurrentObject();
+          const currentObj = app.currentObject;
           if (!currentObj || currentObj.frames.length <= 1) return;
           const currentFrameId = app.timelineUI.selectedFrameId;
           const currentIndex = currentObj.frames.findIndex(
@@ -643,13 +657,15 @@ export const LightingCanvasContainer = observer(
           const newIndex = (currentIndex + delta + length) % length;
           const nextFrame = currentObj.frames[newIndex];
           if (!nextFrame) return;
-          actions.selectFrame(nextFrame.id, false);
-          actions.advanceVariantFrames(delta);
+          runInAction(() => {
+            app.timelineUI.selectFrame(nextFrame.id, false);
+            app.timelineUI.advanceVariantFrames(delta);
+          });
         }
       };
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [actions, app.timelineUI.selectedFrameId]);
+    }, [app, app.timelineUI.selectedFrameId]);
 
     /* ── the panel, and its one imperative coupling ──────────────────────── */
     //

@@ -68,7 +68,31 @@ import { useEditorStore } from "../store";
 export const ColorPickerContainer = observer(function ColorPickerContainer() {
   const { domain, session, ui } = useStores();
 
-  // Still-Zustand half of the hybrid — see the note above.
+  // ⚠️ STILL ZUSTAND. W29d built the two seams this needed —
+  // `PixelStore.resolveTargetFor(frameId, layerId)` and the
+  // transaction-wrapped `PixelStore.adjustColorAcross`, which produces ONE
+  // history entry across N layers — and they are tested. The blocker that
+  // remains is NARROWER and is about the VARIANT path:
+  //
+  //   `adjustColorAcross` deliberately refuses variant layers. The legacy
+  //   variant all-frames path keys its Map by the SYNTHETIC string
+  //   `variant-frame-<index>`, which matches no `frame.id` anywhere in the
+  //   tree, and replays ONE flat `affectedPixels` list into every variant
+  //   frame — a different addressing model, not a special case of the
+  //   per-frame Map.
+  //
+  // ⚠️ AND IT IS UNPINNED. `store/__tests__/colorAdjustment.test.ts` has 34
+  // pins and NOT ONE of them exercises a variant. Routing `onAdjustColor` at
+  // MobX today would move unpinned behaviour on the owner's real artwork,
+  // which §10 rule 10 forbids. The variant path needs characterising FIRST.
+  //
+  // ⚠️ SEPARATELY — a live pre-existing defect, see the header note.
+  //    `onSetColor` below calls `ui.tool.setColor` directly, and W29d MEASURED
+  //    that a MobX-only `selectedColor` write is reverted by the next
+  //    unrelated Zustand change (`zustandBridge.ts:334` re-hydrates the ~30 UI
+  //    fields from `project.uiState` on EVERY change). Use
+  //    `app.setColorAndAddToHistory` — which writes the source — when this
+  //    container is next touched.
   const colorAdjustment = useEditorStore((s) => s.colorAdjustment);
   const adjustColor = useEditorStore((s) => s.adjustColor);
   const saveCurrentStateToHistory = useEditorStore(

@@ -8,7 +8,7 @@
  * and the end-to-end zero-POST gate by `autoSaveGate.test.ts`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { runInAction } from "mobx";
+import { observable, runInAction } from "mobx";
 
 import { ApiError } from "@/api";
 import { DomainStore, type ProjectHost } from "@/stores/domain/DomainStore";
@@ -201,6 +201,109 @@ describe("the version counters", () => {
     rig.domain.bumpPixelVersion();
     expect(rig.domain.domainVersion).toBe(1);
     expect(rig.domain.pixelVersion).toBe(2);
+  });
+});
+
+/* ── the THIRD counter (W29d) ────────────────────────────────────────────── */
+
+/**
+ * `persistedUIVersion` — the counter task 16 said would "join with the UIStore
+ * task", which task 24 BUILT but never wired into the trigger tuple.
+ *
+ * ⚠️ MEASURED W29d, before the fix: a UI-only write bumped
+ * `UIStore.persistedUIVersion` from 1 to 2 and produced **zero** saves. Nothing
+ * caught it because every UI setting ALSO went through a legacy Zustand setter
+ * that called `updateProjectAndSave` — so the counter was dead weight and the
+ * first setting whose ownership flipped to MobX would have silently stopped
+ * persisting. `setAiServiceUrl` was blocked squarely on this.
+ *
+ * The source is OPTIONAL, so both shapes are pinned here: without it the
+ * trigger keeps its exact task-16 behaviour, and with it a UI-only change
+ * saves.
+ */
+describe("persistedUIVersion joins the trigger (W29d)", () => {
+  /** A minimal stand-in for `UIStore`'s counter. */
+  function uiSource(): { persistedUIVersion: number } {
+    return observable({ persistedUIVersion: 0 });
+  }
+
+  function rigWithUI(ui: { persistedUIVersion: number }) {
+    let current: Project | null = tinyProject();
+    const host: ProjectHost = {
+      getProject: () => current,
+      installProject: (p) => {
+        current = p;
+      },
+      replaceProject: (p) => {
+        current = p;
+      },
+      snapshotToHistory: () => {},
+    };
+    const session = new SessionStore();
+    const domain = new DomainStore({ session, host });
+    runInAction(() => domain.adoptTree(current as Project));
+    const save = vi.fn(async () => ({ success: true, backupCreated: false }));
+    const controller = new AutoSaveController(
+      domain,
+      session,
+      null,
+      { save },
+      ui,
+    );
+    runInAction(() => {
+      domain.projectName = "unit";
+      domain.loadGeneration += 1;
+      domain.loadState = "loaded";
+    });
+    return { controller, save, dispose: () => controller.dispose() };
+  }
+
+  it("a UI-ONLY change schedules a save when the source is injected", async () => {
+    const ui = uiSource();
+    const r = rigWithUI(ui);
+    expect(r.save).not.toHaveBeenCalled();
+
+    // No domain edit, no pixel edit — only the UI counter moves.
+    runInAction(() => {
+      ui.persistedUIVersion += 1;
+    });
+    await vi.advanceTimersByTimeAsync(AutoSaveController.DEBOUNCE_MS);
+    expect(r.save).toHaveBeenCalledTimes(1);
+    r.dispose();
+  });
+
+  it("coalesces rapid UI changes into ONE save, like the other two counters", async () => {
+    const ui = uiSource();
+    const r = rigWithUI(ui);
+    for (let i = 0; i < 10; i++) {
+      runInAction(() => {
+        ui.persistedUIVersion += 1;
+      });
+    }
+    await vi.advanceTimersByTimeAsync(AutoSaveController.DEBOUNCE_MS);
+    expect(r.save).toHaveBeenCalledTimes(1);
+    r.dispose();
+  });
+
+  it("does not re-save when nothing has moved since the last save", async () => {
+    const ui = uiSource();
+    const r = rigWithUI(ui);
+    runInAction(() => {
+      ui.persistedUIVersion += 1;
+    });
+    await vi.advanceTimersByTimeAsync(AutoSaveController.DEBOUNCE_MS);
+    expect(r.save).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(r.save).toHaveBeenCalledTimes(1);
+    r.dispose();
+  });
+
+  it("WITHOUT a source the trigger is unchanged — a domain edit still saves", async () => {
+    rig = makeRig();
+    rig.openGate();
+    rig.edit();
+    await vi.advanceTimersByTimeAsync(AutoSaveController.DEBOUNCE_MS);
+    expect(rig.save).toHaveBeenCalledTimes(1);
   });
 });
 

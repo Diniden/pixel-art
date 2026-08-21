@@ -90,6 +90,29 @@ export let syncHistoryMirror: () => void = () => {};
  */
 export let reconcileHistory: () => void = () => {};
 
+/**
+ * The undo/redo seam, published for W29d — the same technique
+ * {@link strokeControl} uses and for the same reason.
+ *
+ * `HistoryStore.undo()`/`redo()` are NOT the whole operation during the
+ * bridge era: each must be wrapped in `reconcile()` … `computeMirror()` so
+ * the Phase B `projectHistory`/`historyIndex` mirror stays consistent, and
+ * that glue has exactly ONE writer (R6, task 17) — this module. A consumer
+ * calling `app.history.undo()` directly would undo the command and leave the
+ * mirror describing the pre-undo stack.
+ *
+ * Assigned during `create()` below and retired with the Zustand store
+ * (task 38), at which point the mirror goes with it and `HistoryStore`'s own
+ * methods become the whole operation.
+ */
+export let historyControl: {
+  undo(): void;
+  redo(): void;
+} = {
+  undo: () => {},
+  redo: () => {},
+};
+
 export const useEditorStore = create<EditorState>((set, get) => {
   // Task 16: auto-save no longer lives here. The single commit path below
   // only WRITES the project; the bridge bumps `DomainStore.domainVersion` on
@@ -438,7 +461,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
   /* ── undo / redo delegates ─────────────────────────────────────────────── */
 
-  const historyControl = {
+  const historyOps = {
     undo: () => {
       reconcile();
       runInAction(() => history.undo());
@@ -450,10 +473,13 @@ export const useEditorStore = create<EditorState>((set, get) => {
       set(computeMirror());
     },
   };
+  // W29d: published so a MIGRATED consumer can undo without importing
+  // `useEditorStore`. Same seam, same single writer — see the declaration.
+  historyControl = historyOps;
 
   // Create all action modules
   const helpers = createHelpers(get);
-  const projectActions = createProjectActions(historyControl);
+  const projectActions = createProjectActions(historyOps);
   const objectActions = createObjectActions(get, updateProjectAndSave);
   // Task 25: these four modules are throwing stubs; the real implementations
   // are FrameStore / LayerStore / TimelineUIStore, installed as delegates by

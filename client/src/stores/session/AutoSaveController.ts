@@ -11,7 +11,17 @@
  *                     `pixelVersion`) — never the data. Observing the tree
  *                     would re-evaluate a 300,249-cell structure per
  *                     keystroke; counters make the trigger O(1).
- *                     (`persistedUIVersion` joins with the UIStore task.)
+ *                     ⚠️ W29d JOINED THE THIRD COUNTER. Task 16 left a note
+ *                     saying "`persistedUIVersion` joins with the UIStore
+ *                     task"; task 24 built the counter but never wired it
+ *                     here, and nothing measured the gap. MEASURED W29d: a
+ *                     UI-only write bumped `persistedUIVersion` 1 -> 2 and
+ *                     produced ZERO `POST /api/project`. Every UI setting
+ *                     persisted only because the LEGACY Zustand setters still
+ *                     ran `updateProjectAndSave` beside them — so the moment a
+ *                     setting's ownership flips to MobX it silently stops
+ *                     persisting. That is exactly the trap `setAiServiceUrl`
+ *                     was stuck behind. See {@link PersistedUISource}.
  *  Debounce           500 ms, trailing edge, RESET on each change, coalesce
  *                     to the latest — identical to the old `DEBOUNCE_MS`.
  *                     ⚠️ Spec correction: the spec's `{ delay: 500 }` reaction
@@ -51,6 +61,25 @@ export interface ReplayGuard {
   readonly isReplaying: boolean;
 }
 
+/**
+ * The slice of `UIStore` the trigger consults — W29d.
+ *
+ * A COUNTER, never the fields. `UIStore` bumps it from a reaction over
+ * `persistedSignature`, a structural projection built from
+ * `toPersistedUIState()` itself, so a field added to that builder cannot be
+ * forgotten here. Observing the counter keeps this trigger O(1) for the same
+ * reason `domainVersion`/`pixelVersion` do.
+ *
+ * ⚠️ Optional, and deliberately so. `AutoSaveController` is constructed by
+ * `ApplicationStore` AFTER `UIStore`, but the task-16 suites build one with
+ * only a domain and a session; a required dependency would rewrite tests that
+ * are pinning save behaviour, not UI behaviour. Absent, the trigger keeps its
+ * task-16 two-counter shape exactly.
+ */
+export interface PersistedUISource {
+  readonly persistedUIVersion: number;
+}
+
 /** Injectable timer source so tests own time. */
 export interface Clock {
   setTimeout(fn: () => void, ms: number): ReturnType<typeof setTimeout>;
@@ -68,9 +97,20 @@ export interface AutoSaveControllerOptions {
   clock?: Clock;
 }
 
-type Versions = readonly [domain: number, pixel: number];
-/** `[loadGeneration, domainVersion, pixelVersion]` when the gate is open. */
-type Trigger = readonly [generation: number, domain: number, pixel: number];
+/** `0` stands in for "no UI source injected" — see {@link PersistedUISource}. */
+const NO_UI_VERSION = 0;
+
+type Versions = readonly [domain: number, pixel: number, ui: number];
+/**
+ * `[loadGeneration, domainVersion, pixelVersion, persistedUIVersion]` when the
+ * gate is open. The fourth member joined in W29d — see the header.
+ */
+type Trigger = readonly [
+  generation: number,
+  domain: number,
+  pixel: number,
+  ui: number,
+];
 
 export class AutoSaveController {
   static readonly DEBOUNCE_MS = 500;
@@ -81,6 +121,8 @@ export class AutoSaveController {
   private readonly domain: DomainStore;
   private readonly session: SessionStore;
   private readonly history: ReplayGuard | null;
+  /** W29d. `null` keeps the task-16 two-counter trigger exactly. */
+  private readonly persistedUI: PersistedUISource | null;
   private readonly save: (
     project: CompactProject,
     name?: string,
@@ -103,10 +145,12 @@ export class AutoSaveController {
     session: SessionStore,
     history: ReplayGuard | null = null,
     options: AutoSaveControllerOptions = {},
+    persistedUI: PersistedUISource | null = null,
   ) {
     this.domain = domain;
     this.session = session;
     this.history = history;
+    this.persistedUI = persistedUI;
     this.save = options.save ?? ((project, name) => projectApi.save(project, name));
     this.clock = options.clock ?? realClock;
     // The construction-time counters are the clean baseline: a load that
@@ -116,7 +160,11 @@ export class AutoSaveController {
       () =>
         [
           domain.loadGeneration,
-          [domain.domainVersion, domain.pixelVersion] as const,
+          [
+            domain.domainVersion,
+            domain.pixelVersion,
+            persistedUI?.persistedUIVersion ?? NO_UI_VERSION,
+          ] as const,
         ] as const,
     );
 
@@ -129,18 +177,22 @@ export class AutoSaveController {
           this.clearPendingDebounce();
           return;
         }
-        const [generation, domainV, pixelV] = trigger;
+        const [generation, domainV, pixelV, uiV] = trigger;
         if (generation !== this.lastGeneration) {
           // A FRESH project was installed (init/load/create/switch/delete):
           // adopt its counters as the clean baseline. Opening the gate is not
           // an edit, and a pending pre-switch edit dies here exactly as it
           // died under the old `cancelPendingSave()`.
           this.lastGeneration = generation;
-          this.lastSaved = [domainV, pixelV];
+          this.lastSaved = [domainV, pixelV, uiV];
           this.clearPendingDebounce();
           return;
         }
-        if (domainV === this.lastSaved[0] && pixelV === this.lastSaved[1]) {
+        if (
+          domainV === this.lastSaved[0] &&
+          pixelV === this.lastSaved[1] &&
+          uiV === this.lastSaved[2]
+        ) {
           // Gate re-opened (suspend lifted / replay ended) with nothing new.
           return;
         }
@@ -179,6 +231,10 @@ export class AutoSaveController {
       this.domain.loadGeneration,
       this.domain.domainVersion,
       this.domain.pixelVersion,
+      // W29d. `?? NO_UI_VERSION` rather than a branch: with no source injected
+      // the member is a CONSTANT, so it can never move the trigger and the
+      // task-16 behaviour is preserved bit for bit.
+      this.persistedUI?.persistedUIVersion ?? NO_UI_VERSION,
     ] as const;
   }
 
@@ -213,11 +269,12 @@ export class AutoSaveController {
       const attempt = runInAction(() => {
         const trigger = this.saveTrigger;
         if (trigger === null) return null; // late gate (retry timers)
-        const [generation, domainV, pixelV] = trigger;
+        const [generation, domainV, pixelV, uiV] = trigger;
         if (
           generation === this.lastGeneration &&
           domainV === this.lastSaved[0] &&
-          pixelV === this.lastSaved[1]
+          pixelV === this.lastSaved[1] &&
+          uiV === this.lastSaved[2]
         ) {
           // Nothing unsaved (e.g. a fresh install was adopted mid-flight).
           return null;
@@ -227,7 +284,7 @@ export class AutoSaveController {
         return {
           compact,
           generation,
-          versions: [domainV, pixelV] as Versions,
+          versions: [domainV, pixelV, uiV] as Versions,
           name: this.domain.projectName || undefined,
         };
       });

@@ -208,6 +208,34 @@ export class SelectionUIStore {
     };
   }
 
+  /**
+   * The options `moveSelectedPixels` / `deleteSelectionPixels` need — W29d.
+   *
+   * Identical to {@link writeOptions} except that `behavior` is DELIBERATELY
+   * omitted. `selectionBehavior` does not gate these two: the legacy actions
+   * (`selectionActions.ts`) never consulted it in either, and including it
+   * would make a `"editMask"` behaviour silently filter the very pixels the
+   * action exists to move.
+   *
+   * Moved here from `zustandBridge.ts:1007`'s `selectionWriteOptions()`
+   * closure, which was its only home. It belongs on this store for the same
+   * reason `writeOptions` does: it is a projection of THIS store's selection
+   * into the shape `PixelStore` accepts, and the one-directional boundary
+   * requires the UI side to assemble it and pass it DOWN.
+   */
+  get maskWriteOptions(): {
+    mask?: ReadonlySet<number>;
+    maskSize?: SelectionDims;
+  } {
+    const selection = this.selection;
+    return {
+      mask: selection?.mask,
+      maskSize: selection
+        ? { width: selection.width, height: selection.height }
+        : undefined,
+    };
+  }
+
   /* ── the single write path ─────────────────────────────────────────────── */
 
   /**

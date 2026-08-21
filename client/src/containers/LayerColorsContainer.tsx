@@ -56,7 +56,16 @@ export const LayerColorsContainer = observer(function LayerColorsContainer() {
   const app = useStores();
   const { domain, ui } = app;
 
-  // Still-Zustand half — the colour-adjustment lifecycle.
+  // ⚠️ STILL ZUSTAND, and W29d BUILT the MobX replacements but could not
+  // switch this over. `ApplicationStore.startColorAdjustment` /
+  // `clearColorAdjustment` exist and are tested (42 seam tests), but the LIVE
+  // `adjustColor` — dispatched from `ColorPickerContainer`, which cannot move
+  // either — reads ZUSTAND's `colorAdjustment`. `colorAdjustment` is in
+  // NEITHER `PHASE_A_FIELDS` nor `PHASE_B_FIELDS`, so the two copies are
+  // independent and writing only MobX's would leave `adjustColor` with
+  // nothing to replay: the mode would open and then do nothing.
+  // The two containers must move TOGETHER — see `ColorPickerContainer`'s
+  // header for the blocker that stops the pair.
   const colorAdjustment = useEditorStore((s) => s.colorAdjustment);
   const startColorAdjustment = useEditorStore((s) => s.startColorAdjustment);
   const clearColorAdjustment = useEditorStore((s) => s.clearColorAdjustment);
