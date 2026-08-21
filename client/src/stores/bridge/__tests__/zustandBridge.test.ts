@@ -49,21 +49,24 @@ describe("the R6 ledger", () => {
     //       is throwing stubs behind bridge delegates and `TimelineUIStore`
     //       is now its single writer. FLIPPED.
     //
-    //   the three ids — `store/objectActions.ts:65-67` (`selectObject`) is
-    //       STILL a live Zustand implementation writing all three, and it is
-    //       outside task 28's `Touches`. Flipping would give each id two
-    //       writers, which R6 forbids. NOT flipped — for the fifth
-    //       consecutive wave, and now for exactly ONE remaining reason.
+    //   the three ids — blocked through task 28 by
+    //       `store/objectActions.ts:65-67` (`selectObject`), the last live
+    //       Zustand implementation writing all three.
     //
-    // ⚠️ `selectObject` is the last blocker. No other file under `src/store`
-    // writes any of the three.
-    expect([...PHASE_A_FIELDS]).toEqual([
-      "aiServiceUrl",
-      "colorHistory",
-      "selectedObjectId",
-      "selectedFrameId",
-      "selectedLayerId",
-    ]);
+    // ── W29f (task 38): THE IDS ARE GONE FROM THIS LIST ────────────────────
+    //
+    // W29f ported `selectObject` to `TimelineUIStore.selectObject`, installed
+    // the bridge delegate, rewired `ObjectLibraryContainer` and flipped the
+    // three ids A→B — all in ONE change, which is what R6 requires. With the
+    // legacy body reduced to a throwing stub, `TimelineUIStore` is the single
+    // writer of all three.
+    //
+    // What remains in Phase A is the pair whose consumers W29f could NOT
+    // safely migrate — see the task 38 report:
+    //   `aiServiceUrl`  — persisted via `zustandProjectHost.publishAiServiceUrl`
+    //   `colorHistory`  — written by `CanvasContainer`'s remaining Phase A
+    //                     actions (`setColorAndAddToHistory`, `addToColorHistory`)
+    expect([...PHASE_A_FIELDS]).toEqual(["aiServiceUrl", "colorHistory"]);
   });
 
   it("PHASE_B holds the lifecycle slice, the history mirror, and the domain TREE (task 23)", () => {
@@ -134,6 +137,16 @@ describe("the R6 ledger", () => {
       // KEY-BY-KEY equality — it is `observableRef`, so every write is a new
       // record and a reference compare would fire on every no-op rebuild.
       "variantFrameIndices",
+      // ── W29f (task 38) ─────────────────────────────────────────────────
+      // The three selection ids, flipped A→B in the same change that ported
+      // `store/objectActions.ts`'s `selectObject` — their last writer outside
+      // `TimelineUIStore` — onto the store and installed its bridge delegate.
+      // Mirrored by `disposeSelectionB`, a fifth reaction, because like the
+      // task-25 trio and the task-27 nine they live INSIDE `project.uiState`
+      // and cannot ride the top-level scalar snapshot.
+      "selectedObjectId",
+      "selectedFrameId",
+      "selectedLayerId",
     ]);
   });
 

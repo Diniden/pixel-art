@@ -39,14 +39,19 @@
  *
  *   objects / variants / pixelVersion  → `DomainStore`
  *   variantFrameIndices                → `TimelineUIStore` (Phase B)
- *   selectedObjectId / selectedFrameId → `TimelineUIStore` (still Phase A)
+ *   selectedObjectId / selectedFrameId → `TimelineUIStore` (Phase B, W29f)
  *   objectLibraryViewMode + setter     → `TimelineUIStore`
  *   6 object CRUD actions              → `ObjectStore` (task 23)
+ *   selectObject                       → `TimelineUIStore` (W29f, task 38)
  *
- * ⚠️ `selectObject` is still routed through the legacy Zustand action. It is
- * the last writer of the three `uiState` selection ids and lives in
- * `store/objectActions.ts:65-67`, outside this task's `Touches` — see the
- * Phase A note in `zustandBridge.ts` for why the ids cannot flip A→B here.
+ * ── W29f (task 38): the last legacy seam in this file is CLOSED ───────────
+ *
+ * `selectObject` used to come from `useEditorStore`. It was the last writer
+ * of the three `uiState` selection ids outside `TimelineUIStore`, which is
+ * why the ids sat in Phase A for five waves. W29f ported the action verbatim
+ * to `TimelineUIStore.selectObject`, flipped the three ids A→B and rewired
+ * this call site — all in one change, as R6 requires: the store becomes the
+ * single writer in the same commit the field changes direction.
  *
  * `observer()` lives here and only here (ESLint, task 05).
  */
@@ -57,14 +62,11 @@ import {
   type ObjectRowModel,
 } from "../ui/components/ObjectLibrary/ObjectLibrary";
 import { makeObjectThumbnailDraw } from "./hooks/objectThumbnailDraw";
-import { useEditorStore } from "../store";
 import { useStores } from "../stores/context";
 
 export const ObjectLibraryContainer = observer(
   function ObjectLibraryContainer() {
     const { domain, objects, timelineUI } = useStores();
-    // See the header: the last legacy seam, and deliberately so.
-    const selectObject = useEditorStore((s) => s.selectObject);
 
     const allObjects = domain.objects;
     const variants = domain.variants;
@@ -115,7 +117,7 @@ export const ObjectLibraryContainer = observer(
         onResizeObject={(id, width, height, anchor) =>
           objects.resizeObject(id, width, height, anchor)
         }
-        onSelectObject={(id) => selectObject(id)}
+        onSelectObject={(id) => timelineUI.selectObject(id)}
         onDuplicateObject={(id) => objects.duplicateObject(id)}
         onSetViewMode={(mode) => timelineUI.setObjectLibraryViewMode(mode)}
       />

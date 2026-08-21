@@ -164,9 +164,6 @@ export const PHASE_A_FIELDS = [
   // `TimelineUIStore`'s own selection writes go to ZUSTAND (through
   // `createZustandTimelineContext`) and are read straight back by
   // `syncPhaseA` — a round trip, not a second writer.
-  "selectedObjectId", //   project.uiState.selectedObjectId  → timelineUI.selectedObjectId
-  "selectedFrameId", //    project.uiState.selectedFrameId   → timelineUI.selectedFrameId
-  "selectedLayerId", //    project.uiState.selectedLayerId   → timelineUI.selectedLayerId
 ] as const;
 
 /* ── Phase B: MobX → Zustand. Fields whose ownership HAS flipped. ────────── */
@@ -295,6 +292,25 @@ export const PHASE_B_FIELDS = [
   // `observableRef` means every write is a new record, so a reference compare
   // would fire on every no-op rebuild.
   "variantFrameIndices", // timelineUI.variantFrameIndices → uiState.variantFrameIndices
+  // ── W29f (task 38): THE THREE SELECTION IDS FLIP A→B (R6) ──────────────
+  //
+  // The flip five waves deferred. `store/objectActions.ts`'s `selectObject`
+  // was the last writer of these three outside `TimelineUIStore`; W29f ported
+  // it to `TimelineUIStore.selectObject` and installed a bridge delegate in
+  // THIS SAME CHANGE, which is what makes the store the single writer and the
+  // flip legal. Every other writer already routed through it: `selectFrame`,
+  // `selectLayer`, `selectVariantFrame` and `VariantStore`'s injected
+  // `selectLayer` callback are all its own actions.
+  //
+  // ⚠️ Mirrored by `disposeSelectionB` below, not by the scalar snapshot —
+  // like the task-25 trio, the task-27 nine and `variantFrameIndices`, these
+  // live INSIDE `project.uiState`. Compared field-by-field.
+  //
+  // ⚠️ `syncPhaseA` no longer adopts them; `adoptSelectionIds` does, only
+  // when Zustand's copy DIFFERS from what this bridge last published.
+  "selectedObjectId", //   timelineUI.selectedObjectId → uiState.selectedObjectId
+  "selectedFrameId", //    timelineUI.selectedFrameId  → uiState.selectedFrameId
+  "selectedLayerId", //    timelineUI.selectedLayerId  → uiState.selectedLayerId
 ] as const;
 
 /**
@@ -369,21 +385,19 @@ function syncPhaseA(
     // make Zustand a second writer (R6) and would clobber a fresh copy with
     // the stale mirror on the very next unrelated Zustand change.
     app.session.colorHistory = s.colorHistory;
-    // Task 23: the selection ids the cross-store computeds depend on.
+    // ⚠️ W29f (task 38): THE THREE SELECTION IDS ARE NO LONGER ADOPTED HERE.
     //
-    // ⚠️ Task 28: `variantFrameIndices` is NO LONGER adopted here. It flipped
-    // to Phase B, so MobX owns it and re-reading Zustand's copy on every
-    // store change would make Zustand a second writer — it would clobber a
-    // fresh variant-frame selection with the stale mirror on the very next
-    // tick, exactly the failure the lighting fields hit in W19. Its external
-    // writes (a project LOAD installs a whole new `uiState`) are handled by
-    // `adoptVariantFrameIndices` below, on the same echo-check seam.
-    const uiState = s.project?.uiState;
-    app.timelineUI.adopt({
-      selectedObjectId: uiState?.selectedObjectId ?? null,
-      selectedFrameId: uiState?.selectedFrameId ?? null,
-      selectedLayerId: uiState?.selectedLayerId ?? null,
-    });
+    // They flipped A→B in the same change that migrated `selectObject` (the
+    // last writer outside `TimelineUIStore`), so MobX owns them now and this
+    // unconditional re-read would be exactly the second writer R6 forbids —
+    // the identical failure `variantFrameIndices` was pulled out of this
+    // block for in task 28, and the ~30 UI fields in W29e. A fresh
+    // `selectFrame` would survive until the next unrelated Zustand change
+    // (a `saveStatus` flip is three per save) and then revert to the stale
+    // mirror.
+    //
+    // External writes — a project LOAD installs a whole new `uiState` — are
+    // adopted by `adoptSelectionIds` below, on the same echo-check seam.
   });
 }
 
@@ -511,6 +525,39 @@ function lightingEquals(
     a.heightBrushValue === b.heightBrushValue &&
     a.normalBrushShape === b.normalBrushShape
   );
+}
+
+/* ══ W29f (task 38): the selection-ids Phase B helper ═════════════════════ */
+
+/** The three ids `TimelineUIStore` owns after the W29f flip. */
+interface SelectionIds {
+  selectedObjectId: string | null;
+  selectedFrameId: string | null;
+  selectedLayerId: string | null;
+}
+
+/**
+ * Field-by-field equality for the three selection ids.
+ *
+ * Three primitives, so this is written out rather than reaching for
+ * `compareStructural` — the same reasoning as `variantIndicesEqual`: a deep
+ * comparator would be safe on this shape but the habit is what bit W17/W18.
+ */
+function selectionIdsEqual(a: SelectionIds, b: SelectionIds): boolean {
+  return (
+    a.selectedObjectId === b.selectedObjectId &&
+    a.selectedFrameId === b.selectedFrameId &&
+    a.selectedLayerId === b.selectedLayerId
+  );
+}
+
+/** The three ids as MobX currently holds them. */
+function selectionIdsSnapshot(app: ApplicationStore): SelectionIds {
+  return {
+    selectedObjectId: app.timelineUI.selectedObjectId,
+    selectedFrameId: app.timelineUI.selectedFrameId,
+    selectedLayerId: app.timelineUI.selectedLayerId,
+  };
 }
 
 /* ══ Task 28: the `variantFrameIndices` Phase B helper ════════════════════ */
@@ -794,6 +841,59 @@ export function installBridge(app: ApplicationStore): () => void {
   };
   adoptVariantFrameIndices(useEditorStore.getState());
 
+  /* ── W29f (task 38): the PHASE B SELECTION-IDS ADOPTION seam (R6) ───────
+   *
+   * The mirror image of `adoptVariantFrameIndices`, for the three ids that
+   * flipped A→B in this change. `syncPhaseA` used to adopt them
+   * unconditionally on every Zustand change; now that MobX owns them that
+   * would be a second writer, so they are PULLED only when Zustand's copy
+   * differs from what this bridge last published.
+   *
+   * What still writes them externally: a project LOAD (`installProject` puts
+   * a whole new `uiState` into Zustand, carrying the ids the file was saved
+   * with), the task-08 harness's `load()`, and `zustandProjectHost`. Those
+   * differ from the mirror and are adopted. The reaction's own echo does not
+   * and is ignored.
+   *
+   * ⚠️ NOT keyed on `project` identity — W19 measured that every pixel edit
+   * publishes a new `project`, so an identity-keyed adoption would revert the
+   * selection on every stroke.
+   */
+  let mirroredSelectionIds = selectionIdsSnapshot(app);
+  const adoptSelectionIds = (s: EditorState): void => {
+    // ⚠️ A NULL project CLEARS the ids — it does NOT early-return.
+    //
+    // This is the one place `adoptSelectionIds` deliberately differs from
+    // `adoptVariantFrameIndices`, and it was found by a failing pin rather
+    // than reasoned in: `selection.test.ts`'s "falls back to a hard-coded
+    // 32x32 when nothing resolves" went red on the zustand row.
+    //
+    // The mechanism: the harness's `reset()` sets `project: null`, but the
+    // tree-adoption seam below only runs `adoptTree` `if (s.project)`, so
+    // `domain.objects` KEEPS the old object. The ids were what made the
+    // resolution fail — `syncPhaseA`'s old unconditional `adopt({... ?? null})`
+    // nulled them on every project-less sync. Early-returning here left them
+    // pointing at a still-present object, so `app.currentLayer` resolved, and
+    // `selectionDims()` returned the 4x4 object grid instead of the 32x32
+    // fallback that pin records.
+    //
+    // Clearing on a null project preserves the pinned behaviour exactly and
+    // is still ONE writer: a null project IS an external write, and the
+    // echo check below still ignores the mirror's own.
+    const ui = s.project?.uiState;
+    const incoming: SelectionIds = {
+      selectedObjectId: ui?.selectedObjectId ?? null,
+      selectedFrameId: ui?.selectedFrameId ?? null,
+      selectedLayerId: ui?.selectedLayerId ?? null,
+    };
+    if (selectionIdsEqual(incoming, mirroredSelectionIds)) return;
+    runInAction(() => {
+      app.timelineUI.adopt(incoming);
+      mirroredSelectionIds = selectionIdsSnapshot(app);
+    });
+  };
+  adoptSelectionIds(useEditorStore.getState());
+
   // The `domainVersion` bump — see item 3 in the module header.
   let lastProject = initialProject;
 
@@ -845,6 +945,8 @@ export function installBridge(app: ApplicationStore): () => void {
     adoptLighting(s);
     // Task 28: same seam for `variantFrameIndices`.
     adoptVariantFrameIndices(s);
+    // W29f (task 38): same seam for the three selection ids.
+    adoptSelectionIds(s);
     if (s.project !== lastProject) {
       lastProject = s.project;
 
@@ -1000,6 +1102,40 @@ export function installBridge(app: ApplicationStore): () => void {
     { equals: variantIndicesEqual },
   );
 
+  // ── W29f (task 38): the three selection ids that flipped A→B ────────────
+  //
+  // A FIFTH reaction, for the same reason the other four exist: the ids live
+  // INSIDE `project.uiState`, so they cannot ride the top-level scalar
+  // snapshot. `mirroredSelectionIds` is updated HERE as well as in
+  // `adoptSelectionIds`, closing the loop — the value this reaction writes
+  // into Zustand comes straight back through `subscribe`, and the echo check
+  // then recognises it as the mirror's own rather than an external write.
+  const disposeSelectionB = reaction(
+    () => selectionIdsSnapshot(app),
+    (snap) => {
+      const { project } = useEditorStore.getState();
+      if (!project) return;
+      mirroredSelectionIds = snap;
+      const ui = project.uiState;
+      if (
+        selectionIdsEqual(
+          {
+            selectedObjectId: ui.selectedObjectId ?? null,
+            selectedFrameId: ui.selectedFrameId ?? null,
+            selectedLayerId: ui.selectedLayerId ?? null,
+          },
+          snap,
+        )
+      ) {
+        return;
+      }
+      useEditorStore.setState({
+        project: { ...project, uiState: { ...ui, ...snap } },
+      });
+    },
+    { equals: selectionIdsEqual },
+  );
+
   // The lifecycle DELEGATES — see item 2 in the module header. The previous
   // (throwing-stub) actions are captured and restored on dispose so tests can
   // wire and unwire repeatedly.
@@ -1074,6 +1210,7 @@ export function installBridge(app: ApplicationStore): () => void {
     addFrameTag: useEditorStore.getState().addFrameTag,
     removeFrameTag: useEditorStore.getState().removeFrameTag,
     // TimelineUIStore (2 + 2)
+    selectObject: useEditorStore.getState().selectObject,
     selectFrame: useEditorStore.getState().selectFrame,
     selectLayer: useEditorStore.getState().selectLayer,
     setObjectLibraryViewMode: useEditorStore.getState().setObjectLibraryViewMode,
@@ -1116,6 +1253,14 @@ export function installBridge(app: ApplicationStore): () => void {
     addFrameTag: (frameId, tag) => app.frames.addFrameTag(frameId, tag),
     removeFrameTag: (frameId, tag) => app.frames.removeFrameTag(frameId, tag),
 
+    // ── W29f (task 38): THE LAST UNBRIDGED SELECTION WRITER ─────────────
+    //
+    // `store/objectActions.ts`'s `selectObject` wrote all three ids directly
+    // into `project.uiState` and was the single reason the ids stayed in
+    // Phase A through W16-W19 and W28. With this delegate installed,
+    // `TimelineUIStore` is the ONLY writer of all three, so they move A→B in
+    // this same change (R6: move between lists, never copy).
+    selectObject: (id) => app.timelineUI.selectObject(id),
     selectFrame: (id, syncVariants) => app.timelineUI.selectFrame(id, syncVariants),
     selectLayer: (id) => app.timelineUI.selectLayer(id),
     setObjectLibraryViewMode: (mode) =>
@@ -1575,6 +1720,7 @@ export function installBridge(app: ApplicationStore): () => void {
     disposeUIB();
     disposeLightingB();
     disposeVariantB();
+    disposeSelectionB();
     useEditorStore.setState(previousActions);
     useEditorStore.setState(previousDomainActions);
     useEditorStore.setState(previousTimelineActions);

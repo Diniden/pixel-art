@@ -411,6 +411,10 @@ export class ApplicationStore {
         currentFrame: () => this.currentFrame,
         currentLayer: () => this.currentLayer,
         variants: () => this.domain.variants,
+        // W29f (task 38): `selectObject` resolves an ARBITRARY object id, so
+        // it needs the whole list — `currentObject` only ever yields the
+        // already-selected one. Same shape as `variants` above.
+        objects: () => this.domain.objects,
         publishSelection:
           options.timelineContext?.publishSelection ??
           zustandTimeline.publishSelection,

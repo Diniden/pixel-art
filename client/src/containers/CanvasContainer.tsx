@@ -107,18 +107,40 @@
  *
  * ── What still keeps `useEditorStore` in this file ────────────────────────
  *
- * NOT the clobber. Of the 28 `actions.*` names left, 21 are bridge DELEGATES
- * that already reach the MobX stores. The remaining handful — `setTool`,
- * `revertToPreviousTool`, `setBorderRadius`, `setColorAndAddToHistory`,
- * `addToColorHistory`, `undo` — are live Phase A implementations, i.e.
- * Zustand is still their legitimate single writer (R6). Calling the MobX
- * setter INSTEAD would make MobX a second writer of a Phase A field, which is
- * the mirror image of the bug just fixed.
+ * NOT the clobber, and after W29f (task 38) not the six actions either.
  *
- * Moving them means the A→B ownership flip, and that flip is only safe once
- * every consumer of those fields is migrated in the SAME change — task 38's
- * wholesale job. So this container keeps the legacy handle deliberately, and
- * it is now a scope boundary rather than a correctness hazard.
+ * ── W29f: the last six Phase A writes in this file are GONE ───────────────
+ *
+ * `setTool`, `revertToPreviousTool`, `setBorderRadius`,
+ * `setColorAndAddToHistory`, `addToColorHistory` and `undo` now call their
+ * MobX owners (`app.ui.tool.*`, `app.setColorAndAddToHistory`,
+ * `app.session.addToColorHistory`, `app.undo()`).
+ *
+ * This is NOT the second-writer hazard the previous note warned about,
+ * because the two things that made it one were both fixed first:
+ *
+ *  1. `selectedTool`/`borderRadius`/`selectedColor` are among the ~30 UI
+ *     fields that sit in NEITHER phase list and are mediated by W29e's
+ *     echo-checked `adoptUIState`. W29e PINNED the survival of exactly these
+ *     writes — `rehydrationClobber.test.ts` has "setTool +
+ *     revertToPreviousTool survive — the eyedropper round trip",
+ *     "setBorderRadius survives" and "a pure-MobX setColor survives WITHOUT
+ *     writing the Zustand source". Two other containers
+ *     (`PixelStudioToolsContainer`, `RightSidebarTopControlsContainer`)
+ *     already wrote them this way, so this file was the ODD ONE OUT — the
+ *     two entry points had drifted onto different stores exactly as the
+ *     frame-trace overlay had.
+ *  2. `colorHistory` IS a genuine `PHASE_A_FIELDS` member, so it is reached
+ *     through `ApplicationStore.setColorAndAddToHistory`, which deliberately
+ *     writes the ZUSTAND SOURCE (see its note) and lets the mirror carry the
+ *     value back. That is Phase A's direction, not a second writer.
+ *  3. A MobX UI write now actually SAVES: W29d found `AutoSaveController`
+ *     never observed `persistedUIVersion`, so a UI-only write produced zero
+ *     saves. Fixed and pinned, which is what makes flipping these safe at all.
+ *
+ * The 21 `actions.*` names that remain are all bridge DELEGATES already
+ * reaching the MobX stores, so `useEditorStore` stays here only until the
+ * bridge itself goes — it is a scope boundary, not a correctness hazard.
  *
  * ── Gesture arbitration stays here, and `useCanvasPointer` handles the rest ─
  *
@@ -1104,10 +1126,10 @@ export const CanvasContainer = observer(function CanvasContainer({
     editingVariant: Boolean(editingVariant),
     traceNudgeAmount,
     borderRadius,
-    undo: actions.undo,
+    undo: () => app.undo(),
     deleteSelectionPixels: actions.deleteSelectionPixels,
     deleteSelectedFrame: actions.deleteSelectedFrame,
-    setTool: actions.setTool,
+    setTool: (t) => app.ui.tool.setTool(t),
     clearSelection: actions.clearSelection,
     // ── W29e: the three overlay actions route to their MobX OWNER ───────
     //
@@ -1128,7 +1150,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     moveReferenceOverlay: (dx, dy) => referenceUI.moveOverlay(dx, dy),
     moveFrameOverlay: (dx, dy) => referenceUI.moveFrameOverlay(dx, dy),
     setVariantOffset: actions.setVariantOffset,
-    setBorderRadius: actions.setBorderRadius,
+    setBorderRadius: (r) => app.ui.tool.setBorderRadius(r),
     moveSelection: actions.moveSelection,
     moveSelectedPixels: actions.moveSelectedPixels,
     moveLayerPixels: actions.moveLayerPixels,
@@ -1490,8 +1512,8 @@ export const CanvasContainer = observer(function CanvasContainer({
         if (variantLayer) {
           const pixel = getPixelColor(variantLayer.pixels[coords.y]?.[coords.x]);
           if (pixel && pixel.a > 0) {
-            actions.setColorAndAddToHistory(pixel);
-            actions.revertToPreviousTool();
+            app.setColorAndAddToHistory(pixel);
+            app.ui.tool.revertToPreviousTool();
             return;
           }
         }
@@ -1503,8 +1525,8 @@ export const CanvasContainer = observer(function CanvasContainer({
           if (!l.visible) continue;
           const pixel = getPixelColor(l.pixels[coords.y]?.[coords.x]);
           if (pixel && pixel.a > 0) {
-            actions.setColorAndAddToHistory(pixel);
-            actions.revertToPreviousTool();
+            app.setColorAndAddToHistory(pixel);
+            app.ui.tool.revertToPreviousTool();
             return;
           }
         }
@@ -1521,8 +1543,8 @@ export const CanvasContainer = observer(function CanvasContainer({
           : coords.y;
         const refPixel = getRefPixelAtCoord(canvasX, canvasY);
         if (refPixel && refPixel.a > 0) {
-          actions.setColorAndAddToHistory(refPixel);
-          actions.revertToPreviousTool();
+          app.setColorAndAddToHistory(refPixel);
+          app.ui.tool.revertToPreviousTool();
         }
       }
       return;
@@ -1598,7 +1620,7 @@ export const CanvasContainer = observer(function CanvasContainer({
 
     // Everything past here is a pixel-transform tool: ONE dispatch, both
     // devices, via `useCanvasPointer` → `toolHandlers`.
-    if (currentTool !== "eraser") actions.addToColorHistory(currentColor);
+    if (currentTool !== "eraser") app.session.addToColorHistory(currentColor);
     pointer.beginStroke(e.clientX, e.clientY, "mouse");
   };
 

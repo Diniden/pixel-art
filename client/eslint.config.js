@@ -43,7 +43,12 @@ export default tseslint.config(
           // BOTH project-service-owned and allowDefaultProject-listed (hard
           // parse error, measured). main.ts/preview.tsx are still only
           // reachable from outside the project and stay listed.
-          allowDefaultProject: ["*.ts", "*.js", ".storybook/*.ts", ".storybook/*.tsx"],
+          allowDefaultProject: [
+            "*.ts",
+            "*.js",
+            ".storybook/*.ts",
+            ".storybook/*.tsx",
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -51,8 +56,11 @@ export default tseslint.config(
   },
 
   // Config files at the workspace root are Node-authored, not browser code.
+  // `scripts/**` is the same: build/CI tooling run by `bun`, never bundled —
+  // it needs `process`, `console` and `URL` (task 38 added
+  // `scripts/check-boundaries.mjs`, which is the first linted file there).
   {
-    files: ["*.{js,ts}"],
+    files: ["*.{js,ts}", "scripts/**/*.{js,mjs,ts}"],
     languageOptions: {
       globals: globals.node,
     },
@@ -489,6 +497,68 @@ export default tseslint.config(
     files: [".storybook/**/*.{ts,tsx}"],
     rules: {
       "react-refresh/only-export-components": "off",
+    },
+  },
+
+  // ── `max-lines`: the RATCHET (REFRESH task 38, step 10) ──────────────────
+  //
+  // `warn` at 400 globally, `error` inside `ui/`. Deliberately NOT a global
+  // `error`: a handful of files are legitimately over and flipping the whole
+  // tree red would only teach people to add disable comments.
+  //
+  // `ui/` is `error` because a presentational component that needs 400 lines
+  // is almost always several components — the tier where the limit is a
+  // genuine design signal rather than a historical fact.
+  //
+  // Blank lines and comments do NOT count: this codebase's comments carry the
+  // measured reasoning behind the migration, and a limit that punished them
+  // would be a limit that deleted the evidence.
+  //
+  // The current finding count is recorded as a budget in the task 38 report so
+  // a future task can ratchet it down. Tests and stories are exempt.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: [
+      "src/**/__tests__/**",
+      "src/**/*.test.{ts,tsx}",
+      "src/**/*.stories.{ts,tsx}",
+    ],
+    rules: {
+      "max-lines": [
+        "warn",
+        { max: 400, skipBlankLines: true, skipComments: true },
+      ],
+    },
+  },
+  {
+    files: ["src/ui/**/*.{ts,tsx}"],
+    ignores: [
+      "src/ui/**/__tests__/**",
+      "src/ui/**/*.test.{ts,tsx}",
+      "src/ui/**/*.stories.{ts,tsx}",
+      // ── THE THREE GRANDFATHERED FILES ────────────────────────────────────
+      //
+      // These predate the rule and are over the limit at 515 / 456 / 457
+      // code lines. They are demoted to the global `warn` INDIVIDUALLY rather
+      // than by demoting `src/ui/**` wholesale — the same technique the
+      // purity-boundary block above uses, and for the same reason: a blanket
+      // demotion silently weakens the rule for genuinely NEW ui/ code, which
+      // is the code the `error` severity exists to protect.
+      //
+      // ⚠️ This is a RATCHET, not an exemption. Splitting them is a task-36
+      // shaped job (a presentational component this size is several
+      // components) and was deliberately out of task 38's scope, which is the
+      // store migration. A future task removes one entry at a time; the list
+      // may only ever get shorter.
+      "src/ui/components/ColorPicker/ColorPicker.tsx",
+      "src/ui/components/ExportPreviewModal/ExportPreviewModal.tsx",
+      "src/ui/components/ReferenceImageModal/ReferenceImageModal.tsx",
+    ],
+    rules: {
+      "max-lines": [
+        "error",
+        { max: 400, skipBlankLines: true, skipComments: true },
+      ],
     },
   },
 

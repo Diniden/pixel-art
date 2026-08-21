@@ -195,3 +195,176 @@ describe("W29e: a MobX UI edit survives an unrelated Zustand change", () => {
     expect(app.ui.viewport.zoom).toBe(15);
   });
 });
+
+/**
+ * W29f (task 38) — THE SELECTION-IDS OWNERSHIP FLIP.
+ *
+ * `selectedObjectId`/`selectedFrameId`/`selectedLayerId` moved A→B in the
+ * same change that ported `store/objectActions.ts`'s `selectObject` — their
+ * last writer outside `TimelineUIStore` — onto the store.
+ *
+ * These pin the two halves the flip depends on: MobX writes now PUBLISH into
+ * Zustand and survive an unrelated change (they used to be re-read off the
+ * stale mirror by `syncPhaseA` on every tick), and a genuinely EXTERNAL
+ * write — a load, a null project — is still ADOPTED.
+ */
+describe("W29f: the three selection ids are MobX-owned (Phase B)", () => {
+  let harness: StoreHarness;
+  let app: ApplicationStore;
+  let dispose: (() => void) | null = null;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    harness = createZustandHarness({ bridge: false });
+    harness.reset();
+    harness.load(tinyProject());
+    app = new ApplicationStore({ autoSaveEnabled: false });
+    dispose = installBridge(app);
+  });
+
+  afterEach(() => {
+    dispose?.();
+    dispose = null;
+    app.dispose();
+    harness.reset();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const unrelatedZustandChange = (): void => {
+    useEditorStore.setState({ saveStatus: "saving" });
+  };
+
+  it("selectObject is a bridge DELEGATE — the legacy body is a throwing stub", () => {
+    // The legacy `objectActions.selectObject` now throws `migrated(...)`; with
+    // the bridge installed the delegate reaches `TimelineUIStore` instead.
+    const objectId = app.domain.objects[0].id;
+    harness.dispatch("selectObject", objectId);
+    expect(app.timelineUI.selectedObjectId).toBe(objectId);
+  });
+
+  it("a MobX selectObject PUBLISHES into Zustand", () => {
+    const objectId = app.domain.objects[0].id;
+    app.timelineUI.selectObject(objectId);
+
+    const ui = useEditorStore.getState().project!.uiState;
+    expect(ui.selectedObjectId).toBe(objectId);
+    expect(ui.selectedFrameId).toBe(app.timelineUI.selectedFrameId);
+    expect(ui.selectedLayerId).toBe(app.timelineUI.selectedLayerId);
+  });
+
+  it("a MobX selection SURVIVES an unrelated Zustand change", () => {
+    // The Phase A failure mode: `syncPhaseA` used to re-read all three off
+    // `project.uiState` on EVERY change, reverting a fresh selection.
+    const objectId = app.domain.objects[0].id;
+    app.timelineUI.selectObject(objectId);
+
+    unrelatedZustandChange();
+    expect(app.timelineUI.selectedObjectId).toBe(objectId);
+  });
+
+  it("OBSERVED: an unknown id still selects, and nulls the frame/layer ids", () => {
+    // Verbatim from `objectActions.ts:58-71` — `objects.find()` misses and the
+    // `?? null` fallbacks apply. There is no guard and none may be added.
+    app.timelineUI.selectObject("no-such-object");
+    expect(app.timelineUI.selectedObjectId).toBe("no-such-object");
+    expect(app.timelineUI.selectedFrameId).toBeNull();
+    expect(app.timelineUI.selectedLayerId).toBeNull();
+  });
+
+  it("an EXTERNAL write is still adopted — the seam is a gate, not a mute", () => {
+    const project = useEditorStore.getState().project!;
+    const objectId = project.objects[0].id;
+    useEditorStore.setState({
+      project: {
+        ...project,
+        uiState: { ...project.uiState, selectedObjectId: objectId },
+      },
+    });
+    expect(app.timelineUI.selectedObjectId).toBe(objectId);
+  });
+
+  it("a NULL project CLEARS the ids rather than early-returning", () => {
+    // Not symmetry with `adoptVariantFrameIndices` — found by a failing pin.
+    // `selection.test.ts`'s 32x32 fallback depends on the ids going null when
+    // the project does, because the tree-adoption seam keeps `domain.objects`.
+    app.timelineUI.selectObject(app.domain.objects[0].id);
+    useEditorStore.setState({ project: null });
+    expect(app.timelineUI.selectedObjectId).toBeNull();
+    expect(app.timelineUI.selectedFrameId).toBeNull();
+    expect(app.timelineUI.selectedLayerId).toBeNull();
+  });
+});
+
+/**
+ * W29f — the six actions `CanvasContainer` stopped routing through Zustand.
+ *
+ * The container now calls `app.ui.tool.*` / `app.setColorAndAddToHistory` /
+ * `app.session.addToColorHistory` / `app.undo()`. These pin that each write
+ * lands AND survives, which is the property that made the switch safe.
+ */
+describe("W29f: CanvasContainer's six actions on their MobX owners", () => {
+  let harness: StoreHarness;
+  let app: ApplicationStore;
+  let dispose: (() => void) | null = null;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    harness = createZustandHarness({ bridge: false });
+    harness.reset();
+    harness.load(tinyProject());
+    app = new ApplicationStore({ autoSaveEnabled: false });
+    dispose = installBridge(app);
+  });
+
+  afterEach(() => {
+    dispose?.();
+    dispose = null;
+    app.dispose();
+    harness.reset();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const unrelatedZustandChange = (): void => {
+    useEditorStore.setState({ saveStatus: "saving" });
+  };
+
+  it("the eyedropper round trip: setTool then revertToPreviousTool", () => {
+    app.ui.tool.setTool("pixel");
+    app.ui.tool.setTool("eyedropper");
+    expect(app.ui.tool.selectedTool).toBe("eyedropper");
+
+    unrelatedZustandChange();
+    expect(app.ui.tool.selectedTool).toBe("eyedropper");
+
+    app.ui.tool.revertToPreviousTool();
+    expect(app.ui.tool.selectedTool).toBe("pixel");
+
+    unrelatedZustandChange();
+    expect(app.ui.tool.selectedTool).toBe("pixel");
+  });
+
+  it("setBorderRadius survives, and keeps the legacy Math.max(0) clamp", () => {
+    app.ui.tool.setBorderRadius(5);
+    unrelatedZustandChange();
+    expect(app.ui.tool.borderRadius).toBe(5);
+
+    app.ui.tool.setBorderRadius(-3);
+    expect(app.ui.tool.borderRadius).toBe(0);
+  });
+
+  it("setColorAndAddToHistory writes BOTH stores and survives", () => {
+    // `colorHistory` is a genuine PHASE_A field, so this writes the Zustand
+    // SOURCE and lets the mirror carry it back — Phase A's direction.
+    app.setColorAndAddToHistory(RED);
+    expect(app.ui.tool.selectedColor).toEqual(RED);
+    expect(app.session.colorHistory[0]).toEqual(RED);
+
+    unrelatedZustandChange();
+    expect(app.ui.tool.selectedColor).toEqual(RED);
+    expect(app.session.colorHistory[0]).toEqual(RED);
+  });
+});
