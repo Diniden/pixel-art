@@ -108,9 +108,22 @@ export let reconcileHistory: () => void = () => {};
 export let historyControl: {
   undo(): void;
   redo(): void;
+  /**
+   * Record a pre-mutation project SNAPSHOT — W29h, for `ColorPickerContainer`.
+   *
+   * ⚠️ A SNAPSHOT-family write, and the one place a migrated container makes
+   * one. The colour picker brackets a slider drag with it: an unlabelled call
+   * on drag START (the pre-image) and a debounced `"Adjust color"` 300 ms
+   * after release, so the drag is one undo entry rather than one per
+   * mousemove. `PixelStore` records inverse patches and has no equivalent, so
+   * this stays on the glue — the same published-seam technique `undo`/`redo`
+   * use, and retired with them by task 38.
+   */
+  snapshot(label?: string): void;
 } = {
   undo: () => {},
   redo: () => {},
+  snapshot: () => {},
 };
 
 export const useEditorStore = create<EditorState>((set, get) => {
@@ -218,6 +231,11 @@ export const useEditorStore = create<EditorState>((set, get) => {
 
     if (target.variant) {
       const { variantGroupId, variantId, frameIndex } = target.variant;
+      // W29h — the THIRD read site of the variant address, and it must agree
+      // with `PixelStore.writeGridInAction` / `findLayer` or the legacy
+      // `projectHistory` mirror reconstructs a pre-state for the wrong layer.
+      // `?? 0` preserves every pre-W29h target exactly.
+      const layerIndex = target.variant.layerIndex ?? 0;
       return {
         ...project,
         variants: project.variants?.map((vg) =>
@@ -236,7 +254,7 @@ export const useEditorStore = create<EditorState>((set, get) => {
                             : {
                                 ...f,
                                 layers: f.layers.map((l, li) =>
-                                  li === 0
+                                  li === layerIndex
                                     ? { ...l, pixels: rewriteGrid(l.pixels) }
                                     : l,
                                 ),
@@ -471,6 +489,12 @@ export const useEditorStore = create<EditorState>((set, get) => {
       reconcile();
       runInAction(() => history.redo());
       set(computeMirror());
+    },
+    // W29h — see the `historyControl` declaration. Routed through the SAME
+    // `saveCurrentStateToHistory` the Zustand action exposes, so the migrated
+    // container and any remaining legacy caller record identical entries.
+    snapshot: (label?: string) => {
+      saveCurrentStateToHistory(label);
     },
   };
   // W29d: published so a MIGRATED consumer can undo without importing

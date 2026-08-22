@@ -158,13 +158,25 @@ export interface ApplicationStoreOptions {
    * published `historyControl`, the single writer of the Phase B history
    * mirror; tests substitute a recorder. See {@link ApplicationStore.undo}.
    */
-  historyControl?: { undo(): void; redo(): void };
+  historyControl?: {
+    undo(): void;
+    redo(): void;
+    /** W29h. Optional so an existing test double still type-checks. */
+    snapshot?(label?: string): void;
+  };
   /**
    * Where {@link ApplicationStore.setColorAndAddToHistory} writes the
    * Zustand-sourced half (W29d). Defaults to the Zustand host; tests
    * substitute a recorder.
    */
   publishColorAndHistory?: (color: Color) => void;
+  /**
+   * Where {@link ApplicationStore.adjustColor} writes `uiState.selectedColor`
+   * WITHOUT touching `colorHistory` (W29h). Defaults to the Zustand host;
+   * tests substitute a recorder. See `publishSelectedColor`'s header for why
+   * it is not `publishColorAndHistory`.
+   */
+  publishSelectedColor?: (color: Color) => void;
   /**
    * Where `PixelStore` publishes a committed tree during the bridge era
    * (task 26). Defaults to the Zustand mirror; tests substitute a recorder.
@@ -265,10 +277,16 @@ export class ApplicationStore {
   private readonly aiServiceUrlSink: (url: string) => void;
 
   /** W29d — see {@link ApplicationStore.undo}. */
-  private readonly historyOps: { undo(): void; redo(): void };
+  private readonly historyOps: {
+    undo(): void;
+    redo(): void;
+    snapshot(label?: string): void;
+  };
 
   /** W29d — see {@link ApplicationStore.setColorAndAddToHistory}. */
   private readonly colorSink: (color: Color) => void;
+  /** W29h — see {@link ApplicationStore.adjustColor}. */
+  private readonly selectedColorSink: (color: Color) => void;
 
   /* ── task 27 ───────────────────────────────────────────────────────────── */
   /**
@@ -395,12 +413,21 @@ export class ApplicationStore {
       options.publishAiServiceUrl ?? zustandTimeline.publishAiServiceUrl;
     this.colorSink =
       options.publishColorAndHistory ?? zustandTimeline.publishColorAndHistory;
+    this.selectedColorSink =
+      options.publishSelectedColor ?? zustandTimeline.publishSelectedColor;
     // Read through a closure, never captured: `historyControl` is a mutable
     // module binding assigned when the Zustand store is created, which may be
     // AFTER this constructor runs.
-    this.historyOps = options.historyControl ?? {
-      undo: () => legacyHistoryControl.undo(),
-      redo: () => legacyHistoryControl.redo(),
+    this.historyOps = {
+      undo: () => (options.historyControl ?? legacyHistoryControl).undo(),
+      redo: () => (options.historyControl ?? legacyHistoryControl).redo(),
+      // W29h. `historyControl` gained `snapshot`; an injected test double may
+      // predate it, so fall back to the module binding rather than crashing.
+      snapshot: (label) => {
+        const injected = options.historyControl?.snapshot;
+        if (injected) injected.call(options.historyControl, label);
+        else legacyHistoryControl.snapshot(label);
+      },
     };
     const timelineUI = new TimelineUIStore({
       viewport,
@@ -985,6 +1012,120 @@ export class ApplicationStore {
   }
 
   /**
+   * Replay the pending colour adjustment at `newColor` — W29h, and the last
+   * piece of the colour-adjustment lifecycle.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ WHY THIS COULD NOT EXIST BEFORE W29h
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * W29d built {@link startColorAdjustment} (the scan) and
+   * `PixelStore.adjustColorAcross` (the object write), and still could not
+   * wire the two colour containers, because the VARIANT quarter of the
+   * behaviour was inexpressible: `PixelStore.writeGridInAction` was hard-wired
+   * to variant `layers[0]`, so "all-frames variant adjustment recolours EVERY
+   * layer of every variant frame" (W29g's pin) could not be performed.
+   * W29h added `PixelTarget.variant.layerIndex` and
+   * `PixelStore.adjustVariantColorAcross`; this method is the dispatcher over
+   * the four resulting cases.
+   *
+   * ── The four cases, matching `colorAdjustmentActions.ts:207-442` ──────
+   *
+   *   variant + allFrames   -> `adjustVariantColorAcross` over the snapshot
+   *   variant + single      -> `adjustColor`, which resolves the variant
+   *                            through `resolveTarget` — i.e. `layers[0]`
+   *   object  + allFrames   -> `adjustColorAcross` over the snapshot
+   *   object  + single      -> `adjustColor` on the selected layer
+   *
+   * ⚠️ THE SINGLE-FRAME VARIANT CASE STILL WRITES `layers[0]` ONLY, and that
+   * is DELIBERATE. W29g pinned it as an observed defect: the legacy
+   * `getSelectedVariantLayer()` (`store/helpers.ts:82`) ignores
+   * `selectedLayerId` entirely, and `resolveTarget`'s variant branch
+   * transcribes that. W29h enables the ENGINE to address any variant layer;
+   * it does NOT change what any pinned behaviour does. Fixing the defect
+   * needs owner sign-off.
+   *
+   * ── ⚠️ THE COLOUR WRITE GOES THROUGH THE ZUSTAND SOURCE ───────────────
+   *
+   * The legacy action writes `uiState.selectedColor` in the SAME commit as
+   * the pixels. `selectedColor` is one of the ~30 fields the bridge
+   * re-hydrates wholesale from `project.uiState` on EVERY Zustand change
+   * (`zustandBridge.ts:334`), so a MobX-only write is reverted by the next
+   * unrelated change — MEASURED in W29d. {@link setColorAndAddToHistory}'s
+   * header has the full note; the sink is reused here rather than duplicating
+   * the reasoning.
+   *
+   * ⚠️ It is NOT `setColorAndAddToHistory`: that also prepends to
+   * `colorHistory`, and the legacy `adjustColor` does not. Dragging a slider
+   * would otherwise flood the recent-colours trail with every intermediate
+   * value. `colorSink` writes both, so the colour history is kept out by
+   * writing `selectedColor` through the narrower UI-state patch instead.
+   *
+   * @returns the number of layers written; 0 when there is nothing pending.
+   */
+  adjustColor(newColor: Color, trackHistory = false): number {
+    const state = this.ui.tool.colorAdjustment;
+    if (!state) return 0;
+
+    const layer = this.currentLayer;
+    const obj = this.currentObject;
+    if (!layer || !obj) return 0;
+
+    const options = { trackHistory };
+    let written = 0;
+
+    const byFrame = state.allFrames ? state.affectedPixelsByFrame : undefined;
+
+    if (this.isEditingVariant && layer.variantGroupId) {
+      const variantId = layer.selectedVariantId;
+      if (!variantId) return 0;
+
+      if (byFrame) {
+        // ⚠️ The synthetic key -> INDEX translation. The scan keys by
+        // `variant-frame-<index>` (a string matching no `frame.id` in the
+        // tree); the write engine addresses variant frames positionally.
+        // Both halves agree by construction — see `startColorAdjustment`.
+        const byIndex = new Map<
+          number,
+          ReadonlyMap<string, readonly { x: number; y: number }[]>
+        >();
+        for (const [key, byLayer] of byFrame) {
+          const match = /^variant-frame-(\d+)$/.exec(key);
+          if (match) byIndex.set(Number(match[1]), byLayer);
+        }
+        written = this.pixels.adjustVariantColorAcross(
+          layer.variantGroupId,
+          variantId,
+          byIndex,
+          newColor,
+          options,
+        );
+      } else {
+        // The pinned `layers[0]` path — see the header.
+        this.pixels.adjustColor(state.affectedPixels, newColor, options);
+        written = state.affectedPixels.length > 0 ? 1 : 0;
+      }
+    } else if (byFrame) {
+      written = this.pixels.adjustColorAcross(byFrame, newColor, options);
+    } else {
+      this.pixels.adjustColor(state.affectedPixels, newColor, options);
+      written = state.affectedPixels.length > 0 ? 1 : 0;
+    }
+
+    // The coupled UI write, AFTER the pixels — the legacy action commits both
+    // in one `updateProjectAndSave`, and the order within it is not
+    // observable, but keeping the pixels first means a throw leaves no
+    // half-applied colour.
+    // The eager MobX write is what re-renders the observer on this tick; the
+    // sink writes the source and the bridge then re-asserts the same value.
+    // One writer, not two — `setColorAndAddToHistory`'s header has the note.
+    this.selectedColorSink(newColor);
+    runInAction(() => this.ui.tool.setColor(newColor));
+
+    return written;
+  }
+
+  /**
    * Set the AI service URL — W29d, and the seam `HeaderContainer` was blocked
    * on.
    *
@@ -1056,6 +1197,24 @@ export class ApplicationStore {
   /** Redo one entry, keeping the bridge-era history mirror consistent. */
   redo(): void {
     this.historyOps.redo();
+  }
+
+  /**
+   * Record a pre-mutation project SNAPSHOT — W29h, for `ColorPickerContainer`.
+   *
+   * ⚠️ SNAPSHOT family, deliberately. The colour picker brackets a slider drag
+   * with one unlabelled call on drag START and a debounced `"Adjust color"`
+   * 300 ms after release, which is what makes the whole drag ONE undo entry.
+   * `PixelStore` records inverse patches and has no equivalent bracket, so
+   * this routes to the bridge glue — the single writer of the Phase B mirror
+   * — exactly as {@link ApplicationStore.undo} does, and retires with it.
+   *
+   * ⚠️ It is O(project). Nothing else may start using it; the 5 kB stroke
+   * byte gate does not cover this path and would not notice a regression that
+   * routed a stroke through here.
+   */
+  saveStateToHistory(label?: string): void {
+    this.historyOps.snapshot(label);
   }
 
   /**

@@ -516,6 +516,11 @@ export class PixelStore {
   private writeGridInAction(target: PixelTarget, grid: PixelData[][]): void {
     if (target.variant) {
       const { variantGroupId, variantId, frameIndex } = target.variant;
+      // W29h. Was hard-wired to `li === 0`, which made variant layer 0 the
+      // only address this engine could reach — the structural blocker W29g
+      // found. `?? 0` keeps every pre-W29h target writing exactly where it
+      // did. See `PixelTarget.variant.layerIndex`.
+      const layerIndex = target.variant.layerIndex ?? 0;
       this.domain.variants = this.domain.variants.map((vg) => {
         if (vg.id !== variantGroupId) return vg;
         return {
@@ -529,7 +534,7 @@ export class PixelStore {
                 return {
                   ...f,
                   layers: f.layers.map((l, li) =>
-                    li === 0 ? { ...l, pixels: grid } : l,
+                    li === layerIndex ? { ...l, pixels: grid } : l,
                   ),
                 };
               }),
@@ -631,9 +636,15 @@ export class PixelStore {
   private findLayer(target: PixelTarget): Layer | null {
     if (target.variant) {
       const { variantGroupId, variantId, frameIndex } = target.variant;
+      // W29h — the UNDO half. `applyPatch` re-resolves the layer from the LIVE
+      // tree before writing the recorded side back, so a `layers[0]` here
+      // would have sent every undo of a non-zero variant layer onto layer 0
+      // even after `writeGridInAction` learned to address it. The two read
+      // sites must agree; they are the only two.
+      const layerIndex = target.variant.layerIndex ?? 0;
       const group = this.domain.variants.find((vg) => vg.id === variantGroupId);
       const variant = group?.variants.find((v) => v.id === variantId);
-      return variant?.frames[frameIndex]?.layers[0] ?? null;
+      return variant?.frames[frameIndex]?.layers[layerIndex] ?? null;
     }
     const object = this.domain.objects.find((o) => o.id === target.objectId);
     const frame = object?.frames.find((f) => f.id === target.frameId);
@@ -980,31 +991,191 @@ export class PixelStore {
         if (!resolved) continue; // missing, or a variant layer — see header
         const { target, layer, width, height } = resolved;
 
-        const patches: PixelPatch[] = [];
-        for (const { x, y } of cells) {
-          if (x < 0 || x >= width || y < 0 || y >= height) continue;
-          const existing = layer.pixels[y]?.[x];
-          if (sameColor(existing?.color, newColor)) continue;
-          patches.push({
-            x,
-            y,
-            before: copyCell(existing),
-            after: {
-              color: newColor,
-              normal: existing?.normal ?? 0,
-              height: existing?.height ?? 1,
-            },
-          });
-        }
+        const patches = this.recolorPatches(
+          layer,
+          cells,
+          newColor,
+          width,
+          height,
+        );
         if (patches.length > 0) work.push({ target, layer, patches });
       }
     }
 
     if (work.length === 0) return 0;
 
-    // A single layer needs no transaction — `commitCells` already produces
-    // exactly one entry, and wrapping it would commit an enclosing stroke for
-    // nothing (see the header).
+    return this.commitAdjustment(work, trackHistory);
+  }
+
+  /**
+   * The VARIANT multi-target colour adjustment — W29h.
+   *
+   * The variant twin of {@link adjustColorAcross}, and the second half of what
+   * kept `ColorPickerContainer` / `LayerColorsContainer` on Zustand.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ WHY THIS IS A SEPARATE METHOD RATHER THAN A BRANCH
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * The two paths do not share an ADDRESSING MODEL, which is exactly why
+   * `adjustColorAcross` refused variants outright (W29d) instead of
+   * half-implementing them:
+   *
+   *  - the object path keys by REAL `frame.id` and matches layers by NAME
+   *    across frames;
+   *  - the variant path keys by the SYNTHETIC `` `variant-frame-<index>` ``
+   *    (`ApplicationStore.startColorAdjustment`) — a string that matches no
+   *    `frame.id` anywhere in the tree — and matches layers by ID within one
+   *    frame, with no name matching at all (W29g pin: the variant scan
+   *    iterates `variantFrame.layers` unconditionally).
+   *
+   * Folding them together would mean guessing which key space a string is in.
+   * They stay two methods with one shared commit tail.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THIS IS WHAT W29h's `layerIndex` EXISTS FOR
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * W29g pinned that all-frames variant adjustment recolours EVERY layer of
+   * every variant frame. Before `PixelTarget.variant.layerIndex`, this store
+   * could only ever write `layers[0]` — the pin was inexpressible here. Each
+   * matched layer is resolved to its POSITION in `variantFrame.layers` and
+   * addressed by that index.
+   *
+   * A layer id that is not in the addressed frame is SKIPPED, not guessed at
+   * — the same silent bail-out every resolve on this store uses.
+   *
+   * ── The single-history-entry semantic, unchanged (W29d) ───────────────
+   *
+   * Same transaction rule as {@link adjustColorAcross}, for the same measured
+   * reason: the wrapper opens only when `trackHistory` AND more than one
+   * layer is written. Opening one unconditionally commits an enclosing stroke
+   * and cuts a user's drag in two.
+   *
+   * ⚠️ It writes NO UI field. `uiState.selectedColor` is the caller's, exactly
+   * as on the object path.
+   *
+   * @param byFrameIndex  variant frame INDEX → variant layer id → cells.
+   * @returns the number of layers actually written.
+   */
+  adjustVariantColorAcross(
+    variantGroupId: string,
+    variantId: string,
+    byFrameIndex: ReadonlyMap<
+      number,
+      ReadonlyMap<string, readonly { x: number; y: number }[]>
+    >,
+    newColor: Color,
+    options: PixelWriteOptions = {},
+  ): number {
+    const trackHistory = options.trackHistory ?? false;
+    if (byFrameIndex.size === 0) return 0;
+
+    const group = this.domain.variants.find((vg) => vg.id === variantGroupId);
+    const variant = group?.variants.find((v) => v.id === variantId);
+    if (!variant) return 0;
+    const { width, height } = variant.gridSize;
+
+    // Resolve EVERYTHING before writing anything — same reason as the object
+    // path: `commitCells` rebuilds the spine, so a lazy resolve inside the
+    // loop would read a tree earlier iterations had already replaced.
+    const work: {
+      target: PixelTarget;
+      layer: Layer;
+      patches: PixelPatch[];
+    }[] = [];
+
+    for (const [frameIndex, byLayer] of byFrameIndex) {
+      const variantFrame = variant.frames[frameIndex];
+      if (!variantFrame) continue;
+
+      for (const [layerId, cells] of byLayer) {
+        if (cells.length === 0) continue;
+        // ⚠️ The id → INDEX hop. `layerIndex` is how the write engine
+        // addresses a variant layer (positional, like `frameIndex`), while
+        // the adjustment snapshot keys by id.
+        const layerIndex = variantFrame.layers.findIndex(
+          (l) => l.id === layerId,
+        );
+        if (layerIndex === -1) continue;
+        const layer = variantFrame.layers[layerIndex];
+
+        const patches = this.recolorPatches(
+          layer,
+          cells,
+          newColor,
+          width,
+          height,
+        );
+        if (patches.length > 0) {
+          work.push({
+            target: {
+              objectId: this.source.selectedObjectId ?? "",
+              frameId: this.source.selectedFrameId ?? "",
+              layerId: this.source.selectedLayerId ?? "",
+              variant: { variantGroupId, variantId, frameIndex, layerIndex },
+            },
+            layer,
+            patches,
+          });
+        }
+      }
+    }
+
+    return this.commitAdjustment(work, trackHistory);
+  }
+
+  /**
+   * The recolour patch builder shared by the object and variant adjustments.
+   *
+   * Bounds-checks, skips a cell already holding `newColor` (so re-applying an
+   * adjustment records nothing), and preserves `normal` / `height` — the
+   * `?? 1` height default is the legacy value, transcribed.
+   */
+  private recolorPatches(
+    layer: Layer,
+    cells: readonly { x: number; y: number }[],
+    newColor: Color,
+    width: number,
+    height: number,
+  ): PixelPatch[] {
+    const patches: PixelPatch[] = [];
+    for (const { x, y } of cells) {
+      if (x < 0 || x >= width || y < 0 || y >= height) continue;
+      const existing = layer.pixels[y]?.[x];
+      if (sameColor(existing?.color, newColor)) continue;
+      patches.push({
+        x,
+        y,
+        before: copyCell(existing),
+        after: {
+          color: newColor,
+          normal: existing?.normal ?? 0,
+          height: existing?.height ?? 1,
+        },
+      });
+    }
+    return patches;
+  }
+
+  /**
+   * The commit tail shared by both multi-target adjustments — W29h.
+   *
+   * ⚠️ THE TRANSACTION IS CONDITIONAL, and that is the load-bearing part.
+   * A single layer needs no transaction (`commitCells` already produces
+   * exactly one entry), and a transaction opened while another is already
+   * open COMMITS the outer one — so wrapping unconditionally would cut a
+   * user's in-progress stroke in two (W29d, pinned).
+   *
+   * `endTransaction` runs from a `finally` so a throw part-way through cannot
+   * strand an open transaction and swallow every subsequent edit into it.
+   */
+  private commitAdjustment(
+    work: readonly { target: PixelTarget; layer: Layer; patches: PixelPatch[] }[],
+    trackHistory: boolean,
+  ): number {
+    if (work.length === 0) return 0;
+
     const needsTransaction = trackHistory && work.length > 1;
     if (needsTransaction) this.history.beginTransaction("Adjust color");
     try {

@@ -1693,7 +1693,21 @@ export function installBridge(app: ApplicationStore): () => void {
     startDrawing: (point) => {
       app.canvasInteraction.startDrawing(point);
       // The Phase-A half of the coupled write — see above.
+      //
+      // ⚠️ W29h CLEARS BOTH COPIES. `colorAdjustment` is in neither
+      // `PHASE_A_FIELDS` nor `PHASE_B_FIELDS`, so Zustand's and
+      // `ToolUIStore`'s are two INDEPENDENT storage locations. That was
+      // harmless while both colour containers read Zustand's; now that they
+      // read MobX's, a Zustand-only clear would leave the mode visibly open
+      // after the user starts a stroke — and the next slider drag would
+      // replay a stale snapshot onto pixels the stroke had just changed.
+      //
+      // `ApplicationStore.clearColorAdjustment` (the `selectLayer` clear at
+      // `ApplicationStore.ts:440`) already pairs the two writes for exactly
+      // this reason; this is the second and last site that had not.
+      // `drawing.test.ts:520` pins the Zustand half and still passes.
       useEditorStore.setState({ colorAdjustment: null });
+      app.clearColorAdjustment();
     },
     updateDrawing: (point) => app.canvasInteraction.updateDrawing(point),
     endDrawing: () => app.canvasInteraction.endDrawing(),
