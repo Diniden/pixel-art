@@ -165,7 +165,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStores } from "../stores/context";
-import { useEditorStore } from "../store";
+import { strokeControl } from "../store";
 import type { Color, Point, SelectionBox, Pixel, PixelData } from "../types";
 import type { Layer } from "../types";
 import type { ReferenceImageData } from "../types/referenceImage";
@@ -343,8 +343,127 @@ export const CanvasContainer = observer(function CanvasContainer({
   const drawStartPoint = interaction.drawStartPoint;
   const previewPixels = interaction.previewPixels;
 
-  /* ── actions, through the bridge seam (see the module header) ──────────── */
-  const actions = useEditorStore.getState();
+  /* ══════════════════════════════════════════════════════════════════════
+   *  ACTIONS — now assembled from the MobX stores (W29i)
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * This was `useEditorStore.getState()`, the codebase's last real
+   * `useEditorStore` read outside the bridge itself.
+   *
+   * ── Why it could not move before, and why it can now ───────────────────
+   *
+   * W29c's stated blocker was ARGUMENT ASSEMBLY: four helpers
+   * (`pixelWriteOptions()`, `selectionWriteOptions()`, `selectionDims()`,
+   * `editableGrid()`) existed ONLY as closures in `zustandBridge.ts`, so
+   * calling `app.pixels.*` here meant a SECOND implementation of each —
+   * precisely the duplication the migration exists to remove.
+   *
+   * **W29d dissolved that blocker** by giving all four a store home:
+   * `SelectionUIStore.writeOptions`, `SelectionUIStore.maskWriteOptions`,
+   * `ApplicationStore.editableGrid` and `ApplicationStore.selectionDims`.
+   * `LightingCanvasContainer` migrated on exactly that basis. This file is
+   * the same migration; nothing below re-derives anything.
+   *
+   * ⚠️ `beginStroke`/`endStroke` go through `strokeControl`, NOT
+   * `HistoryStore` directly. They must run the closure that wraps the
+   * transaction in `reconcile()` … `computeMirror()` so the Phase B
+   * `projectHistory` mirror stays consistent — one drag stays exactly one
+   * undo entry. `strokeControl` is a SEPARATE named export from `../store`
+   * (`store/index.ts:60`), so importing it does not import `useEditorStore`;
+   * `zustandBridge.ts`'s own delegates call the identical seam.
+   *
+   * ⚠️ `moveSelectedPixels` is TWO STEPS, in this order — the pixels move,
+   * then the MASK moves with them. Verbatim from the bridge delegate, which
+   * took it verbatim from `selectionActions.ts:577,648`. Dropping the second
+   * step detaches the selection outline from the art it describes.
+   *
+   * ⚠️ `startDrawing` performs a COUPLED write and both halves are kept.
+   * Besides the gesture flag it clears the pending colour adjustment, and
+   * `colorAdjustment` is in NEITHER phase list — Zustand's copy and
+   * `ToolUIStore`'s are two INDEPENDENT storage locations that the bridge
+   * mirrors in no direction. The live UI reads the MobX one after W29h, while
+   * the legacy `store/colorAdjustmentActions.ts` still reads its own, so
+   * clearing one is a real regression in either direction (W29h fixed exactly
+   * that defect at this call site).
+   *
+   * `app.clearColorAdjustment()` clears BOTH: W29i hoisted the paired
+   * implementation out of the `TimelineUIStore` context literal — where it
+   * was reachable only via `selectLayer` — onto `ApplicationStore`, so the
+   * public lifecycle surface and the `selectLayer` path finally agree.
+   * `drawing.test.ts:520` pins the Zustand half and still passes.
+   */
+  const actions = useMemo(
+    () => ({
+      /* pixel writes — `writeOptions` is the mask/behaviour/variant-index
+       * bundle, read on the UI side and passed DOWN, so `PixelStore` never
+       * reads a UI store (the one-directional boundary). */
+      setPixels: (pixels: Parameters<typeof app.pixels.setPixels>[0]) =>
+        app.pixels.setPixels(pixels, app.selectionUI.writeOptions),
+
+      /* selection geometry */
+      setSelection: (box: SelectionBox | null) =>
+        app.selectionUI.setSelection(box, app.selectionDims),
+      clearSelection: () => app.selectionUI.clearSelection(),
+      moveSelection: (dx: number, dy: number) =>
+        app.selectionUI.moveSelection(dx, dy),
+      selectLasso: (points: Point[]) =>
+        app.selectionUI.selectLasso(points, app.selectionDims),
+
+      /* the two pixel-sampling selects — both no-op without an editable grid,
+       * exactly as the bridge delegates did. */
+      selectFloodFillAt: (x: number, y: number) => {
+        const editable = app.editableGrid;
+        if (!editable) return;
+        app.selectionUI.selectFloodFillAt(x, y, editable.grid, editable.dims);
+      },
+      selectAllByColorAt: (x: number, y: number) => {
+        const editable = app.editableGrid;
+        if (!editable) return;
+        app.selectionUI.selectAllByColorAt(x, y, editable.grid, editable.dims);
+      },
+
+      /* the two that ALWAYS act on the mask — `selectionBehavior` does not
+       * gate them, which is why this is `maskWriteOptions` and not
+       * `writeOptions`. */
+      deleteSelectionPixels: () =>
+        app.pixels.deleteSelectionPixels(app.selectionUI.maskWriteOptions),
+      moveSelectedPixels: (dx: number, dy: number) => {
+        app.pixels.moveSelectedPixels(dx, dy, app.selectionUI.maskWriteOptions);
+        app.selectionUI.moveSelection(dx, dy);
+      },
+
+      /* stroke batching — see the note above. */
+      beginStroke: () => strokeControl.begin(),
+      endStroke: () => strokeControl.end(),
+
+      /* gesture state */
+      endDrawing: () => app.canvasInteraction.endDrawing(),
+      setPreviewPixels: (pixels: Parameters<
+        typeof app.canvasInteraction.setPreviewPixels
+      >[0]) => app.canvasInteraction.setPreviewPixels(pixels),
+      clearPreviewPixels: () => app.canvasInteraction.clearPreviewPixels(),
+
+      /* layer / object / variant / frame */
+      moveLayerPixels: (dx: number, dy: number) =>
+        app.layers.moveLayerPixels(dx, dy),
+      setObjectOrigin: (id: string, origin: { x: number; y: number }) =>
+        app.objects.setObjectOrigin(id, origin),
+      setVariantOffset: (dx: number, dy: number, allFrames?: boolean) =>
+        app.variants.setVariantOffset(dx, dy, allFrames),
+      deleteSelectedFrame: () => app.frames.deleteSelectedFrame(),
+      selectFrame: (id: string, syncVariants?: boolean) =>
+        app.timelineUI.selectFrame(id, syncVariants),
+      advanceVariantFrames: (delta: number) =>
+        app.timelineUI.advanceVariantFrames(delta),
+
+      /* the coupled write — see the note above. */
+      startDrawing: (point: Point) => {
+        app.canvasInteraction.startDrawing(point);
+        app.clearColorAdjustment();
+      },
+    }),
+    [app],
+  );
 
   /* ── geometry (concern #2) ─────────────────────────────────────────────── */
   const objWidth = obj?.gridSize.width ?? 32;

@@ -12,20 +12,29 @@
  * so `ui/` cannot import them.
  *
  * ══════════════════════════════════════════════════════════════════════════
- *  ⚠️ `project` AND `obj` ARE STILL PASSED THROUGH TO THE THREE VIEWS
+ *  `project` IS A NARROW VIEW, NOT A DOMAIN NODE (W29i)
  * ══════════════════════════════════════════════════════════════════════════
  *
- * That is a KNOWN deviation from "never pass a domain node", and it is
- * deliberate — see `FrameTimelineContainer` for the measured reason. In
- * short: `FramesView` and `VariantView` thread `project` into live
- * `React.memo` COMPARATORS that read `project.uiState.variantFrameIndices` by
- * reference, and flattening it there changes render behaviour across the
- * whole timeline. Those two files are the last unpurified components and are
- * left for a task that can verify the comparators. This component only
- * forwards the values; it does not read them.
+ * It used to be the whole `Project`, which was a known deviation from "never
+ * pass a domain node": `FramesView` and `VariantView` thread it into live
+ * `React.memo` comparators reading `project.uiState.variantFrameIndices` by
+ * reference, so flattening it changed render behaviour across the timeline.
+ *
+ * W29i enumerated what the subtree actually reads — exactly four fields — and
+ * narrowed the prop to {@link TimelineProjectView}, which `FrameTimelineContainer`
+ * assembles from four separate MobX observables. The comparators still see the
+ * identical `variantFrameIndices` record by the identical reference, and
+ * `containers/__tests__/frameThumbnailMemo.dom.test.tsx` pins the render
+ * counts (measured against the pre-change code, reproduced exactly after).
+ *
+ * ⚠️ `obj` IS still a domain node, deliberately: `PixelObject` carries the
+ * frames and their layers, which is the pixel data the timeline renders. It
+ * is forwarded, never observed deeply.
+ *
+ * This component only forwards both; it does not read either.
  */
 import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
-import type { PixelObject, Project, Layer } from '../../../types';
+import type { PixelObject, Layer, TimelineProjectView } from '../../../types';
 import type { CurrentVariant } from '../../../types';
 import './FrameTimeline.css';
 
@@ -101,7 +110,7 @@ function ViewModeDropdown({
 
 /** What each of the three views needs from this component. */
 export interface TimelineViewRenderProps {
-  project: Project;
+  project: TimelineProjectView;
   obj: PixelObject;
   isPlaying: boolean;
   togglePlayback: () => void;
@@ -112,7 +121,7 @@ export interface TimelineViewRenderProps {
 
 interface FrameTimelineProps {
   /** ⚠️ Forwarded to the three views unchanged — see the note above. */
-  project: Project | null;
+  project: TimelineProjectView | null;
   obj: PixelObject | null;
   layer: Layer | null;
   variantData: CurrentVariant | null;

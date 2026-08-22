@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactNode } from 'react';
-import { Frame, Project, PixelObject } from '../../types';
+import { Frame, PixelObject, TimelineProjectView } from '../../types';
 import { renderFramePreview } from '../../utils/previewRenderer';
 import { PreviewModal } from '../../ui/components/PreviewModal/PreviewModal';
 import { ResizeModal } from '../../ui/components/ResizeModal/ResizeModal';
@@ -328,7 +328,7 @@ const FrameItem = memo(function FrameItem({
 });
 
 interface FramesViewProps {
-  project: Project;
+  project: TimelineProjectView;
   obj: PixelObject;
   isPlaying: boolean;
   togglePlayback: () => void;
@@ -343,11 +343,13 @@ interface FramesViewProps {
    * `selectionWriteOptions()` / `editableGrid()` do for the canvas containers.
    * That is why they lift cleanly here and those do not.
    *
-   * ⚠️ `project` deliberately STAYS a domain node. See the note in
-   * `FramesViewContainer` — `FrameThumbnail`'s comparator reads
-   * `project.uiState.variantFrameIndices` BY REFERENCE and it is LIVE
-   * (measured W29c against the real project: 7 variant groups, 9 populated
-   * indices). Flattening it is a render-behaviour change, not a refactor.
+   * ⚠️ `project` is `TimelineProjectView` as of W29i — the four fields this
+   * file and `VariantView` actually read, NOT a domain node. `FrameThumbnail`'s
+   * comparator still reads `project.uiState.variantFrameIndices` BY REFERENCE
+   * and that guard is LIVE (measured W29c against the real project: 7 variant
+   * groups, 9 populated indices); it sees the identical record by the
+   * identical reference, and the render counts are pinned by
+   * `containers/__tests__/frameThumbnailMemo.dom.test.tsx`.
    */
   addFrame: (name: string, copyPrevious?: boolean) => void;
   deleteFrame: (id: string) => void;

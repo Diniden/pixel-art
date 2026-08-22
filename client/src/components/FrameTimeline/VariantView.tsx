@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactNode } from 'react';
-import { Project, PixelObject, Layer, Variant, VariantFrame, VariantGroup } from '../../types';
+import { PixelObject, Layer, Variant, VariantFrame, VariantGroup, TimelineProjectView } from '../../types';
 import { renderVariantFramePreview } from '../../utils/previewRenderer';
 import { PreviewModal } from '../../ui/components/PreviewModal/PreviewModal';
 import { ResizeModal } from '../../ui/components/ResizeModal/ResizeModal';
@@ -75,7 +75,7 @@ const VariantFrameThumbnail = memo(function VariantFrameThumbnail({
 });
 
 interface VariantViewProps {
-  project: Project;
+  project: TimelineProjectView;
   obj: PixelObject;
   layer: Layer;
   variantData: {
