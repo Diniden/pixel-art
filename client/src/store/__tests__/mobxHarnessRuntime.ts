@@ -615,3 +615,40 @@ export function dispatchLegacyAction(
   }
   return result;
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* The registered-app stack (re-homed from the deleted src/store/index.ts)    */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+const registered: ApplicationStore[] = [];
+
+/**
+ * Make `app` the store the harness dispatch table (and the frozen suite's
+ * module-scope readers) resolves. Returns a disposer that restores the
+ * previously registered app — the same capture-and-restore shape
+ * `installBridge` had, so `wireAutoSave()` keeps its semantics: while a
+ * wired app is registered, dispatches and legacy-shaped reads reach IT; on
+ * dispose they fall back to the shared harness app.
+ */
+export function registerHarnessApp(app: ApplicationStore): () => void {
+  registered.push(app);
+  let disposed = false;
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    const index = registered.lastIndexOf(app);
+    if (index !== -1) registered.splice(index, 1);
+  };
+}
+
+/** The store every legacy-shaped read and dispatch currently resolves to. */
+export function currentHarnessApp(): ApplicationStore {
+  const app = registered[registered.length - 1];
+  if (!app) {
+    throw new Error(
+      "harness runtime: no ApplicationStore is registered — the harness " +
+        "must call registerHarnessApp(app) before anything reads it.",
+    );
+  }
+  return app;
+}

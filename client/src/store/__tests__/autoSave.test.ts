@@ -40,7 +40,6 @@ import {
 import { MAX_HISTORY } from "@/store/storeTypes";
 import { projectApi } from "@/api";
 import { compactToProject, projectToCompact } from "@/types";
-import { useEditorStore } from "@/store";
 
 const spyOnSave = () => vi.spyOn(projectApi, "save");
 
@@ -416,7 +415,7 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
   describe("the AIInterpolateModal history commit (fixed by task 14)", () => {
     it("FIXED: the modal's commit path caps projectHistory at MAX_HISTORY", () => {
       for (let i = 0; i < MAX_HISTORY + 5; i++) {
-        const newProject = cloneProject(useEditorStore.getState().project!);
+        const newProject = cloneProject(harness.getProject()!);
         harness.dispatch("updateProjectAndSave", () => newProject, true);
       }
 
@@ -426,7 +425,7 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
 
     it("FIXED: the modal's commit path schedules a save through the store", () => {
       save.mockClear();
-      const newProject = cloneProject(useEditorStore.getState().project!);
+      const newProject = cloneProject(harness.getProject()!);
       harness.dispatch("updateProjectAndSave", () => newProject, true);
       vi.advanceTimersByTime(500);
       expect(save).toHaveBeenCalledTimes(1);

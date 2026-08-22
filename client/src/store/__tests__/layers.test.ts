@@ -41,7 +41,7 @@ import {
 } from "./storeContract";
 import { projectToCompact } from "@/types";
 import type { Color, Layer, PixelData, Project } from "@/types";
-import { useEditorStore } from "@/store";
+import { currentHarnessApp } from "./mobxHarnessRuntime";
 // Task 16: the lifecycle actions are DomainStore flows behind bridge-installed
 // delegates; the cross-project tests wire the stack and stub the typed API.
 import { projectApi } from "@/api";
@@ -101,7 +101,7 @@ const pixelOf = (
     y
   ][x];
 
-const readClipboard = () => useEditorStore.getState().layerClipboard;
+const readClipboard = () => currentHarnessApp().session.layerClipboard;
 
 describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
   let harness: StoreHarness;
@@ -115,7 +115,7 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
   afterEach(() => {
     harness.dispatch("endStroke");
     harness.reset();
-    useEditorStore.setState({ layerClipboard: null });
+    currentHarnessApp().session.setLayerClipboard(null);
   });
 
   /* ── add / duplicate / delete / rename / visibility ────────────────────── */

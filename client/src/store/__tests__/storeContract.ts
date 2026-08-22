@@ -33,7 +33,7 @@
  * renderer.
  */
 import { runInAction } from "mobx";
-import { currentHarnessApp, registerHarnessApp } from "@/store";
+import { currentHarnessApp, registerHarnessApp } from "./mobxHarnessRuntime";
 import { ApplicationStore } from "@/stores/ApplicationStore";
 import { DEFAULT_UI_STATE, compactToProject, projectToCompact } from "@/types";
 import type {
