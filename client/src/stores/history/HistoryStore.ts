@@ -162,9 +162,20 @@ export class HistoryStore {
     return this.txn !== null && this.txn.commands.length === 0;
   }
 
-  /** Late injection seam for the bridge glue (`store/index.ts`). */
-  setSnapshotProvider(make: (label: string) => Command | null): void {
+  /**
+   * Late injection seam for the snapshot provider.
+   *
+   * Returns the PREVIOUS provider so a caller that installs its own (each
+   * `ApplicationStore` binds the shared instance to its own hosted project)
+   * can restore it on dispose — the same capture-and-restore discipline the
+   * retired bridge used for its action delegates.
+   */
+  setSnapshotProvider(
+    make: ((label: string) => Command | null) | null,
+  ): ((label: string) => Command | null) | null {
+    const previous = this.makeSnapshot;
     this.makeSnapshot = make;
+    return previous;
   }
 
   /**

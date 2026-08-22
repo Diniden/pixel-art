@@ -6,7 +6,7 @@
  * ══════════════════════════════════════════════════════════════════════════
  *
  * `FrameTimelineContainer` was the codebase's second-to-last real
- * `useEditorStore` importer. It read the WHOLE `project` node off Zustand and
+ * legacy-store-hook importer. It read the WHOLE `project` node off Zustand and
  * threaded it into `FramesView`/`VariantView`, where `FrameThumbnail`'s
  * `React.memo` comparator reads `project.uiState.variantFrameIndices` BY
  * REFERENCE (`FramesView.tsx:108-110` and `:150-152`).

@@ -11,15 +11,12 @@ import { createRoot } from 'react-dom/client'
 import { AppContainer } from './containers/AppContainer'
 import { ApplicationStore } from './stores/ApplicationStore'
 import { StoreProvider } from './stores/context'
-import { installBridge } from './stores/bridge/zustandBridge'
 
 // The ONE ApplicationStore of the app, constructed here and passed in — never
 // a module-level singleton (task 14). Tests and Storybook build their own.
+// The Zustand bridge that used to be installed here retired with the legacy
+// store (task 38): the ApplicationStore is self-hosting now.
 const store = new ApplicationStore({ autoSaveEnabled: true })
-
-// Phase A bridge: MobX mirrors Zustand until each slice flips (tasks 14-38).
-// App-lifetime — the disposer is intentionally unused here.
-installBridge(store)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

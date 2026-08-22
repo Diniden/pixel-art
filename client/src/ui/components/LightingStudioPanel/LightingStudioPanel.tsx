@@ -2,7 +2,7 @@
  * LightingStudioPanel — PURE (REFRESH task 36, W27).
  *
  * Task 27 gave this an `observer()` container; task 36 removes its
- * `useEditorStore()` call so it can live under `ui/`. Every value is a prop
+ * legacy Zustand-hook call so it can live under `ui/`. Every value is a prop
  * and every effect is a callback.
  *
  * ⚠️ The two children are still rendered through their own CONTAINERS, passed

@@ -1,13 +1,13 @@
 /**
  * The store seams W29d added — the implementations that block the last six
- * `useEditorStore` container sites.
+ * legacy-hook container sites.
  *
  * ## Why these tests, and not more of them
  *
  * `src/store/__tests__/colorAdjustment.test.ts` (34 pins, both harness rows) is
  * the SPECIFICATION for the colour-adjustment behaviour, and it is frozen —
  * this wave may not touch it. But both of its rows dispatch through
- * `useEditorStore`, which during the bridge era means both rows exercise the
+ * the legacy Zustand hook, which during the bridge era means both rows exercise the
  * **Zustand** `colorAdjustmentActions.ts`. The MobX row varies READS, not
  * dispatch (`storeContract.ts:405`). So the new MobX implementations added
  * here are, by construction, NOT covered by those 34 pins.
@@ -298,7 +298,7 @@ describe("ApplicationStore.startColorAdjustment — the scan", () => {
     app.startColorAdjustment(RED, true);
     expect(app.ui.tool.colorAdjustment).not.toBeNull();
     // Before W29d this cleared ONLY Zustand's copy, through a
-    // `useEditorStore.setState` callback — so the MobX field stayed stale.
+    // legacy-hook `setState` callback — so the MobX field stayed stale.
     runInAction(() => app.timelineUI.selectLayer("hair-f1"));
     expect(app.ui.tool.colorAdjustment).toBeNull();
   });

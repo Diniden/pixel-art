@@ -47,7 +47,7 @@
  *  - `startColorAdjustment` / `clearColorAdjustment` have no MobX
  *    implementation either. The `clearColorAdjustment` found in `stores/` is
  *    NOT one — `zustandProjectHost.ts:150` is a callback that writes
- *    `useEditorStore.setState({ colorAdjustment: null })`, i.e. MobX reaching
+ *    a legacy-hook `setState({ colorAdjustment: null })`, i.e. MobX reaching
  *    BACK into Zustand. The state itself lives only in Zustand.
  *  - `saveCurrentStateToHistory` wraps `HistoryStore.snapshot`, but the
  *    `store/index.ts:355` closure also runs `reconcile()` and

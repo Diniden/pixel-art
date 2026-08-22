@@ -22,7 +22,7 @@ import './ReferenceImagePanel.css';
  * is gone is the shared mutable module state.
  *
  * ⚠️ The component is now pure presentation — it imports no store (task 29
- * deletes its `useEditorStore()` call). `ReferenceImagePanelContainer` supplies
+ * deletes its legacy Zustand-hook call). `ReferenceImagePanelContainer` supplies
  * every value below.
  */
 interface ReferenceImagePanelProps {

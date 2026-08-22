@@ -1,4 +1,19 @@
-import type { StoreGet } from "./storeTypes";
+/**
+ * ── THE FROZEN LEGACY-HELPER ORACLE (REFRESH task 38) ──────────────────────
+ *
+ * `store/helpers.ts` VERBATIM, as deleted by the Zustand retirement — kept
+ * here as the equivalence oracle for `computeds.test.ts`. While the module
+ * was live, that suite imported the real implementation ("an import cannot
+ * drift"); now that the production module is gone, this frozen copy pins the
+ * legacy algorithm the 6 `ApplicationStore` computeds were migrated from.
+ * Nothing imports it outside `computeds.test.ts`, and nothing here may be
+ * "improved": it is a characterisation fixture, not production code.
+ *
+ * Byte-for-byte from `git show <pre-task-38>:client/src/store/helpers.ts`,
+ * with only this header and the import path adjusted (`./storeTypes` →
+ * `../../store/storeTypes`).
+ */
+import type { StoreGet } from "../../store/storeTypes";
 
 export function createHelpers(get: StoreGet) {
   return {

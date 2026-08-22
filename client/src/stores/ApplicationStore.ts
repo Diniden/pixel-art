@@ -56,18 +56,9 @@ import {
 } from "./domain/applyInterpolation";
 import { ReferenceUIStore } from "./ui/ReferenceUIStore";
 import { CanvasInteractionStore } from "./ui/CanvasInteractionStore";
-import {
-  createZustandProjectHost,
-  createZustandDomainMirror,
-  createZustandSelectionSink,
-  createZustandTimelineContext,
-  createZustandPixelMirror,
-  createZustandSelectionPublisher,
-} from "./bridge/zustandProjectHost";
-import {
-  editorHistory,
-  historyControl as legacyHistoryControl,
-} from "../store";
+import { editorHistory } from "./history/editorHistory";
+import { createSnapshotCommand } from "./history/commands";
+import type { Command, SnapshotHost } from "./history/commands";
 import type { HistoryStore } from "./history/HistoryStore";
 import type {
   Color,
@@ -76,6 +67,8 @@ import type {
   Layer,
   PixelData,
   PixelObject,
+  Project,
+  UIState,
 } from "../types";
 import type {
   ColorAdjustmentState,
@@ -279,6 +272,39 @@ export class ApplicationStore {
    */
   private readonly mutator: DomainMutator;
 
+  /* ── task 38: the hosted project — the Zustand mirror's replacement ────── */
+  /**
+   * The recombined `Project` this app currently hosts, held BY REFERENCE.
+   *
+   * This is what the bridge-era Zustand `project` field was once the 34
+   * legacy consumers were migrated off it: the box `DomainMirror.publish` and
+   * `PixelMirror.publish` land a committed tree in, and the record
+   * `DomainStore.currentProject()` reads its `uiState` ride-alongs from.
+   * Plain and non-observable, deliberately — it carries 300k-cell grids, and
+   * every live consumer observes the MobX stores instead (R2).
+   */
+  private readonly hosted: { current: Project | null } = { current: null };
+
+  /** Task 38 — restored by {@link ApplicationStore.dispose}. */
+  private previousSnapshotProvider: ((label: string) => Command | null) | null =
+    null;
+
+  /**
+   * How a `SnapshotCommand` reads and restores the live project (task 38 —
+   * the legacy glue's `snapshotHost`, re-homed). `restore` re-attaches the
+   * LIVE `referenceImage`: it never travels through history (task 17), so
+   * commands are captured with it stripped.
+   */
+  private readonly snapshotHost: SnapshotHost = {
+    current: () => this.hosted.current,
+    restore: (project) => {
+      this.adoptProject({
+        ...project,
+        referenceImage: this.hosted.current?.referenceImage,
+      });
+    },
+  };
+
   /** W29d — see {@link ApplicationStore.setAiServiceUrl}. */
   private readonly aiServiceUrlSink: (url: string) => void;
 
@@ -353,16 +379,42 @@ export class ApplicationStore {
     this.session = new SessionStore();
     this.domain = new DomainStore({
       session: this.session,
-      host: options.projectHost ?? createZustandProjectHost(),
+      host: options.projectHost ?? this.createNativeProjectHost(),
     });
     this.history = editorHistory;
     this.history.setBudgetBytes(this.options.historyBudgetBytes);
+
+    // ── task 38: the shared history singleton snapshots THIS app's project ─
+    //
+    // The snapshot provider is a single slot on the shared `editorHistory`,
+    // so the last-constructed app owns it — the same last-wins discipline the
+    // retired bridge used for its action delegates. The previous provider is
+    // captured and restored by `dispose()`, so a test that wires a second app
+    // (`wireAutoSave()`) hands the slot back when it unwires.
+    this.previousSnapshotProvider = this.history.setSnapshotProvider(
+      (label) => {
+        const project = this.domain.currentProject();
+        return project
+          ? createSnapshotCommand({ label, project, host: this.snapshotHost })
+          : null;
+      },
+    );
 
     // ── task 23: the tree's behaviour modules and the cross-store computeds ─
     const mutator = new DomainMutator({
       domain: this.domain,
       history: this.history,
-      mirror: options.domainMirror ?? createZustandDomainMirror(),
+      mirror: options.domainMirror ?? {
+        // Task 38 (native): a committed MobX mutation lands in the hosted
+        // project BY REFERENCE — the one-line publish the Zustand mirror
+        // performed, minus the store in the middle.
+        publish: (project) => {
+          this.hosted.current = project;
+        },
+        snapshot: (label) => {
+          runInAction(() => this.history.snapshot(label));
+        },
+      },
     });
     this.mutator = mutator;
 
@@ -414,30 +466,48 @@ export class ApplicationStore {
     // ── task 32 ────────────────────────────────────────────────────────────
     // No dependencies in either direction; see the member declaration.
     this.canvasInteraction = new CanvasInteractionStore();
-    const zustandTimeline = createZustandTimelineContext();
+    // ── task 38: the NATIVE sinks — the hosted `uiState` replaces Zustand ──
+    //
+    // During the bridge era these wrote the Zustand SOURCE and the bridge
+    // mirrored the value back into MobX. The MobX stores own every field now,
+    // so each sink patches the hosted project's `uiState` ride-along copy —
+    // the record `currentProject()` recombines for the wire format's domain
+    // half and for external readers — while the owning store's observable is
+    // written by the caller as before. One field, one writer, no mirror.
     this.aiServiceUrlSink =
-      options.publishAiServiceUrl ?? zustandTimeline.publishAiServiceUrl;
+      options.publishAiServiceUrl ??
+      ((url) => this.patchHostedUiState({ aiServiceUrl: url }));
+    // `colorHistory` is SessionStore-owned outright now (the Phase A list is
+    // retired); `setColorAndAddToHistory`'s `session.addToColorHistory` call
+    // is the single writer, so the sink carries only the `selectedColor`
+    // half the legacy action folded into the same commit.
     this.colorSink =
-      options.publishColorAndHistory ?? zustandTimeline.publishColorAndHistory;
+      options.publishColorAndHistory ??
+      ((color) => this.patchHostedUiState({ selectedColor: color }));
     this.selectedColorSink =
-      options.publishSelectedColor ?? zustandTimeline.publishSelectedColor;
-    // W29i: the LEGACY half of the paired colour-adjustment clear. See
-    // `clearBothColorAdjustments`.
+      options.publishSelectedColor ??
+      ((color) => this.patchHostedUiState({ selectedColor: color }));
+    // W29i's paired clear: the "legacy half" is gone with the Zustand store —
+    // `ToolUIStore.colorAdjustment` is the ONLY storage location left, so the
+    // second half of the pair is a no-op unless a test injects its own.
     this.legacyClearColorAdjustment =
-      options.timelineContext?.clearColorAdjustment ??
-      zustandTimeline.clearColorAdjustment;
-    // Read through a closure, never captured: `historyControl` is a mutable
-    // module binding assigned when the Zustand store is created, which may be
-    // AFTER this constructor runs.
+      options.timelineContext?.clearColorAdjustment ?? (() => {});
+    // Task 38: undo/redo/snapshot are bare `HistoryStore` calls now — the
+    // Phase B mirror the bridge-era glue re-published after each operation is
+    // gone with the store it mirrored into.
     this.historyOps = {
-      undo: () => (options.historyControl ?? legacyHistoryControl).undo(),
-      redo: () => (options.historyControl ?? legacyHistoryControl).redo(),
-      // W29h. `historyControl` gained `snapshot`; an injected test double may
-      // predate it, so fall back to the module binding rather than crashing.
+      undo: () =>
+        options.historyControl
+          ? options.historyControl.undo()
+          : runInAction(() => this.history.undo()),
+      redo: () =>
+        options.historyControl
+          ? options.historyControl.redo()
+          : runInAction(() => this.history.redo()),
       snapshot: (label) => {
         const injected = options.historyControl?.snapshot;
         if (injected) injected.call(options.historyControl, label);
-        else legacyHistoryControl.snapshot(label);
+        else runInAction(() => this.history.snapshot(label ?? "Edit"));
       },
     };
     const timelineUI = new TimelineUIStore({
@@ -455,11 +525,11 @@ export class ApplicationStore {
         objects: () => this.domain.objects,
         publishSelection:
           options.timelineContext?.publishSelection ??
-          zustandTimeline.publishSelection,
+          ((patch) => this.patchHostedUiState(patch)),
         // ── W29d: the MobX half is now UNCONDITIONAL ──────────────────
         //
         // This callback used to be ONLY `zustandProjectHost.ts:150`'s
-        // `useEditorStore.setState({ colorAdjustment: null })` — MobX
+        // a legacy-hook `setState({ colorAdjustment: null })` — MobX
         // reaching back into Zustand for a field MobX already stores
         // (`ToolUIStore.colorAdjustment`). That is the wrong direction
         // through the bridge and it left the MobX copy permanently stale,
@@ -495,7 +565,20 @@ export class ApplicationStore {
     this.domain.setUIStateProvider(() => this.ui.toPersistedUIState());
 
     this.palettes = new PaletteStore({ domain: this.domain, mutator });
-    const selectionSink = options.selectionSink ?? createZustandSelectionSink();
+    // Task 38 (native): a domain mutation's selection write lands on the ids'
+    // OWNER (`TimelineUIStore`) plus the hosted ride-along copy. During the
+    // bridge era this wrote Zustand and the adoption seam pulled it back;
+    // both halves collapse into the two direct writes below.
+    const selectionSink = options.selectionSink ?? {
+      selectObjectTree: (ids: {
+        selectedObjectId: string | null;
+        selectedFrameId: string | null;
+        selectedLayerId: string | null;
+      }) => {
+        this.patchHostedUiState(ids);
+        runInAction(() => this.timelineUI.adopt(ids));
+      },
+    };
     this.objects = new ObjectStore({
       domain: this.domain,
       mutator,
@@ -588,7 +671,19 @@ export class ApplicationStore {
     this.pixels = new PixelStore({
       domain: this.domain,
       history: this.history,
-      mirror: options.pixelMirror ?? createZustandPixelMirror(),
+      mirror: options.pixelMirror ?? {
+        // Task 38 (native): publish BY REFERENCE into the hosted project; the
+        // bridge-era history-mirror hooks are no-ops — the mirror they kept
+        // consistent is gone with the Zustand store.
+        publish: (project) => {
+          this.hosted.current = project;
+        },
+        syncHistory: () => {},
+        reconcile: () => {},
+        snapshot: (label) => {
+          runInAction(() => this.history.snapshot(label));
+        },
+      },
       source: {
         get selectedObjectId() {
           return timelineUI.selectedObjectId;
@@ -611,7 +706,10 @@ export class ApplicationStore {
     // satisfied and must not be repeated.
     this.selectionUI = new SelectionUIStore({
       tool: this.ui.tool,
-      publish: options.selectionPublisher ?? createZustandSelectionPublisher(),
+      // Task 38 (native): `SelectionUIStore` is the selection's only storage
+      // location now — the legacy top-level `EditorState.selection` field the
+      // publisher mirrored into is gone, so the default publish is a no-op.
+      publish: options.selectionPublisher ?? (() => {}),
     });
 
     makeObservable(this, {
@@ -650,6 +748,171 @@ export class ApplicationStore {
           this.ui,
         )
       : null;
+  }
+
+  /* ── task 38: the NATIVE project host ──────────────────────────────────── */
+
+  /**
+   * The MobX-native {@link ProjectHost} — the retirement of
+   * `createZustandProjectHost`.
+   *
+   * `getProject()` recombines the hosted project with a `uiState` COMPOSED
+   * from the owning stores, so `DomainStore.currentProject()` (and through it
+   * the wire format's domain half and every external reader) always sees the
+   * live values — the role the bridge's Phase A/B mirrors used to play.
+   *
+   * `installProject` resets the undo history exactly as the legacy lifecycle
+   * did on init/create/switch/delete; `replaceProject` keeps it
+   * (restore-from-backup is undoable); `snapshotToHistory` records through
+   * the shared stack's snapshot provider.
+   */
+  private createNativeProjectHost(): ProjectHost {
+    return {
+      getProject: () => {
+        const project = this.hosted.current;
+        if (!project) return null;
+        return { ...project, uiState: this.composeUiState(project.uiState) };
+      },
+      installProject: (project) => {
+        this.adoptProject(project);
+        // `replaceEntries`, NOT `clear()`: an open stroke transaction
+        // deliberately survives an install — pinned by task 08 (see
+        // `HistoryStore.replaceEntries`).
+        runInAction(() => this.history.replaceEntries([], -1));
+      },
+      replaceProject: (project) => {
+        this.adoptProject(project);
+      },
+      snapshotToHistory: () => {
+        // The legacy host pushed a serializer-round-trip clone; the snapshot
+        // provider's `createSnapshotCommand` clones the same way ("Edit" is
+        // the label the bridge-era adoption gave these entries).
+        runInAction(() => this.history.snapshot("Edit"));
+      },
+    };
+  }
+
+  /**
+   * Adopt a whole `Project` into every store that owns a slice of it — the
+   * load/install/restore seam (task 38).
+   *
+   * This is what the bridge's subscribe-side adoption seams (`adoptTree`,
+   * `adoptUIState`, `adoptLighting`, `adoptVariantFrameIndices`,
+   * `adoptSelectionIds`, the Phase A `aiServiceUrl` sync) collapse into once
+   * the store in the middle is gone: one explicit call at every point a whole
+   * project legitimately arrives (a load, a lifecycle flow, an undo/redo
+   * restore, the task-08 harness's `load()`), instead of an echo-checked
+   * pull on every store change.
+   */
+  adoptProject(project: Project): void {
+    runInAction(() => {
+      this.hosted.current = project;
+      this.domain.adoptTree(project);
+      const ui = project.uiState;
+      this.ui.hydrate(ui);
+      this.ui.hydrateLighting(ui);
+      this.timelineUI.adopt({
+        selectedObjectId: ui.selectedObjectId ?? null,
+        selectedFrameId: ui.selectedFrameId ?? null,
+        selectedLayerId: ui.selectedLayerId ?? null,
+      });
+      this.timelineUI.adoptVariantFrameIndices(ui.variantFrameIndices ?? {});
+      this.session.setAiServiceUrl(ui.aiServiceUrl ?? null);
+    });
+  }
+
+  /**
+   * Drop the hosted project so `currentProject()` reads `null` (task 38).
+   * The teardown seam the task-08 harness's `reset()` uses — the legacy
+   * store's `project: null` write, made explicit.
+   */
+  clearHostedProject(): void {
+    this.hosted.current = null;
+  }
+
+  /**
+   * Patch the hosted project's `uiState` ride-along copy (task 38). The
+   * shape every native sink funnels through — the one writer of that record.
+   */
+  private patchHostedUiState(patch: Partial<UIState>): void {
+    const project = this.hosted.current;
+    if (!project) return;
+    this.hosted.current = {
+      ...project,
+      uiState: { ...project.uiState, ...patch },
+    };
+  }
+
+  /**
+   * The live `UIState`, composed from the stores that own each field
+   * (task 38). `base` supplies any field no store has claimed — the honest
+   * representation of the hosted ride-along, exactly as the bridge-era
+   * `currentProject()` composition worked, only sourced from MobX instead of
+   * the Zustand mirror.
+   *
+   * ⚠️ RUNTIME shapes, not the wire format: packing to `CompactUIState`
+   * happens only in `UIStore.toPersistedUIState()`, at the serialization
+   * boundary.
+   */
+  private composeUiState(base: UIState): UIState {
+    const t = this.ui.tool;
+    const v = this.ui.viewport;
+    const l = this.lightingUI;
+    const tl = this.timelineUI;
+    const panels = v.panels;
+    return {
+      ...base,
+      /* TimelineUIStore */
+      selectedObjectId: tl.selectedObjectId,
+      selectedFrameId: tl.selectedFrameId,
+      selectedLayerId: tl.selectedLayerId,
+      variantFrameIndices: tl.variantFrameIndices,
+      /* ToolUIStore */
+      selectedTool: t.selectedTool,
+      selectedColor: t.selectedColor,
+      brushSize: t.brushSize,
+      bitDepth: t.bitDepth,
+      shapeMode: t.shapeMode,
+      borderRadius: t.borderRadius ?? base.borderRadius,
+      eraserShape: t.eraserShape,
+      pencilBrushShape: t.pencilBrushShape,
+      pencilBrushMax: t.pencilBrushMax,
+      moveAllLayers: t.moveAllLayers,
+      selectionMode: t.selectionMode,
+      selectionBehavior: t.selectionBehavior,
+      originColor: t.originColor,
+      gaussianFill: t.gaussianFill,
+      /* ViewportUIStore */
+      zoom: v.zoom,
+      panOffset: v.panOffset,
+      focusMode: v.focusMode,
+      lightGridMode: v.lightGridMode,
+      canvasInfoHidden: v.canvasInfoHidden,
+      objectLibraryViewMode: v.objectLibraryViewMode,
+      timelineThumbnailMode: v.timelineThumbnailMode,
+      layerSelectionCounter: v.layerSelectionCounter,
+      frameReferencePanelPosition: panels.frameReference.position,
+      frameReferencePanelMinimized: panels.frameReference.minimized,
+      frameReferencePanelVisible: panels.frameReference.visible,
+      referenceImagePanelPosition: panels.referenceImage.position,
+      referenceImagePanelMinimized: panels.referenceImage.minimized,
+      lightingPreviewPanelPosition: panels.lightingPreview.position,
+      lightingPreviewPanelMinimized: panels.lightingPreview.minimized,
+      /* UIStore / ReferenceUIStore */
+      traceNudgeAmount: this.ui.traceNudgeAmount,
+      /* LightingUIStore — runtime shapes */
+      studioMode: l.studioMode,
+      lightingDataLayerEditMode: l.lightingDataLayerEditMode,
+      selectedNormal: l.selectedNormal,
+      lightDirection: l.lightDirection,
+      lightColor: l.lightColor,
+      ambientColor: l.ambientColor,
+      heightScale: l.heightScale,
+      heightBrushValue: l.heightBrushValue,
+      normalBrushShape: l.normalBrushShape,
+      /* SessionStore */
+      aiServiceUrl: this.session.aiServiceUrl ?? undefined,
+    };
   }
 
   /* ── THE 6 COMPUTEDS — the replacement for `store/helpers.ts` (task 23) ──
@@ -768,7 +1031,7 @@ export class ApplicationStore {
    * Both were closures inside `zustandBridge.ts` (`editableGrid()` at :1020,
    * `selectionDims()` at :1043) and had no other home, which is the single
    * reason `CanvasContainer` and `LightingCanvasContainer` still dispatch
-   * through `useEditorStore` — calling `app.selectionUI.*` directly meant
+   * through the legacy Zustand hook — calling `app.selectionUI.*` directly meant
    * re-deriving them at the call site, a SECOND implementation of each (R6).
    *
    * They live HERE, not on `DomainStore` and not on a UI store, for exactly
@@ -1010,7 +1273,7 @@ export class ApplicationStore {
    * class so consumers have one lifecycle surface (`start…`/`clear…`) rather
    * than reaching for the scan here and the clear two stores down, and so the
    * `TimelineUIStore` callback that `zustandProjectHost.ts:150` implemented as
-   * `useEditorStore.setState({ colorAdjustment: null })` has a MobX target.
+   * a legacy-hook `setState({ colorAdjustment: null })` has a MobX target.
    */
   clearColorAdjustment(): void {
     this.clearBothColorAdjustments();
@@ -1214,7 +1477,7 @@ export class ApplicationStore {
    * `historyControl` seam — the same technique `strokeControl`,
    * `syncHistoryMirror` and `reconcileHistory` already use, and for the same
    * reason. The point is that a migrated container gets undo WITHOUT
-   * importing `useEditorStore`, not that the glue has moved: it has not, and
+   * importing the legacy Zustand hook, not that the glue has moved: it has not, and
    * task 38 retires it along with the mirror, at which point these two
    * methods become bare `HistoryStore` calls.
    */
@@ -1341,5 +1604,8 @@ export class ApplicationStore {
     this.autoSave?.dispose();
     this.ui.dispose();
     this.referenceUI.dispose();
+    // Task 38: hand the shared history singleton's snapshot slot back to
+    // whichever app held it before this one — see the constructor.
+    this.history.setSnapshotProvider(this.previousSnapshotProvider);
   }
 }

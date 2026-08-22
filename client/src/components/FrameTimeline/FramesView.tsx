@@ -335,7 +335,7 @@ interface FramesViewProps {
   showPreview: boolean;
   setShowPreview: (show: boolean) => void;
   viewModeDropdown: ReactNode;
-  /* ── The 8 former `useEditorStore()` members, now props (W29c) ──────────
+  /* ── The 8 former legacy Zustand-hook members, now props (W29c) ──────────
    *
    * All eight were PASS-THROUGH bridge delegates — five to `FrameStore`, one
    * to `TimelineUIStore.selectFrame`, one to `ObjectStore.resizeObject` — with

@@ -6,7 +6,7 @@
  *     THE API, OR MOBX
  * ══════════════════════════════════════════════════════════════════════════
  *
- * The pre-refactor file was 1,267 lines with `const store = useEditorStore()`
+ * The pre-refactor file was 1,267 lines with one whole-store legacy Zustand-hook call
  * at line 316 — the worst store coupling in the codebase — plus three
  * duplicated encoders, a 136-line job submitter, a 182-line commit routine and
  * 46 hooks. All of that moved OUT:

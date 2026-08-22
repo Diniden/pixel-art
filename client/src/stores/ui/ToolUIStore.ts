@@ -268,7 +268,7 @@ export class ToolUIStore {
    * the adjustment when the layer changes (`layerActions.ts:210`), and it
    * reached that behaviour through an injected `clearColorAdjustment`
    * callback which `zustandProjectHost.ts:150` implemented as
-   * `useEditorStore.setState({ colorAdjustment: null })` — MobX reaching back
+   * a legacy-hook `setState({ colorAdjustment: null })` — MobX reaching back
    * into Zustand for a field MobX already owns. This is that callback's MobX
    * implementation.
    */

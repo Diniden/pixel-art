@@ -3,7 +3,7 @@
  *
  * Moved here from `components/Canvas/CanvasInfo.tsx` by REFRESH task 32 and
  * PURIFIED in the same change. Task 23 had already collapsed its two
- * `useEditorStore()` calls into one and hoisted three computeds into
+ * legacy Zustand-hook calls into one and hoisted three computeds into
  * `CanvasInfoContainer`; what remained was a single destructure of `project`,
  * `selection`, `referenceOverlayOffset` and `setCanvasInfoHidden`. Those are
  * now props, so this file imports no store, no MobX and no API — which is the

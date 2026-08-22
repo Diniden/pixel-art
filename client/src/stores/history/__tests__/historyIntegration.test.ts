@@ -14,7 +14,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runInAction } from "mobx";
-import { editorHistory } from "@/store";
+import { editorHistory } from "@/stores/history/editorHistory";
 import { MAX_HISTORY_BYTES } from "@/stores/history/HistoryStore";
 import { ApplicationStore } from "@/stores/ApplicationStore";
 import { projectApi } from "@/api";
@@ -25,7 +25,7 @@ import {
   RED,
   cloneProject,
   colorAt,
-  createZustandHarness,
+  createMobxHarness,
   layerOf,
   mkLayer,
   tinyProject,
@@ -77,7 +77,7 @@ describe("HistoryStore through the store actions", () => {
   let harness: StoreHarness;
 
   beforeEach(() => {
-    harness = createZustandHarness();
+    harness = createMobxHarness();
     harness.reset();
     // cloneProject: the baseline must already be round-trip-normalised so the
     // final byte-identity comparison is against a stable form (task 07's R1:
@@ -325,7 +325,7 @@ describe("isReplaying blocks auto-save during replay", () => {
     vi.useFakeTimers();
     save = spyOnSave();
     save.mockResolvedValue({ success: true, backupCreated: false });
-    harness = createZustandHarness();
+    harness = createMobxHarness();
     harness.reset();
     harness.load(cloneProject(tinyProject()));
     wired = wireAutoSave();

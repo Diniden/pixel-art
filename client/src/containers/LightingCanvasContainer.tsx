@@ -84,7 +84,7 @@
  *
  * ── W29d: STORE-FREE. The seven `actions.*` names are gone ───────────────
  *
- * W29c left all seven on `useEditorStore.getState()` and named the blocker
+ * W29c left all seven on `getState()` on the legacy Zustand hook and named the blocker
  * precisely: four of them needed something that existed ONLY as a closure
  * inside `stores/bridge/zustandBridge.ts`, so calling `app.pixels.*` here
  * meant re-deriving it — a SECOND implementation, which is the duplication

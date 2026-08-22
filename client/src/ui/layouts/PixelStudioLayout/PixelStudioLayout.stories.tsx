@@ -6,7 +6,7 @@
  * ══════════════════════════════════════════════════════════════════════════
  *
  * There is no `StoreProvider` in this file, no `ApplicationStore`, no
- * `installBridge`, no `useEditorStore`, no MobX import and no decorator that
+ * `installBridge`, no legacy store hook, no MobX import and no decorator that
  * supplies any of them — `.storybook/preview.tsx` provides only CSS, MSW and a
  * full-height wrapper. If `PixelStudioLayout` or `AppShell` had kept a single
  * store read, every story below would throw on mount.

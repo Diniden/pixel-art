@@ -16,7 +16,9 @@
  * duplicates NOTHING. That is the property that distinguishes these from the
  * canvas containers' `actions.*` sites, whose delegates assemble arguments
  * (`pixelWriteOptions()`, `selectionWriteOptions()`, `editableGrid()`) that
- * live only inside `stores/bridge/zustandBridge.ts`.
+ * then lived only inside the bridge (their store homes today are
+ * `SelectionUIStore.writeOptions`/`.maskWriteOptions` and
+ * `ApplicationStore.editableGrid`/`.selectionDims`).
  *
  * ── W29i: `project` IS NO LONGER A DOMAIN NODE ────────────────────────────
  *

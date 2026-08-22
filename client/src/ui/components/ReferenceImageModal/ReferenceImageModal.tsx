@@ -32,7 +32,7 @@ import {
  *   adjustReferenceBoxSize ─────┘
  *   saveReferenceImageToProject ┐
  *   restoreReferenceImageFromProject └→ `DomainStore` actions   (the last two
- *                                       `useEditorStore.getState()` calls)
+ *                                       legacy-hook `getState()` calls)
  *   getCurrentReferenceImageData → `ReferenceUIStore.currentReferenceImageData`
  *   ReferenceImageData (the type) → `types/referenceImage.ts`
  *

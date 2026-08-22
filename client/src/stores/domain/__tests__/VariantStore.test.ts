@@ -28,7 +28,7 @@
  *  6. every grid the store produces is a raw array, never an observable.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { runInAction } from "mobx";
 
 import { ApplicationStore } from "@/stores/ApplicationStore";
@@ -473,7 +473,9 @@ describe("the LAYERING boundaries this task closed", () => {
       "src/stores/domain/FrameStore.ts",
       "src/stores/ui/TimelineUIStore.ts",
       "src/stores/ApplicationStore.ts",
-      "src/stores/bridge/zustandBridge.ts",
+      // (task 38 deleted `src/stores/bridge/` outright — the strongest
+      // possible pass for the file this list used to check.)
+      "src/stores/history/editorHistory.ts",
     ];
     for (const f of files) {
       expect(read(f), f).not.toMatch(/from\s+["'][^"']*components\//);
@@ -494,11 +496,10 @@ describe("the LAYERING boundaries this task closed", () => {
     );
   });
 
-  it("the legacy variantActions module is stubs only — no live implementation", () => {
-    const src = read("src/store/variantActions.ts");
-    // The 1,412-line implementation is gone; what is left routes to MobX.
-    expect(src.split("\n").length).toBeLessThan(200);
-    expect(src).not.toContain("updateProjectAndSave(");
-    expect(src).toContain('migrated(name, "VariantStore")');
+  it("the legacy variantActions module is GONE — task 38 finished the retirement", () => {
+    // W28's gate pinned the module down to throwing stubs; task 38 deleted it
+    // with the rest of the legacy store. `VariantStore` is the only
+    // implementation, which is the end state the stub gate existed to reach.
+    expect(existsSync("src/store/variantActions.ts")).toBe(false);
   });
 });

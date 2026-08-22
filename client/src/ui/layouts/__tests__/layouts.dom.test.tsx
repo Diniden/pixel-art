@@ -10,7 +10,7 @@
  *
  * So this file MOUNTS EVERY STORY OF ALL THREE LAYOUTS AND OF `AppShell`,
  * using their real args, with no `StoreProvider`, no `ApplicationStore`, no
- * `installBridge`, no `useEditorStore` and no decorator of any kind. If any of
+ * `installBridge`, no legacy store hook and no decorator of any kind. If any of
  * the four reached a store — directly or three imports deep — these tests
  * would throw rather than pass quietly.
  *

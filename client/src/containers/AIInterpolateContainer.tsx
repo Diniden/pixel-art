@@ -12,7 +12,7 @@
  *
  *  - **W8 / task 14** — the accept commits through the store's single path
  *    (`app.applyInterpolation` → `DomainMutator.commit`). NO
- *    `useEditorStore.setState()` splice and NO direct `scheduleAutoSave()`
+ *    legacy-hook `setState()` splice and NO direct `scheduleAutoSave()`
  *    import, so `MAX_HISTORY` and the normal auto-save both apply.
  *  - **W9 / task 15** — one `AbortController` per run inside
  *    `useInterpolationJob`, aborted on close AND unmount; `aiApi.pollJob`

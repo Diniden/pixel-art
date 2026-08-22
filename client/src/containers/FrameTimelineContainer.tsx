@@ -40,7 +40,7 @@ export const FrameTimelineContainer = observer(function FrameTimelineContainer()
    *  `project` IS NOW A FOUR-FIELD VIEW BUILT FROM MobX (W29i)
    * ══════════════════════════════════════════════════════════════════════
    *
-   * This line was the codebase's second-to-last real `useEditorStore` read,
+   * This line was the codebase's second-to-last real legacy-store read,
    * and eight preparatory waves left it standing for two stated reasons.
    * Both are now resolved — by measurement, not by assertion.
    *

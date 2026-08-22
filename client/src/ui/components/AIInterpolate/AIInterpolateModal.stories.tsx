@@ -7,7 +7,7 @@
  * ══════════════════════════════════════════════════════════════════════════
  *
  * There is no `StoreProvider` here, no `ApplicationStore`, no `installBridge`,
- * no `useEditorStore`, no MobX import, no `aiApi`, and no decorator that
+ * no legacy store hook, no MobX import, no `aiApi`, and no decorator that
  * supplies any of them — `.storybook/preview.tsx` provides only CSS, MSW and a
  * wrapper, and `modalHost` only retargets the portal.
  *

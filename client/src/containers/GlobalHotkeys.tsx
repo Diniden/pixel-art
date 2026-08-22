@@ -44,7 +44,7 @@
  *
  * ── Why the stores, not the bridge ────────────────────────────────────────
  *
- * `App.tsx` read all five members off `useEditorStore()`. All five have MobX
+ * `App.tsx` read all five members off the legacy Zustand hook. All five have MobX
  * owners now — `ToolUIStore.colorAdjustment` / `.setColorAdjustment`,
  * `ViewportUIStore.toggleFocusMode`, `LightingUIStore.studioMode` /
  * `.setStudioMode` — so this container reads them directly and the bridge is
