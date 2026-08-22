@@ -40,3 +40,6 @@ b78aeafe5b6856394cf5df460e21cdc1e409fbf7
 #   # then append that commit's SHA below, and widen the root `format:check`
 #   # script from the Sweep A scope to the full tree.
 # Spot-check three files by hand before committing (R13).
+
+# Task 38 — Prettier Sweep B, executed 2026-08-22 (213 files, formatting only)
+feff5fad6add578041c978ec79fb0e6621f43910
