@@ -263,6 +263,12 @@ export class ApplicationStore {
    */
   readonly selectionUI: SelectionUIStore;
 
+  /**
+   * The Zustand half of the paired colour-adjustment clear (W29i).
+   * See {@link clearBothColorAdjustments}; a no-op once task 38 lands.
+   */
+  private readonly legacyClearColorAdjustment: () => void;
+
   /* ── task 34 ───────────────────────────────────────────────────────────── */
   /**
    * The shared write seam, retained so {@link applyInterpolation} can reach
@@ -415,6 +421,11 @@ export class ApplicationStore {
       options.publishColorAndHistory ?? zustandTimeline.publishColorAndHistory;
     this.selectedColorSink =
       options.publishSelectedColor ?? zustandTimeline.publishSelectedColor;
+    // W29i: the LEGACY half of the paired colour-adjustment clear. See
+    // `clearBothColorAdjustments`.
+    this.legacyClearColorAdjustment =
+      options.timelineContext?.clearColorAdjustment ??
+      zustandTimeline.clearColorAdjustment;
     // Read through a closure, never captured: `historyControl` is a mutable
     // module binding assigned when the Zustand store is created, which may be
     // AFTER this constructor runs.
@@ -464,13 +475,7 @@ export class ApplicationStore {
         // still reads its own. Clearing only MobX would stop `selectLayer`
         // dropping the LIVE adjustment — a real regression. Task 38 deletes
         // the Zustand half along with the store, leaving the MobX line.
-        clearColorAdjustment: () => {
-          this.ui.tool.clearColorAdjustment();
-          const legacy =
-            options.timelineContext?.clearColorAdjustment ??
-            zustandTimeline.clearColorAdjustment;
-          legacy();
-        },
+        clearColorAdjustment: () => this.clearBothColorAdjustments(),
       },
     });
     this.timelineUI = timelineUI;
@@ -1008,7 +1013,32 @@ export class ApplicationStore {
    * `useEditorStore.setState({ colorAdjustment: null })` has a MobX target.
    */
   clearColorAdjustment(): void {
+    this.clearBothColorAdjustments();
+  }
+
+  /**
+   * The PAIRED clear — both independent storage locations (W29i).
+   *
+   * ⚠️ Not two writers of one field. `colorAdjustment` is in NEITHER
+   * `PHASE_A_FIELDS` nor `PHASE_B_FIELDS`, so the bridge mirrors it in no
+   * direction and Zustand's copy and `ToolUIStore`'s are genuinely
+   * independent. The live UI now reads the MobX one
+   * ({@link adjustColor}, `GlobalHotkeys`, the two colour containers), while
+   * the legacy `store/colorAdjustmentActions.ts` still reads its own.
+   * Clearing only MobX would leave a stale LIVE adjustment on the Zustand
+   * side; clearing only Zustand is the W29d defect this replaced.
+   *
+   * W29i hoisted this out of the `TimelineUIStore` context literal, where it
+   * had been the ONLY paired implementation, so that `clearColorAdjustment()`
+   * — the public lifecycle surface consumers actually reach for — has the
+   * same semantics as the `selectLayer` path. Before this, the two disagreed:
+   * `selectLayer` cleared both, the public method cleared one.
+   *
+   * Task 38 deletes the legacy half with the store, leaving the MobX line.
+   */
+  private clearBothColorAdjustments(): void {
     runInAction(() => this.ui.tool.clearColorAdjustment());
+    this.legacyClearColorAdjustment();
   }
 
   /**

@@ -18,8 +18,16 @@
  * (`pixelWriteOptions()`, `selectionWriteOptions()`, `editableGrid()`) that
  * live only inside `stores/bridge/zustandBridge.ts`.
  *
- * ⚠️ `project` IS STILL PASSED DOWN WHOLE, deliberately — W29c MEASURED the
- * comparator rather than assuming, both ways:
+ * ── W29i: `project` IS NO LONGER A DOMAIN NODE ────────────────────────────
+ *
+ * It is now `TimelineProjectView` — the four fields this subtree actually
+ * reads, assembled from MobX observables by `FrameTimelineContainer`. The
+ * comparator below still sees the identical `variantFrameIndices` record by
+ * the identical reference, and the render counts are pinned by
+ * `__tests__/frameThumbnailMemo.dom.test.tsx`.
+ *
+ * The measurement that made that safe, and that kept `project` whole for
+ * eight waves before it:
  *
  *   `FrameThumbnail`'s `React.memo` comparator
  *   (`FramesView.tsx`) compares `project.uiState.variantFrameIndices` BY
@@ -34,8 +42,13 @@
  *   leaves `undefined` — and was therefore dead code. Same shape, different
  *   answer; the difference only shows up by measuring.
  *
- * Flattening `project` to a view-model would change which timeline cells
- * re-render, which neither tsc nor the suite can verify. It stays.
+ * What no predecessor asked was the NEXT question: what does the comparator
+ * OBSERVE? Only `project.uiState.variantFrameIndices` — and `FrameThumbnail`'s
+ * prop type was always the structural minimum
+ * `{ uiState?: { variantFrameIndices?: … } }`, never `Project`. So narrowing
+ * the wrapper leaves the observed record untouched. Pinned, not assumed: the
+ * render-count test carries two negative controls that fail if the
+ * by-reference guard is flattened into a by-value one or vice versa.
  *
  * `observer()` lives here and only here (ESLint, task 05).
  */

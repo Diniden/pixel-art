@@ -55,10 +55,10 @@ import { TimelineCellContainer } from "./TimelineCellContainer";
 import { generateLayerColors } from "./hooks/timelineLayerColors";
 import { PreviewModal } from "../ui/components/PreviewModal/PreviewModal";
 import { useStores } from "../stores/context";
-import type { PixelObject, Project } from "../types";
+import type { PixelObject, TimelineProjectView } from "../types";
 
 export interface TimelineViewContainerProps {
-  project: Project;
+  project: TimelineProjectView;
   obj: PixelObject;
   isPlaying: boolean;
   togglePlayback: () => void;

@@ -267,3 +267,61 @@ export interface CurrentVariant {
   baseFrameIndex: number;
   offset: { x: number; y: number };
 }
+
+/**
+ * Everything the frame-timeline subtree reads off the project node — and
+ * nothing else (REFRESH W29i).
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ THE SHAPE IS NOT A DESIGN CHOICE — IT IS A MEASUREMENT
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * `FrameTimelineContainer` used to read the WHOLE `Project` off Zustand and
+ * thread it through `FrameTimeline` into `FramesView` (684 lines) and
+ * `VariantView` (657 lines). Eight preparatory waves left it there because
+ * `FrameThumbnail`'s `React.memo` comparator reads
+ * `project.uiState.variantFrameIndices` BY REFERENCE, and W29c measured that
+ * guard **LIVE** against the owner's real project (7 variant groups, 9
+ * populated indices; `TimelineUIStore.setVariantFrameIndex` rebuilds the
+ * record per write because it is `observableRef`). Narrowing what a live
+ * comparator observes changes which timeline cells re-render — a behaviour
+ * change neither tsc nor the suite would catch.
+ *
+ * W29i enumerated every `project.*` access in that whole subtree. There are
+ * exactly FOUR, and this interface is that list:
+ *
+ * | access                             | sites                              |
+ * | ---------------------------------- | ---------------------------------- |
+ * | `uiState.variantFrameIndices`      | the two comparators + VariantView   |
+ * | `uiState.selectedFrameId`          | FramesView:427, VariantView:176     |
+ * | `uiState.zoom`                     | both `PreviewModal`s, TimelineView  |
+ * | `variants`                         | thumbnails, previews, TimelineView  |
+ *
+ * Nothing reads `objects`, `palettes`, `referenceImage`, `version` or any
+ * pixel data. In particular **no consumer needs the 300,249-cell pixel tree**,
+ * which is why this can be assembled from `DomainStore`'s five observable
+ * members without ever calling `currentProject()` — the method that REBUILDS
+ * that tree through `treeToProject()` on every call and must never appear in
+ * a render path (R2).
+ *
+ * ⚠️ **The identity contract that keeps the comparators honest.**
+ * `FrameThumbnail`'s prop type has ALWAYS been the structural minimum
+ * `{ uiState?: { variantFrameIndices?: … } }` — it never asked for a
+ * `Project`, it was merely handed one. The comparator compares the
+ * `variantFrameIndices` RECORD by reference, never the node that wraps it, so
+ * the wrapper's own identity is not load-bearing for it. But `FrameItem` is a
+ * plain `memo` with a SHALLOW prop compare, and it does receive this node —
+ * so the container must keep the wrapper's identity stable whenever its four
+ * fields are unchanged, or every cell re-renders on every timeline render.
+ * `FrameTimelineContainer` does that with a `useMemo` keyed on the four
+ * fields; `frameThumbnailMemo.dom.test.tsx` pins the resulting render counts,
+ * measured against the pre-change code and reproduced exactly after.
+ */
+export interface TimelineProjectView {
+  variants: VariantGroup[];
+  uiState: {
+    selectedFrameId: string | null;
+    zoom: number;
+    variantFrameIndices: { [variantGroupId: string]: number };
+  };
+}
