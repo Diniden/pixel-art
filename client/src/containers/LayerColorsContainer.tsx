@@ -50,25 +50,29 @@ import { observer } from "mobx-react-lite";
 import { LayerColors } from "../ui/components/LayerColors/LayerColors";
 import { extractLayerColors } from "./hooks/layerColorExtraction";
 import { useStores } from "../stores/context";
-import { useEditorStore } from "../store";
 
 export const LayerColorsContainer = observer(function LayerColorsContainer() {
   const app = useStores();
   const { domain, ui } = app;
 
-  // ⚠️ STILL ZUSTAND, and W29d BUILT the MobX replacements but could not
-  // switch this over. `ApplicationStore.startColorAdjustment` /
-  // `clearColorAdjustment` exist and are tested (42 seam tests), but the LIVE
-  // `adjustColor` — dispatched from `ColorPickerContainer`, which cannot move
-  // either — reads ZUSTAND's `colorAdjustment`. `colorAdjustment` is in
-  // NEITHER `PHASE_A_FIELDS` nor `PHASE_B_FIELDS`, so the two copies are
-  // independent and writing only MobX's would leave `adjustColor` with
-  // nothing to replay: the mode would open and then do nothing.
-  // The two containers must move TOGETHER — see `ColorPickerContainer`'s
-  // header for the blocker that stops the pair.
-  const colorAdjustment = useEditorStore((s) => s.colorAdjustment);
-  const startColorAdjustment = useEditorStore((s) => s.startColorAdjustment);
-  const clearColorAdjustment = useEditorStore((s) => s.clearColorAdjustment);
+  // ✅ MIGRATED — W29h, together with `ColorPickerContainer`. They HAD to move
+  // as a pair: `colorAdjustment` is in neither `PHASE_A_FIELDS` nor
+  // `PHASE_B_FIELDS`, so Zustand's copy and `ToolUIStore`'s are two
+  // INDEPENDENT storage locations. Migrating only this one would have left
+  // the live `adjustColor` replaying an empty Zustand snapshot — the mode
+  // would open and then do nothing.
+  //
+  // W29d built the scan (`ApplicationStore.startColorAdjustment`) and the
+  // object write; W29h added the variant write the pair was actually waiting
+  // on. See `ColorPickerContainer`'s note.
+  //
+  // ⚠️ THE TWO ZUSTAND-ONLY CLEARS WERE PAIRED UP FOR THIS.
+  // `zustandProjectHost.ts:154` (selectLayer) already went through
+  // `ApplicationStore.clearColorAdjustment`; `zustandBridge.ts`'s
+  // `startDrawing` clear did NOT, and W29h fixed it. Both now clear both
+  // copies, so the mode still closes when the user selects another layer or
+  // starts a stroke.
+  const colorAdjustment = ui.tool.colorAdjustment;
 
   // `allFramesMode` was local `useState` in the component. It stays local view
   // state, but lives HERE because the scan below is keyed on it.
@@ -113,9 +117,9 @@ export const LayerColorsContainer = observer(function LayerColorsContainer() {
       allFramesMode={allFramesMode}
       onAllFramesModeChange={setAllFramesMode}
       onStartColorAdjustment={(color, allFrames) =>
-        startColorAdjustment(color, allFrames)
+        app.startColorAdjustment(color, allFrames)
       }
-      onClearColorAdjustment={() => clearColorAdjustment()}
+      onClearColorAdjustment={() => app.clearColorAdjustment()}
     />
   );
 });

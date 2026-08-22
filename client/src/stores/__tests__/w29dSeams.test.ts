@@ -646,3 +646,442 @@ describe("SelectionUIStore.maskWriteOptions", () => {
     });
   });
 });
+
+/* ════════════════════════════════════════════════════════════════════════ */
+/* W29h. PixelStore.adjustVariantColorAcross — the VARIANT multi-target write */
+/* ════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The variant twin of the block above, and the reason W29h exists at all.
+ *
+ * `adjustColorAcross` refuses variants (W29d) because the two paths key their
+ * snapshots differently — real `frame.id` + layer NAME on the object path,
+ * synthetic `variant-frame-<index>` + layer ID on the variant path. W29h adds
+ * `PixelTarget.variant.layerIndex` so the write engine can reach a variant
+ * layer other than `layers[0]`, and `adjustVariantColorAcross` is the method
+ * that spends it.
+ *
+ * The behaviour asserted here is W29g's, transcribed: all-frames variant
+ * adjustment recolours EVERY layer of every variant frame, with no name
+ * matching anywhere.
+ */
+
+/** A variant group: 3 frames × 2 layers, plus a host layer that selects it. */
+function variantProject(): Project {
+  const base = tinyProject({
+    layers: [
+      mkLayer("layer-1", 4, 4, {
+        isVariant: true,
+        variantGroupId: "vg-1",
+        selectedVariantId: "v-1",
+      }),
+    ],
+  });
+  return {
+    ...base,
+    variants: [
+      {
+        id: "vg-1",
+        name: "Group",
+        variants: [
+          {
+            id: "v-1",
+            name: "Variant 1",
+            gridSize: { width: 4, height: 4 },
+            baseFrameOffsets: {},
+            frames: [0, 1, 2].map((f) => ({
+              id: `vf-${f}`,
+              name: `VF ${f}`,
+              layers: [
+                mkLayer(`vl-${f}-a`, 4, 4),
+                mkLayer(`vl-${f}-b`, 4, 4),
+              ],
+            })),
+          },
+        ],
+      },
+    ],
+  } as Project;
+}
+
+/** Paint (1,1) of EVERY variant layer, directly on the fixture. */
+function paintAllVariantLayers(project: Project, color: Color = RED): Project {
+  return {
+    ...project,
+    variants: project.variants!.map((vg) => ({
+      ...vg,
+      variants: vg.variants.map((v) => ({
+        ...v,
+        frames: v.frames.map((vf) => ({
+          ...vf,
+          layers: vf.layers.map((vl) => {
+            const pixels = vl.pixels.map((row) => [...row]);
+            pixels[1][1] = { color, normal: 0, height: 1 };
+            return { ...vl, pixels };
+          }),
+        })),
+      })),
+    })),
+  };
+}
+
+/** Colour of a variant cell, read from the MobX tree. */
+function vcell(
+  app: ApplicationStore,
+  f: number,
+  l: number,
+  x = 1,
+  y = 1,
+): Color | 0 {
+  return (
+    app.domain.variants[0]?.variants[0]?.frames[f]?.layers[l]?.pixels[y]?.[x]
+      ?.color ?? 0
+  );
+}
+
+describe("W29h — PixelStore.adjustVariantColorAcross", () => {
+  let app: ApplicationStore;
+
+  /** Start an all-frames adjustment on RED and hand back the snapshot map. */
+  const startedMap = () => {
+    app.startColorAdjustment(RED, true);
+    const state = app.ui.tool.colorAdjustment;
+    const byFrame = state?.affectedPixelsByFrame;
+    if (!byFrame) throw new Error("no snapshot");
+    // The snapshot keys by `variant-frame-<index>`; the write engine addresses
+    // by index. This is the translation the container performs.
+    const out = new Map<
+      number,
+      Map<string, readonly { x: number; y: number }[]>
+    >();
+    for (const [key, byLayer] of byFrame) {
+      const m = /^variant-frame-(\d+)$/.exec(key);
+      if (!m) continue;
+      out.set(Number(m[1]), new Map(byLayer));
+    }
+    return out;
+  };
+
+  beforeEach(() => {
+    app = makeApp(paintAllVariantLayers(variantProject()));
+  });
+
+  it("the fixture selects the variant — the variant branch is reachable", () => {
+    expect(app.isEditingVariant).toBe(true);
+    expect(app.currentVariant?.variant.id).toBe("v-1");
+  });
+
+  it("the snapshot covers EVERY layer of every variant frame (W29g pin)", () => {
+    const map = startedMap();
+    expect([...map.keys()].sort()).toEqual([0, 1, 2]);
+    for (const byLayer of map.values()) expect(byLayer.size).toBe(2);
+  });
+
+  it("⭐ recolours EVERY layer of every variant frame — 6 layers written", () => {
+    const written = app.pixels.adjustVariantColorAcross(
+      "vg-1",
+      "v-1",
+      startedMap(),
+      BLUE,
+      { trackHistory: true },
+    );
+    expect(written).toBe(6);
+    for (const f of [0, 1, 2]) {
+      for (const l of [0, 1]) expect(vcell(app, f, l)).toEqual(BLUE);
+    }
+  });
+
+  it("⭐ layer 1 is genuinely written — not aliased onto layer 0", () => {
+    // The whole point of `layerIndex`. Before W29h the engine could only
+    // address `layers[0]`, so this cell stayed RED.
+    app.pixels.adjustVariantColorAcross("vg-1", "v-1", startedMap(), BLUE, {
+      trackHistory: true,
+    });
+    expect(vcell(app, 0, 1)).toEqual(BLUE);
+    expect(vcell(app, 2, 1)).toEqual(BLUE);
+  });
+
+  it("writes ONE history entry for all six layers (W29d semantic)", () => {
+    app.pixels.adjustVariantColorAcross("vg-1", "v-1", startedMap(), BLUE, {
+      trackHistory: true,
+    });
+    expect(app.history.entries).toHaveLength(1);
+  });
+
+  it("⭐ that ONE entry undoes each layer back onto ITSELF", () => {
+    app.pixels.adjustVariantColorAcross("vg-1", "v-1", startedMap(), BLUE, {
+      trackHistory: true,
+    });
+    app.history.undo();
+    for (const f of [0, 1, 2]) {
+      for (const l of [0, 1]) expect(vcell(app, f, l)).toEqual(RED);
+    }
+    app.history.redo();
+    for (const f of [0, 1, 2]) {
+      for (const l of [0, 1]) expect(vcell(app, f, l)).toEqual(BLUE);
+    }
+  });
+
+  it("records NOTHING with trackHistory false", () => {
+    app.pixels.adjustVariantColorAcross("vg-1", "v-1", startedMap(), BLUE, {
+      trackHistory: false,
+    });
+    expect(app.history.entries).toHaveLength(0);
+    expect(vcell(app, 1, 1)).toEqual(BLUE);
+  });
+
+  it("replays the START snapshot verbatim — the slider-drag semantic", () => {
+    const map = startedMap();
+    app.pixels.adjustVariantColorAcross("vg-1", "v-1", map, BLUE, {
+      trackHistory: true,
+    });
+    // The cells are no longer RED, but the snapshot is replayed as recorded.
+    app.pixels.adjustVariantColorAcross("vg-1", "v-1", map, GREEN, {
+      trackHistory: true,
+    });
+    for (const f of [0, 1, 2]) {
+      for (const l of [0, 1]) expect(vcell(app, f, l)).toEqual(GREEN);
+    }
+  });
+
+  it("skips an unknown layer id rather than guessing at layers[0]", () => {
+    const map = new Map([
+      [0, new Map([["not-a-layer", [{ x: 1, y: 1 }]]])],
+    ]);
+    expect(
+      app.pixels.adjustVariantColorAcross("vg-1", "v-1", map, BLUE, {
+        trackHistory: true,
+      }),
+    ).toBe(0);
+    expect(vcell(app, 0, 0)).toEqual(RED);
+  });
+
+  it("skips an out-of-range frame index", () => {
+    const map = new Map([[9, new Map([["vl-0-a", [{ x: 1, y: 1 }]]])]]);
+    expect(app.pixels.adjustVariantColorAcross("vg-1", "v-1", map, BLUE)).toBe(0);
+  });
+
+  it("returns 0 for an unknown variant group, writing nothing", () => {
+    expect(
+      app.pixels.adjustVariantColorAcross("nope", "v-1", startedMap(), BLUE),
+    ).toBe(0);
+    expect(vcell(app, 0, 0)).toEqual(RED);
+  });
+
+  it("returns 0 on an empty map", () => {
+    expect(
+      app.pixels.adjustVariantColorAcross("vg-1", "v-1", new Map(), BLUE),
+    ).toBe(0);
+  });
+
+  it("re-applying the SAME colour records no entry (patch list empties)", () => {
+    expect(
+      app.pixels.adjustVariantColorAcross("vg-1", "v-1", startedMap(), RED, {
+        trackHistory: true,
+      }),
+    ).toBe(0);
+    expect(app.history.entries).toHaveLength(0);
+  });
+
+  it("preserves normal and height on every recoloured cell", () => {
+    app.pixels.adjustVariantColorAcross("vg-1", "v-1", startedMap(), BLUE, {
+      trackHistory: true,
+    });
+    const cellData =
+      app.domain.variants[0].variants[0].frames[0].layers[1].pixels[1][1];
+    expect(cellData.height).toBe(1);
+    expect(cellData.normal).toBe(0);
+  });
+
+  it("writes NO UI field — `selectedColor` is the caller's", () => {
+    // ⚠️ `startColorAdjustment` moves the picker to the colour being adjusted
+    // — its own pinned coupled write (W29b pin 4) — so `before` must be read
+    // AFTER the snapshot is taken, not before. The assertion is that the
+    // PIXEL write leaves it alone: `uiState.selectedColor` belongs to
+    // `ApplicationStore.adjustColor`, never to `PixelStore`.
+    const map = startedMap();
+    const before = app.ui.tool.selectedColor;
+    expect(before).toEqual(RED);
+    app.pixels.adjustVariantColorAcross("vg-1", "v-1", map, GREEN, {
+      trackHistory: true,
+    });
+    expect(app.ui.tool.selectedColor).toEqual(before);
+  });
+
+  it("a SINGLE-layer map opens no transaction (still one entry)", () => {
+    const map = new Map([[0, new Map([["vl-0-a", [{ x: 1, y: 1 }]]])]]);
+    expect(
+      app.pixels.adjustVariantColorAcross("vg-1", "v-1", map, BLUE, {
+        trackHistory: true,
+      }),
+    ).toBe(1);
+    expect(app.history.entries).toHaveLength(1);
+    expect(vcell(app, 0, 0)).toEqual(BLUE);
+    expect(vcell(app, 0, 1)).toEqual(RED);
+  });
+
+  it("leaves the OBJECT tree untouched", () => {
+    const objGrid = app.domain.objects[0].frames[0].layers[0].pixels;
+    app.pixels.adjustVariantColorAcross("vg-1", "v-1", startedMap(), BLUE, {
+      trackHistory: true,
+    });
+    expect(app.domain.objects[0].frames[0].layers[0].pixels).toBe(objGrid);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════════ */
+/* W29h. ApplicationStore.adjustColor — the dispatcher the containers call   */
+/* ════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * `ColorPickerContainer` now dispatches here instead of at Zustand's
+ * `adjustColor`, so this is the surface the migration actually rests on. It
+ * dispatches over four cases — {variant, object} × {allFrames, single} — and
+ * carries the coupled `uiState.selectedColor` write the legacy action folded
+ * into the same commit.
+ */
+describe("W29h — ApplicationStore.adjustColor (the container's entry point)", () => {
+  /** Record what reaches the Zustand `selectedColor` sink. */
+  function makeAppWithSink(project: Project): {
+    app: ApplicationStore;
+    published: Color[];
+  } {
+    const published: Color[] = [];
+    let current: Project | null = project;
+    const app = new ApplicationStore({
+      autoSaveEnabled: false,
+      projectHost: {
+        getProject: () => current,
+        installProject: (p) => {
+          current = p;
+        },
+        replaceProject: (p) => {
+          current = p;
+        },
+        snapshotToHistory: () => {},
+      },
+      domainMirror: {
+        publish: (p) => {
+          current = p;
+        },
+        snapshot: () => {},
+      },
+      selectionSink: { selectObjectTree: () => {} },
+      publishSelectedColor: (color) => published.push(color),
+    });
+    runInAction(() => {
+      app.domain.adoptTree(project);
+      app.selection.adopt({
+        selectedObjectId: project.uiState.selectedObjectId,
+        selectedFrameId: project.uiState.selectedFrameId,
+        selectedLayerId: project.uiState.selectedLayerId,
+      });
+      app.selection.adoptVariantFrameIndices(
+        project.uiState.variantFrameIndices ?? {},
+      );
+      app.history.clear();
+    });
+    return { app, published };
+  }
+
+  it("is a NO-OP with nothing pending — returns 0, publishes nothing", () => {
+    const { app, published } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    expect(app.adjustColor(BLUE, true)).toBe(0);
+    expect(published).toEqual([]);
+    expect(app.history.entries).toHaveLength(0);
+  });
+
+  it("object + allFrames: recolours every same-named layer, ONE entry", () => {
+    const { app } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    app.startColorAdjustment(RED, true);
+    expect(app.adjustColor(BLUE, true)).toBe(3);
+    expect(cell(app, 0, 0, 1, 1)).toEqual(BLUE);
+    expect(cell(app, 2, 0, 1, 1)).toEqual(BLUE);
+    expect(app.history.entries).toHaveLength(1);
+  });
+
+  it("object + single frame: recolours only the selected layer", () => {
+    const { app } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    app.startColorAdjustment(RED, false);
+    expect(app.adjustColor(BLUE, true)).toBe(1);
+    expect(cell(app, 0, 0, 1, 1)).toEqual(BLUE);
+    expect(cell(app, 1, 0, 1, 1)).toEqual(RED);
+  });
+
+  it("⭐ variant + allFrames: recolours EVERY layer of every variant frame", () => {
+    const { app } = makeAppWithSink(paintAllVariantLayers(variantProject()));
+    app.startColorAdjustment(RED, true);
+    // 3 frames × 2 layers. Before W29h the engine reached only `layers[0]`.
+    expect(app.adjustColor(BLUE, true)).toBe(6);
+    for (const f of [0, 1, 2]) {
+      for (const l of [0, 1]) expect(vcell(app, f, l)).toEqual(BLUE);
+    }
+    expect(app.history.entries).toHaveLength(1);
+  });
+
+  it("⭐ that ONE entry undoes every variant layer back onto ITSELF", () => {
+    const { app } = makeAppWithSink(paintAllVariantLayers(variantProject()));
+    app.startColorAdjustment(RED, true);
+    app.adjustColor(BLUE, true);
+    app.history.undo();
+    for (const f of [0, 1, 2]) {
+      for (const l of [0, 1]) expect(vcell(app, f, l)).toEqual(RED);
+    }
+  });
+
+  it("variant + single frame STILL writes layers[0] only — W29g's pinned defect", () => {
+    // ⚠️ NOT a bug introduced here, and NOT fixed here. `resolveTarget`'s
+    // variant branch transcribes `getSelectedVariantLayer()`, which ignores
+    // `selectedLayerId` and always returns `layers[0]`. W29g pinned it;
+    // changing it needs owner sign-off. W29h enabled the ENGINE only.
+    const { app } = makeAppWithSink(paintAllVariantLayers(variantProject()));
+    app.startColorAdjustment(RED, false);
+    app.adjustColor(BLUE, true);
+    expect(vcell(app, 0, 0)).toEqual(BLUE);
+    expect(vcell(app, 0, 1)).toEqual(RED); // layer 1 untouched — the defect
+  });
+
+  it("publishes `selectedColor` through the ZUSTAND sink, not MobX-only", () => {
+    const { app, published } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    app.startColorAdjustment(RED, true);
+    app.adjustColor(BLUE, true);
+    // A MobX-only write is reverted by the next unrelated Zustand change —
+    // measured in W29d. The sink writes the source.
+    expect(published).toEqual([BLUE]);
+    expect(app.ui.tool.selectedColor).toEqual(BLUE);
+  });
+
+  it("does NOT prepend to colorHistory — a slider drag must not flood it", () => {
+    const { app } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    const before = app.session.colorHistory.length;
+    app.startColorAdjustment(RED, true);
+    app.adjustColor(BLUE, true);
+    app.adjustColor(GREEN, true);
+    expect(app.session.colorHistory.length).toBe(before);
+  });
+
+  it("replays the START snapshot on every call — the slider-drag semantic", () => {
+    const { app } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    app.startColorAdjustment(RED, true);
+    app.adjustColor(BLUE, true);
+    // The cells are BLUE now, but the snapshot still names them.
+    expect(app.adjustColor(GREEN, true)).toBe(3);
+    expect(cell(app, 0, 0, 1, 1)).toEqual(GREEN);
+  });
+
+  it("records NO history entry with trackHistory false (the drag default)", () => {
+    const { app } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    app.startColorAdjustment(RED, true);
+    app.adjustColor(BLUE, false);
+    expect(app.history.entries).toHaveLength(0);
+    expect(cell(app, 0, 0, 1, 1)).toEqual(BLUE);
+  });
+
+  it("after clearColorAdjustment it is a no-op again", () => {
+    const { app } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    app.startColorAdjustment(RED, true);
+    app.clearColorAdjustment();
+    expect(app.adjustColor(BLUE, true)).toBe(0);
+    expect(cell(app, 0, 0, 1, 1)).toEqual(RED);
+  });
+});

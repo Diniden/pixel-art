@@ -138,6 +138,7 @@ export function createZustandTimelineContext(): {
   clearColorAdjustment(): void;
   publishAiServiceUrl(url: string): void;
   publishColorAndHistory(color: Color): void;
+  publishSelectedColor(color: Color): void;
 } {
   return {
     publishSelection: (patch) => {
@@ -152,6 +153,41 @@ export function createZustandTimelineContext(): {
     // colour adjustment when the layer changes.
     clearColorAdjustment: () => {
       useEditorStore.setState({ colorAdjustment: null });
+    },
+
+    /**
+     * `uiState.selectedColor` ALONE — W29h, for `adjustColor`'s coupled write.
+     *
+     * ⚠️ NOT a duplicate of `publishColorAndHistory` below, and the
+     * difference is behavioural rather than cosmetic: that one also prepends
+     * to `colorHistory`, because `toolActions.ts:111` (picking a colour) does.
+     * `colorAdjustmentActions.ts` does NOT — it writes only
+     * `uiState.selectedColor` — and dragging the adjustment slider fires this
+     * on every frame, so reusing the wider sink would flood the
+     * recent-colours trail with every intermediate value the drag passed
+     * through.
+     *
+     * It writes the SOURCE for the same measured reason as every sink here:
+     * `selectedColor` is one of the ~30 fields the bridge re-hydrates
+     * wholesale from `project.uiState` on every Zustand change
+     * (`zustandBridge.ts:334`), so a MobX-only write is reverted by the next
+     * unrelated change.
+     *
+     * `trackHistory` is false — a plain `setState`, never
+     * `updateProjectAndSave`. The legacy action folds this field into the
+     * pixel commit whose `trackHistory` the caller chose; the pixels are
+     * already recorded by `PixelStore`, and recording the colour again here
+     * would double the entry.
+     */
+    publishSelectedColor: (color) => {
+      const { project } = useEditorStore.getState();
+      if (!project) return;
+      useEditorStore.setState({
+        project: {
+          ...project,
+          uiState: { ...project.uiState, selectedColor: color },
+        },
+      });
     },
 
     /**

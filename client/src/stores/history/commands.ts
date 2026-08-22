@@ -273,6 +273,30 @@ export interface PixelTarget {
     variantGroupId: string;
     variantId: string;
     frameIndex: number;
+    /**
+     * Which layer of the addressed variant frame — W29h.
+     *
+     * ⚠️ OPTIONAL, and it must stay optional. Every variant target built
+     * before W29h omitted it and meant `layers[0]`, so `?? 0` at both read
+     * sites preserves that exactly; making it required would have forced a
+     * mechanical edit through `resolveTarget`, `planNormalCompute` and every
+     * fixture, changing nothing semantically while inviting a typo in a path
+     * that writes the owner's artwork.
+     *
+     * ⚠️ It is addressed BY INDEX, not by id, because that is how the whole
+     * variant tree is addressed — `frameIndex` above, `getSelectedVariantLayer`
+     * (`store/helpers.ts:82`) and the legacy colour-adjustment key
+     * `` `variant-frame-${i}` `` all index positionally. A `variantLayerId`
+     * here would be the only id-addressed hop in an otherwise positional
+     * chain.
+     *
+     * ⚠️ {@link coalescePixelCommands}' `sameTarget` MUST compare this. Two
+     * writes to different variant layers that compare equal merge into ONE
+     * command whose target names a single layer, and undo then replays BOTH
+     * layers' cells onto it — silent artwork corruption in the undo path.
+     * Pinned in `PixelStoreVariantLayer.test.ts`.
+     */
+    layerIndex?: number;
   };
 }
 
@@ -555,13 +579,32 @@ function coalescePixelCommands(
     runCells = [];
   };
 
+  /**
+   * ⚠️ `layerIndex` is compared through `?? 0`, NOT raw — W29h.
+   *
+   * Two reasons, and both are load-bearing:
+   *
+   *  1. **Omitting it would corrupt artwork.** A run merges into ONE command
+   *     carrying ONE target. If writes to variant layers 0 and 2 compared
+   *     equal they would merge, the surviving target would name one layer,
+   *     and `undo()` would replay BOTH layers' `before` cells onto it —
+   *     restoring pixels to a layer they never came from. Nothing throws.
+   *
+   *  2. **`?? 0`, not `===`, so legacy targets still coalesce.** A target
+   *     with no `layerIndex` means `layers[0]` (see {@link PixelTarget}).
+   *     Comparing raw would make `undefined !== 0` split a run the moment any
+   *     producer started emitting an explicit `layerIndex: 0`, and a pencil
+   *     drag that stops coalescing costs 18x the bytes — straight through the
+   *     5 kB gate.
+   */
   const sameTarget = (a: PixelTarget, b: PixelTarget) =>
     a.objectId === b.objectId &&
     a.frameId === b.frameId &&
     a.layerId === b.layerId &&
     a.variant?.variantGroupId === b.variant?.variantGroupId &&
     a.variant?.variantId === b.variant?.variantId &&
-    a.variant?.frameIndex === b.variant?.frameIndex;
+    a.variant?.frameIndex === b.variant?.frameIndex &&
+    (a.variant?.layerIndex ?? 0) === (b.variant?.layerIndex ?? 0);
 
   for (const command of commands) {
     if (!isPixelCommand(command)) {
