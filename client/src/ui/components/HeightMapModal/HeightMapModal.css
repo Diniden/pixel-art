@@ -10,8 +10,12 @@
 }
 
 @keyframes height-map-modal-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .height-map-modal {
@@ -243,7 +247,3 @@
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
-
-
-
-

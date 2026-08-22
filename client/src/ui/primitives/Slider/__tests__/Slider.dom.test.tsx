@@ -12,7 +12,15 @@ describe("Slider", () => {
 
   it("renders the thick variant", () => {
     const { container } = render(
-      <Slider value={60} min={0} max={200} step={5} thick onChange={() => {}} label="Intensity" />,
+      <Slider
+        value={60}
+        min={0}
+        max={200}
+        step={5}
+        thick
+        onChange={() => {}}
+        label="Intensity"
+      />,
     );
     expect(container.firstChild).toMatchSnapshot();
   });

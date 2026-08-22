@@ -16,10 +16,10 @@
  * blocks automatically — do not import them separately there.
  */
 
-@import './styles/tokens.css';
-@import './styles/reset.css';
-@import './styles/blocks/btn.css';
-@import './styles/blocks/slider.css';
-@import './styles/blocks/panel.css';
-@import './styles/blocks/modal.css';
-@import './styles/blocks/confirm-dialog.css';
+@import "./styles/tokens.css";
+@import "./styles/reset.css";
+@import "./styles/blocks/btn.css";
+@import "./styles/blocks/slider.css";
+@import "./styles/blocks/panel.css";
+@import "./styles/blocks/modal.css";
+@import "./styles/blocks/confirm-dialog.css";

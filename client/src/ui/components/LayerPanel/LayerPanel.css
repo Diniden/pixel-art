@@ -219,13 +219,21 @@
 
 /* Variant layer styles */
 .layer-panel__item--variant {
-  background: linear-gradient(135deg, var(--accent-variant-10) 0%, var(--accent-primary-05) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-variant-10) 0%,
+    var(--accent-primary-05) 100%
+  );
   border-color: var(--accent-variant-30);
 }
 
 .layer-panel__item--variant.layer-panel__item--selected {
   border-color: var(--accent-variant);
-  background: linear-gradient(135deg, var(--accent-variant-20) 0%, var(--accent-primary-10) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-variant-20) 0%,
+    var(--accent-primary-10) 100%
+  );
 }
 
 .layer-panel__header-btn--visibility {

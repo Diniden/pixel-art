@@ -22,17 +22,17 @@
  */
 export function encodeImageToBase64(image: HTMLImageElement): Promise<string> {
   return new Promise((resolve, reject) => {
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = image.width;
     canvas.height = image.height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) {
-      reject(new Error('Could not get canvas context'));
+      reject(new Error("Could not get canvas context"));
       return;
     }
     ctx.drawImage(image, 0, 0);
     try {
-      const base64 = canvas.toDataURL('image/png');
+      const base64 = canvas.toDataURL("image/png");
       resolve(base64);
     } catch (error) {
       reject(error);

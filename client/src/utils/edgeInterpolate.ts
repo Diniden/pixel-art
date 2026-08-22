@@ -1,4 +1,4 @@
-import { Layer, Normal, PixelData } from '../types';
+import { Layer, Normal, PixelData } from "../types";
 
 interface EdgePoint {
   x: number;
@@ -24,7 +24,11 @@ function hasColor(pixel: PixelData | undefined): boolean {
 /**
  * Find all edge pixels (pixels that border empty pixels)
  */
-function findEdgePixels(layer: Layer, width: number, height: number): Array<{ x: number; y: number }> {
+function findEdgePixels(
+  layer: Layer,
+  width: number,
+  height: number,
+): Array<{ x: number; y: number }> {
   const edgePixels: Array<{ x: number; y: number }> = [];
 
   for (let y = 0; y < height; y++) {
@@ -41,7 +45,7 @@ function findEdgePixels(layer: Layer, width: number, height: number): Array<{ x:
       ];
 
       // If any neighbor is empty, this is an edge pixel
-      const isEdge = neighbors.some(n => {
+      const isEdge = neighbors.some((n) => {
         if (n.x < 0 || n.x >= width || n.y < 0 || n.y >= height) {
           return true; // Border pixels are edges
         }
@@ -71,7 +75,7 @@ function computeEdgeNormal(
   layer: Layer,
   width: number,
   height: number,
-  startAngleDeg: number
+  startAngleDeg: number,
 ): { x: number; y: number; z: number } | null {
   // Clamp angles at exactly ±90° to avoid edge case where Z = 0
   // This ensures normals always have a small positive Z component for proper spherical interpolation
@@ -87,7 +91,7 @@ function computeEdgeNormal(
   ];
 
   // Find empty neighbors (edge directions)
-  const emptyNeighbors = neighbors.filter(n => {
+  const emptyNeighbors = neighbors.filter((n) => {
     if (n.x < 0 || n.x >= width || n.y < 0 || n.y >= height) {
       return true; // Border is considered empty
     }
@@ -160,7 +164,9 @@ function computeEdgeNormal(
   }
 
   // Normalize the vector
-  const normalLength = Math.sqrt(normalX * normalX + normalY * normalY + normalZ * normalZ);
+  const normalLength = Math.sqrt(
+    normalX * normalX + normalY * normalY + normalZ * normalZ,
+  );
   if (normalLength < 0.001) {
     // Default to pointing straight out
     return { x: 0, y: 0, z: 1 };
@@ -169,7 +175,7 @@ function computeEdgeNormal(
   return {
     x: normalX / normalLength,
     y: normalY / normalLength,
-    z: normalZ / normalLength
+    z: normalZ / normalLength,
   };
 }
 
@@ -180,7 +186,7 @@ function createEdgeNormalPoints(
   layer: Layer,
   width: number,
   height: number,
-  startAngleDeg: number
+  startAngleDeg: number,
 ): EdgePoint[] {
   const edgePixels = findEdgePixels(layer, width, height);
   const points: EdgePoint[] = [];
@@ -191,13 +197,15 @@ function createEdgeNormalPoints(
     if (!normal) continue;
 
     // Normalize the normal vector
-    const length = Math.sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+    const length = Math.sqrt(
+      normal.x * normal.x + normal.y * normal.y + normal.z * normal.z,
+    );
     if (length < 0.001) continue;
 
     const normalized = {
       x: normal.x / length,
       y: normal.y / length,
-      z: normal.z / length
+      z: normal.z / length,
     };
 
     // For edge pixels, we can place the normal point slightly outside the pixel
@@ -210,20 +218,24 @@ function createEdgeNormalPoints(
     ];
 
     // Check if this is a corner (has empty neighbors in multiple directions)
-    const emptyNeighbors = neighbors.filter(n => {
+    const emptyNeighbors = neighbors.filter((n) => {
       if (n.x < 0 || n.x >= width || n.y < 0 || n.y >= height) return true;
       return isEmpty(layer.pixels[n.y]?.[n.x]);
     });
 
     if (emptyNeighbors.length > 1) {
       // Corner: place point at the corner position
-      const avgOffsetX = emptyNeighbors.reduce((sum, n) => sum + n.offsetX, 0) / emptyNeighbors.length;
-      const avgOffsetY = emptyNeighbors.reduce((sum, n) => sum + n.offsetY, 0) / emptyNeighbors.length;
+      const avgOffsetX =
+        emptyNeighbors.reduce((sum, n) => sum + n.offsetX, 0) /
+        emptyNeighbors.length;
+      const avgOffsetY =
+        emptyNeighbors.reduce((sum, n) => sum + n.offsetY, 0) /
+        emptyNeighbors.length;
       points.push({
         x: x + avgOffsetX,
         y: y + avgOffsetY,
         normal: normalized,
-        position: { x: x + avgOffsetX, y: y + avgOffsetY }
+        position: { x: x + avgOffsetX, y: y + avgOffsetY },
       });
     } else if (emptyNeighbors.length === 1) {
       // Edge: place point slightly outside the pixel
@@ -232,7 +244,7 @@ function createEdgeNormalPoints(
         x: x + n.offsetX,
         y: y + n.offsetY,
         normal: normalized,
-        position: { x: x + n.offsetX, y: y + n.offsetY }
+        position: { x: x + n.offsetX, y: y + n.offsetY },
       });
     }
 
@@ -241,7 +253,7 @@ function createEdgeNormalPoints(
       x,
       y,
       normal: normalized,
-      position: { x, y }
+      position: { x, y },
     });
   }
 
@@ -251,7 +263,11 @@ function createEdgeNormalPoints(
 /**
  * Gaussian Radial Basis Function
  */
-function gaussianRBF(distance: number, radius: number, smoothing: number): number {
+function gaussianRBF(
+  distance: number,
+  radius: number,
+  smoothing: number,
+): number {
   const sigma = radius * smoothing;
   return Math.exp(-(distance * distance) / (2 * sigma * sigma));
 }
@@ -301,7 +317,7 @@ function sphereLogMap(p: Vec3, q: Vec3): Vec3 {
   return {
     x: scale * (q.x - cosClamped * p.x),
     y: scale * (q.y - cosClamped * p.y),
-    z: scale * (q.z - cosClamped * p.z)
+    z: scale * (q.z - cosClamped * p.z),
   };
 }
 
@@ -324,7 +340,7 @@ function sphereExpMap(p: Vec3, v: Vec3): Vec3 {
   return {
     x: cosTheta * p.x + scale * v.x,
     y: cosTheta * p.y + scale * v.y,
-    z: cosTheta * p.z + scale * v.z
+    z: cosTheta * p.z + scale * v.z,
   };
 }
 
@@ -347,17 +363,19 @@ function ensurePositiveZ(v: Vec3): Vec3 {
 function weightedSphericalMean(
   normals: Vec3[],
   weights: number[],
-  totalWeight: number
+  totalWeight: number,
 ): Vec3 {
   if (normals.length === 0) return { x: 0, y: 0, z: 1 };
   if (normals.length === 1) return ensurePositiveZ(normals[0]);
 
   // Flip any input normals with negative Z to their front-facing equivalent
   // This ensures we always interpolate on the front hemisphere
-  const frontNormals: Vec3[] = normals.map(n => ensurePositiveZ(n));
+  const frontNormals: Vec3[] = normals.map((n) => ensurePositiveZ(n));
 
   // Start with normalized linear average as initial estimate
-  let sumX = 0, sumY = 0, sumZ = 0;
+  let sumX = 0,
+    sumY = 0,
+    sumZ = 0;
   for (let i = 0; i < frontNormals.length; i++) {
     sumX += weights[i] * frontNormals[i].x;
     sumY += weights[i] * frontNormals[i].y;
@@ -367,7 +385,7 @@ function weightedSphericalMean(
   let mean = normalizeVec3({
     x: sumX / totalWeight,
     y: sumY / totalWeight,
-    z: sumZ / totalWeight
+    z: sumZ / totalWeight,
   });
 
   // Ensure initial mean is front-facing
@@ -379,7 +397,9 @@ function weightedSphericalMean(
 
   for (let iter = 0; iter < maxIterations; iter++) {
     // Compute weighted average of log maps (tangent vectors)
-    let tangentX = 0, tangentY = 0, tangentZ = 0;
+    let tangentX = 0,
+      tangentY = 0,
+      tangentZ = 0;
 
     for (let i = 0; i < frontNormals.length; i++) {
       const log = sphereLogMap(mean, frontNormals[i]);
@@ -393,7 +413,9 @@ function weightedSphericalMean(
     tangentZ /= totalWeight;
 
     // Check for convergence
-    const tangentLen = Math.sqrt(tangentX * tangentX + tangentY * tangentY + tangentZ * tangentZ);
+    const tangentLen = Math.sqrt(
+      tangentX * tangentX + tangentY * tangentY + tangentZ * tangentZ,
+    );
     if (tangentLen < convergenceThreshold) break;
 
     // Move mean along the tangent direction on the sphere
@@ -415,7 +437,7 @@ function interpolateNormal(
   y: number,
   edgePoints: EdgePoint[],
   radius: number,
-  smoothing: number
+  smoothing: number,
 ): { x: number; y: number; z: number } | null {
   if (edgePoints.length === 0) return null;
 
@@ -446,7 +468,11 @@ function interpolateNormal(
 /**
  * Convert normalized normal vector to Normal format (signed bytes for x,y, unsigned for z)
  */
-function normalizedToNormal(normal: { x: number; y: number; z: number }): Normal {
+function normalizedToNormal(normal: {
+  x: number;
+  y: number;
+  z: number;
+}): Normal {
   // Normal format: x, y are signed bytes (-128 to 127), z is unsigned byte (0 to 255)
   // We need to map from [-1, 1] for x,y and [0, 1] for z to the byte ranges
 
@@ -458,7 +484,7 @@ function normalizedToNormal(normal: { x: number; y: number; z: number }): Normal
   return {
     x: Math.round(x * 127), // -127 to 127
     y: Math.round(y * 127), // -127 to 127
-    z: Math.round(z * 255)  // 0 to 255
+    z: Math.round(z * 255), // 0 to 255
   };
 }
 
@@ -471,10 +497,15 @@ export function computeEdgeInterpolatedNormals(
   height: number,
   startAngleDeg: number,
   smoothing: number,
-  radius: number
+  radius: number,
 ): Array<Normal | 0> {
   // Create edge normal points
-  const edgePoints = createEdgeNormalPoints(layer, width, height, startAngleDeg);
+  const edgePoints = createEdgeNormalPoints(
+    layer,
+    width,
+    height,
+    startAngleDeg,
+  );
 
   // Compute interpolated normals for all pixels
   const normals: Array<Normal | 0> = [];
@@ -490,7 +521,13 @@ export function computeEdgeInterpolatedNormals(
       }
 
       // Interpolate normal
-      const interpolated = interpolateNormal(x, y, edgePoints, radius, smoothing);
+      const interpolated = interpolateNormal(
+        x,
+        y,
+        edgePoints,
+        radius,
+        smoothing,
+      );
 
       if (interpolated) {
         normals.push(normalizedToNormal(interpolated));
@@ -503,4 +540,3 @@ export function computeEdgeInterpolatedNormals(
 
   return normals;
 }
-

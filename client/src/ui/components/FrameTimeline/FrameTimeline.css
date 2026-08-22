@@ -80,7 +80,11 @@
 }
 
 .frame-timeline__preview-btn:hover {
-  background: linear-gradient(135deg, var(--accent-warning-20), var(--accent-primary-20));
+  background: linear-gradient(
+    135deg,
+    var(--accent-warning-20),
+    var(--accent-primary-20)
+  );
   border-color: var(--accent-warning);
   color: var(--accent-warning);
 }
@@ -102,7 +106,11 @@
 }
 
 .frame-timeline__size-btn:hover {
-  background: linear-gradient(135deg, var(--accent-primary-20), var(--accent-variant-20));
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary-20),
+    var(--accent-variant-20)
+  );
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
@@ -988,7 +996,7 @@
 }
 
 .timeline-view__playhead::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -4px;
   left: -4px;

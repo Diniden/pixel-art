@@ -8,7 +8,7 @@
  *
  * ⚠️ SCOPE NOTE — this container is deliberately THIN. `FrameReferencePanel`
  * still reads `project`, `getCurrentObject`, `getFrameReferenceObject` and the
- * four frame-trace members off `useEditorStore()`. Those are the trace-overlay
+ * four frame-trace members off the legacy Zustand hook. Those are the trace-overlay
  * fields, which stay Phase A in this task because their other consumers —
  * `Canvas.tsx` (task 32), `CanvasInfo.tsx`, `RightSidebarTopControls.tsx` — are
  * outside this task's `Touches` list, and flipping a field while an unmigrated

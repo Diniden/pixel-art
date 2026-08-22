@@ -72,7 +72,6 @@ export function FrameTagsModal({
 }: FrameTagsModalProps) {
   const [inputValue, setInputValue] = useState("");
 
-
   const addTag = (tag: string) => {
     const t = tag.trim().toLowerCase();
     if (!t) return;
@@ -93,7 +92,6 @@ export function FrameTagsModal({
   useEffect(() => {
     if (!isOpen) setInputValue("");
   }, [isOpen]);
-
 
   if (!isOpen) return null;
 
@@ -176,7 +174,10 @@ export function FrameTagsModal({
                 </div>
               ) : (
                 projectTagSections.map((section) => (
-                  <div key={section.key} className="frame-tags-modal__project-group">
+                  <div
+                    key={section.key}
+                    className="frame-tags-modal__project-group"
+                  >
                     <div className="frame-tags-modal__project-group-label">
                       {section.label}
                     </div>

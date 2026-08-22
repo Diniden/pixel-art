@@ -2,7 +2,7 @@
  * PixelStudioPanelContainer (REFRESH task 24; PURIFIED task 36, W27).
  *
  * `PixelStudioPanel` read 8 store members across **two separate
- * `useEditorStore()` calls** — 5 in the panel and 3 more in its private
+ * legacy Zustand-hook calls** — 5 in the panel and 3 more in its private
  * `OriginColorPicker`. Task 24 created this container and left the collapse to
  * 35/36; both call sites are now folded into this one `observer()`, exactly as
  * the spec asked.

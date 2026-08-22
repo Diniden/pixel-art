@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { Icon } from '../../primitives/Icon/Icon';
-import { FolderOpen, Plus, X } from 'lucide-react';
-import './ProjectSelectModal.css';
+import { useState } from "react";
+import { Icon } from "../../primitives/Icon/Icon";
+import { FolderOpen, Plus, X } from "lucide-react";
+import "./ProjectSelectModal.css";
 
 interface ProjectSelectModalProps {
   onClose: () => void;
@@ -24,7 +24,7 @@ export function ProjectSelectModal({
   onDeleteProject,
   onRefreshProjectList,
 }: ProjectSelectModalProps) {
-  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectName, setNewProjectName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,7 +42,7 @@ export function ProjectSelectModal({
     if (success) {
       onClose();
     } else {
-      setError('Failed to switch project');
+      setError("Failed to switch project");
       setIsLoading(false);
     }
   };
@@ -51,17 +51,19 @@ export function ProjectSelectModal({
     const trimmedName = newProjectName.trim();
 
     if (!trimmedName) {
-      setError('Project name cannot be empty');
+      setError("Project name cannot be empty");
       return;
     }
 
     if (!/^[a-zA-Z0-9\s\-_]+$/.test(trimmedName)) {
-      setError('Project name can only contain letters, numbers, spaces, hyphens, and underscores');
+      setError(
+        "Project name can only contain letters, numbers, spaces, hyphens, and underscores",
+      );
       return;
     }
 
     if (projectList.includes(trimmedName)) {
-      setError('A project with that name already exists');
+      setError("A project with that name already exists");
       return;
     }
 
@@ -72,18 +74,22 @@ export function ProjectSelectModal({
     if (success) {
       onClose();
     } else {
-      setError('Failed to create project');
+      setError("Failed to create project");
       setIsLoading(false);
     }
   };
 
   const handleDeleteProject = async () => {
     if (projectList.length <= 1) {
-      setError('Cannot delete the last project');
+      setError("Cannot delete the last project");
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete "${projectName}"? This cannot be undone.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to delete "${projectName}"? This cannot be undone.`,
+      )
+    ) {
       return;
     }
 
@@ -95,18 +101,18 @@ export function ProjectSelectModal({
       await onRefreshProjectList();
       onClose();
     } else {
-      setError('Failed to delete project');
+      setError("Failed to delete project");
       setIsLoading(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && isCreating) {
+    if (e.key === "Enter" && isCreating) {
       handleCreateProject();
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       if (isCreating) {
         setIsCreating(false);
-        setNewProjectName('');
+        setNewProjectName("");
         setError(null);
       } else {
         onClose();
@@ -116,28 +122,42 @@ export function ProjectSelectModal({
 
   return (
     <div className="modal__overlay" onClick={onClose}>
-      <div className="modal project-select-modal" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+      <div
+        className="modal project-select-modal"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+      >
         <div className="modal__header">
           <h2>Switch Project</h2>
-          <button className="modal__close" onClick={onClose} disabled={isLoading}><Icon icon={X} size={14} /></button>
+          <button
+            className="modal__close"
+            onClick={onClose}
+            disabled={isLoading}
+          >
+            <Icon icon={X} size={14} />
+          </button>
         </div>
 
-        {error && (
-          <div className="project-select-modal__error">{error}</div>
-        )}
+        {error && <div className="project-select-modal__error">{error}</div>}
 
         <div className="modal__body">
           <div className="project-select-modal__list">
             {projectList.map((name) => (
               <button
                 key={name}
-                className={`project-select-modal__item ${name === projectName ? 'project-select-modal__item--current' : ''}`}
+                className={`project-select-modal__item ${name === projectName ? "project-select-modal__item--current" : ""}`}
                 onClick={() => handleSwitchProject(name)}
                 disabled={isLoading}
               >
-                <span className="project-select-modal__icon"><Icon icon={FolderOpen} size={14} /></span>
+                <span className="project-select-modal__icon">
+                  <Icon icon={FolderOpen} size={14} />
+                </span>
                 <span className="project-select-modal__name">{name}</span>
-                {name === projectName && <span className="project-select-modal__badge--current">Current</span>}
+                {name === projectName && (
+                  <span className="project-select-modal__badge--current">
+                    Current
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -157,7 +177,7 @@ export function ProjectSelectModal({
                   className="btn btn--ghost"
                   onClick={() => {
                     setIsCreating(false);
-                    setNewProjectName('');
+                    setNewProjectName("");
                     setError(null);
                   }}
                   disabled={isLoading}
@@ -179,7 +199,9 @@ export function ProjectSelectModal({
               onClick={() => setIsCreating(true)}
               disabled={isLoading}
             >
-              <span className="project-select-modal__plus-icon"><Icon icon={Plus} size={14} /></span>
+              <span className="project-select-modal__plus-icon">
+                <Icon icon={Plus} size={14} />
+              </span>
               New Project
             </button>
           )}
@@ -190,7 +212,11 @@ export function ProjectSelectModal({
             className="btn btn--danger-outline"
             onClick={handleDeleteProject}
             disabled={isLoading || projectList.length <= 1}
-            title={projectList.length <= 1 ? 'Cannot delete the last project' : `Delete "${projectName}"`}
+            title={
+              projectList.length <= 1
+                ? "Cannot delete the last project"
+                : `Delete "${projectName}"`
+            }
           >
             Delete Current Project
           </button>
@@ -199,4 +225,3 @@ export function ProjectSelectModal({
     </div>
   );
 }
-

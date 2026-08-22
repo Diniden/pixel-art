@@ -20,7 +20,11 @@ describe("Toggle", () => {
 
   it("renders unlabelled with an aria-label", () => {
     const { container } = render(
-      <Toggle checked={false} onChange={() => {}} ariaLabel="Layer visibility" />,
+      <Toggle
+        checked={false}
+        onChange={() => {}}
+        ariaLabel="Layer visibility"
+      />,
     );
     expect(container.firstChild).toMatchSnapshot();
   });

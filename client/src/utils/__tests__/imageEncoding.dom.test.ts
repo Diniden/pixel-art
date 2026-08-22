@@ -89,7 +89,9 @@ describe("decodeBase64ToImage", () => {
     // @ts-expect-error — swapping the constructor for a probe.
     globalThis.Image = FailingImage;
     try {
-      await expect(decodeBase64ToImage("data:image/png;base64,zzz")).rejects.toBeDefined();
+      await expect(
+        decodeBase64ToImage("data:image/png;base64,zzz"),
+      ).rejects.toBeDefined();
     } finally {
       globalThis.Image = original;
     }

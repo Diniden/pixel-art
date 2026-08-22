@@ -12,11 +12,7 @@
  *  - every failure THROWS a typed `ApiError` — no fabricated success values,
  *    no `console.error`. Callers decide what a failure means.
  */
-export {
-  API_BASE,
-  DEFAULT_TIMEOUT_MS,
-  LONG_TIMEOUT_MS,
-} from "./client/config";
+export { API_BASE, DEFAULT_TIMEOUT_MS, LONG_TIMEOUT_MS } from "./client/config";
 export {
   ApiError,
   NetworkError,

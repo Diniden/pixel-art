@@ -29,9 +29,11 @@ const BLUE: Color = { r: 0, g: 0, b: 255, a: 255 };
 const GREEN: Color = { r: 0, g: 255, b: 0, a: 255 };
 
 const empty = (): PixelData => ({ color: 0, normal: 0, height: 0 });
-const solid =
-  (c: Color) =>
-  (): PixelData => ({ color: { ...c }, normal: 0, height: 0 });
+const solid = (c: Color) => (): PixelData => ({
+  color: { ...c },
+  normal: 0,
+  height: 0,
+});
 
 const grid = (
   w: number,
@@ -44,9 +46,8 @@ const grid = (
 const xy = (pts: readonly Point[]): [number, number][] =>
   pts.map((p) => [p.x, p.y]);
 
-const coords = (
-  pts: readonly { x: number; y: number }[],
-): [number, number][] => pts.map((p) => [p.x, p.y]);
+const coords = (pts: readonly { x: number; y: number }[]): [number, number][] =>
+  pts.map((p) => [p.x, p.y]);
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /* getLinePixels — Bresenham                                                  */
@@ -161,26 +162,28 @@ describe("getLinePixels", () => {
 
 describe("getRectanglePixels", () => {
   it('"outline" emits the border ring only, in row-major order', () => {
-    expect(xy(getRectanglePixels({ x: 0, y: 0 }, { x: 3, y: 3 }, "outline"))).toEqual(
-      [
-        [0, 0],
-        [1, 0],
-        [2, 0],
-        [3, 0],
-        [0, 1],
-        [3, 1],
-        [0, 2],
-        [3, 2],
-        [0, 3],
-        [1, 3],
-        [2, 3],
-        [3, 3],
-      ],
-    );
+    expect(
+      xy(getRectanglePixels({ x: 0, y: 0 }, { x: 3, y: 3 }, "outline")),
+    ).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [0, 1],
+      [3, 1],
+      [0, 2],
+      [3, 2],
+      [0, 3],
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ]);
   });
 
   it('"fill" emits every interior cell', () => {
-    expect(xy(getRectanglePixels({ x: 0, y: 0 }, { x: 2, y: 2 }, "fill"))).toEqual([
+    expect(
+      xy(getRectanglePixels({ x: 0, y: 0 }, { x: 2, y: 2 }, "fill")),
+    ).toEqual([
       [0, 0],
       [1, 0],
       [2, 0],
@@ -285,40 +288,40 @@ describe("getEllipsePixels", () => {
     // BEHAVIOUR NOTE: region 1's `while (dx < dy)` never runs (dy = 0) and
     // region 2's `while (y >= 0)` runs once at y = 0 with x = 0, so a
     // zero-height ellipse degenerates to the centre point only. Observed.
-    expect(xy(getEllipsePixels({ x: 4, y: 4 }, { x: 6, y: 4 }, "outline"))).toEqual(
-      [[4, 4]],
-    );
+    expect(
+      xy(getEllipsePixels({ x: 4, y: 4 }, { x: 6, y: 4 }, "outline")),
+    ).toEqual([[4, 4]]);
   });
 
   it("emits a vertical bar when rx is 0 but ry is not", () => {
-    expect(xy(getEllipsePixels({ x: 4, y: 4 }, { x: 4, y: 6 }, "outline"))).toEqual(
-      [
-        [4, 6],
-        [4, 2],
-        [4, 5],
-        [4, 3],
-        [4, 4],
-      ],
-    );
+    expect(
+      xy(getEllipsePixels({ x: 4, y: 4 }, { x: 4, y: 6 }, "outline")),
+    ).toEqual([
+      [4, 6],
+      [4, 2],
+      [4, 5],
+      [4, 3],
+      [4, 4],
+    ]);
   });
 
   it('"outline" of a 2-radius circle emits the 12-pixel ring', () => {
-    expect(xy(getEllipsePixels({ x: 4, y: 4 }, { x: 6, y: 6 }, "outline"))).toEqual(
-      [
-        [4, 6],
-        [4, 2],
-        [5, 6],
-        [3, 6],
-        [5, 2],
-        [3, 2],
-        [6, 5],
-        [2, 5],
-        [6, 3],
-        [2, 3],
-        [6, 4],
-        [2, 4],
-      ],
-    );
+    expect(
+      xy(getEllipsePixels({ x: 4, y: 4 }, { x: 6, y: 6 }, "outline")),
+    ).toEqual([
+      [4, 6],
+      [4, 2],
+      [5, 6],
+      [3, 6],
+      [5, 2],
+      [3, 2],
+      [6, 5],
+      [2, 5],
+      [6, 3],
+      [2, 3],
+      [6, 4],
+      [2, 4],
+    ]);
   });
 
   it('"fill" and "both" are identical, and both are supersets of the outline', () => {
@@ -336,9 +339,11 @@ describe("getEllipsePixels", () => {
     const cx = 4;
     const cy = 4;
     const keys = new Set(
-      getEllipsePixels({ x: cx, y: cy }, { x: cx + 3, y: cy + 3 }, "outline").map(
-        (p) => `${p.x},${p.y}`,
-      ),
+      getEllipsePixels(
+        { x: cx, y: cy },
+        { x: cx + 3, y: cy + 3 },
+        "outline",
+      ).map((p) => `${p.x},${p.y}`),
     );
     for (const k of [...keys]) {
       const [x, y] = k.split(",").map(Number);
@@ -545,7 +550,11 @@ describe("gaussianFloodFill", () => {
     g[0][4] = solid(BLUE)();
     const result = gaussianFloodFill(g, 2, 0, 5, 1, 1.0, 2.0, GREEN);
     // The RED run at x=1..3 is the region; both BLUE ends are seeds.
-    expect(coords(result).map(([x]) => x).sort()).toEqual([1, 2, 3]);
+    expect(
+      coords(result)
+        .map(([x]) => x)
+        .sort(),
+    ).toEqual([1, 2, 3]);
     expect(result.every((r) => r.color !== GREEN)).toBe(true);
   });
 });

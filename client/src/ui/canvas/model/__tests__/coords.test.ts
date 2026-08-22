@@ -29,25 +29,46 @@ const geom = (over: Partial<CanvasViewGeometry> = {}): CanvasViewGeometry => ({
 describe('screenToPixel — "pixel" mode, normal', () => {
   it("maps a click to the cell containing it", () => {
     expect(screenToPixel(0, 0, rect, geom(), "pixel")).toEqual({ x: 0, y: 0 });
-    expect(screenToPixel(50, 90, rect, geom(), "pixel")).toEqual({ x: 1, y: 2 });
+    expect(screenToPixel(50, 90, rect, geom(), "pixel")).toEqual({
+      x: 1,
+      y: 2,
+    });
   });
 
   it("FLOORS — anywhere inside a cell yields the same cell", () => {
-    expect(screenToPixel(40, 40, rect, geom(), "pixel")).toEqual({ x: 1, y: 1 });
-    expect(screenToPixel(79, 79, rect, geom(), "pixel")).toEqual({ x: 1, y: 1 });
-    expect(screenToPixel(80, 80, rect, geom(), "pixel")).toEqual({ x: 2, y: 2 });
+    expect(screenToPixel(40, 40, rect, geom(), "pixel")).toEqual({
+      x: 1,
+      y: 1,
+    });
+    expect(screenToPixel(79, 79, rect, geom(), "pixel")).toEqual({
+      x: 1,
+      y: 1,
+    });
+    expect(screenToPixel(80, 80, rect, geom(), "pixel")).toEqual({
+      x: 2,
+      y: 2,
+    });
   });
 
   it("honours a rect that is not at the viewport origin", () => {
     const offsetRect = { left: 100, top: 200, width: 160, height: 160 };
-    expect(screenToPixel(100, 200, offsetRect, geom(), "pixel")).toEqual({ x: 0, y: 0 });
-    expect(screenToPixel(140, 240, offsetRect, geom(), "pixel")).toEqual({ x: 1, y: 1 });
+    expect(screenToPixel(100, 200, offsetRect, geom(), "pixel")).toEqual({
+      x: 0,
+      y: 0,
+    });
+    expect(screenToPixel(140, 240, offsetRect, geom(), "pixel")).toEqual({
+      x: 1,
+      y: 1,
+    });
   });
 
   it("maps through the RECT, so a CSS-scaled canvas still resolves correctly", () => {
     // Same 4×4 grid, but the element is rendered at half size by a pinch zoom.
     const scaled = { left: 0, top: 0, width: 80, height: 80 };
-    expect(screenToPixel(20, 20, scaled, geom(), "pixel")).toEqual({ x: 1, y: 1 });
+    expect(screenToPixel(20, 20, scaled, geom(), "pixel")).toEqual({
+      x: 1,
+      y: 1,
+    });
   });
 
   it("returns null OUTSIDE the grid on every side", () => {
@@ -60,7 +81,9 @@ describe('screenToPixel — "pixel" mode, normal', () => {
   it("returns null for a degenerate rect (unmounted / display:none canvas)", () => {
     const dead = { left: 0, top: 0, width: 0, height: 0 };
     expect(screenToPixel(10, 10, dead, geom(), "pixel")).toBeNull();
-    expect(screenToPixel(10, 10, { ...rect, height: 0 }, geom(), "pixel")).toBeNull();
+    expect(
+      screenToPixel(10, 10, { ...rect, height: 0 }, geom(), "pixel"),
+    ).toBeNull();
   });
 });
 
@@ -79,8 +102,14 @@ describe('screenToPixel — "pixel" mode, editing a variant', () => {
 
   it("returns VARIANT-LOCAL coordinates, not world ones", () => {
     // Screen (40,40) is world cell (1,1), which is variant cell (0,0).
-    expect(screenToPixel(40, 40, rect, variant, "pixel")).toEqual({ x: 0, y: 0 });
-    expect(screenToPixel(80, 80, rect, variant, "pixel")).toEqual({ x: 1, y: 1 });
+    expect(screenToPixel(40, 40, rect, variant, "pixel")).toEqual({
+      x: 0,
+      y: 0,
+    });
+    expect(screenToPixel(80, 80, rect, variant, "pixel")).toEqual({
+      x: 1,
+      y: 1,
+    });
   });
 
   it("rejects world cells outside the VARIANT even when inside the view", () => {
@@ -103,8 +132,14 @@ describe('screenToPixel — "pixel" mode, editing a variant', () => {
     });
     const wide = { left: 0, top: 0, width: 200, height: 200 };
     // Screen (0,0) is world (-1,-1) which is variant cell (0,0).
-    expect(screenToPixel(0, 0, wide, negative, "pixel")).toEqual({ x: 0, y: 0 });
-    expect(screenToPixel(40, 40, wide, negative, "pixel")).toEqual({ x: 1, y: 1 });
+    expect(screenToPixel(0, 0, wide, negative, "pixel")).toEqual({
+      x: 0,
+      y: 0,
+    });
+    expect(screenToPixel(40, 40, wide, negative, "pixel")).toEqual({
+      x: 1,
+      y: 1,
+    });
     // World (1,1) is variant cell (2,2) — outside the 2×2 variant.
     expect(screenToPixel(80, 80, wide, negative, "pixel")).toBeNull();
   });
@@ -114,11 +149,20 @@ describe('screenToPixel — "origin" mode', () => {
   it("SNAPS to the nearest half cell", () => {
     expect(screenToPixel(0, 0, rect, geom(), "origin")).toEqual({ x: 0, y: 0 });
     // Screen 20 is cell 0.5 exactly.
-    expect(screenToPixel(20, 20, rect, geom(), "origin")).toEqual({ x: 0.5, y: 0.5 });
+    expect(screenToPixel(20, 20, rect, geom(), "origin")).toEqual({
+      x: 0.5,
+      y: 0.5,
+    });
     // Screen 30 is cell 0.75 -> snaps up to 1.
-    expect(screenToPixel(30, 30, rect, geom(), "origin")).toEqual({ x: 1, y: 1 });
+    expect(screenToPixel(30, 30, rect, geom(), "origin")).toEqual({
+      x: 1,
+      y: 1,
+    });
     // Screen 25 is cell 0.625 -> snaps down to 0.5.
-    expect(screenToPixel(25, 25, rect, geom(), "origin")).toEqual({ x: 0.5, y: 0.5 });
+    expect(screenToPixel(25, 25, rect, geom(), "origin")).toEqual({
+      x: 0.5,
+      y: 0.5,
+    });
   });
 
   it("stays in OBJECT space — it does NOT subtract the variant offset", () => {
@@ -129,14 +173,23 @@ describe('screenToPixel — "origin" mode', () => {
       variantOffset: { x: 1, y: 1 },
     });
     // The same screen point that "pixel" mode called variant cell (0,0).
-    expect(screenToPixel(40, 40, rect, variant, "origin")).toEqual({ x: 1, y: 1 });
+    expect(screenToPixel(40, 40, rect, variant, "origin")).toEqual({
+      x: 1,
+      y: 1,
+    });
   });
 
   it("ALLOWS one cell of slop outside the object on every side", () => {
     // The object is 4×4, so -1 .. 5 is accepted.
     const wide = { left: 0, top: 0, width: 160, height: 160 };
-    expect(screenToPixel(-40, 0, wide, geom(), "origin")).toEqual({ x: -1, y: 0 });
-    expect(screenToPixel(200, 0, wide, geom(), "origin")).toEqual({ x: 5, y: 0 });
+    expect(screenToPixel(-40, 0, wide, geom(), "origin")).toEqual({
+      x: -1,
+      y: 0,
+    });
+    expect(screenToPixel(200, 0, wide, geom(), "origin")).toEqual({
+      x: 5,
+      y: 0,
+    });
   });
 
   it("rejects a point beyond that slop", () => {
@@ -145,7 +198,10 @@ describe('screenToPixel — "origin" mode', () => {
     // is not -1 cell but the point that snaps past it: anything up to -1.25
     // cells still rounds to -1 and is accepted. -1.5 cells (screen -60) is the
     // first value that snaps to -1.5 and fails.
-    expect(screenToPixel(-45, 0, wide, geom(), "origin")).toEqual({ x: -1, y: 0 });
+    expect(screenToPixel(-45, 0, wide, geom(), "origin")).toEqual({
+      x: -1,
+      y: 0,
+    });
     expect(screenToPixel(-60, 0, wide, geom(), "origin")).toBeNull();
     expect(screenToPixel(0, 240, wide, geom(), "origin")).toBeNull();
   });
@@ -158,8 +214,14 @@ describe('screenToPixel — "origin" mode', () => {
 
 describe("the two modes are genuinely different rules", () => {
   it("disagree on the same point: whole-cell floor vs half-cell round", () => {
-    expect(screenToPixel(30, 30, rect, geom(), "pixel")).toEqual({ x: 0, y: 0 });
-    expect(screenToPixel(30, 30, rect, geom(), "origin")).toEqual({ x: 1, y: 1 });
+    expect(screenToPixel(30, 30, rect, geom(), "pixel")).toEqual({
+      x: 0,
+      y: 0,
+    });
+    expect(screenToPixel(30, 30, rect, geom(), "origin")).toEqual({
+      x: 1,
+      y: 1,
+    });
   });
 
   it("disagree at the edge: pixel mode rejects, origin mode allows slop", () => {

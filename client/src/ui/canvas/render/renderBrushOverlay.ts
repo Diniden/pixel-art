@@ -63,7 +63,12 @@ export function paintBrushCells(
   buffer: PixelBuffer,
   cells: ReadonlyArray<BrushCell>,
   zoom: number,
-  fill: { r: number; g: number; b: number; a: number } = BRUSH_OVERLAY_STYLE.fill,
+  fill: {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+  } = BRUSH_OVERLAY_STYLE.fill,
 ): PixelBuffer {
   const { data, width, height } = buffer;
   const sa = fill.a;

@@ -66,7 +66,9 @@ function buildUrl(
  * answer with an HTML 502 page; the old call sites did `await response.json()`
  * unguarded there, which threw a SyntaxError and masked the real status.
  */
-async function readServerMessage(response: Response): Promise<string | undefined> {
+async function readServerMessage(
+  response: Response,
+): Promise<string | undefined> {
   try {
     // Real `Response` objects always have `text()`; hand-rolled stubs in older
     // characterisation tests may only implement `json()`.

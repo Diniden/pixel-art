@@ -1,14 +1,23 @@
-import { readFile, writeFile, mkdir, readdir, unlink, stat, rename, rm } from 'fs/promises';
-import { existsSync, createWriteStream } from 'fs';
-import { dirname, join, basename } from 'path';
-import { fileURLToPath } from 'url';
-import { createGzip } from 'zlib';
-import * as crypto from 'crypto';
+import {
+  readFile,
+  writeFile,
+  mkdir,
+  readdir,
+  unlink,
+  stat,
+  rename,
+  rm,
+} from "fs/promises";
+import { existsSync, createWriteStream } from "fs";
+import { dirname, join, basename } from "path";
+import { fileURLToPath } from "url";
+import { createGzip } from "zlib";
+import * as crypto from "crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, 'data');
-const BACKUPS_DIR = join(DATA_DIR, 'backups');
-const CONFIG_FILE = join(DATA_DIR, 'config.json');
+const DATA_DIR = join(__dirname, "data");
+const BACKUPS_DIR = join(DATA_DIR, "backups");
+const CONFIG_FILE = join(DATA_DIR, "config.json");
 
 const BACKUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes minimum between backups
 const MAX_BACKUPS_PER_DAY = 50;
@@ -25,7 +34,7 @@ const projectBackupStates: Map<string, ProjectBackupState> = new Map();
  * Generate a hash of file content for comparison
  */
 function generateHash(content: string): string {
-  return crypto.createHash('md5').update(content).digest('hex');
+  return crypto.createHash("md5").update(content).digest("hex");
 }
 
 /**
@@ -33,8 +42,8 @@ function generateHash(content: string): string {
  */
 function getDateFolderName(): string {
   const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
   const year = now.getFullYear();
   return `${month}-${day}-${year}`;
 }
@@ -44,9 +53,9 @@ function getDateFolderName(): string {
  */
 function getTimestampString(): string {
   const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
   return `${hours}-${minutes}-${seconds}`;
 }
 
@@ -67,12 +76,12 @@ async function safeWriteFile(filePath: string, content: string): Promise<void> {
 
   try {
     // Write to temporary file
-    await writeFile(tempPath, content, 'utf-8');
+    await writeFile(tempPath, content, "utf-8");
 
     // Verify the temp file was written correctly by reading it back
-    const verification = await readFile(tempPath, 'utf-8');
+    const verification = await readFile(tempPath, "utf-8");
     if (verification !== content) {
-      throw new Error('Write verification failed: content mismatch');
+      throw new Error("Write verification failed: content mismatch");
     }
 
     // Atomic rename (this is atomic on most filesystems)
@@ -100,7 +109,7 @@ async function compressAndDeleteFolder(folderPath: string): Promise<void> {
   try {
     // Read all backup files in the folder
     const files = await readdir(folderPath);
-    const backupFiles = files.filter(f => f.endsWith('.json'));
+    const backupFiles = files.filter((f) => f.endsWith(".json"));
 
     if (backupFiles.length === 0) {
       console.log(`No backup files in ${folderName}, deleting empty folder`);
@@ -111,7 +120,7 @@ async function compressAndDeleteFolder(folderPath: string): Promise<void> {
     // Create a combined JSON with all backups (for simplicity without tar)
     const combined: { [filename: string]: unknown } = {};
     for (const file of backupFiles) {
-      const content = await readFile(join(folderPath, file), 'utf-8');
+      const content = await readFile(join(folderPath, file), "utf-8");
       combined[file] = JSON.parse(content);
     }
 
@@ -124,9 +133,9 @@ async function compressAndDeleteFolder(folderPath: string): Promise<void> {
     const gzip = createGzip({ level: 9 }); // Maximum compression
 
     await new Promise<void>((resolve, reject) => {
-      gzip.on('error', reject);
-      writeStream.on('error', reject);
-      writeStream.on('finish', resolve);
+      gzip.on("error", reject);
+      writeStream.on("error", reject);
+      writeStream.on("finish", resolve);
 
       gzip.write(combinedContent);
       gzip.end();
@@ -139,7 +148,9 @@ async function compressAndDeleteFolder(folderPath: string): Promise<void> {
     // Delete the original folder
     await rm(folderPath, { recursive: true, force: true });
 
-    console.log(`Compressed ${folderName} with ${backupFiles.length} backups to ${basename(gzipPath)}`);
+    console.log(
+      `Compressed ${folderName} with ${backupFiles.length} backups to ${basename(gzipPath)}`,
+    );
   } catch (error) {
     console.error(`Error compressing folder ${folderName}:`, error);
   }
@@ -178,7 +189,7 @@ function isPreviousDay(folderName: string): boolean {
  */
 async function getSortedBackupFiles(folderPath: string): Promise<string[]> {
   const files = await readdir(folderPath);
-  const jsonFiles = files.filter(f => f.endsWith('.json'));
+  const jsonFiles = files.filter((f) => f.endsWith(".json"));
 
   // Get file stats and sort by mtime
   const fileStats = await Promise.all(
@@ -186,11 +197,11 @@ async function getSortedBackupFiles(folderPath: string): Promise<string[]> {
       const filePath = join(folderPath, file);
       const stats = await stat(filePath);
       return { file, mtime: stats.mtime.getTime() };
-    })
+    }),
   );
 
   fileStats.sort((a, b) => a.mtime - b.mtime);
-  return fileStats.map(fs => fs.file);
+  return fileStats.map((fs) => fs.file);
 }
 
 /**
@@ -200,7 +211,10 @@ async function cleanupOldBackups(folderPath: string): Promise<void> {
   const sortedFiles = await getSortedBackupFiles(folderPath);
 
   if (sortedFiles.length > MAX_BACKUPS_PER_DAY) {
-    const filesToDelete = sortedFiles.slice(0, sortedFiles.length - MAX_BACKUPS_PER_DAY);
+    const filesToDelete = sortedFiles.slice(
+      0,
+      sortedFiles.length - MAX_BACKUPS_PER_DAY,
+    );
     for (const file of filesToDelete) {
       await unlink(join(folderPath, file));
       console.log(`Deleted old backup: ${file}`);
@@ -219,7 +233,10 @@ function getProjectFilePath(projectName: string): string {
  * Run backup for a specific project (called on auto-save)
  * Returns true if backup was created, false if skipped
  */
-export async function runBackupForProject(projectName: string, projectContent: string): Promise<boolean> {
+export async function runBackupForProject(
+  projectName: string,
+  projectContent: string,
+): Promise<boolean> {
   try {
     await ensureDir(BACKUPS_DIR);
 
@@ -236,7 +253,9 @@ export async function runBackupForProject(projectName: string, projectContent: s
     // Check if enough time has passed since last backup (5 minutes)
     const timeSinceLastBackup = now - backupState.lastBackupTime;
     if (timeSinceLastBackup < BACKUP_INTERVAL_MS) {
-      console.log(`Backup skipped for ${projectName}: only ${Math.round(timeSinceLastBackup / 1000)}s since last backup`);
+      console.log(
+        `Backup skipped for ${projectName}: only ${Math.round(timeSinceLastBackup / 1000)}s since last backup`,
+      );
       return false;
     }
 
@@ -296,21 +315,23 @@ export async function loadConfig(): Promise<{ currentProject: string }> {
 
     if (!existsSync(CONFIG_FILE)) {
       // Default config
-      return { currentProject: 'project' };
+      return { currentProject: "project" };
     }
 
-    const content = await readFile(CONFIG_FILE, 'utf-8');
+    const content = await readFile(CONFIG_FILE, "utf-8");
     return JSON.parse(content);
   } catch (error) {
-    console.error('Error loading config:', error);
-    return { currentProject: 'project' };
+    console.error("Error loading config:", error);
+    return { currentProject: "project" };
   }
 }
 
 /**
  * Save the server config
  */
-export async function saveConfig(config: { currentProject: string }): Promise<void> {
+export async function saveConfig(config: {
+  currentProject: string;
+}): Promise<void> {
   await ensureDir(DATA_DIR);
   await safeWriteFile(CONFIG_FILE, JSON.stringify(config, null, 2));
 }
@@ -323,8 +344,14 @@ export async function listProjects(): Promise<string[]> {
   const files = await readdir(DATA_DIR);
 
   return files
-    .filter(f => f.endsWith('.json') && f !== 'config.json' && !f.includes('.backup') && !f.includes('.migration-backup'))
-    .map(f => f.replace('.json', ''))
+    .filter(
+      (f) =>
+        f.endsWith(".json") &&
+        f !== "config.json" &&
+        !f.includes(".backup") &&
+        !f.includes(".migration-backup"),
+    )
+    .map((f) => f.replace(".json", ""))
     .sort();
 }
 
@@ -338,7 +365,10 @@ export function projectExists(projectName: string): boolean {
 /**
  * Rename a project file
  */
-export async function renameProjectFile(oldName: string, newName: string): Promise<void> {
+export async function renameProjectFile(
+  oldName: string,
+  newName: string,
+): Promise<void> {
   const oldPath = getProjectFilePath(oldName);
   const newPath = getProjectFilePath(newName);
 
@@ -375,7 +405,12 @@ export async function listBackupsForProject(
 ): Promise<{ date: string; time: string; filename: string }[]> {
   await ensureDir(BACKUPS_DIR);
 
-  const entries: { date: string; time: string; filename: string; mtime: number }[] = [];
+  const entries: {
+    date: string;
+    time: string;
+    filename: string;
+    mtime: number;
+  }[] = [];
 
   let allItems: string[];
   try {
@@ -402,7 +437,7 @@ export async function listBackupsForProject(
 
     const prefix = `${projectName}-`;
     for (const file of files) {
-      if (!file.startsWith(prefix) || !file.endsWith('.json')) continue;
+      if (!file.startsWith(prefix) || !file.endsWith(".json")) continue;
 
       const timeStr = file.slice(prefix.length, -5); // strip prefix and .json
       const filePath = join(itemPath, file);
@@ -434,7 +469,7 @@ export async function readBackupFile(
     throw new Error(`Backup file not found: ${dateFolderName}/${filename}`);
   }
 
-  return await readFile(filePath, 'utf-8');
+  return await readFile(filePath, "utf-8");
 }
 
 // Export utilities for use in project routes

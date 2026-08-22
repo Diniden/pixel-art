@@ -16,7 +16,7 @@ const meta = {
           "`toggle > toggle__input + toggle__track + toggle__label`. " +
           "Replaces the 9 measured sites in 3 incompatible idioms, including " +
           "LayerColors' keyboard-INACCESSIBLE div-onClick toggles. The " +
-          "control is a real `<input type=\"checkbox\" role=\"switch\">`, so " +
+          'control is a real `<input type="checkbox" role="switch">`, so ' +
           "Tab + Space work natively.",
       },
     },

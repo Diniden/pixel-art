@@ -33,10 +33,7 @@ export interface PanelState {
   visible?: boolean;
 }
 
-export type PanelName =
-  | "frameReference"
-  | "referenceImage"
-  | "lightingPreview";
+export type PanelName = "frameReference" | "referenceImage" | "lightingPreview";
 
 export class ViewportUIStore {
   zoom: number = DEFAULT_UI_STATE.zoom;

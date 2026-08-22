@@ -1,7 +1,7 @@
 /**
  * PixelStudioPanel — PURE (REFRESH task 36, W27).
  *
- * This file used to make TWO separate `useEditorStore()` calls — 5 members in
+ * This file used to make TWO separate legacy Zustand-hook calls — 5 members in
  * the panel and 3 more in its private `OriginColorPicker`. Task 24's container
  * note called for collapsing them into ONE container; that is now done, and
  * `OriginColorPicker` takes props like everything else.
@@ -139,7 +139,9 @@ export function PixelStudioPanel({
                     min="1"
                     max={pencilBrushMax ?? 16}
                     value={Math.min(brushSize, pencilBrushMax ?? 16)}
-                    onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
+                    onChange={(e) =>
+                      onBrushSizeChange(parseInt(e.target.value))
+                    }
                   />
                   <span className="pixel-studio-panel__size-value">
                     {Math.min(brushSize, pencilBrushMax ?? 16)}
@@ -199,9 +201,13 @@ export function PixelStudioPanel({
                     min="1"
                     max={pencilBrushMax ?? 16}
                     value={brushSize}
-                    onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
+                    onChange={(e) =>
+                      onBrushSizeChange(parseInt(e.target.value))
+                    }
                   />
-                  <span className="pixel-studio-panel__size-value">{brushSize}</span>
+                  <span className="pixel-studio-panel__size-value">
+                    {brushSize}
+                  </span>
                 </div>
               </div>
 

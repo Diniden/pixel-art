@@ -7,7 +7,7 @@
  * ══════════════════════════════════════════════════════════════════════════
  *
  * There is no `StoreProvider` here, no `ApplicationStore`, no `installBridge`,
- * no `useEditorStore`, no MobX import, no `aiApi`, and no decorator that
+ * no legacy store hook, no MobX import, no `aiApi`, and no decorator that
  * supplies any of them — `.storybook/preview.tsx` provides only CSS, MSW and a
  * wrapper, and `modalHost` only retargets the portal.
  *
@@ -79,7 +79,7 @@ const meta = {
           "The PURE shell: step orchestration only. Built on the task-19 " +
           "`Modal` primitive, which preserves the mousedown-origin backdrop " +
           "close this file was the only legacy modal to get right, and adds " +
-          "the `role=\"dialog\"`, `aria-modal`, focus trap and Escape it " +
+          'the `role="dialog"`, `aria-modal`, focus trap and Escape it ' +
           "lacked. Every value is a prop and every effect a callback, which " +
           "is what lets these stories mount with no provider at all.",
       },

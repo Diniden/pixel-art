@@ -450,11 +450,12 @@ describe("W29h — the variant write engine can address any layer", () => {
       const { collapsed } = collapse([vt(0, 2), vt(0, 2)]);
 
       expect(isPixelCommand(collapsed)).toBe(true);
-      expect((collapsed as unknown as { cells: readonly PixelPatch[] }).cells).toHaveLength(
-        2,
-      );
       expect(
-        (collapsed as unknown as { target: PixelTarget }).target.variant?.layerIndex,
+        (collapsed as unknown as { cells: readonly PixelPatch[] }).cells,
+      ).toHaveLength(2);
+      expect(
+        (collapsed as unknown as { target: PixelTarget }).target.variant
+          ?.layerIndex,
       ).toBe(2);
     });
 
@@ -465,9 +466,9 @@ describe("W29h — the variant write engine can address any layer", () => {
       const { collapsed } = collapse([vt(0), vt(0, 0)]);
 
       expect(isPixelCommand(collapsed)).toBe(true);
-      expect((collapsed as unknown as { cells: readonly PixelPatch[] }).cells).toHaveLength(
-        2,
-      );
+      expect(
+        (collapsed as unknown as { cells: readonly PixelPatch[] }).cells,
+      ).toHaveLength(2);
     });
 
     it("still splits on frameIndex, as before", () => {

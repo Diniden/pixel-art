@@ -167,9 +167,7 @@ export interface VariantStoreDeps {
    * rather than merging into it. `deleteVariantGroup` needs to REMOVE a key,
    * which a merging setter cannot express.
    */
-  replaceVariantFrameIndices(next: {
-    [variantGroupId: string]: number;
-  }): void;
+  replaceVariantFrameIndices(next: { [variantGroupId: string]: number }): void;
 }
 
 export class VariantStore {
@@ -917,7 +915,10 @@ export class VariantStore {
               ...f,
               layers: f.layers.map((l) => {
                 if (allFrames) {
-                  if (l.isVariant && l.variantGroupId === layer.variantGroupId) {
+                  if (
+                    l.isVariant &&
+                    l.variantGroupId === layer.variantGroupId
+                  ) {
                     const currentOffset = getLayerOffset(l, frameIndex);
                     return {
                       ...l,
@@ -1186,9 +1187,15 @@ export class VariantStore {
     let updatedVariantIndex = currentVariantIndex;
     if (currentVariantIndex === fromIndex) {
       updatedVariantIndex = newIndex;
-    } else if (fromIndex < currentVariantIndex && newIndex >= currentVariantIndex) {
+    } else if (
+      fromIndex < currentVariantIndex &&
+      newIndex >= currentVariantIndex
+    ) {
       updatedVariantIndex = currentVariantIndex - 1;
-    } else if (fromIndex > currentVariantIndex && newIndex <= currentVariantIndex) {
+    } else if (
+      fromIndex > currentVariantIndex &&
+      newIndex <= currentVariantIndex
+    ) {
       updatedVariantIndex = currentVariantIndex + 1;
     }
 

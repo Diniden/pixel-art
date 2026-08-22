@@ -29,7 +29,7 @@
  *    `__tests__/applyInterpolation.test.ts` asserts a written layer's `pixels`
  *    is `PixelData[][]` — the assertion the task 34 spec requires.
  *  - **W8 / task 14, the commit path.** This goes through `mutator.commit`.
- *    It must NEVER call `useEditorStore.setState()` or `scheduleAutoSave()`
+ *    It must NEVER call `setState()` on the legacy Zustand hook or `scheduleAutoSave()`
  *    directly again: those bypassed the `MAX_HISTORY` cap and the normal save.
  *  - **ONE undo entry.** `mutator.commit` snapshots exactly once, so accepting
  *    an interpolation — however many frames it adds — is a single undoable
@@ -43,12 +43,7 @@
  * DOM. That keeps it runnable in the `unit` lane.
  */
 import { generateId } from "../../types";
-import type {
-  Frame,
-  Layer,
-  PixelData,
-  VariantFrame,
-} from "../../types";
+import type { Frame, Layer, PixelData, VariantFrame } from "../../types";
 import type { DomainStore } from "./DomainStore";
 import type { DomainMutator } from "./DomainMutator";
 
@@ -83,8 +78,7 @@ export interface ApplyInterpolationToVariant extends ApplyInterpolationBase {
 }
 
 export type ApplyInterpolationInput =
-  | ApplyInterpolationToObject
-  | ApplyInterpolationToVariant;
+  ApplyInterpolationToObject | ApplyInterpolationToVariant;
 
 export interface ApplyInterpolationDeps {
   domain: DomainStore;
@@ -212,11 +206,7 @@ interface SpliceOptions<F> {
   loopBack: boolean;
   pairs: PairPixelData;
   /** Build the generated frames for one pair. */
-  makeFrames: (
-    grids: PixelData[][][],
-    pairIdx: number,
-    isLoop: boolean,
-  ) => F[];
+  makeFrames: (grids: PixelData[][][], pairIdx: number, isLoop: boolean) => F[];
 }
 
 /**

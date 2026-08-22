@@ -2,7 +2,7 @@
  * LightingStudioPanelContainer (REFRESH task 27; PURIFIED task 36, W27).
  *
  * `LightingStudioPanel` used to read 4 store members through
- * `useEditorStore()`. Task 36 made it pure and moved it to
+ * the legacy Zustand hook. Task 36 made it pure and moved it to
  * `ui/components/LightingStudioPanel/`; this container is now the only place
  * that touches a store on its behalf.
  *

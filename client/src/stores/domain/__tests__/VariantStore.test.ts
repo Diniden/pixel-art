@@ -28,7 +28,7 @@
  *  6. every grid the store produces is a raw array, never an observable.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { runInAction } from "mobx";
 
 import { ApplicationStore } from "@/stores/ApplicationStore";
@@ -37,7 +37,12 @@ import type { ProjectHost } from "@/stores/domain/DomainStore";
 import type { SelectionSink } from "@/stores/domain/ObjectStore";
 import { assertGridsAreRaw } from "@/stores/domain/gridSafety";
 import { getAnchorPadding } from "@/utils/variantHelpers";
-import { RED, GREEN, mkLayer, tinyProject } from "@/store/__tests__/storeContract";
+import {
+  RED,
+  GREEN,
+  mkLayer,
+  tinyProject,
+} from "@/store/__tests__/storeContract";
 import type { Color, Layer, PixelData, Project } from "@/types";
 
 /* ── the rig ─────────────────────────────────────────────────────────────── */
@@ -183,7 +188,8 @@ function variantFixture(): Project {
 }
 
 const objOf = (rig: Rig) => rig.app.domain.objects[0];
-const layersOf = (rig: Rig, frameIndex = 0) => objOf(rig).frames[frameIndex].layers;
+const layersOf = (rig: Rig, frameIndex = 0) =>
+  objOf(rig).frames[frameIndex].layers;
 
 /** Make a variant of "Body" and return the ids the store generated. */
 function makeBodyVariant(rig: Rig) {
@@ -329,7 +335,11 @@ describe("VariantStore — variantFrameIndices goes through the UI callbacks", (
     // Two base frames → two variant frames already.
     expect(variant.frames).toHaveLength(2);
 
-    rig.app.variants.deleteVariantFrame(group.id, variant.id, variant.frames[1].id);
+    rig.app.variants.deleteVariantFrame(
+      group.id,
+      variant.id,
+      variant.frames[1].id,
+    );
     expect(rig.app.domain.variants[0].variants[0].frames).toHaveLength(1);
     // index 1 deleted → max(0, 1-1) = 0
     expect(rig.app.timelineUI.variantFrameIndices[group.id]).toBe(0);
@@ -473,7 +483,9 @@ describe("the LAYERING boundaries this task closed", () => {
       "src/stores/domain/FrameStore.ts",
       "src/stores/ui/TimelineUIStore.ts",
       "src/stores/ApplicationStore.ts",
-      "src/stores/bridge/zustandBridge.ts",
+      // (task 38 deleted `src/stores/bridge/` outright — the strongest
+      // possible pass for the file this list used to check.)
+      "src/stores/history/editorHistory.ts",
     ];
     for (const f of files) {
       expect(read(f), f).not.toMatch(/from\s+["'][^"']*components\//);
@@ -494,11 +506,10 @@ describe("the LAYERING boundaries this task closed", () => {
     );
   });
 
-  it("the legacy variantActions module is stubs only — no live implementation", () => {
-    const src = read("src/store/variantActions.ts");
-    // The 1,412-line implementation is gone; what is left routes to MobX.
-    expect(src.split("\n").length).toBeLessThan(200);
-    expect(src).not.toContain("updateProjectAndSave(");
-    expect(src).toContain('migrated(name, "VariantStore")');
+  it("the legacy variantActions module is GONE — task 38 finished the retirement", () => {
+    // W28's gate pinned the module down to throwing stubs; task 38 deleted it
+    // with the rest of the legacy store. `VariantStore` is the only
+    // implementation, which is the end state the stub gate existed to reach.
+    expect(existsSync("src/store/variantActions.ts")).toBe(false);
   });
 });

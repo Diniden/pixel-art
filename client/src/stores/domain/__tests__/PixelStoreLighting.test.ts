@@ -175,8 +175,12 @@ describe("PixelStore.setNormalPixel", () => {
   });
 
   it("ignores an out-of-bounds coordinate silently", () => {
-    expect(() => rig.pixels.setNormalPixel(99, 99, { x: 1, y: 2, z: 3 })).not.toThrow();
-    expect(() => rig.pixels.setNormalPixel(-1, 0, { x: 1, y: 2, z: 3 })).not.toThrow();
+    expect(() =>
+      rig.pixels.setNormalPixel(99, 99, { x: 1, y: 2, z: 3 }),
+    ).not.toThrow();
+    expect(() =>
+      rig.pixels.setNormalPixel(-1, 0, { x: 1, y: 2, z: 3 }),
+    ).not.toThrow();
   });
 
   it("replaces the grid WHOLESALE — a new array identity (R2)", () => {

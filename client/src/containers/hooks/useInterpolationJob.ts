@@ -37,11 +37,7 @@ import type { JobStatusResult } from "../../api/resources/aiApi";
  * names — do not delete or rename them.
  */
 export type PairJobStatus =
-  | "pending"
-  | "queued"
-  | "processing"
-  | "completed"
-  | "failed";
+  "pending" | "queued" | "processing" | "completed" | "failed";
 
 export interface PairJobState {
   pairIdx: number;
@@ -67,8 +63,7 @@ export interface GenerateOptions {
 
 /** What the health check concluded. */
 export type HealthOutcome =
-  | { available: true }
-  | { available: false; detail: string };
+  { available: true } | { available: false; detail: string };
 
 export interface InterpolationJob {
   pairJobs: PairJobState[];

@@ -61,13 +61,11 @@
  * the fields it uses instead of on every store change like the 33 legacy
  * consumers did.
  *
- * ACTIONS, however, are dispatched through the bridge seam
- * (`useEditorStore.getState()`). This is not the legacy store: with the bridge
- * installed, every one of these names is a DELEGATE that lands in MobX. The
- * reason to go through it is that several delegates assemble non-trivial
- * arguments the MobX actions require and which live in
- * `stores/bridge/zustandBridge.ts` — `pixelWriteOptions()`,
- * `selectionWriteOptions()`, `editableGrid()`, and the two-step
+ * ACTIONS are assembled from the MobX stores directly (W29i; the bridge that
+ * once mediated them is gone since task 38). During the bridge era several
+ * delegates assembled non-trivial arguments the MobX actions require —
+ * `pixelWriteOptions()`, `selectionWriteOptions()`, `editableGrid()`, and
+ * the two-step
  * `moveSelectedPixels` that moves the mask after the pixels
  * (`zustandBridge.ts:1006-1105`). Re-deriving those here would create a SECOND
  * implementation of each, which is precisely the duplication the migration
@@ -105,7 +103,7 @@
  * the fourth name on W29d's list, which turned out to be a DIFFERENT defect —
  * see the overlay note at the shortcut wiring below.
  *
- * ── What still keeps `useEditorStore` in this file ────────────────────────
+ * ── What still kept the legacy Zustand hook in this file ────────────────────────
  *
  * NOT the clobber, and after W29f (task 38) not the six actions either.
  *
@@ -138,9 +136,10 @@
  *     never observed `persistedUIVersion`, so a UI-only write produced zero
  *     saves. Fixed and pinned, which is what makes flipping these safe at all.
  *
- * The 21 `actions.*` names that remain are all bridge DELEGATES already
- * reaching the MobX stores, so `useEditorStore` stays here only until the
- * bridge itself goes — it is a scope boundary, not a correctness hazard.
+ * The 21 remaining `actions.*` names reached the MobX stores through bridge
+ * delegates until task 38 deleted the bridge; they now call those stores
+ * directly (see the ACTIONS block below) — the same implementations, one
+ * fewer hop.
  *
  * ── Gesture arbitration stays here, and `useCanvasPointer` handles the rest ─
  *
@@ -165,7 +164,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStores } from "../stores/context";
-import { strokeControl } from "../store";
+import { strokeControl } from "../stores/history/editorHistory";
 import type { Color, Point, SelectionBox, Pixel, PixelData } from "../types";
 import type { Layer } from "../types";
 import type { ReferenceImageData } from "../types/referenceImage";
@@ -347,8 +346,8 @@ export const CanvasContainer = observer(function CanvasContainer({
    *  ACTIONS — now assembled from the MobX stores (W29i)
    * ══════════════════════════════════════════════════════════════════════
    *
-   * This was `useEditorStore.getState()`, the codebase's last real
-   * `useEditorStore` read outside the bridge itself.
+   * This was `getState()` on the legacy Zustand hook, the codebase's last real
+   * legacy-store read outside the bridge itself.
    *
    * ── Why it could not move before, and why it can now ───────────────────
    *
@@ -364,13 +363,13 @@ export const CanvasContainer = observer(function CanvasContainer({
    * `LightingCanvasContainer` migrated on exactly that basis. This file is
    * the same migration; nothing below re-derives anything.
    *
-   * ⚠️ `beginStroke`/`endStroke` go through `strokeControl`, NOT
-   * `HistoryStore` directly. They must run the closure that wraps the
-   * transaction in `reconcile()` … `computeMirror()` so the Phase B
-   * `projectHistory` mirror stays consistent — one drag stays exactly one
-   * undo entry. `strokeControl` is a SEPARATE named export from `../store`
-   * (`store/index.ts:60`), so importing it does not import `useEditorStore`;
-   * `zustandBridge.ts`'s own delegates call the identical seam.
+   * ⚠️ `beginStroke`/`endStroke` go through `strokeControl`
+   * (`stores/history/editorHistory.ts`), NOT `HistoryStore` methods spelled
+   * out here: the seam owns the deferred-empty-snapshot rule ("beginStroke
+   * ALWAYS snapshots, even on a stroke that paints nothing" — pinned by task
+   * 08), so one drag stays exactly one undo entry. During the bridge era the
+   * same closure also kept the legacy history mirror consistent; task 38
+   * retired the mirror and re-homed the seam.
    *
    * ⚠️ `moveSelectedPixels` is TWO STEPS, in this order — the pixels move,
    * then the MASK moves with them. Verbatim from the bridge delegate, which
@@ -438,9 +437,9 @@ export const CanvasContainer = observer(function CanvasContainer({
 
       /* gesture state */
       endDrawing: () => app.canvasInteraction.endDrawing(),
-      setPreviewPixels: (pixels: Parameters<
-        typeof app.canvasInteraction.setPreviewPixels
-      >[0]) => app.canvasInteraction.setPreviewPixels(pixels),
+      setPreviewPixels: (
+        pixels: Parameters<typeof app.canvasInteraction.setPreviewPixels>[0],
+      ) => app.canvasInteraction.setPreviewPixels(pixels),
       clearPreviewPixels: () => app.canvasInteraction.clearPreviewPixels(),
 
       /* layer / object / variant / frame */
@@ -908,7 +907,12 @@ export const CanvasContainer = observer(function CanvasContainer({
           const y = Math.floor(idx / selection.width);
           const destX = x + dragDx;
           const destY = y + dragDy;
-          if (destX < 0 || destX >= gridWidth || destY < 0 || destY >= gridHeight)
+          if (
+            destX < 0 ||
+            destX >= gridWidth ||
+            destY < 0 ||
+            destY >= gridHeight
+          )
             continue;
           const pixel = getPixelColor(srcPixels[y]?.[x]);
           if (!pixel || pixel.a === 0) continue;
@@ -1315,7 +1319,12 @@ export const CanvasContainer = observer(function CanvasContainer({
 
       const frameX = canvasX - frameOverlayOffset.x;
       const frameY = canvasY - frameOverlayOffset.y;
-      if (frameX < 0 || frameX >= objWidth || frameY < 0 || frameY >= objHeight) {
+      if (
+        frameX < 0 ||
+        frameX >= objWidth ||
+        frameY < 0 ||
+        frameY >= objHeight
+      ) {
         return null;
       }
 
@@ -1391,14 +1400,7 @@ export const CanvasContainer = observer(function CanvasContainer({
 
       return null;
     },
-    [
-      frameTraceFrame,
-      obj,
-      objWidth,
-      objHeight,
-      frameOverlayOffset,
-      app.domain,
-    ],
+    [frameTraceFrame, obj, objWidth, objHeight, frameOverlayOffset, app.domain],
   );
 
   /* ── the brush/trace inputs both devices share ─────────────────────────── */
@@ -1475,7 +1477,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       currentColor,
       pencilShape:
         pencilBrushShape === "circle" ? getCirclePixels : getSquarePixels,
-      eraserShapeFn: eraserShape === "circle" ? getCirclePixels : getSquarePixels,
+      eraserShapeFn:
+        eraserShape === "circle" ? getCirclePixels : getSquarePixels,
       line: getLinePixels,
       shapeMode,
       borderRadius,
@@ -1518,12 +1521,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       squarePixelsAt: (p) =>
         getSquarePixels(p as Point, brushSize, currentColor) as never,
       rectanglePreview: (from, to) =>
-        getRectanglePixels(
-          from as Point,
-          to as Point,
-          shapeMode,
-          borderRadius,
-        ),
+        getRectanglePixels(from as Point, to as Point, shapeMode, borderRadius),
       ellipsePreview: (from, to) =>
         getEllipsePixels(from as Point, to as Point, shapeMode),
       linePreview: (from, to) => getLinePixels(from as Point, to as Point),
@@ -1629,7 +1627,9 @@ export const CanvasContainer = observer(function CanvasContainer({
       if (isEditingVariantResolved && variantData) {
         const variantLayer = variantData.variantFrame.layers[0];
         if (variantLayer) {
-          const pixel = getPixelColor(variantLayer.pixels[coords.y]?.[coords.x]);
+          const pixel = getPixelColor(
+            variantLayer.pixels[coords.y]?.[coords.x],
+          );
           if (pixel && pixel.a > 0) {
             app.setColorAndAddToHistory(pixel);
             app.ui.tool.revertToPreviousTool();
@@ -1812,7 +1812,10 @@ export const CanvasContainer = observer(function CanvasContainer({
       if (dx !== 0 || dy !== 0) {
         if (selectionDragMode === "pixels") {
           // Non-destructive preview; the real move commits on mouse-up.
-          setPixelDragOffset((prev) => ({ dx: prev.dx + dx, dy: prev.dy + dy }));
+          setPixelDragOffset((prev) => ({
+            dx: prev.dx + dx,
+            dy: prev.dy + dy,
+          }));
         } else {
           actions.moveSelection(dx, dy);
         }

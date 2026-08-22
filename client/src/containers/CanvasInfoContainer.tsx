@@ -3,7 +3,7 @@
  * canvas status strip (REFRESH task 23, rewritten by task 32).
  *
  * Task 23 hoisted three computeds out of `CanvasInfo` and collapsed its two
- * `useEditorStore()` calls into one. Task 32 finished the job: the component
+ * legacy Zustand-hook calls into one. Task 32 finished the job: the component
  * moved to `src/ui/components/CanvasInfo/` and its last store read became
  * props, so this container now supplies every value it displays.
  *

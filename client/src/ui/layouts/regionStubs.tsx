@@ -110,7 +110,14 @@ export function StubList({
   const rows = ROWS[density];
   return (
     <StubRegion label={`${label} (${rows})`} grow={grow}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, overflow: "auto" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          overflow: "auto",
+        }}
+      >
         {Array.from({ length: rows }, (_, i) => (
           <div
             key={i}

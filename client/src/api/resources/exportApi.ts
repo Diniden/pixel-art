@@ -20,7 +20,10 @@ export interface ExportRunResult {
 
 export const exportApi = {
   /** POST /api/project/export — a full export can be slow; long timeout. */
-  async run(projectName?: string, signal?: AbortSignal): Promise<ExportRunResult> {
+  async run(
+    projectName?: string,
+    signal?: AbortSignal,
+  ): Promise<ExportRunResult> {
     return request<ExportRunResult>({
       method: "POST",
       path: "/project/export",

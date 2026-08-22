@@ -56,7 +56,14 @@ export const Playground: Story = {};
 /** All eight skins, side by side. */
 export const Variants: Story = {
   render: () => (
-    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+    <div
+      style={{
+        display: "flex",
+        gap: 12,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
+    >
       <Button>Default</Button>
       <Button variant="primary">Primary</Button>
       <Button variant="neutral">Neutral</Button>
@@ -84,7 +91,14 @@ export const Sizes: Story = {
 /** State the controls cannot express alongside every skin at once. */
 export const Disabled: Story = {
   render: () => (
-    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+    <div
+      style={{
+        display: "flex",
+        gap: 12,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
+    >
       <Button disabled>Default</Button>
       <Button disabled variant="primary">
         Primary

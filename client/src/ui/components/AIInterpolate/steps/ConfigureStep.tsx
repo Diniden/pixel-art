@@ -363,7 +363,9 @@ export function ConfigureStep({
                   max={4.0}
                   step={0.25}
                   value={flowScale}
-                  onChange={(e) => onFlowScaleChange(parseFloat(e.target.value))}
+                  onChange={(e) =>
+                    onFlowScaleChange(parseFloat(e.target.value))
+                  }
                   disabled={isGenerating}
                 />
                 <span className="ai-interpolate-modal__setting-value">

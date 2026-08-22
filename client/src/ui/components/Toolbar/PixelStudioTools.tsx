@@ -63,7 +63,12 @@ const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
   { id: "flood-fill", icon: PaintBucket, label: "Fill", hotkey: "5" },
   { id: "gaussian-fill", icon: CloudFog, label: "Gaussian Fill", hotkey: "G" },
   { id: "line", icon: Minus, label: "Line", hotkey: "6" },
-  { id: "rectangle", icon: RectangleHorizontal, label: "Rectangle (↑↓ radius)", hotkey: "7" },
+  {
+    id: "rectangle",
+    icon: RectangleHorizontal,
+    label: "Rectangle (↑↓ radius)",
+    hotkey: "7",
+  },
   { id: "ellipse", icon: Circle, label: "Ellipse", hotkey: "8" },
   { id: "move", icon: Move, label: "Move (arrows to shift)", hotkey: "9" },
   {
@@ -72,7 +77,12 @@ const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
     label: "Selection (arrows to move)",
     hotkey: "0",
   },
-  { id: "origin", icon: Crosshair, label: "Origin (set anchor point)", hotkey: "O" },
+  {
+    id: "origin",
+    icon: Crosshair,
+    label: "Origin (set anchor point)",
+    hotkey: "O",
+  },
 ];
 
 export function PixelStudioTools({
@@ -106,7 +116,9 @@ export function PixelStudioTools({
               onClick={() => onSelectTool(tool.id)}
               title={`${tool.label} (${tool.hotkey})`}
             >
-              <span className="toolbar__tool-icon"><Icon icon={tool.icon} /></span>
+              <span className="toolbar__tool-icon">
+                <Icon icon={tool.icon} />
+              </span>
               <span className="toolbar__tool-hotkey">{tool.hotkey}</span>
             </button>
           ))}
@@ -120,14 +132,18 @@ export function PixelStudioTools({
             onClick={() => onFlipHorizontal()}
             title="Flip Horizontal"
           >
-            <span className="toolbar__tool-icon"><Icon icon={FlipHorizontal2} /></span>
+            <span className="toolbar__tool-icon">
+              <Icon icon={FlipHorizontal2} />
+            </span>
           </button>
           <button
             className="toolbar__tool-btn"
             onClick={() => onFlipVertical()}
             title="Flip Vertical"
           >
-            <span className="toolbar__tool-icon"><Icon icon={FlipVertical2} /></span>
+            <span className="toolbar__tool-icon">
+              <Icon icon={FlipVertical2} />
+            </span>
           </button>
         </div>
 
@@ -139,7 +155,9 @@ export function PixelStudioTools({
             onClick={() => setIsRefModalOpen(true)}
             title="Add Reference Image"
           >
-            <span className="toolbar__tool-icon"><Icon icon={Camera} /></span>
+            <span className="toolbar__tool-icon">
+              <Icon icon={Camera} />
+            </span>
           </button>
           {hasReferenceImage && (
             <button
@@ -147,7 +165,9 @@ export function PixelStudioTools({
               onClick={handleClearReference}
               title="Clear Reference Image"
             >
-              <span className="toolbar__tool-icon"><Icon icon={X} /></span>
+              <span className="toolbar__tool-icon">
+                <Icon icon={X} />
+              </span>
             </button>
           )}
         </div>

@@ -131,7 +131,10 @@ export function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         tabIndex={-1}
-        className={classNames("confirm-dialog", danger && "confirm-dialog--danger")}
+        className={classNames(
+          "confirm-dialog",
+          danger && "confirm-dialog--danger",
+        )}
         {...markerProps}
       >
         {danger ? (

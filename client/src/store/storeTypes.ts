@@ -475,8 +475,7 @@ export interface EditorState {
 export type StoreGet = () => EditorState;
 export type StoreSet = (
   partial:
-    | Partial<EditorState>
-    | ((state: EditorState) => Partial<EditorState>),
+    Partial<EditorState> | ((state: EditorState) => Partial<EditorState>),
 ) => void;
 export type UpdateProjectAndSave = (
   updater: (project: Project) => Project,

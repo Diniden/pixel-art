@@ -171,8 +171,7 @@ export function migrateVariantsToProjectLevel(
 
 /** Which migrations `runMigrations` applied, in order. */
 export type AppliedMigration =
-  | "migrateLegacyProject"
-  | "migrateVariantsToProjectLevel";
+  "migrateLegacyProject" | "migrateVariantsToProjectLevel";
 
 /**
  * The load-order orchestration, moved verbatim from the former

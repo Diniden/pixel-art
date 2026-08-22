@@ -29,7 +29,7 @@ import {
   type StoreHarness,
 } from "./storeContract";
 import type { Project, SelectionBehavior } from "@/types";
-import { useEditorStore } from "@/store";
+import { currentHarnessApp } from "./mobxHarnessRuntime";
 
 // Task 16: the store no longer imports services/api (deleted) — dispatching
 // actions can no longer reach the network, so the defensive module mock that
@@ -44,7 +44,7 @@ import { useEditorStore } from "@/store";
  * spreading `getState()` across the file, so the MobX port has exactly one line
  * to re-point.
  */
-const readSelection = () => useEditorStore.getState().selection;
+const readSelection = () => currentHarnessApp().selectionUI.selection;
 
 const maskCoords = (): [number, number][] => {
   const s = readSelection();

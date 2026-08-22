@@ -37,7 +37,11 @@ import type { Color, Layer, PixelData, Project, Variant } from "@/types";
 
 /* ── fixtures ────────────────────────────────────────────────────────────── */
 
-const solid = (c: Color): PixelData => ({ color: { ...c }, normal: 0, height: 0 });
+const solid = (c: Color): PixelData => ({
+  color: { ...c },
+  normal: 0,
+  height: 0,
+});
 
 function layerWith(
   id: string,
@@ -209,8 +213,8 @@ describe.each(HARNESSES)("%s — variants", (_name, makeHarness) => {
 
     it("REPLACES the source layer with a variant HOST layer, at the same index", () => {
       for (const frameIndex of [0, 1]) {
-        const layers = harness.getProject()!.objects[0].frames[frameIndex]
-          .layers;
+        const layers =
+          harness.getProject()!.objects[0].frames[frameIndex].layers;
         expect(layers).toHaveLength(3);
         // The Body layer was at index 1 and the host takes its place.
         expect(layers[1].isVariant).toBe(true);
@@ -453,7 +457,12 @@ describe.each(HARNESSES)("%s — variants", (_name, makeHarness) => {
       harness.load(
         variantProject(
           {},
-          { variantOffsets: { "v-1": { x: 1, y: 1 }, "v-other": { x: 9, y: 9 } } },
+          {
+            variantOffsets: {
+              "v-1": { x: 1, y: 1 },
+              "v-other": { x: 9, y: 9 },
+            },
+          },
         ),
       );
       harness.dispatch("setVariantOffset", 1, 1);

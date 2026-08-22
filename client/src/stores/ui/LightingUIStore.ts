@@ -252,8 +252,10 @@ export class LightingUIStore {
     if (ui.studioMode !== undefined) this.studioMode = ui.studioMode;
     // Unconditional: absent must stay absent.
     this.lightingDataLayerEditMode = ui.lightingDataLayerEditMode;
-    if (ui.selectedNormal !== undefined) this.selectedNormal = ui.selectedNormal;
-    if (ui.lightDirection !== undefined) this.lightDirection = ui.lightDirection;
+    if (ui.selectedNormal !== undefined)
+      this.selectedNormal = ui.selectedNormal;
+    if (ui.lightDirection !== undefined)
+      this.lightDirection = ui.lightDirection;
     if (ui.lightColor !== undefined) this.lightColor = ui.lightColor;
     if (ui.ambientColor !== undefined) this.ambientColor = ui.ambientColor;
     if (ui.heightScale !== undefined) this.heightScale = ui.heightScale;

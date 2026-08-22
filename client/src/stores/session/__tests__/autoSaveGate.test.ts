@@ -3,9 +3,10 @@
  *
  * The bug being closed: a failed `GET /api/project` used to fabricate a blank
  * default project store-side, and the next edit auto-saved it OVER the
- * owner's real 1.1 MB file. Task 15 made the API throw; this task added the
+ * owner's real 1.1 MB file. Task 15 made the API throw; task 16 added the
  * store's load-state gate. The contract this suite pins, end to end over the
- * REAL stack (ApplicationStore + bridge + Zustand + typed API + MSW):
+ * REAL stack (ApplicationStore + typed API + MSW — the Zustand bridge that
+ * used to sit in the middle retired with task 38; the gate is the same):
  *
  *     a failed load produces ZERO `POST /api/project` requests.
  *
@@ -15,17 +16,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpResponse, http } from "msw";
-import { runInAction } from "mobx";
+import { flowResult, runInAction } from "mobx";
 
 import { server } from "@test/mswServer";
-import { useEditorStore } from "@/store";
-import {
-  createZustandHarness,
-  tinyProject,
-  type StoreHarness,
-} from "@/store/__tests__/storeContract";
+import { tinyProject } from "@/store/__tests__/storeContract";
 import { ApplicationStore } from "@/stores/ApplicationStore";
-import { installBridge } from "@/stores/bridge/zustandBridge";
 
 const DEBOUNCE_GRACE_MS = 2000; // 4× the 500 ms debounce
 
@@ -44,26 +39,18 @@ function interceptProjectPosts(): void {
   );
 }
 
-let harness: StoreHarness;
 let app: ApplicationStore;
-let disposeBridge: (() => void) | null = null;
 let consoleError: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   projectPosts = [];
   consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-  harness = createZustandHarness();
-  harness.reset();
   app = new ApplicationStore({ autoSaveEnabled: true });
-  disposeBridge = installBridge(app);
   interceptProjectPosts();
 });
 
 afterEach(() => {
-  disposeBridge?.();
-  disposeBridge = null;
   app.dispose();
-  harness.reset();
   consoleError.mockRestore();
 });
 
@@ -75,15 +62,15 @@ describe("THE GATE: a failed load produces ZERO POST /api/project", () => {
       ),
     );
 
-    // Exactly what App.tsx's effect runs — the bridge-installed delegate.
-    await useEditorStore.getState().initProject();
+    // Exactly what AppContainer's effect runs.
+    await flowResult(app.domain.initProject());
 
     // The failure is a STATE, not a fabricated success:
     expect(app.domain.loadState).toBe("failed");
     expect(app.domain.loadError?.kind).toBe("server");
-    expect(useEditorStore.getState().loadState).toBe("failed"); // mirrored for App
+    expect(app.domain.isLoading).toBe(false);
     // R5's old poison: the catch used to install createDefaultProject().
-    expect(useEditorStore.getState().project).toBeNull();
+    expect(app.domain.currentProject()).toBeNull();
     expect(consoleError).toHaveBeenCalledWith(
       "Failed to load project:",
       expect.anything(),
@@ -92,8 +79,8 @@ describe("THE GATE: a failed load produces ZERO POST /api/project", () => {
     // Now try hard to make it save anyway — every path an edit could take:
     runInAction(() => app.domain.bumpDomainVersion()); //   a rogue counter bump
     runInAction(() => app.domain.bumpPixelVersion());
-    useEditorStore.setState({ project: tinyProject() }); // a rogue direct install
-    useEditorStore.getState().setTool?.("eraser"); //       a real edit action
+    app.adoptProject(tinyProject()); //                     a rogue direct install
+    app.ui.tool.setTool("eraser"); //                       a real edit action
 
     await wait(DEBOUNCE_GRACE_MS);
 
@@ -112,13 +99,13 @@ describe("THE GATE: a failed load produces ZERO POST /api/project", () => {
 
     // React 19 StrictMode runs the effect twice, synchronously back-to-back
     // (W2a R11 site 1). The second call must return before the first yield.
-    const first = useEditorStore.getState().initProject();
-    const second = useEditorStore.getState().initProject();
+    const first = flowResult(app.domain.initProject());
+    const second = flowResult(app.domain.initProject());
     await Promise.all([first, second]);
 
     expect(gets).toBe(1); // ONE load, not two racing ones
     expect(app.domain.loadState).toBe("failed");
-    expect(useEditorStore.getState().project).toBeNull();
+    expect(app.domain.currentProject()).toBeNull();
 
     await wait(DEBOUNCE_GRACE_MS);
     expect(projectPosts).toHaveLength(0);
@@ -140,13 +127,13 @@ describe("THE GATE: a failed load produces ZERO POST /api/project", () => {
       ),
     );
 
-    await useEditorStore.getState().initProject();
+    await flowResult(app.domain.initProject());
     expect(app.domain.loadState).toBe("failed");
 
     failing = false;
-    await useEditorStore.getState().initProject(); // the Retry button's call
+    await flowResult(app.domain.initProject()); // the Retry button's call
     expect(app.domain.loadState).toBe("loaded");
-    expect(useEditorStore.getState().project).not.toBeNull();
+    expect(app.domain.currentProject()).not.toBeNull();
     // Loading is NOT an edit: still no POST.
     await wait(DEBOUNCE_GRACE_MS);
     expect(projectPosts).toHaveLength(0);
@@ -156,11 +143,13 @@ describe("THE GATE: a failed load produces ZERO POST /api/project", () => {
 describe("the happy path still saves (the gate blocks failures, not first-runs or edits)", () => {
   it("after a successful load, 10 rapid edits coalesce into EXACTLY ONE POST", async () => {
     // Default MSW handlers: healthy config/list/get.
-    await useEditorStore.getState().initProject();
+    await flowResult(app.domain.initProject());
     expect(app.domain.loadState).toBe("loaded");
 
     for (let i = 0; i < 10; i++) {
-      useEditorStore.setState({ project: tinyProject() }); // 10 commits
+      // 10 commits through the trigger the legacy commit path used: one
+      // gated `domainVersion` bump per committed mutation.
+      runInAction(() => app.domain.bumpDomainVersion());
       await wait(10);
     }
     await wait(DEBOUNCE_GRACE_MS);
@@ -175,14 +164,14 @@ describe("the happy path still saves (the gate blocks failures, not first-runs o
       ),
     );
 
-    await useEditorStore.getState().initProject();
+    await flowResult(app.domain.initProject());
 
     // The pinned first-run path: a 404 is "no project yet", not a failure.
     expect(app.domain.loadState).toBe("loaded");
-    expect(useEditorStore.getState().project).not.toBeNull();
+    expect(app.domain.currentProject()).not.toBeNull();
     expect(projectPosts).toHaveLength(0); // loading itself never saves
 
-    useEditorStore.setState({ project: tinyProject() }); // first real edit
+    runInAction(() => app.domain.bumpDomainVersion()); // first real edit
     await wait(DEBOUNCE_GRACE_MS);
     expect(projectPosts).toHaveLength(1); // and THAT saves
   });

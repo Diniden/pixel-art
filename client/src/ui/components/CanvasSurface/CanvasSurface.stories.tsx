@@ -7,7 +7,7 @@
  * ══════════════════════════════════════════════════════════════════════════
  *
  * There is no `StoreProvider` here, no `ApplicationStore`, no `installBridge`,
- * no `useEditorStore`, no MobX import and no decorator that supplies any of
+ * no legacy store hook, no MobX import and no decorator that supplies any of
  * them — `.storybook/preview.tsx` provides only CSS, MSW and a full-height
  * wrapper. If `CanvasSurface` had kept a single store read, every story below
  * would throw on mount.
@@ -381,12 +381,7 @@ export const FrameOverlay: Story = {
       ctx.strokeStyle = "rgba(139, 92, 246, 0.7)";
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
-      ctx.strokeRect(
-        2 * ZOOM,
-        1 * ZOOM,
-        GRID.width * ZOOM,
-        GRID.height * ZOOM,
-      );
+      ctx.strokeRect(2 * ZOOM, 1 * ZOOM, GRID.width * ZOOM, GRID.height * ZOOM);
       ctx.setLineDash([]);
     },
   },

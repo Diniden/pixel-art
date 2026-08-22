@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import type { BackupEntry } from '../../../types';
-import { Icon } from '../../primitives/Icon/Icon';
-import { Clock, X } from 'lucide-react';
-import './BrowseBackupsModal.css';
+import { useState, useEffect } from "react";
+import type { BackupEntry } from "../../../types";
+import { Icon } from "../../primitives/Icon/Icon";
+import { Clock, X } from "lucide-react";
+import "./BrowseBackupsModal.css";
 
 interface BrowseBackupsModalProps {
   onClose: () => void;
@@ -34,19 +34,19 @@ function formatDate(dateStr: string): string {
   const [, month, day, year] = match;
   const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
   return d.toLocaleDateString(undefined, {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 }
 
 function formatTime(timeStr: string): string {
-  const parts = timeStr.split('-');
+  const parts = timeStr.split("-");
   if (parts.length !== 3) return timeStr;
   const [h, m, s] = parts;
   const hour = parseInt(h);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const ampm = hour >= 12 ? "PM" : "AM";
   const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
   return `${displayHour}:${m}:${s} ${ampm}`;
 }
@@ -60,7 +60,9 @@ export function BrowseBackupsModal({
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedBackup, setSelectedBackup] = useState<BackupEntry | null>(null);
+  const [selectedBackup, setSelectedBackup] = useState<BackupEntry | null>(
+    null,
+  );
   const [showConfirm, setShowConfirm] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   // Task 15: the API layer no longer returns `[]` when the server is down, so
@@ -83,7 +85,7 @@ export function BrowseBackupsModal({
         // The container narrows `ApiError` to a message before it reaches
         // here — `isApiError` is an API-layer import that `ui/` may not make.
         setLoadError(
-          err instanceof Error ? err.message : 'Could not load the backup list',
+          err instanceof Error ? err.message : "Could not load the backup list",
         );
         setIsLoading(false);
       }
@@ -114,19 +116,22 @@ export function BrowseBackupsModal({
     setIsRestoring(true);
     setError(null);
 
-    const success = await onRestoreFromBackup(selectedBackup.date, selectedBackup.filename);
+    const success = await onRestoreFromBackup(
+      selectedBackup.date,
+      selectedBackup.filename,
+    );
 
     if (success) {
       onClose();
     } else {
-      setError('Failed to restore backup');
+      setError("Failed to restore backup");
       setIsRestoring(false);
       setShowConfirm(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       if (showConfirm) {
         setShowConfirm(false);
       } else {
@@ -144,18 +149,34 @@ export function BrowseBackupsModal({
       >
         <div className="modal__header">
           <h2>Backups — {projectName}</h2>
-          <button className="modal__close" onClick={onClose} disabled={isRestoring}>
+          <button
+            className="modal__close"
+            onClick={onClose}
+            disabled={isRestoring}
+          >
             <Icon icon={X} size={14} />
           </button>
         </div>
 
-        {error && <div className="browse-backups-modal__error" style={{ margin: '12px 20px 0' }}>{error}</div>}
+        {error && (
+          <div
+            className="browse-backups-modal__error"
+            style={{ margin: "12px 20px 0" }}
+          >
+            {error}
+          </div>
+        )}
 
         <div className="modal__body">
           {isLoading ? (
-            <div className="browse-backups-modal__loading">Loading backups...</div>
+            <div className="browse-backups-modal__loading">
+              Loading backups...
+            </div>
           ) : loadError ? (
-            <div className="browse-backups-modal__error" style={{ margin: '12px 0' }}>
+            <div
+              className="browse-backups-modal__error"
+              style={{ margin: "12px 0" }}
+            >
               Could not load backups — {loadError}. Your backups are NOT gone;
               check that the server is running and reopen this dialog.
             </div>
@@ -166,7 +187,9 @@ export function BrowseBackupsModal({
           ) : (
             dateKeys.map((date) => (
               <div key={date} className="browse-backups-modal__date-group">
-                <div className="browse-backups-modal__date-label">{formatDate(date)}</div>
+                <div className="browse-backups-modal__date-label">
+                  {formatDate(date)}
+                </div>
                 <div className="browse-backups-modal__list">
                   {groupedBackups[date].map((entry) => {
                     const isSelected =
@@ -176,13 +199,19 @@ export function BrowseBackupsModal({
                     return (
                       <button
                         key={entry.filename}
-                        className={`browse-backups-modal__item ${isSelected ? 'browse-backups-modal__item--selected' : ''}`}
+                        className={`browse-backups-modal__item ${isSelected ? "browse-backups-modal__item--selected" : ""}`}
                         onClick={() => setSelectedBackup(entry)}
                         disabled={isRestoring}
                       >
-                        <span className="browse-backups-modal__time-icon"><Icon icon={Clock} size={12} /></span>
-                        <span className="browse-backups-modal__time">{formatTime(entry.time)}</span>
-                        <span className="browse-backups-modal__filename">{entry.filename}</span>
+                        <span className="browse-backups-modal__time-icon">
+                          <Icon icon={Clock} size={12} />
+                        </span>
+                        <span className="browse-backups-modal__time">
+                          {formatTime(entry.time)}
+                        </span>
+                        <span className="browse-backups-modal__filename">
+                          {entry.filename}
+                        </span>
                       </button>
                     );
                   })}
@@ -204,12 +233,15 @@ export function BrowseBackupsModal({
       </div>
 
       {showConfirm && selectedBackup && (
-        <div className="confirm-dialog__backdrop" onClick={() => !isRestoring && setShowConfirm(false)}>
+        <div
+          className="confirm-dialog__backdrop"
+          onClick={() => !isRestoring && setShowConfirm(false)}
+        >
           <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>Restore Backup?</h3>
             <p>
-              This will replace the current project state with the backup from{' '}
-              <strong>{formatDate(selectedBackup.date)}</strong> at{' '}
+              This will replace the current project state with the backup from{" "}
+              <strong>{formatDate(selectedBackup.date)}</strong> at{" "}
               <strong>{formatTime(selectedBackup.time)}</strong>.
             </p>
             <p className="confirm-dialog__undo">
@@ -228,7 +260,7 @@ export function BrowseBackupsModal({
                 onClick={handleConfirmRestore}
                 disabled={isRestoring}
               >
-                {isRestoring ? 'Restoring...' : 'Restore'}
+                {isRestoring ? "Restoring..." : "Restore"}
               </button>
             </div>
           </div>

@@ -41,9 +41,7 @@ export const AddVariantModalContainer = observer(
             addToAllFrames,
           )
         }
-        onDeleteVariantGroup={(groupId) =>
-          variants.deleteVariantGroup(groupId)
-        }
+        onDeleteVariantGroup={(groupId) => variants.deleteVariantGroup(groupId)}
         onRenameVariantGroup={(groupId, name) =>
           variants.renameVariantGroup(groupId, name)
         }

@@ -35,11 +35,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** Deterministic pseudo-random pixel sprite, seeded by `revision`. */
-function drawSprite(
-  ctx: CanvasRenderingContext2D,
-  size: number,
-  seed: number,
-) {
+function drawSprite(ctx: CanvasRenderingContext2D, size: number, seed: number) {
   const cells = 8;
   const cell = size / cells;
   let state = seed * 2654435761 + 1;
@@ -68,7 +64,12 @@ function RevisionDemo() {
   );
   return (
     <div style={{ display: "grid", gap: 12, justifyItems: "center" }}>
-      <ThumbnailCanvas size={96} revision={revision} draw={draw} label="Sprite preview" />
+      <ThumbnailCanvas
+        size={96}
+        revision={revision}
+        draw={draw}
+        label="Sprite preview"
+      />
       <Button variant="primary" onClick={() => setRevision((r) => r + 1)}>
         Edit a pixel (bump revision → {revision})
       </Button>

@@ -131,7 +131,8 @@
 }
 
 @keyframes anchor-grid-pulse-expand {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.6;
     transform: scale(1);
   }
@@ -142,7 +143,8 @@
 }
 
 @keyframes anchor-grid-pulse-shrink {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.6;
     transform: scale(1);
   }

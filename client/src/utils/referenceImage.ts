@@ -25,7 +25,10 @@
  *
  * `extractPixelsFromSelection` moved VERBATIM — it was already pure.
  */
-import type { ReferenceImageData, ReferencePixel } from '../types/referenceImage';
+import type {
+  ReferenceImageData,
+  ReferencePixel,
+} from "../types/referenceImage";
 
 /**
  * The modal's selection rectangle: two CORNERS, in image pixel coordinates.
@@ -79,10 +82,10 @@ export function extractPixelsFromSelection(
 ): ReferenceImageData | null {
   if (!image || !selection) return null;
 
-  const tempCanvas = document.createElement('canvas');
+  const tempCanvas = document.createElement("canvas");
   tempCanvas.width = image.width;
   tempCanvas.height = image.height;
-  const ctx = tempCanvas.getContext('2d');
+  const ctx = tempCanvas.getContext("2d");
   if (!ctx) return null;
 
   ctx.drawImage(image, 0, 0);
@@ -95,7 +98,7 @@ export function extractPixelsFromSelection(
   if (w === 0 || h === 0) return null;
 
   const imageData = ctx.getImageData(x, y, w, h);
-  const pixels: ReferenceImageData['pixels'] = [];
+  const pixels: ReferenceImageData["pixels"] = [];
 
   for (let py = 0; py < h; py++) {
     const row: Array<ReferencePixel> = [];
@@ -203,7 +206,7 @@ export function sizeSteppedSelection(
 export function resizedSelection(
   selection: ReferenceSelectionBox,
   bounds: ImageBounds,
-  direction: 'up' | 'down' | 'left' | 'right',
+  direction: "up" | "down" | "left" | "right",
   increase: boolean,
 ): ReferenceSelectionBox | null {
   const { minX, minY, maxX, maxY } = normalize(selection);
@@ -215,16 +218,16 @@ export function resizedSelection(
   let newMaxY = maxY;
 
   switch (direction) {
-    case 'up':
+    case "up":
       newMinY = Math.max(0, minY - delta);
       break;
-    case 'down':
+    case "down":
       newMaxY = Math.min(bounds.height, maxY + delta);
       break;
-    case 'left':
+    case "left":
       newMinX = Math.max(0, minX - delta);
       break;
-    case 'right':
+    case "right":
       newMaxX = Math.min(bounds.width, maxX + delta);
       break;
   }

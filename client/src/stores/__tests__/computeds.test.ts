@@ -25,7 +25,7 @@ import type { DomainMirror } from "@/stores/domain/DomainMutator";
 import type { ProjectHost } from "@/stores/domain/DomainStore";
 import type { SelectionSink } from "@/stores/domain/ObjectStore";
 import { tinyProject } from "@/store/__tests__/storeContract";
-import { createHelpers } from "@/store/helpers";
+import { createHelpers } from "./legacyHelpersOracle";
 import type {
   Layer,
   PixelObject,
@@ -407,7 +407,8 @@ describe("parity with store/helpers.ts", () => {
 /* ── EQUIVALENCE: the computed vs the live legacy helper ─────────────────── */
 //
 // The strongest available proof that this migration is behaviour-preserving:
-// run `createHelpers` (the real 93-line module, still on disk) and the MobX
+// run `createHelpers` (the legacy 93-line module, frozen verbatim in
+// `legacyHelpersOracle.ts` since task 38 deleted its production home) and the MobX
 // computeds over the SAME projects and require identical results. If a later
 // task changes one and not the other, this fails.
 
@@ -463,9 +464,7 @@ describe("equivalence with the LIVE helpers.ts implementation", () => {
     expect(app.currentFrame).toEqual(helpers.getCurrentFrame());
     expect(app.currentLayer).toEqual(helpers.getCurrentLayer());
     expect(app.currentVariant).toEqual(helpers.getCurrentVariant());
-    expect(app.selectedVariantLayer).toEqual(
-      helpers.getSelectedVariantLayer(),
-    );
+    expect(app.selectedVariantLayer).toEqual(helpers.getSelectedVariantLayer());
     expect(app.isEditingVariant).toEqual(helpers.isEditingVariant());
   });
 });

@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { Layer, Pixel, PixelData, PixelObject } from '../../../types';
-import type { CurrentVariant } from '../../../types';
-import { Icon } from '../../primitives/Icon/Icon';
-import { Mountain, X } from 'lucide-react';
-import './HeightMapModal.css';
+import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { Layer, Pixel, PixelData, PixelObject } from "../../../types";
+import type { CurrentVariant } from "../../../types";
+import { Icon } from "../../primitives/Icon/Icon";
+import { Mountain, X } from "lucide-react";
+import "./HeightMapModal.css";
 
-export type ChannelType = 'R' | 'G' | 'B' | 'H' | 'S' | 'L';
+export type ChannelType = "R" | "G" | "B" | "H" | "S" | "L";
 
 interface HeightMapModalProps {
   isOpen: boolean;
@@ -24,7 +24,11 @@ interface HeightMapModalProps {
 }
 
 // Convert RGB to HSL
-function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+function rgbToHsl(
+  r: number,
+  g: number,
+  b: number,
+): { h: number; s: number; l: number } {
   r /= 255;
   g /= 255;
   b /= 255;
@@ -55,24 +59,24 @@ function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: n
   return {
     h: Math.round(h * 255), // Scale to 0-255
     s: Math.round(s * 255),
-    l: Math.round(l * 255)
+    l: Math.round(l * 255),
   };
 }
 
 // Extract channel value from pixel
 function getChannelValue(pixel: Pixel, channel: ChannelType): number {
   switch (channel) {
-    case 'R':
+    case "R":
       return pixel.r;
-    case 'G':
+    case "G":
       return pixel.g;
-    case 'B':
+    case "B":
       return pixel.b;
-    case 'H':
-    case 'S':
-    case 'L': {
+    case "H":
+    case "S":
+    case "L": {
       const hsl = rgbToHsl(pixel.r, pixel.g, pixel.b);
-      return hsl[channel.toLowerCase() as 'h' | 's' | 'l'];
+      return hsl[channel.toLowerCase() as "h" | "s" | "l"];
     }
   }
 }
@@ -86,7 +90,7 @@ export function HeightMapModal({
   editingVariant,
   variantData,
 }: HeightMapModalProps) {
-  const [channel, setChannel] = useState<ChannelType>('L');
+  const [channel, setChannel] = useState<ChannelType>("L");
   const [min, setMin] = useState(0);
   const [max, setMax] = useState(255);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -110,7 +114,7 @@ export function HeightMapModal({
     if (!isOpen || !canvasRef.current || !targetLayer) return;
 
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     canvas.width = gridWidth;
@@ -123,14 +127,18 @@ export function HeightMapModal({
       if (!row) continue;
       for (let x = 0; x < gridWidth; x++) {
         const pixelData: PixelData | undefined = row[x];
-        if (pixelData && pixelData.color !== 0 && typeof pixelData.color === 'object') {
+        if (
+          pixelData &&
+          pixelData.color !== 0 &&
+          typeof pixelData.color === "object"
+        ) {
           channelValues.push(getChannelValue(pixelData.color, channel));
         }
       }
     }
 
     if (channelValues.length === 0) {
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, gridWidth, gridHeight);
       return;
     }
@@ -153,7 +161,11 @@ export function HeightMapModal({
         const pixelData: PixelData | undefined = row[x];
         const idx = (y * gridWidth + x) * 4;
 
-        if (pixelData && pixelData.color !== 0 && typeof pixelData.color === 'object') {
+        if (
+          pixelData &&
+          pixelData.color !== 0 &&
+          typeof pixelData.color === "object"
+        ) {
           const channelValue = getChannelValue(pixelData.color, channel);
 
           // Normalize: map from [actualMin, actualMax] to [normalizedMin, normalizedMax]
@@ -169,10 +181,10 @@ export function HeightMapModal({
 
           // Clamp to 0-255
           const gray = Math.max(0, Math.min(255, Math.round(normalized)));
-          imageData.data[idx] = gray;     // R
+          imageData.data[idx] = gray; // R
           imageData.data[idx + 1] = gray; // G
           imageData.data[idx + 2] = gray; // B
-          imageData.data[idx + 3] = 255;  // A
+          imageData.data[idx + 3] = 255; // A
         } else {
           // Empty pixel - black
           imageData.data[idx] = 0;
@@ -201,10 +213,14 @@ export function HeightMapModal({
 
   return createPortal(
     <div className="height-map-modal__backdrop" onClick={handleBackdropClick}>
-      <div className="height-map-modal" onClick={e => e.stopPropagation()}>
+      <div className="height-map-modal" onClick={(e) => e.stopPropagation()}>
         <div className="height-map-modal__header">
-          <h3><Icon icon={Mountain} size={16} /> Height Map Generator</h3>
-          <button className="modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <h3>
+            <Icon icon={Mountain} size={16} /> Height Map Generator
+          </h3>
+          <button className="modal__close" onClick={onClose}>
+            <Icon icon={X} size={14} />
+          </button>
         </div>
 
         <div className="height-map-modal__content">
@@ -213,12 +229,12 @@ export function HeightMapModal({
             <canvas
               ref={canvasRef}
               style={{
-                imageRendering: 'pixelated',
-                width: '100%',
-                height: 'auto',
-                maxWidth: '400px',
-                border: '1px solid var(--border-primary)',
-                borderRadius: 'var(--radius-sm)'
+                imageRendering: "pixelated",
+                width: "100%",
+                height: "auto",
+                maxWidth: "400px",
+                border: "1px solid var(--border-primary)",
+                borderRadius: "var(--radius-sm)",
               }}
             />
           </div>
@@ -229,7 +245,7 @@ export function HeightMapModal({
               <span className="height-map-modal__label-text">Channel</span>
             </label>
             <div className="height-map-modal__channel-buttons">
-              {(['R', 'G', 'B', 'H', 'S', 'L'] as ChannelType[]).map((ch) => (
+              {(["R", "G", "B", "H", "S", "L"] as ChannelType[]).map((ch) => (
                 <button
                   key={ch}
                   className={`height-map-modal__channel-btn ${channel === ch ? "height-map-modal__channel-btn--active" : ""}`}
@@ -240,7 +256,8 @@ export function HeightMapModal({
               ))}
             </div>
             <div className="height-map-modal__description">
-              Select which channel to use for grayscale conversion. R, G, B are RGB channels. H, S, L are HSL channels.
+              Select which channel to use for grayscale conversion. R, G, B are
+              RGB channels. H, S, L are HSL channels.
             </div>
           </div>
 
@@ -248,7 +265,9 @@ export function HeightMapModal({
           <div className="height-map-modal__control">
             <label className="height-map-modal__label">
               <span className="height-map-modal__label-text">Min Value</span>
-              <span className="height-map-modal__label-value">0x{min.toString(16).toUpperCase().padStart(2, '0')} ({min})</span>
+              <span className="height-map-modal__label-value">
+                0x{min.toString(16).toUpperCase().padStart(2, "0")} ({min})
+              </span>
             </label>
             <div className="height-map-modal__slider-group">
               <input
@@ -261,7 +280,8 @@ export function HeightMapModal({
               />
             </div>
             <div className="height-map-modal__description">
-              Minimum value for grayscale normalization. Can be greater than max to invert.
+              Minimum value for grayscale normalization. Can be greater than max
+              to invert.
             </div>
           </div>
 
@@ -269,7 +289,9 @@ export function HeightMapModal({
           <div className="height-map-modal__control">
             <label className="height-map-modal__label">
               <span className="height-map-modal__label-text">Max Value</span>
-              <span className="height-map-modal__label-value">0x{max.toString(16).toUpperCase().padStart(2, '0')} ({max})</span>
+              <span className="height-map-modal__label-value">
+                0x{max.toString(16).toUpperCase().padStart(2, "0")} ({max})
+              </span>
             </label>
             <div className="height-map-modal__slider-group">
               <input
@@ -282,25 +304,28 @@ export function HeightMapModal({
               />
             </div>
             <div className="height-map-modal__description">
-              Maximum value for grayscale normalization. Can be less than min to invert.
+              Maximum value for grayscale normalization. Can be less than min to
+              invert.
             </div>
           </div>
         </div>
 
         <div className="height-map-modal__actions">
-          <button className="height-map-modal__btn height-map-modal__btn--neutral" onClick={onClose}>
+          <button
+            className="height-map-modal__btn height-map-modal__btn--neutral"
+            onClick={onClose}
+          >
             Cancel
           </button>
-          <button className="height-map-modal__btn height-map-modal__btn--primary" onClick={handleConfirm}>
+          <button
+            className="height-map-modal__btn height-map-modal__btn--primary"
+            onClick={handleConfirm}
+          >
             Apply
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
-
-
-
-

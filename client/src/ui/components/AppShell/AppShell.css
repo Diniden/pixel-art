@@ -18,8 +18,16 @@
   flex-direction: column;
   height: 100vh;
   background:
-    radial-gradient(circle at 20% 80%, var(--accent-primary-03) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, var(--accent-tertiary-03) 0%, transparent 50%),
+    radial-gradient(
+      circle at 20% 80%,
+      var(--accent-primary-03) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 80% 20%,
+      var(--accent-tertiary-03) 0%,
+      transparent 50%
+    ),
     var(--bg-primary);
 }
 
@@ -48,7 +56,9 @@
 }
 
 @keyframes app-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .app__loading-content h2 {
@@ -74,7 +84,9 @@
   position: relative;
   background: var(--bg-secondary);
   border-color: var(--border-primary);
-  transition: width var(--transition-normal), min-width var(--transition-normal);
+  transition:
+    width var(--transition-normal),
+    min-width var(--transition-normal);
   display: flex;
   flex-direction: column;
   z-index: var(--z-shell);
@@ -185,6 +197,4 @@
   .app__side-panel--open {
     width: 100%;
   }
-
 }
-

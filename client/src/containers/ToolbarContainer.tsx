@@ -50,9 +50,7 @@ export const ToolbarContainer = observer(function ToolbarContainer({
       isLightingMode={lightingUI.studioMode === "lighting"}
       isFocusMode={viewport.focusMode}
       isLightGrid={viewport.lightGridMode ?? false}
-      isFrameReferenceVisible={
-        viewport.panels.frameReference.visible ?? true
-      }
+      isFrameReferenceVisible={viewport.panels.frameReference.visible ?? true}
       onSetStudioMode={(mode) => lightingUI.setStudioMode(mode)}
       onToggleFocusMode={() => viewport.toggleFocusMode()}
       onToggleLightGridMode={() => viewport.toggleLightGridMode()}

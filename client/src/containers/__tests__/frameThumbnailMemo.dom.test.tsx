@@ -6,7 +6,7 @@
  * ══════════════════════════════════════════════════════════════════════════
  *
  * `FrameTimelineContainer` was the codebase's second-to-last real
- * `useEditorStore` importer. It read the WHOLE `project` node off Zustand and
+ * legacy-store-hook importer. It read the WHOLE `project` node off Zustand and
  * threaded it into `FramesView`/`VariantView`, where `FrameThumbnail`'s
  * `React.memo` comparator reads `project.uiState.variantFrameIndices` BY
  * REFERENCE (`FramesView.tsx:108-110` and `:150-152`).
@@ -54,7 +54,14 @@
  * near-miss is exactly the failure class this file exists to rule out, so the
  * stub is load-bearing, not incidental.
  */
-import { describe, expect, it, beforeEach, vi, type MockInstance } from "vitest";
+import {
+  describe,
+  expect,
+  it,
+  beforeEach,
+  vi,
+  type MockInstance,
+} from "vitest";
 import { render } from "@testing-library/react";
 import type { Frame, VariantGroup } from "../../types";
 
@@ -68,9 +75,7 @@ import * as previewRenderer from "../../utils/previewRenderer";
  * `.mock === undefined`, i.e. the real module. `spyOn` on the namespace
  * object does intercept `FramesView`'s call, verified by the same probe.
  */
-let renderFramePreview: MockInstance<
-  typeof previewRenderer.renderFramePreview
->;
+let renderFramePreview: MockInstance<typeof previewRenderer.renderFramePreview>;
 
 /* ══ fixtures ═══════════════════════════════════════════════════════════════
  *
@@ -82,9 +87,7 @@ let renderFramePreview: MockInstance<
 const FRAME: Frame = {
   id: "frame-0",
   name: "frame-0",
-  layers: [
-    { id: "l0", name: "base", visible: true, opacity: 1, pixels: [] },
-  ],
+  layers: [{ id: "l0", name: "base", visible: true, opacity: 1, pixels: [] }],
 } as unknown as Frame;
 
 function makeVariantGroup(id: string, frameCount: number): VariantGroup {
@@ -165,10 +168,9 @@ describe("W29i — FrameThumbnail memo behaviour under a narrowed project prop",
       .mockImplementation(() => {});
     // See the header: without this the effect early-returns on a null context
     // and every count is a false 0.
-    vi.spyOn(
-      HTMLCanvasElement.prototype,
-      "getContext",
-    ).mockReturnValue({} as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      {} as unknown as CanvasRenderingContext2D,
+    );
   });
 
   it("the counter is WIRED — a real prop change DOES reach renderFramePreview", () => {

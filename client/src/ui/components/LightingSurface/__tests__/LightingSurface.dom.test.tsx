@@ -59,7 +59,9 @@ describe("LightingSurface — GATE 2: renders with NO store provider", () => {
 describe("LightingSurface — the markup, from props alone", () => {
   it("renders both canvases, the viewport and the info bar", () => {
     const { container } = render(<composed.Default />);
-    expect(container.querySelector(".lighting-canvas__viewport")).not.toBeNull();
+    expect(
+      container.querySelector(".lighting-canvas__viewport"),
+    ).not.toBeNull();
     expect(container.querySelector(".lighting-canvas__stack")).not.toBeNull();
     expect(
       container.querySelector(".lighting-canvas__edit-canvas"),

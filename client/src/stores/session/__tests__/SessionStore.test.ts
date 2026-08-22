@@ -175,10 +175,14 @@ describe("R14 — nothing resets the session by construction", () => {
     const s = makeApp().session;
     const methodNames = Object.getOwnPropertyNames(
       Object.getPrototypeOf(s),
-    ).filter((n) => typeof (s as unknown as Record<string, unknown>)[n] === "function");
+    ).filter(
+      (n) => typeof (s as unknown as Record<string, unknown>)[n] === "function",
+    );
     // The contract: no method whose name suggests wholesale clearing exists.
     // (Setting a clipboard to null explicitly is fine; a project-switch hook
     // that clears session state is not.)
-    expect(methodNames.filter((n) => /^(reset|clear|onProjectSwitch)/i.test(n))).toEqual([]);
+    expect(
+      methodNames.filter((n) => /^(reset|clear|onProjectSwitch)/i.test(n)),
+    ).toEqual([]);
   });
 });

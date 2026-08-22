@@ -1,5 +1,13 @@
-import { Pixel, PixelData, Layer, Frame, VariantGroup, VariantFrame, Variant } from '../types';
-import { resolveVariantOffset } from '../ui/canvas/model/variantOffset';
+import {
+  Pixel,
+  PixelData,
+  Layer,
+  Frame,
+  VariantGroup,
+  VariantFrame,
+  Variant,
+} from "../types";
+import { resolveVariantOffset } from "../ui/canvas/model/variantOffset";
 
 // Helper to extract color from PixelData
 function getPixelColor(pd: PixelData | undefined): Pixel | null {
@@ -38,12 +46,12 @@ function getCheckerboard(size: number): Uint8ClampedArray {
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const idx = (y * size + x) * 4;
-        if (((Math.floor(x / checkSize) + Math.floor(y / checkSize)) % 2) === 0) {
-          data[idx] = 42;     // #2a2a3a
+        if ((Math.floor(x / checkSize) + Math.floor(y / checkSize)) % 2 === 0) {
+          data[idx] = 42; // #2a2a3a
           data[idx + 1] = 42;
           data[idx + 2] = 58;
         } else {
-          data[idx] = 34;     // #222230
+          data[idx] = 34; // #222230
           data[idx + 1] = 34;
           data[idx + 2] = 48;
         }
@@ -61,7 +69,7 @@ interface RenderPreviewOptions {
   gridHeight: number;
   frame: Frame;
   frameIndex?: number; // Base frame index for fallback offset lookup
-  variants?: VariantGroup[];  // Project-level variants (renamed from variantGroups)
+  variants?: VariantGroup[]; // Project-level variants (renamed from variantGroups)
   variantFrameIndices?: { [variantGroupId: string]: number };
 }
 
@@ -72,9 +80,17 @@ interface RenderPreviewOptions {
  */
 export function renderFramePreview(
   ctx: CanvasRenderingContext2D,
-  options: RenderPreviewOptions
+  options: RenderPreviewOptions,
 ): void {
-  const { thumbSize, gridWidth, gridHeight, frame, frameIndex = 0, variants, variantFrameIndices } = options;
+  const {
+    thumbSize,
+    gridWidth,
+    gridHeight,
+    frame,
+    frameIndex = 0,
+    variants,
+    variantFrameIndices,
+  } = options;
 
   ctx.imageSmoothingEnabled = false;
 
@@ -104,11 +120,19 @@ export function renderFramePreview(
     if (!layer.visible) continue;
 
     // Handle variant layers
-    if (layer.isVariant && layer.variantGroupId && variants && variantFrameIndices) {
-      const vg = variants.find(vg => vg.id === layer.variantGroupId);
-      const variant = vg?.variants.find(v => v.id === layer.selectedVariantId);
+    if (
+      layer.isVariant &&
+      layer.variantGroupId &&
+      variants &&
+      variantFrameIndices
+    ) {
+      const vg = variants.find((vg) => vg.id === layer.variantGroupId);
+      const variant = vg?.variants.find(
+        (v) => v.id === layer.selectedVariantId,
+      );
       const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
-      const vFrame = variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
+      const vFrame =
+        variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
 
       if (variant && vFrame) {
         // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
@@ -124,7 +148,7 @@ export function renderFramePreview(
           gridHeight,
           offsetX,
           offsetY,
-          scale
+          scale,
         );
       }
     } else if (!layer.isVariant) {
@@ -137,7 +161,7 @@ export function renderFramePreview(
         gridHeight,
         offsetX,
         offsetY,
-        scale
+        scale,
       );
     }
   }
@@ -156,7 +180,7 @@ function renderLayer(
   gridHeight: number,
   offsetX: number,
   offsetY: number,
-  scale: number
+  scale: number,
 ): void {
   const pixels = layer.pixels;
   if (!pixels) return;
@@ -171,10 +195,22 @@ function renderLayer(
 
       const thumbX = Math.floor(offsetX + px * scale);
       const thumbY = Math.floor(offsetY + py * scale);
-      const thumbEndX = Math.min(thumbSize, Math.ceil(offsetX + (px + 1) * scale));
-      const thumbEndY = Math.min(thumbSize, Math.ceil(offsetY + (py + 1) * scale));
+      const thumbEndX = Math.min(
+        thumbSize,
+        Math.ceil(offsetX + (px + 1) * scale),
+      );
+      const thumbEndY = Math.min(
+        thumbSize,
+        Math.ceil(offsetY + (py + 1) * scale),
+      );
 
-      if (thumbX >= thumbSize || thumbY >= thumbSize || thumbEndX <= 0 || thumbEndY <= 0) continue;
+      if (
+        thumbX >= thumbSize ||
+        thumbY >= thumbSize ||
+        thumbEndX <= 0 ||
+        thumbEndY <= 0
+      )
+        continue;
 
       const srcAlpha = pixel.a / 255;
       const r = pixel.r;
@@ -190,9 +226,15 @@ function renderLayer(
 
           if (outAlpha > 0.01) {
             const invOutAlpha = 1 / outAlpha;
-            data[idx] = (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-            data[idx + 1] = (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-            data[idx + 2] = (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+            data[idx] =
+              (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) *
+              invOutAlpha;
+            data[idx + 1] =
+              (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) *
+              invOutAlpha;
+            data[idx + 2] =
+              (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) *
+              invOutAlpha;
             data[idx + 3] = outAlpha * 255;
           }
         }
@@ -214,7 +256,7 @@ function renderVariantFrame(
   gridHeight: number,
   offsetX: number,
   offsetY: number,
-  scale: number
+  scale: number,
 ): void {
   const vHeight = variant.gridSize.height;
   const vWidth = variant.gridSize.width;
@@ -240,15 +282,28 @@ function renderVariantFrame(
         const baseY = vOffset.y + vy;
 
         // Skip if outside base object bounds
-        if (baseX < 0 || baseX >= gridWidth || baseY < 0 || baseY >= gridHeight) continue;
+        if (baseX < 0 || baseX >= gridWidth || baseY < 0 || baseY >= gridHeight)
+          continue;
 
         // Calculate the area this pixel covers in thumbnail (use same scale as base)
         const thumbX = Math.floor(offsetX + baseX * scale);
         const thumbY = Math.floor(offsetY + baseY * scale);
-        const thumbEndX = Math.min(thumbSize, Math.ceil(offsetX + (baseX + 1) * scale));
-        const thumbEndY = Math.min(thumbSize, Math.ceil(offsetY + (baseY + 1) * scale));
+        const thumbEndX = Math.min(
+          thumbSize,
+          Math.ceil(offsetX + (baseX + 1) * scale),
+        );
+        const thumbEndY = Math.min(
+          thumbSize,
+          Math.ceil(offsetY + (baseY + 1) * scale),
+        );
 
-        if (thumbX >= thumbSize || thumbY >= thumbSize || thumbEndX <= 0 || thumbEndY <= 0) continue;
+        if (
+          thumbX >= thumbSize ||
+          thumbY >= thumbSize ||
+          thumbEndX <= 0 ||
+          thumbEndY <= 0
+        )
+          continue;
 
         const srcAlpha = pixel.a / 255;
         const r = pixel.r;
@@ -264,9 +319,15 @@ function renderVariantFrame(
 
             if (outAlpha > 0.01) {
               const invOutAlpha = 1 / outAlpha;
-              data[idx] = (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-              data[idx + 1] = (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-              data[idx + 2] = (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+              data[idx] =
+                (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) *
+                invOutAlpha;
+              data[idx + 1] =
+                (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) *
+                invOutAlpha;
+              data[idx + 2] =
+                (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) *
+                invOutAlpha;
               data[idx + 3] = outAlpha * 255;
             }
           }
@@ -283,7 +344,7 @@ export function renderVariantFramePreview(
   ctx: CanvasRenderingContext2D,
   thumbSize: number,
   variant: { gridSize: { width: number; height: number } },
-  variantFrame: VariantFrame
+  variantFrame: VariantFrame,
 ): void {
   ctx.imageSmoothingEnabled = false;
 
@@ -323,10 +384,22 @@ export function renderVariantFramePreview(
 
         const thumbX = Math.floor(offsetX + px * scale);
         const thumbY = Math.floor(offsetY + py * scale);
-        const thumbEndX = Math.min(thumbSize, Math.ceil(offsetX + (px + 1) * scale));
-        const thumbEndY = Math.min(thumbSize, Math.ceil(offsetY + (py + 1) * scale));
+        const thumbEndX = Math.min(
+          thumbSize,
+          Math.ceil(offsetX + (px + 1) * scale),
+        );
+        const thumbEndY = Math.min(
+          thumbSize,
+          Math.ceil(offsetY + (py + 1) * scale),
+        );
 
-        if (thumbX >= thumbSize || thumbY >= thumbSize || thumbEndX <= 0 || thumbEndY <= 0) continue;
+        if (
+          thumbX >= thumbSize ||
+          thumbY >= thumbSize ||
+          thumbEndX <= 0 ||
+          thumbEndY <= 0
+        )
+          continue;
 
         const srcAlpha = pixel.a / 255;
         const r = pixel.r;
@@ -342,9 +415,15 @@ export function renderVariantFramePreview(
 
             if (outAlpha > 0.01) {
               const invOutAlpha = 1 / outAlpha;
-              data[idx] = (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-              data[idx + 1] = (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-              data[idx + 2] = (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+              data[idx] =
+                (r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) *
+                invOutAlpha;
+              data[idx + 1] =
+                (g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) *
+                invOutAlpha;
+              data[idx + 2] =
+                (b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) *
+                invOutAlpha;
               data[idx + 3] = outAlpha * 255;
             }
           }
@@ -364,7 +443,7 @@ export function renderLayerPreview(
   thumbSize: number,
   layer: Layer,
   gridWidth: number,
-  gridHeight: number
+  gridHeight: number,
 ): void {
   ctx.imageSmoothingEnabled = false;
 
@@ -386,7 +465,16 @@ export function renderLayerPreview(
   data.set(checkerboard);
 
   // Render the single layer
-  renderLayer(data, thumbSize, layer, gridWidth, gridHeight, offsetX, offsetY, scale);
+  renderLayer(
+    data,
+    thumbSize,
+    layer,
+    gridWidth,
+    gridHeight,
+    offsetX,
+    offsetY,
+    scale,
+  );
 
   ctx.putImageData(imageData, 0, 0);
 }
@@ -397,14 +485,19 @@ export function renderLayerPreview(
 export function renderVariantLayerPreview(
   ctx: CanvasRenderingContext2D,
   thumbSize: number,
-  variant: Variant
+  variant: Variant,
 ): void {
   ctx.imageSmoothingEnabled = false;
 
   const { width, height } = variant.gridSize;
   const firstFrame = variant.frames[0];
 
-  if (width === 0 || height === 0 || !firstFrame || firstFrame.layers.length === 0) {
+  if (
+    width === 0 ||
+    height === 0 ||
+    !firstFrame ||
+    firstFrame.layers.length === 0
+  ) {
     const checkerboard = getCheckerboard(thumbSize);
     const imageData = ctx.createImageData(thumbSize, thumbSize);
     imageData.data.set(checkerboard);
@@ -415,4 +508,3 @@ export function renderVariantLayerPreview(
   // Use renderVariantFramePreview which already handles this
   renderVariantFramePreview(ctx, thumbSize, variant, firstFrame);
 }
-

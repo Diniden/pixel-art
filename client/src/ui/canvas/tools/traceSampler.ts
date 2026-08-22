@@ -51,10 +51,7 @@ export type TraceSample = StampColor;
  * `refPixel && refPixel.a > 0`, in which `0` is falsy and therefore skipped —
  * `stampTrace` reproduces that by testing truthiness before reading `.a`.
  */
-export type TraceSamplerFn = (
-  x: number,
-  y: number,
-) => TraceSample | null | 0;
+export type TraceSamplerFn = (x: number, y: number) => TraceSample | null | 0;
 
 /**
  * The legacy alpha test was `refPixel && refPixel.a > 0` in all four copies —

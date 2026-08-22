@@ -214,7 +214,12 @@ export const LayerPanelContainer = observer(function LayerPanelContainer() {
     [dragIndex, storedLayers, layerStore],
   );
 
-  if (!domain.currentProject || !frame || !store.currentObject || !storedLayers) {
+  if (
+    !domain.currentProject ||
+    !frame ||
+    !store.currentObject ||
+    !storedLayers
+  ) {
     return null;
   }
 
@@ -337,9 +342,7 @@ export const LayerPanelContainer = observer(function LayerPanelContainer() {
       }
       copyFromModal={
         showCopyFromModal ? (
-          <CopyFromModalContainer
-            onClose={() => setShowCopyFromModal(false)}
-          />
+          <CopyFromModalContainer onClose={() => setShowCopyFromModal(false)} />
         ) : null
       }
       addVariantModal={

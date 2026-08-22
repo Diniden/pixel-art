@@ -46,7 +46,7 @@
  *
  * ── W29f (task 38): the last legacy seam in this file is CLOSED ───────────
  *
- * `selectObject` used to come from `useEditorStore`. It was the last writer
+ * `selectObject` used to come from the legacy Zustand hook. It was the last writer
  * of the three `uiState` selection ids outside `TimelineUIStore`, which is
  * why the ids sat in Phase A for five waves. W29f ported the action verbatim
  * to `TimelineUIStore.selectObject`, flipped the three ids A→B and rewired

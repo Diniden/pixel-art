@@ -53,7 +53,13 @@ export const InProgress: Story = {};
 export const AllStatuses: Story = {
   args: {
     pairs: (
-      ["pending", "queued", "processing", "completed", "failed"] as GenPairStatus[]
+      [
+        "pending",
+        "queued",
+        "processing",
+        "completed",
+        "failed",
+      ] as GenPairStatus[]
     ).map((status, i) => ({ pairIdx: i, status })),
     keyframeCount: 6,
   },

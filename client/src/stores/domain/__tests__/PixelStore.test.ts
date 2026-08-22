@@ -45,7 +45,10 @@ const BLUE: Color = { r: 0, g: 0, b: 255, a: 255 };
 
 function emptyGrid(w: number, h: number): PixelData[][] {
   return Array.from({ length: h }, () =>
-    Array.from({ length: w }, () => ({ color: 0, normal: 0, height: 0 }) as PixelData),
+    Array.from(
+      { length: w },
+      () => ({ color: 0, normal: 0, height: 0 }) as PixelData,
+    ),
   );
 }
 
@@ -154,7 +157,8 @@ function makeRig(project: Project = mkProject()): Rig {
     snapshots: [] as string[],
     pixels: null as unknown as PixelStore,
     layer: () => domain.objects[0].frames[0].layers[0],
-    variantLayer: (index) => domain.variants[0].variants[0].frames[index].layers[0],
+    variantLayer: (index) =>
+      domain.variants[0].variants[0].frames[index].layers[0],
   };
 
   const mirror: PixelMirror = {
@@ -185,7 +189,8 @@ function makeRig(project: Project = mkProject()): Rig {
   return rig;
 }
 
-const colorAt = (layer: Layer, x: number, y: number) => layer.pixels[y][x].color;
+const colorAt = (layer: Layer, x: number, y: number) =>
+  layer.pixels[y][x].color;
 
 describe("PixelStore — the sole grid writer", () => {
   let rig: Rig;
@@ -245,7 +250,11 @@ describe("PixelStore — the sole grid writer", () => {
       // the conversion is that it is now ~1.4 MB and nothing evicts.
       for (let s = 0; s < 1000; s++) {
         rig.pixels.setPixels([
-          { x: s % 16, y: Math.floor(s / 16) % 16, color: { ...RED, r: s % 256 } },
+          {
+            x: s % 16,
+            y: Math.floor(s / 16) % 16,
+            color: { ...RED, r: s % 256 },
+          },
         ]);
       }
       expect(rig.history.historyBytes).toBeLessThan(64 * 1024 * 1024);

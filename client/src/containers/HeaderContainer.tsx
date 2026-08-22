@@ -97,7 +97,8 @@ export const HeaderContainer = observer(function HeaderContainer() {
   // overwriting it.
   const setAiServiceUrl = (url: string) => app.setAiServiceUrl(url);
 
-  const [aiHealthStatus, setAiHealthStatus] = useState<AiHealthStatus>("unknown");
+  const [aiHealthStatus, setAiHealthStatus] =
+    useState<AiHealthStatus>("unknown");
   const [aiHealthDetail, setAiHealthDetail] = useState<string | null>(null);
   // `null` = the server default is UNKNOWN — never an invented URL.
   const [serverDefaultUrl, setServerDefaultUrl] = useState<string | null>(null);

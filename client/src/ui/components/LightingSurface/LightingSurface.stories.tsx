@@ -7,7 +7,7 @@
  * ══════════════════════════════════════════════════════════════════════════
  *
  * There is no `StoreProvider` here, no `ApplicationStore`, no `installBridge`,
- * no `useEditorStore`, no MobX import and no decorator that supplies any of
+ * no legacy store hook, no MobX import and no decorator that supplies any of
  * them — `.storybook/preview.tsx` provides only CSS, MSW and a full-height
  * wrapper. If `LightingSurface` had kept a single store read, every story would
  * throw on mount.
@@ -115,12 +115,7 @@ interface HarnessProps {
  * Stands in for `LightingCanvasContainer` — holds the refs and drives the
  * imperative draw. It reads NO store; every value it forwards is a literal.
  */
-function LightingHarness({
-  surface,
-  source,
-  light,
-  brushCells,
-}: HarnessProps) {
+function LightingHarness({ surface, source, light, brushCells }: HarnessProps) {
   const editCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

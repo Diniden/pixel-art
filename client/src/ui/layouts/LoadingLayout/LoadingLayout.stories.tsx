@@ -59,7 +59,8 @@ export const Failed: Story = {
   args: {
     variant: "failed",
     message: "GET /api/project failed: 500 Internal Server Error",
-    detail: "Nothing has been changed on disk — your project file is untouched.",
+    detail:
+      "Nothing has been changed on disk — your project file is untouched.",
     onRetry: () => {},
   },
 };
@@ -72,7 +73,8 @@ export const Failed: Story = {
 export const FailedWithoutMessage: Story = {
   args: {
     variant: "failed",
-    detail: "Nothing has been changed on disk — your project file is untouched.",
+    detail:
+      "Nothing has been changed on disk — your project file is untouched.",
     onRetry: () => {},
   },
 };

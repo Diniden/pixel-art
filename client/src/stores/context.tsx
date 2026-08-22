@@ -31,7 +31,9 @@ export function StoreProvider({
   store: ApplicationStore;
   children: ReactNode;
 }) {
-  return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
+  return (
+    <StoreContext.Provider value={store}>{children}</StoreContext.Provider>
+  );
 }
 
 /** The whole tree. Throws when rendered outside a `StoreProvider`. */

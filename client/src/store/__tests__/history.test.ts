@@ -429,7 +429,9 @@ describe.each(HARNESSES)("%s — history", (_name, makeHarness) => {
         historyGrowth(() => harness.dispatch("renameLayer", "layer-1", "R")),
       ).toBe(1);
       expect(
-        historyGrowth(() => harness.dispatch("toggleLayerVisibility", "layer-1")),
+        historyGrowth(() =>
+          harness.dispatch("toggleLayerVisibility", "layer-1"),
+        ),
       ).toBe(1);
       expect(
         historyGrowth(() => harness.dispatch("addObject", "O2", 4, 4)),
@@ -455,7 +457,9 @@ describe.each(HARNESSES)("%s — history", (_name, makeHarness) => {
     it("startColorAdjustment itself is NON-tracking", () => {
       harness.dispatch("setPixel", 1, 1, RED);
       expect(
-        historyGrowth(() => harness.dispatch("startColorAdjustment", RED, false)),
+        historyGrowth(() =>
+          harness.dispatch("startColorAdjustment", RED, false),
+        ),
       ).toBe(0);
       harness.dispatch("clearColorAdjustment");
     });

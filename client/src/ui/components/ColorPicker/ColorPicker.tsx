@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 /**
  * ColorPicker — PURE (REFRESH task 36, W27).
  *
@@ -18,12 +18,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  *
  * That "write on release, not on every mousemove" behaviour is manual check 3.
  */
-import { Color } from '../../../types';
+import { Color } from "../../../types";
 // Task 36: the HSL ⇄ RGB maths was module-private here; it now lives in
 // `ui/utils/colorMath.ts` (extracted verbatim — see that file's note on why
 // `prevHsl` must not be "simplified" away).
-import { hslToRgb, rgbToHsl } from '../../utils/colorMath';
-import './ColorPicker.css';
+import { hslToRgb, rgbToHsl } from "../../utils/colorMath";
+import "./ColorPicker.css";
 
 interface ColorPickerProps {
   /** `uiState.selectedColor` — the colour the picker reflects. */
@@ -46,7 +46,12 @@ export function ColorPicker({
   onAdjustColor,
   onSaveStateToHistory,
 }: ColorPickerProps) {
-  const [localColor, setLocalColor] = useState<Color>({ r: 0, g: 0, b: 0, a: 255 });
+  const [localColor, setLocalColor] = useState<Color>({
+    r: 0,
+    g: 0,
+    b: 0,
+    a: 255,
+  });
   const [hsl, setHsl] = useState({ h: 0, s: 0, l: 0 });
   const [isDraggingSV, setIsDraggingSV] = useState(false);
   const [isDraggingHue, setIsDraggingHue] = useState(false);
@@ -77,7 +82,7 @@ export function ColorPicker({
     const canvas = svCanvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const width = canvas.width;
@@ -90,15 +95,15 @@ export function ColorPicker({
 
     // White gradient from left
     const whiteGradient = ctx.createLinearGradient(0, 0, width, 0);
-    whiteGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    whiteGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    whiteGradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+    whiteGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
     ctx.fillStyle = whiteGradient;
     ctx.fillRect(0, 0, width, height);
 
     // Black gradient from bottom
     const blackGradient = ctx.createLinearGradient(0, 0, 0, height);
-    blackGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    blackGradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+    blackGradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+    blackGradient.addColorStop(1, "rgba(0, 0, 0, 1)");
     ctx.fillStyle = blackGradient;
     ctx.fillRect(0, 0, width, height);
   }, [hsl.h]);
@@ -108,7 +113,7 @@ export function ColorPicker({
     const canvas = hueCanvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const width = canvas.width;
@@ -177,16 +182,20 @@ export function ColorPicker({
   // Handle global mouse up to save final state if dragging
   useEffect(() => {
     const handleGlobalMouseUp = () => {
-      if (isDraggingSlider && colorAdjustment && hasSavedInitialStateRef.current) {
+      if (
+        isDraggingSlider &&
+        colorAdjustment &&
+        hasSavedInitialStateRef.current
+      ) {
         setIsDraggingSlider(false);
         saveFinalStateToHistory();
       }
     };
 
     if (isDraggingSlider) {
-      window.addEventListener('mouseup', handleGlobalMouseUp);
+      window.addEventListener("mouseup", handleGlobalMouseUp);
       return () => {
-        window.removeEventListener('mouseup', handleGlobalMouseUp);
+        window.removeEventListener("mouseup", handleGlobalMouseUp);
       };
     }
   }, [isDraggingSlider, colorAdjustment, localColor, saveFinalStateToHistory]);
@@ -242,7 +251,7 @@ export function ColorPicker({
     setLocalColor(newColor);
     // Only track history if not dragging a slider (for direct input changes)
     applyColor(newColor, !isDraggingSlider);
-    if (channel !== 'a') {
+    if (channel !== "a") {
       const newHsl = rgbToHsl(newColor.r, newColor.g, newColor.b, hsl);
       setHsl(newHsl);
       // Update last valid H and S if L is not 0 or 100
@@ -252,7 +261,9 @@ export function ColorPicker({
     }
   };
 
-  const handleSVCanvasInteraction = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleSVCanvasInteraction = (
+    e: React.MouseEvent<HTMLCanvasElement>,
+  ) => {
     const canvas = svCanvasRef.current;
     if (!canvas) return;
 
@@ -266,8 +277,8 @@ export function ColorPicker({
     const s = x * 100;
     const v = (1 - y) * 100;
     // Convert HSV to HSL
-    const l = (v / 100) * (1 - (s / 100) / 2);
-    const sHSL = l === 0 || l === 1 ? 0 : ((v / 100) - l) / Math.min(l, 1 - l);
+    const l = (v / 100) * (1 - s / 100 / 2);
+    const sHSL = l === 0 || l === 1 ? 0 : (v / 100 - l) / Math.min(l, 1 - l);
 
     const lPercent = Math.round(l * 100);
     let finalHsl = { h: hsl.h, s: Math.round(sHSL * 100), l: lPercent };
@@ -292,7 +303,9 @@ export function ColorPicker({
     applyColor(newColor, false);
   };
 
-  const handleHueCanvasInteraction = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleHueCanvasInteraction = (
+    e: React.MouseEvent<HTMLCanvasElement>,
+  ) => {
     const canvas = hueCanvasRef.current;
     if (!canvas) return;
 
@@ -310,7 +323,9 @@ export function ColorPicker({
   };
 
   const handleHexChange = (hex: string) => {
-    const match = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i);
+    const match = hex.match(
+      /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i,
+    );
     if (match) {
       const r = parseInt(match[1], 16);
       const g = parseInt(match[2], 16);
@@ -329,9 +344,9 @@ export function ColorPicker({
   };
 
   const getHexColor = (): string => {
-    const r = localColor.r.toString(16).padStart(2, '0');
-    const g = localColor.g.toString(16).padStart(2, '0');
-    const b = localColor.b.toString(16).padStart(2, '0');
+    const r = localColor.r.toString(16).padStart(2, "0");
+    const g = localColor.g.toString(16).padStart(2, "0");
+    const b = localColor.b.toString(16).padStart(2, "0");
     return `#${r}${g}${b}`;
   };
 
@@ -348,7 +363,7 @@ export function ColorPicker({
     const sHSV = v === 0 ? 0 : 2 * (1 - l / v);
     return {
       x: sHSV * 100,
-      y: (1 - v) * 100
+      y: (1 - v) * 100,
     };
   };
 
@@ -377,10 +392,10 @@ export function ColorPicker({
                 key={`${color.r}-${color.g}-${color.b}-${color.a}-${index}`}
                 className="color-picker__history-swatch"
                 style={{
-                  backgroundColor: `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`
+                  backgroundColor: `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`,
                 }}
                 onClick={() => handleHistoryColorClick(color)}
-                title={`#${color.r.toString(16).padStart(2, '0')}${color.g.toString(16).padStart(2, '0')}${color.b.toString(16).padStart(2, '0')}`}
+                title={`#${color.r.toString(16).padStart(2, "0")}${color.g.toString(16).padStart(2, "0")}${color.b.toString(16).padStart(2, "0")}`}
               />
             ))}
           </div>
@@ -444,7 +459,9 @@ export function ColorPicker({
                 saveInitialStateToHistory();
                 handleHueCanvasInteraction(e);
               }}
-              onMouseMove={(e) => isDraggingHue && handleHueCanvasInteraction(e)}
+              onMouseMove={(e) =>
+                isDraggingHue && handleHueCanvasInteraction(e)
+              }
               onMouseUp={() => {
                 setIsDraggingHue(false);
                 setIsDraggingSlider(false);
@@ -497,7 +514,9 @@ export function ColorPicker({
               value={hsl.h}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
-              onChange={(e) => updateColorFromHSL({ ...hsl, h: parseInt(e.target.value) })}
+              onChange={(e) =>
+                updateColorFromHSL({ ...hsl, h: parseInt(e.target.value) })
+              }
             />
             <input
               type="number"
@@ -505,7 +524,9 @@ export function ColorPicker({
               min="0"
               max="360"
               value={hsl.h}
-              onChange={(e) => updateColorFromHSL({ ...hsl, h: parseInt(e.target.value) || 0 })}
+              onChange={(e) =>
+                updateColorFromHSL({ ...hsl, h: parseInt(e.target.value) || 0 })
+              }
             />
           </div>
           <div className="slider__row">
@@ -518,11 +539,13 @@ export function ColorPicker({
               value={hsl.s}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
-              onChange={(e) => updateColorFromHSL({ ...hsl, s: parseInt(e.target.value) })}
+              onChange={(e) =>
+                updateColorFromHSL({ ...hsl, s: parseInt(e.target.value) })
+              }
               style={{
                 background: `linear-gradient(to right,
                   hsl(${hsl.h}, 0%, ${hsl.l}%),
-                  hsl(${hsl.h}, 100%, ${hsl.l}%))`
+                  hsl(${hsl.h}, 100%, ${hsl.l}%))`,
               }}
             />
             <input
@@ -531,7 +554,9 @@ export function ColorPicker({
               min="0"
               max="100"
               value={hsl.s}
-              onChange={(e) => updateColorFromHSL({ ...hsl, s: parseInt(e.target.value) || 0 })}
+              onChange={(e) =>
+                updateColorFromHSL({ ...hsl, s: parseInt(e.target.value) || 0 })
+              }
             />
           </div>
           <div className="slider__row">
@@ -544,12 +569,14 @@ export function ColorPicker({
               value={hsl.l}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
-              onChange={(e) => updateColorFromHSL({ ...hsl, l: parseInt(e.target.value) })}
+              onChange={(e) =>
+                updateColorFromHSL({ ...hsl, l: parseInt(e.target.value) })
+              }
               style={{
                 background: `linear-gradient(to right,
                   hsl(${hsl.h}, ${hsl.s}%, 0%),
                   hsl(${hsl.h}, ${hsl.s}%, 50%),
-                  hsl(${hsl.h}, ${hsl.s}%, 100%))`
+                  hsl(${hsl.h}, ${hsl.s}%, 100%))`,
               }}
             />
             <input
@@ -558,7 +585,9 @@ export function ColorPicker({
               min="0"
               max="100"
               value={hsl.l}
-              onChange={(e) => updateColorFromHSL({ ...hsl, l: parseInt(e.target.value) || 0 })}
+              onChange={(e) =>
+                updateColorFromHSL({ ...hsl, l: parseInt(e.target.value) || 0 })
+              }
             />
           </div>
         </div>
@@ -566,9 +595,11 @@ export function ColorPicker({
         {/* RGB Sliders */}
         <div className="color-picker__section">
           <div className="color-picker__section-label">RGB</div>
-          {(['r', 'g', 'b'] as const).map((channel) => (
+          {(["r", "g", "b"] as const).map((channel) => (
             <div key={channel} className="slider__row">
-              <label className={`slider__label color-picker__label--${channel}`}>
+              <label
+                className={`slider__label color-picker__label--${channel}`}
+              >
                 {channel.toUpperCase()}
               </label>
               <input
@@ -579,7 +610,9 @@ export function ColorPicker({
                 value={localColor[channel]}
                 onMouseDown={handleSliderMouseDown}
                 onMouseUp={handleSliderMouseUp}
-                onChange={(e) => updateColorFromRGB(channel, parseInt(e.target.value))}
+                onChange={(e) =>
+                  updateColorFromRGB(channel, parseInt(e.target.value))
+                }
               />
               <input
                 type="number"
@@ -587,7 +620,9 @@ export function ColorPicker({
                 min="0"
                 max="255"
                 value={localColor[channel]}
-                onChange={(e) => updateColorFromRGB(channel, parseInt(e.target.value) || 0)}
+                onChange={(e) =>
+                  updateColorFromRGB(channel, parseInt(e.target.value) || 0)
+                }
               />
             </div>
           ))}
@@ -605,11 +640,13 @@ export function ColorPicker({
               value={localColor.a}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
-              onChange={(e) => updateColorFromRGB('a', parseInt(e.target.value))}
+              onChange={(e) =>
+                updateColorFromRGB("a", parseInt(e.target.value))
+              }
               style={{
                 background: `linear-gradient(to right,
                   rgba(${localColor.r}, ${localColor.g}, ${localColor.b}, 0),
-                  rgba(${localColor.r}, ${localColor.g}, ${localColor.b}, 1))`
+                  rgba(${localColor.r}, ${localColor.g}, ${localColor.b}, 1))`,
               }}
             />
             <input
@@ -618,7 +655,9 @@ export function ColorPicker({
               min="0"
               max="255"
               value={localColor.a}
-              onChange={(e) => updateColorFromRGB('a', parseInt(e.target.value) || 0)}
+              onChange={(e) =>
+                updateColorFromRGB("a", parseInt(e.target.value) || 0)
+              }
             />
           </div>
         </div>

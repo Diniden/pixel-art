@@ -52,5 +52,4 @@ describe("ReferenceUIStore — commit paths", () => {
     expect(store.referenceImageSelection).toEqual(box(10, 10, 21, 20));
     expect(saved).toEqual([box(10, 10, 21, 20)]);
   });
-
 });

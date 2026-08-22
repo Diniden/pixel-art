@@ -251,10 +251,10 @@ export class DomainStore {
   }
 
   /**
-   * One committed domain mutation. During the bridge era the ONLY caller is
-   * the Zustand bridge (`installBridge`), which is the single place that sees
-   * every `project` commit; task 23+ moves the bumps into the domain
-   * sub-stores that will own the mutations.
+   * One committed domain mutation. During the bridge era the ONLY caller
+   * was the Zustand bridge, the single place that saw every `project`
+   * commit; tasks 23+ moved the bumps into the domain sub-stores that own
+   * the mutations (`DomainMutator.commit`, `PixelStore.publishAndBump`).
    */
   bumpDomainVersion(): void {
     this.domainVersion += 1;
@@ -277,10 +277,11 @@ export class DomainStore {
    * observable members, leaving every pixel grid EXACTLY as it arrived — by
    * reference, never cloned, never proxied.
    *
-   * Called from two places, both of which are "the tree changed wholesale":
+   * Called only when "the tree changed wholesale":
    *  - the lifecycle flows, via `installTree()` (load / create / switch / …)
-   *  - the bridge, ADOPTING a commit made by a not-yet-migrated Zustand
-   *    action (see `zustandBridge`'s Phase B note).
+   *  - `ApplicationStore.adoptProject` (a load, an undo/redo restore, the
+   *    task-08 harness). During the bridge era the bridge also called it to
+   *    ADOPT commits made by not-yet-migrated Zustand actions.
    *
    * `uiState` is deliberately NOT stored here: 43 of its 44 fields are UI and
    * one is session, so it stays Zustand-owned until the UIStore task. Task 23
@@ -336,7 +337,7 @@ export class DomainStore {
    *
    *  These two replace `ReferenceImageModal.tsx`'s module-level
    *  `saveReferenceImageToProject` / `restoreReferenceImageFromProject`,
-   *  which were the codebase's LAST TWO `useEditorStore.getState()` calls
+   *  which were the codebase's LAST TWO legacy-hook `getState()` calls
    *  (lines 235 and 261 of that file). Both reached into the Zustand store
    *  from a React module rather than receiving it — `getState()` outside a
    *  component is an untracked read that no reaction can observe, which is

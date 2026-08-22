@@ -12,7 +12,8 @@
  */
 
 .confirm-dialog__warning.confirm-dialog__warning--callout,
-.confirm-dialog__body .confirm-dialog__warning.confirm-dialog__warning--callout {
+.confirm-dialog__body
+  .confirm-dialog__warning.confirm-dialog__warning--callout {
   color: var(--status-warn);
   background: var(--status-warn-10);
   padding: var(--space-2-5) var(--space-4);

@@ -47,7 +47,9 @@ export function ReviewStep({
 
   return (
     <div className="ai-interpolate-modal__preview-section">
-      <h4 className="ai-interpolate-modal__preview-label">Generated Sequence</h4>
+      <h4 className="ai-interpolate-modal__preview-label">
+        Generated Sequence
+      </h4>
       <div className="ai-interpolate-modal__preview-strip">
         {sequence.map((item, idx) => (
           <div
@@ -63,7 +65,9 @@ export function ReviewStep({
               </div>
             )}
             <span className="ai-interpolate-modal__preview-item-label">
-              {item.type === "keyframe" ? `Key ${(item.keyIdx ?? 0) + 1}` : `Gen`}
+              {item.type === "keyframe"
+                ? `Key ${(item.keyIdx ?? 0) + 1}`
+                : `Gen`}
             </span>
           </div>
         ))}

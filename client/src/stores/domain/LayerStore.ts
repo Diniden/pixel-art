@@ -126,9 +126,7 @@ function copyPixel(pd: PixelData): PixelData {
         ? 0
         : { r: pd.color.r, g: pd.color.g, b: pd.color.b, a: pd.color.a },
     normal:
-      pd.normal === 0
-        ? 0
-        : { x: pd.normal.x, y: pd.normal.y, z: pd.normal.z },
+      pd.normal === 0 ? 0 : { x: pd.normal.x, y: pd.normal.y, z: pd.normal.z },
     height: pd.height,
   } as PixelData;
 }
@@ -203,7 +201,9 @@ export class LayerStore {
   private currentLayer(): Layer | null {
     const frame = this.currentFrame();
     if (!frame) return null;
-    return frame.layers.find((l) => l.id === this.source.selectedLayerId) ?? null;
+    return (
+      frame.layers.find((l) => l.id === this.source.selectedLayerId) ?? null
+    );
   }
 
   /** Write only `selectedLayerId`, echoing the other two ids unchanged. */
@@ -415,10 +415,7 @@ export class LayerStore {
           (_, index) => index !== currentLayerIndex,
         );
         if (f.id === frame.id && newLayers.length > 0) {
-          const targetIndex = Math.min(
-            currentLayerIndex,
-            newLayers.length - 1,
-          );
+          const targetIndex = Math.min(currentLayerIndex, newLayers.length - 1);
           newSelectedLayerId = newLayers[targetIndex].id;
         }
         return { ...f, layers: newLayers };
@@ -798,7 +795,9 @@ export class LayerStore {
     // Only re-select when the DELETED layer was the selected one, and pick
     // the first survivor from the PRE-delete frame — verbatim.
     if (this.source.selectedLayerId === layerId) {
-      this.selectLayerId(frame.layers.find((l) => l.id !== layerId)?.id ?? null);
+      this.selectLayerId(
+        frame.layers.find((l) => l.id !== layerId)?.id ?? null,
+      );
     }
   }
 
@@ -975,10 +974,7 @@ export class LayerStore {
       } else {
         layerFrames.push({
           name: layerName,
-          pixels: createEmptyPixelGrid(
-            obj.gridSize.width,
-            obj.gridSize.height,
-          ),
+          pixels: createEmptyPixelGrid(obj.gridSize.width, obj.gridSize.height),
           visible: true,
         });
       }
@@ -1053,10 +1049,7 @@ export class LayerStore {
       const makeVariantLayer = (idx: number): Layer => ({
         id: generateId(),
         name: sourceVariantGroup.name,
-        pixels: createEmptyPixelGrid(
-          obj.gridSize.width,
-          obj.gridSize.height,
-        ),
+        pixels: createEmptyPixelGrid(obj.gridSize.width, obj.gridSize.height),
         visible: true,
         isVariant: true,
         variantGroupId: newVariantGroupId,

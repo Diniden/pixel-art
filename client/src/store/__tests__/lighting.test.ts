@@ -41,26 +41,10 @@ import type { Normal, PixelData, Project } from "@/types";
  */
 function asymmetricProject(): Project {
   const cells: Array<[number, number, PixelData]> = [
-    [
-      0,
-      0,
-      { color: RED, normal: { x: -30, y: -10, z: 200 }, height: 10 },
-    ],
-    [
-      0,
-      1,
-      { color: BLUE, normal: { x: 40, y: 20, z: 210 }, height: 20 },
-    ],
-    [
-      0,
-      2,
-      { color: GREEN, normal: { x: -50, y: 30, z: 220 }, height: 30 },
-    ],
-    [
-      1,
-      2,
-      { color: RED, normal: { x: 60, y: -40, z: 230 }, height: 40 },
-    ],
+    [0, 0, { color: RED, normal: { x: -30, y: -10, z: 200 }, height: 10 }],
+    [0, 1, { color: BLUE, normal: { x: 40, y: 20, z: 210 }, height: 20 }],
+    [0, 2, { color: GREEN, normal: { x: -50, y: 30, z: 220 }, height: 30 }],
+    [1, 2, { color: RED, normal: { x: 60, y: -40, z: 230 }, height: 40 }],
   ];
   const p = tinyProject();
   const pixels = p.objects[0].frames[0].layers[0].pixels;
@@ -272,7 +256,9 @@ describe.each(HARNESSES)("%s — lighting", (_name, makeHarness) => {
       // A hole in the source therefore materialises as {color:0,normal:0,
       // height:0} rather than staying `undefined`.
       const p = asymmetricProject();
-      delete (p.objects[0].frames[0].layers[0].pixels[3] as unknown as unknown[])[3];
+      delete (
+        p.objects[0].frames[0].layers[0].pixels[3] as unknown as unknown[]
+      )[3];
       harness.load(p);
       harness.dispatch("flipHorizontal");
       expect(layerOf(harness.getProject())!.pixels[3][0]).toEqual({

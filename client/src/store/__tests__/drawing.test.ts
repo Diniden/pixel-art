@@ -70,9 +70,9 @@ const variantPixel = (
   x: number,
   y: number,
 ) =>
-  project?.variants?.[0]?.variants[0]?.frames[frameIndex]?.layers[0]?.pixels[y]?.[
-    x
-  ]?.color ?? 0;
+  project?.variants?.[0]?.variants[0]?.frames[frameIndex]?.layers[0]?.pixels[
+    y
+  ]?.[x]?.color ?? 0;
 
 describe.each(HARNESSES)("%s — drawing", (_name, makeHarness) => {
   let harness: StoreHarness;
@@ -119,7 +119,9 @@ describe.each(HARNESSES)("%s — drawing", (_name, makeHarness) => {
       const p = tinyProject();
       // Delete the cell so `existing` is `undefined` rather than an empty
       // PixelData. This is the only path that reaches the fallback.
-      delete (p.objects[0].frames[0].layers[0].pixels[0] as unknown as unknown[])[0];
+      delete (
+        p.objects[0].frames[0].layers[0].pixels[0] as unknown as unknown[]
+      )[0];
       harness.load(p);
       harness.dispatch("setPixel", 0, 0, RED);
       expect(pixelAt(harness.getProject(), 0, 0)).toEqual({

@@ -237,7 +237,9 @@ export function renderFrameOverlay(
     if (isBoundVariant) {
       const groupId = layer.variantGroupId as string;
       const vg = variants!.find((g) => g.id === groupId);
-      const variant = vg?.variants.find((v) => v.id === layer.selectedVariantId);
+      const variant = vg?.variants.find(
+        (v) => v.id === layer.selectedVariantId,
+      );
       const variantFrameIdx = variantFrameIndices![groupId] ?? 0;
       const vFrame =
         variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];

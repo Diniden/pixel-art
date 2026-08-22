@@ -5,9 +5,7 @@ import { ColorSwatch } from "../ColorSwatch";
 describe("ColorSwatch", () => {
   it("renders an opaque colour with hex name", () => {
     const { container } = render(<ColorSwatch r={0} g={217} b={255} />);
-    expect(
-      screen.getByRole("button", { name: "#00d9ff" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "#00d9ff" })).toBeInTheDocument();
     expect(container.firstChild).toMatchSnapshot();
   });
 

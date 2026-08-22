@@ -118,7 +118,9 @@ export function renderNormalEdit(
       // Source-over against an opaque destination: the destination stays
       // opaque, so the standard formula collapses to a plain lerp.
       const a = alpha / 255;
-      data[idx] = Math.round((source.data[sIdx] ?? 0) * a + (data[idx] ?? 0) * (1 - a));
+      data[idx] = Math.round(
+        (source.data[sIdx] ?? 0) * a + (data[idx] ?? 0) * (1 - a),
+      );
       data[idx + 1] = Math.round(
         (source.data[sIdx + 1] ?? 0) * a + (data[idx + 1] ?? 0) * (1 - a),
       );

@@ -41,7 +41,11 @@ import { runInAction } from "mobx";
 import { UIStore } from "@/stores/ui/UIStore";
 import { SelectionMirror } from "@/stores/SelectionMirror";
 import { SessionStore } from "@/stores/session/SessionStore";
-import { compactToProject, createDefaultProject, projectToCompact } from "@/types";
+import {
+  compactToProject,
+  createDefaultProject,
+  projectToCompact,
+} from "@/types";
 import { corpusFiles, loadCorpusFile } from "@test/__fixtures__/projects";
 import type { CompactUIState, Project } from "@/types";
 
@@ -104,7 +108,10 @@ function canonical(ui: CompactUIState): string {
   return JSON.stringify(
     Object.keys(ui)
       .sort()
-      .map((k) => [k, (ui as unknown as Record<string, unknown>)[k] ?? "\u0000undefined"]),
+      .map((k) => [
+        k,
+        (ui as unknown as Record<string, unknown>)[k] ?? "\u0000undefined",
+      ]),
   );
 }
 
@@ -184,9 +191,13 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     // `CompactUIState` without a matching line in the builder fails HERE,
     // which is the whole reason the builder is explicit rather than a spread.
     const source = readFileSync("src/types/codecs/compactTypes.ts", "utf8");
-    const body = source.match(/export interface CompactUIState \{([\s\S]*?)\n\}/);
+    const body = source.match(
+      /export interface CompactUIState \{([\s\S]*?)\n\}/,
+    );
     expect(body).not.toBeNull();
-    const declared = [...body![1].matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]);
+    const declared = [...body![1].matchAll(/^ {2}(\w+)\??:/gm)].map(
+      (m) => m[1],
+    );
 
     expect(declared).toHaveLength(44);
 
@@ -212,14 +223,32 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
 
   it("keeps the three floating panels' keys DISTINCT", () => {
     const project = createDefaultProject();
-    project.uiState.frameReferencePanelPosition = { topPercent: 1, leftPercent: 2 };
-    project.uiState.referenceImagePanelPosition = { topPercent: 3, leftPercent: 4 };
-    project.uiState.lightingPreviewPanelPosition = { topPercent: 5, leftPercent: 6 };
+    project.uiState.frameReferencePanelPosition = {
+      topPercent: 1,
+      leftPercent: 2,
+    };
+    project.uiState.referenceImagePanelPosition = {
+      topPercent: 3,
+      leftPercent: 4,
+    };
+    project.uiState.lightingPreviewPanelPosition = {
+      topPercent: 5,
+      leftPercent: 6,
+    };
     const built = hydratedStore(project).toPersistedUIState();
 
-    expect(built.frameReferencePanelPosition).toEqual({ topPercent: 1, leftPercent: 2 });
-    expect(built.referenceImagePanelPosition).toEqual({ topPercent: 3, leftPercent: 4 });
-    expect(built.lightingPreviewPanelPosition).toEqual({ topPercent: 5, leftPercent: 6 });
+    expect(built.frameReferencePanelPosition).toEqual({
+      topPercent: 1,
+      leftPercent: 2,
+    });
+    expect(built.referenceImagePanelPosition).toEqual({
+      topPercent: 3,
+      leftPercent: 4,
+    });
+    expect(built.lightingPreviewPanelPosition).toEqual({
+      topPercent: 5,
+      leftPercent: 6,
+    });
     expect(built).toEqual(legacyUIState(project));
   });
 
@@ -292,7 +321,9 @@ describe("R3 — the builder against the real corpus", () => {
           `${file}::${key} — uiState KEY SET drifted`,
         ).toEqual({ snapshot: key, keys: Object.keys(legacy).sort() });
 
-        for (const field of Object.keys(legacy).sort() as (keyof CompactUIState)[]) {
+        for (const field of Object.keys(
+          legacy,
+        ).sort() as (keyof CompactUIState)[]) {
           expect(
             { [field]: built[field] },
             `${file}::${key} — uiState.${field} VALUE drifted`,

@@ -41,7 +41,7 @@ import {
 } from "./storeContract";
 import { projectToCompact } from "@/types";
 import type { Color, Layer, PixelData, Project } from "@/types";
-import { useEditorStore } from "@/store";
+import { currentHarnessApp } from "./mobxHarnessRuntime";
 // Task 16: the lifecycle actions are DomainStore flows behind bridge-installed
 // delegates; the cross-project tests wire the stack and stub the typed API.
 import { projectApi } from "@/api";
@@ -97,10 +97,11 @@ const pixelOf = (
   y = 0,
   frameIndex = 0,
 ) =>
-  harness.getProject()!.objects[0].frames[frameIndex].layers[layerIndex]
-    .pixels[y][x];
+  harness.getProject()!.objects[0].frames[frameIndex].layers[layerIndex].pixels[
+    y
+  ][x];
 
-const readClipboard = () => useEditorStore.getState().layerClipboard;
+const readClipboard = () => currentHarnessApp().session.layerClipboard;
 
 describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
   let harness: StoreHarness;
@@ -114,7 +115,7 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
   afterEach(() => {
     harness.dispatch("endStroke");
     harness.reset();
-    useEditorStore.setState({ layerClipboard: null });
+    currentHarnessApp().session.setLayerClipboard(null);
   });
 
   /* ── add / duplicate / delete / rename / visibility ────────────────────── */
@@ -239,7 +240,11 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
         tinyProject({
           frames: [
             { id: "frame-1", name: "F1", layers: [mkLayer("a"), mkLayer("b")] },
-            { id: "frame-2", name: "F2", layers: [mkLayer("a2"), mkLayer("b2")] },
+            {
+              id: "frame-2",
+              name: "F2",
+              layers: [mkLayer("a2"), mkLayer("b2")],
+            },
           ],
         }),
       );
@@ -719,9 +724,7 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
 
   describe("copyLayerToClipboard / pasteLayerFromClipboard", () => {
     beforeEach(() =>
-      harness.load(
-        tinyProject({ layers: [filledLayer("layer-1", RED)] }),
-      ),
+      harness.load(tinyProject({ layers: [filledLayer("layer-1", RED)] })),
     );
 
     it("copy populates the clipboard WITHOUT touching the project or history", () => {
@@ -764,7 +767,13 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
 
     // ── SIZE MISMATCH: centre-pad / centre-crop, never scale, never refuse ──
     it("SIZE MISMATCH — a SMALLER source is CENTRED and padded", () => {
-      harness.load(tinyProject({ layers: [filledLayer("small", RED, 2, 2)], width: 2, height: 2 }));
+      harness.load(
+        tinyProject({
+          layers: [filledLayer("small", RED, 2, 2)],
+          width: 2,
+          height: 2,
+        }),
+      );
       harness.dispatch("copyLayerToClipboard", "small");
 
       // Paste into a 6×6 object.
@@ -780,7 +789,13 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
     });
 
     it("SIZE MISMATCH — a LARGER source is centre-CROPPED, never scaled or refused", () => {
-      harness.load(tinyProject({ layers: [filledLayer("big", RED, 6, 6)], width: 6, height: 6 }));
+      harness.load(
+        tinyProject({
+          layers: [filledLayer("big", RED, 6, 6)],
+          width: 6,
+          height: 6,
+        }),
+      );
       harness.dispatch("copyLayerToClipboard", "big");
 
       harness.load(tinyProject({ width: 2, height: 2 }));
@@ -794,7 +809,13 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
     it("OBSERVED: with an ODD size difference the content is biased TOP-LEFT", () => {
       // `Math.floor((width - sourceWidth) / 2)`, so a 2-into-5 paste offsets by
       // floor(3/2) = 1, not 1.5 and not 2.
-      harness.load(tinyProject({ layers: [filledLayer("small", RED, 2, 2)], width: 2, height: 2 }));
+      harness.load(
+        tinyProject({
+          layers: [filledLayer("small", RED, 2, 2)],
+          width: 2,
+          height: 2,
+        }),
+      );
       harness.dispatch("copyLayerToClipboard", "small");
       harness.load(tinyProject({ width: 5, height: 5 }));
       harness.dispatch("pasteLayerFromClipboard");
@@ -832,9 +853,7 @@ describe.each(HARNESSES)("%s — layers", (_name, makeHarness) => {
       // deleteCurrentProject :150, renameCurrentProject :119) clears it.
       // Verified by reading every `set()` in that file. This survival is
       // load-bearing behaviour the MobX port must preserve.
-      harness.load(
-        tinyProject({ layers: [filledLayer("from-A", GREEN)] }),
-      );
+      harness.load(tinyProject({ layers: [filledLayer("from-A", GREEN)] }));
       harness.dispatch("copyLayerToClipboard", "from-A");
       expect(readClipboard()).not.toBeNull();
 

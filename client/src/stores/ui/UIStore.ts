@@ -76,7 +76,13 @@
  * `projectToCompact` ADDS an `originColor: undefined` key that was not in
  * the input — and that behaviour is preserved deliberately below.
  */
-import { computedStruct, makeObservable, observable, observableRef, reaction } from "mobx";
+import {
+  computedStruct,
+  makeObservable,
+  observable,
+  observableRef,
+  reaction,
+} from "mobx";
 import type { IReactionDisposer } from "mobx";
 import { normalToPacked, rgbaToHex } from "../../types";
 import type { CompactUIState, Color } from "../../types";
@@ -384,21 +390,57 @@ export class UIStore {
     // have no such key, and the legacy spread does not invent one.
     /* 33 */ assign(persisted, "gaussianFill", tool.gaussianFill);
     /* 34 */ assign(persisted, "lightGridMode", viewport.lightGridMode);
-    /* 35 */ assign(persisted, "layerSelectionCounter", viewport.layerSelectionCounter);
+    /* 35 */ assign(
+      persisted,
+      "layerSelectionCounter",
+      viewport.layerSelectionCounter,
+    );
     /* 36 */ assign(persisted, "canvasInfoHidden", viewport.canvasInfoHidden);
     // ⚠️ The three floating panels keep DISTINCT persistence keys — do not
     // unify them (spec constraint).
-    /* 37 */ assign(persisted, "frameReferencePanelPosition", panels.frameReference.position);
-    /* 38 */ assign(persisted, "frameReferencePanelMinimized", panels.frameReference.minimized);
-    /* 39 */ assign(persisted, "frameReferencePanelVisible", panels.frameReference.visible);
-    /* 40 */ assign(persisted, "referenceImagePanelPosition", panels.referenceImage.position);
-    /* 41 */ assign(persisted, "referenceImagePanelMinimized", panels.referenceImage.minimized);
-    /* 42 */ assign(persisted, "lightingPreviewPanelPosition", panels.lightingPreview.position);
-    /* 43 */ assign(persisted, "lightingPreviewPanelMinimized", panels.lightingPreview.minimized);
+    /* 37 */ assign(
+      persisted,
+      "frameReferencePanelPosition",
+      panels.frameReference.position,
+    );
+    /* 38 */ assign(
+      persisted,
+      "frameReferencePanelMinimized",
+      panels.frameReference.minimized,
+    );
+    /* 39 */ assign(
+      persisted,
+      "frameReferencePanelVisible",
+      panels.frameReference.visible,
+    );
+    /* 40 */ assign(
+      persisted,
+      "referenceImagePanelPosition",
+      panels.referenceImage.position,
+    );
+    /* 41 */ assign(
+      persisted,
+      "referenceImagePanelMinimized",
+      panels.referenceImage.minimized,
+    );
+    /* 42 */ assign(
+      persisted,
+      "lightingPreviewPanelPosition",
+      panels.lightingPreview.position,
+    );
+    /* 43 */ assign(
+      persisted,
+      "lightingPreviewPanelMinimized",
+      panels.lightingPreview.minimized,
+    );
     // OWNER DECISION (Q2, 2026-08-16): `aiServiceUrl` STAYS in the wire
     // format. `SessionStore` is the single read source; the value
     // round-trips to the project file exactly as it always has.
-    /* 44 */ assign(persisted, "aiServiceUrl", this.session.aiServiceUrl ?? undefined);
+    /* 44 */ assign(
+      persisted,
+      "aiServiceUrl",
+      this.session.aiServiceUrl ?? undefined,
+    );
 
     // See the TYPE-vs-REALITY note above: `borderRadius` is declared required
     // but is genuinely absent from most real projects.

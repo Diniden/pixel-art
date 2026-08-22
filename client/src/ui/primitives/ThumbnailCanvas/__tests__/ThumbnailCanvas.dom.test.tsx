@@ -17,7 +17,12 @@ describe("ThumbnailCanvas", () => {
 
   it("renders labelled as an image with custom size", () => {
     const { container } = render(
-      <ThumbnailCanvas revision={1} size={96} draw={() => {}} label="Frame 3 preview" />,
+      <ThumbnailCanvas
+        revision={1}
+        size={96}
+        draw={() => {}}
+        label="Frame 3 preview"
+      />,
     );
     expect(container.firstChild).toMatchSnapshot();
   });

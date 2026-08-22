@@ -175,7 +175,9 @@ describe.each(HARNESSES)("%s — helpers", (_name, makeHarness) => {
       p.uiState.variantFrameIndices = { "vg-1": 3 };
       harness.load(p);
       // 3 % 2 === 1
-      expect(harness.dispatch("getCurrentVariant")?.variantFrame.id).toBe("vf-2");
+      expect(harness.dispatch("getCurrentVariant")?.variantFrame.id).toBe(
+        "vf-2",
+      );
     });
   });
 

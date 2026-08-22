@@ -74,7 +74,9 @@ export function Toolbar({
               onClick={onToggleFocusMode}
               aria-label="Focus Mode"
             >
-              <span className="toolbar__tool-icon"><Icon icon={Maximize2} /></span>
+              <span className="toolbar__tool-icon">
+                <Icon icon={Maximize2} />
+              </span>
               <span className="toolbar__tool-hotkey">`</span>
             </button>
           </Tooltip>
@@ -88,7 +90,9 @@ export function Toolbar({
               onClick={onToggleLightGridMode}
               aria-label="Light Grid Background"
             >
-              <span className="toolbar__tool-icon"><Icon icon={isLightGrid ? Sun : Moon} /></span>
+              <span className="toolbar__tool-icon">
+                <Icon icon={isLightGrid ? Sun : Moon} />
+              </span>
             </button>
           </Tooltip>
           {!isLightingMode && (
@@ -104,7 +108,9 @@ export function Toolbar({
                 onClick={onToggleFrameReferencePanelVisible}
                 aria-label="Frame Reference"
               >
-                <span className="toolbar__tool-icon"><Icon icon={Film} /></span>
+                <span className="toolbar__tool-icon">
+                  <Icon icon={Film} />
+                </span>
               </button>
             </Tooltip>
           )}
@@ -122,7 +128,9 @@ export function Toolbar({
               onClick={() => onSetStudioMode("pixel")}
               aria-label="Pixel Studio"
             >
-              <span className="toolbar__tool-icon"><Icon icon={Palette} /></span>
+              <span className="toolbar__tool-icon">
+                <Icon icon={Palette} />
+              </span>
             </button>
           </Tooltip>
           <Tooltip content="Lighting Studio">
@@ -131,7 +139,9 @@ export function Toolbar({
               onClick={() => onSetStudioMode("lighting")}
               aria-label="Lighting Studio"
             >
-              <span className="toolbar__tool-icon"><Icon icon={Lightbulb} /></span>
+              <span className="toolbar__tool-icon">
+                <Icon icon={Lightbulb} />
+              </span>
             </button>
           </Tooltip>
         </div>
@@ -140,11 +150,7 @@ export function Toolbar({
       <div className="toolbar__divider" />
 
       {/* Conditional Tools based on Studio Mode */}
-      {isLightingMode ? (
-        lightingStudioTools
-      ) : (
-        pixelStudioTools
-      )}
+      {isLightingMode ? lightingStudioTools : pixelStudioTools}
     </div>
   );
 }

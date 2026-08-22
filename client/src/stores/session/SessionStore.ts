@@ -164,7 +164,10 @@ export class SessionStore {
   addToColorHistory(color: Color): void {
     const existingIndex = this.colorHistory.findIndex(
       (c) =>
-        c.r === color.r && c.g === color.g && c.b === color.b && c.a === color.a,
+        c.r === color.r &&
+        c.g === color.g &&
+        c.b === color.b &&
+        c.a === color.a,
     );
     if (existingIndex !== -1) {
       this.colorHistory = [

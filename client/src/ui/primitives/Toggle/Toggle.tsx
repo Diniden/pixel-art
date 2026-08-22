@@ -47,7 +47,11 @@ export function Toggle({
 
   return (
     <label
-      className={classNames("toggle", disabled && "toggle--disabled", className)}
+      className={classNames(
+        "toggle",
+        disabled && "toggle--disabled",
+        className,
+      )}
       htmlFor={id}
     >
       <input

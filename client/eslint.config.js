@@ -553,6 +553,16 @@ export default tseslint.config(
       "src/ui/components/ColorPicker/ColorPicker.tsx",
       "src/ui/components/ExportPreviewModal/ExportPreviewModal.tsx",
       "src/ui/components/ReferenceImageModal/ReferenceImageModal.tsx",
+      // ── THREE MORE, PUSHED OVER BY PRETTIER SWEEP B (task 38) ──────────
+      //
+      // At 481 / 421 / 431 counted lines AFTER the sweep. All three sat just
+      // under 400 counted lines before it; the sweep's mandatory line
+      // wrapping (a formatting-only commit, R13 — the code could not be
+      // edited to compensate) carried them over. No code was added. Same
+      // ratchet rules as above: entries only ever leave this list.
+      "src/ui/components/FrameReferencePanel/FrameReferencePanel.tsx",
+      "src/ui/components/PreviewModal/PreviewModal.tsx",
+      "src/ui/components/ReferenceImagePanel/ReferenceImagePanel.tsx",
     ],
     rules: {
       "max-lines": [

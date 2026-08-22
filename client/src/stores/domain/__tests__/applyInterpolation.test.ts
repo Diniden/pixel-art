@@ -26,13 +26,7 @@ import {
   type PairPixelData,
 } from "@/stores/domain/applyInterpolation";
 import { mkLayer, tinyProject } from "@/store/__tests__/storeContract";
-import type {
-  Frame,
-  PixelData,
-  Project,
-  Variant,
-  VariantGroup,
-} from "@/types";
+import type { Frame, PixelData, Project, Variant, VariantGroup } from "@/types";
 
 /* ── rig ─────────────────────────────────────────────────────────────────── */
 
@@ -119,16 +113,14 @@ describe("applyInterpolation — base object", () => {
   it("splices generated frames between keyframes and drops what was between", () => {
     // 5 frames, keyframes at 0 and 4 → frames 1,2,3 are replaced by 2 generated.
     const rig = makeRig(projectWithFrames(5));
-    const ok = rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "obj-1",
-        selectedLayerName: "Base",
-        sortedKeyframes: [0, 4],
-        pairs: pairsOf([2]),
-        loopBack: false,
-      },
-    );
+    const ok = rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "obj-1",
+      selectedLayerName: "Base",
+      sortedKeyframes: [0, 4],
+      pairs: pairsOf([2]),
+      loopBack: false,
+    });
 
     expect(ok).toBe(true);
     const names = framesOf(rig).map((f) => f.name);
@@ -143,16 +135,14 @@ describe("applyInterpolation — base object", () => {
   it("preserves frames OUTSIDE the keyframe range", () => {
     // 6 frames, keyframes 1 and 4 → frame 0 kept before, frame 5 kept after.
     const rig = makeRig(projectWithFrames(6));
-    rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "obj-1",
-        selectedLayerName: "Base",
-        sortedKeyframes: [1, 4],
-        pairs: pairsOf([1]),
-        loopBack: false,
-      },
-    );
+    rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "obj-1",
+      selectedLayerName: "Base",
+      sortedKeyframes: [1, 4],
+      pairs: pairsOf([1]),
+      loopBack: false,
+    });
 
     expect(framesOf(rig).map((f) => f.name)).toEqual([
       "Frame 1",
@@ -165,17 +155,15 @@ describe("applyInterpolation — base object", () => {
 
   it("loopBack appends a wrap pair AND drops everything after the last keyframe", () => {
     const rig = makeRig(projectWithFrames(6));
-    rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "obj-1",
-        selectedLayerName: "Base",
-        sortedKeyframes: [0, 3],
-        // pair 0 = 0→3, pair 1 = the loop 3→0
-        pairs: pairsOf([1, 2]),
-        loopBack: true,
-      },
-    );
+    rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "obj-1",
+      selectedLayerName: "Base",
+      sortedKeyframes: [0, 3],
+      // pair 0 = 0→3, pair 1 = the loop 3→0
+      pairs: pairsOf([1, 2]),
+      loopBack: true,
+    });
 
     expect(framesOf(rig).map((f) => f.name)).toEqual([
       "Frame 1",
@@ -198,16 +186,14 @@ describe("applyInterpolation — base object", () => {
     }
     const rig = makeRig(base);
 
-    rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "obj-1",
-        selectedLayerName: "Base",
-        sortedKeyframes: [0, 2],
-        pairs: pairsOf([1]),
-        loopBack: false,
-      },
-    );
+    rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "obj-1",
+      selectedLayerName: "Base",
+      sortedKeyframes: [0, 2],
+      pairs: pairsOf([1]),
+      loopBack: false,
+    });
 
     const generated = framesOf(rig)[1];
     expect(generated.name).toBe("Interp 1.1");
@@ -225,16 +211,14 @@ describe("applyInterpolation — base object", () => {
 
   it("🏁 the written layer's `pixels` is PixelData[][] — rank 2 per frame (W1)", () => {
     const rig = makeRig(projectWithFrames(3));
-    rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "obj-1",
-        selectedLayerName: "Base",
-        sortedKeyframes: [0, 2],
-        pairs: pairsOf([1]),
-        loopBack: false,
-      },
-    );
+    rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "obj-1",
+      selectedLayerName: "Base",
+      sortedKeyframes: [0, 2],
+      pairs: pairsOf([1]),
+      loopBack: false,
+    });
 
     const written = framesOf(rig)[1].layers.find((l) => l.name === "Base")!;
     const pixels = written.pixels;
@@ -268,16 +252,14 @@ describe("applyInterpolation — base object", () => {
 
   it("🏁 records exactly ONE history entry no matter how many frames land", () => {
     const rig = makeRig(projectWithFrames(8));
-    rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "obj-1",
-        selectedLayerName: "Base",
-        sortedKeyframes: [0, 3, 7],
-        pairs: pairsOf([4, 4]),
-        loopBack: false,
-      },
-    );
+    rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "obj-1",
+      selectedLayerName: "Base",
+      sortedKeyframes: [0, 3, 7],
+      pairs: pairsOf([4, 4]),
+      loopBack: false,
+    });
 
     // 11 frames now exist; ONE undo step must revert all of them.
     expect(framesOf(rig)).toHaveLength(3 + 8);
@@ -287,16 +269,14 @@ describe("applyInterpolation — base object", () => {
 
   it("publishes the mutated tree to the Zustand mirror exactly once", () => {
     const rig = makeRig(projectWithFrames(4));
-    rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "obj-1",
-        selectedLayerName: "Base",
-        sortedKeyframes: [0, 3],
-        pairs: pairsOf([2]),
-        loopBack: false,
-      },
-    );
+    rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "obj-1",
+      selectedLayerName: "Base",
+      sortedKeyframes: [0, 3],
+      pairs: pairsOf([2]),
+      loopBack: false,
+    });
     expect(rig.published).toHaveLength(1);
     expect(rig.published[0].objects[0].frames).toHaveLength(4);
   });
@@ -305,16 +285,14 @@ describe("applyInterpolation — base object", () => {
 
   it("refuses (and commits nothing) on fewer than two keyframes", () => {
     const rig = makeRig(projectWithFrames(3));
-    const ok = rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "obj-1",
-        selectedLayerName: "Base",
-        sortedKeyframes: [1],
-        pairs: pairsOf([1]),
-        loopBack: false,
-      },
-    );
+    const ok = rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "obj-1",
+      selectedLayerName: "Base",
+      sortedKeyframes: [1],
+      pairs: pairsOf([1]),
+      loopBack: false,
+    });
     expect(ok).toBe(false);
     expect(rig.snapshots).toEqual([]);
     expect(framesOf(rig)).toHaveLength(3);
@@ -322,32 +300,28 @@ describe("applyInterpolation — base object", () => {
 
   it("refuses on an unknown object id", () => {
     const rig = makeRig(projectWithFrames(3));
-    const ok = rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "nope",
-        selectedLayerName: "Base",
-        sortedKeyframes: [0, 2],
-        pairs: pairsOf([1]),
-        loopBack: false,
-      },
-    );
+    const ok = rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "nope",
+      selectedLayerName: "Base",
+      sortedKeyframes: [0, 2],
+      pairs: pairsOf([1]),
+      loopBack: false,
+    });
     expect(ok).toBe(false);
     expect(rig.snapshots).toEqual([]);
   });
 
   it("refuses when a keyframe index is out of range", () => {
     const rig = makeRig(projectWithFrames(3));
-    const ok = rig.app.applyInterpolation(
-      {
-        mode: "base",
-        objectId: "obj-1",
-        selectedLayerName: "Base",
-        sortedKeyframes: [0, 9],
-        pairs: pairsOf([1]),
-        loopBack: false,
-      },
-    );
+    const ok = rig.app.applyInterpolation({
+      mode: "base",
+      objectId: "obj-1",
+      selectedLayerName: "Base",
+      sortedKeyframes: [0, 9],
+      pairs: pairsOf([1]),
+      loopBack: false,
+    });
     expect(ok).toBe(false);
     expect(rig.snapshots).toEqual([]);
   });
@@ -379,16 +353,14 @@ function projectWithVariant(frameCount: number): Project {
 describe("applyInterpolation — variant", () => {
   it("splices generated variant frames, each with a single 'Layer 1'", () => {
     const rig = makeRig(projectWithVariant(4));
-    const ok = rig.app.applyInterpolation(
-      {
-        mode: "variant",
-        variantGroupId: "vg-1",
-        variantId: "var-1",
-        sortedKeyframes: [0, 3],
-        pairs: pairsOf([2]),
-        loopBack: false,
-      },
-    );
+    const ok = rig.app.applyInterpolation({
+      mode: "variant",
+      variantGroupId: "vg-1",
+      variantId: "var-1",
+      sortedKeyframes: [0, 3],
+      pairs: pairsOf([2]),
+      loopBack: false,
+    });
 
     expect(ok).toBe(true);
     const frames = rig.app.domain.variants[0].variants[0].frames;
@@ -401,16 +373,14 @@ describe("applyInterpolation — variant", () => {
 
   it("🏁 a generated variant layer's `pixels` is PixelData[][] too", () => {
     const rig = makeRig(projectWithVariant(3));
-    rig.app.applyInterpolation(
-      {
-        mode: "variant",
-        variantGroupId: "vg-1",
-        variantId: "var-1",
-        sortedKeyframes: [0, 2],
-        pairs: pairsOf([1]),
-        loopBack: false,
-      },
-    );
+    rig.app.applyInterpolation({
+      mode: "variant",
+      variantGroupId: "vg-1",
+      variantId: "var-1",
+      sortedKeyframes: [0, 2],
+      pairs: pairsOf([1]),
+      loopBack: false,
+    });
     const pixels =
       rig.app.domain.variants[0].variants[0].frames[1].layers[0].pixels;
     expect(pixels).toHaveLength(H);
@@ -421,16 +391,14 @@ describe("applyInterpolation — variant", () => {
 
   it("🏁 is ONE history entry", () => {
     const rig = makeRig(projectWithVariant(5));
-    rig.app.applyInterpolation(
-      {
-        mode: "variant",
-        variantGroupId: "vg-1",
-        variantId: "var-1",
-        sortedKeyframes: [0, 2, 4],
-        pairs: pairsOf([3, 3]),
-        loopBack: false,
-      },
-    );
+    rig.app.applyInterpolation({
+      mode: "variant",
+      variantGroupId: "vg-1",
+      variantId: "var-1",
+      sortedKeyframes: [0, 2, 4],
+      pairs: pairsOf([3, 3]),
+      loopBack: false,
+    });
     expect(rig.snapshots).toEqual([APPLY_INTERPOLATION_LABEL]);
   });
 

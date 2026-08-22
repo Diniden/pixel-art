@@ -35,7 +35,9 @@ function makeCtx(over: Partial<ToolContext> = {}): ToolContext {
     gridHeight: 16,
     brushSize: 1,
     currentColor: { r: 255, g: 0, b: 0, a: 255 },
-    pencilShape: (p) => [{ x: p.x, y: p.y, color: { r: 0, g: 0, b: 0, a: 255 } }],
+    pencilShape: (p) => [
+      { x: p.x, y: p.y, color: { r: 0, g: 0, b: 0, a: 255 } },
+    ],
     eraserShapeFn: (p) => [
       { x: p.x, y: p.y, color: { r: 0, g: 0, b: 0, a: 255 } },
     ],

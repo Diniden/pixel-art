@@ -79,7 +79,7 @@
 
 .object-select-modal__divider::before,
 .object-select-modal__divider::after {
-  content: '';
+  content: "";
   flex: 1;
   height: 1px;
   background: var(--border-primary);
@@ -208,14 +208,26 @@
 }
 
 .object-select-modal__card--follow-current {
-  background: linear-gradient(135deg, var(--status-ok-10) 0%, var(--accent-info-10) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--status-ok-10) 0%,
+    var(--accent-info-10) 100%
+  );
   border-style: dashed;
 }
 
 .object-select-modal__card--follow-current:hover {
-  background: linear-gradient(135deg, var(--status-ok-20) 0%, var(--accent-info-15) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--status-ok-20) 0%,
+    var(--accent-info-15) 100%
+  );
 }
 
 .object-select-modal__card--follow-current.object-select-modal__card--selected {
-  background: linear-gradient(135deg, var(--status-ok-25) 0%, var(--accent-info-20) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--status-ok-25) 0%,
+    var(--accent-info-20) 100%
+  );
 }

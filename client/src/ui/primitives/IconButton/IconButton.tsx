@@ -22,11 +22,10 @@ import "./IconButton.css";
  * ONE close button had an aria-label (FrameTagsModal:177).
  */
 
-export interface IconButtonProps
-  extends Omit<
-    ButtonHTMLAttributes<HTMLButtonElement>,
-    "className" | "children" | "aria-label"
-  > {
+export interface IconButtonProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "className" | "children" | "aria-label"
+> {
   /** The lucide icon to render. */
   icon: LucideIcon;
   /** Accessible name (rendered as `aria-label`). Required. */

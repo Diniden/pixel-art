@@ -104,14 +104,19 @@ export function LightingStudioTools({
     <>
       {/* Lighting data layer edit target */}
       <div className="toolbar__section toolbar__section--studio-mode">
-        <div className="toolbar__studio-mode-toggle" title="Lighting edit target">
+        <div
+          className="toolbar__studio-mode-toggle"
+          title="Lighting edit target"
+        >
           <button
             className={`toolbar__studio-mode-btn ${editMode === "normals" ? "toolbar__studio-mode-btn--active" : ""}`}
             onClick={() => onEditModeChange("normals")}
             aria-label="Edit Normals"
             title="Edit Normals"
           >
-            <span className="toolbar__tool-icon"><Icon icon={Sun} /></span>
+            <span className="toolbar__tool-icon">
+              <Icon icon={Sun} />
+            </span>
           </button>
           <button
             className={`toolbar__studio-mode-btn ${editMode === "height" ? "toolbar__studio-mode-btn--active" : ""}`}
@@ -119,7 +124,9 @@ export function LightingStudioTools({
             aria-label="Edit Height Map"
             title="Edit Height Map"
           >
-            <span className="toolbar__tool-icon"><Icon icon={Mountain} /></span>
+            <span className="toolbar__tool-icon">
+              <Icon icon={Mountain} />
+            </span>
           </button>
         </div>
       </div>
@@ -133,7 +140,9 @@ export function LightingStudioTools({
               onClick={() => handleToolClick(tool.id)}
               title={`${tool.label} (${tool.hotkey})`}
             >
-              <span className="toolbar__tool-icon"><Icon icon={tool.icon} /></span>
+              <span className="toolbar__tool-icon">
+                <Icon icon={tool.icon} />
+              </span>
               <span className="toolbar__tool-hotkey">{tool.hotkey}</span>
             </button>
           ))}

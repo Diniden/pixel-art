@@ -31,10 +31,7 @@
  * so the store would stop depending on a React component.
  */
 import { useState } from "react";
-import {
-  AnchorGrid,
-  type AnchorPosition,
-} from "../../AnchorGrid/AnchorGrid";
+import { AnchorGrid, type AnchorPosition } from "../../AnchorGrid/AnchorGrid";
 import "../ObjectLibrary.css";
 
 export interface ObjectResizeDialogProps {

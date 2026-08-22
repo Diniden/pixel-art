@@ -58,7 +58,9 @@ describe("renderScene — NORMAL mode", () => {
   });
 
   it("skips hidden layers", () => {
-    const buf = render({ layers: [{ id: "l1", visible: false, pixels: DIAGONAL_4 }] });
+    const buf = render({
+      layers: [{ id: "l1", visible: false, pixels: DIAGONAL_4 }],
+    });
     expect(buf.data.every((b) => b === 0)).toBe(true);
   });
 
@@ -202,7 +204,10 @@ describe("paintPreviewPixels", () => {
   const preview = (over = {}) => {
     const buf = createBuffer(16, 16);
     paintPreviewPixels(buf, {
-      points: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+      points: [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ],
       color: RED,
       gridWidth: 4,
       gridHeight: 4,
@@ -226,7 +231,12 @@ describe("paintPreviewPixels", () => {
   });
 
   it("drops points outside the editable grid", () => {
-    const buf = preview({ points: [{ x: 9, y: 9 }, { x: -1, y: 0 }] });
+    const buf = preview({
+      points: [
+        { x: 9, y: 9 },
+        { x: -1, y: 0 },
+      ],
+    });
     expect(buf.data.every((b) => b === 0)).toBe(true);
   });
 

@@ -5,7 +5,13 @@ import { SliderWithNumber } from "../SliderWithNumber";
 describe("SliderWithNumber", () => {
   it("renders the labelled row", () => {
     const { container } = render(
-      <SliderWithNumber label="R" value={128} min={0} max={255} onChange={() => {}} />,
+      <SliderWithNumber
+        label="R"
+        value={128}
+        min={0}
+        max={255}
+        onChange={() => {}}
+      />,
     );
     expect(container.firstChild).toMatchSnapshot();
   });
@@ -33,7 +39,13 @@ describe("SliderWithNumber", () => {
   it("both controls drive the same onChange", () => {
     const onChange = vi.fn();
     render(
-      <SliderWithNumber label="R" value={128} min={0} max={255} onChange={onChange} />,
+      <SliderWithNumber
+        label="R"
+        value={128}
+        min={0}
+        max={255}
+        onChange={onChange}
+      />,
     );
     fireEvent.change(screen.getByRole("slider"), { target: { value: "200" } });
     expect(onChange).toHaveBeenCalledWith(200);
