@@ -29,8 +29,12 @@ describe("wire format is byte-identical through the MobX tree", () => {
     let current: Project | null = project;
     const host: ProjectHost = {
       getProject: () => current,
-      installProject: (p) => { current = p; },
-      replaceProject: (p) => { current = p; },
+      installProject: (p) => {
+        current = p;
+      },
+      replaceProject: (p) => {
+        current = p;
+      },
       snapshotToHistory: () => {},
     };
     const domain = new DomainStore({ session: new SessionStore(), host });
@@ -48,8 +52,12 @@ describe("wire format is byte-identical through the MobX tree", () => {
     let current: Project | null = project;
     const host: ProjectHost = {
       getProject: () => current,
-      installProject: (p) => { current = p; },
-      replaceProject: (p) => { current = p; },
+      installProject: (p) => {
+        current = p;
+      },
+      replaceProject: (p) => {
+        current = p;
+      },
       snapshotToHistory: () => {},
     };
     const domain = new DomainStore({ session: new SessionStore(), host });

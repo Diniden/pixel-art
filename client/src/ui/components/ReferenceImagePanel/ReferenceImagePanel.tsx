@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Icon } from '../../primitives/Icon/Icon';
-import { Camera, ChevronUp, ChevronDown, Target } from 'lucide-react';
-import type { ReferenceImageData } from '../../../types/referenceImage';
-import './ReferenceImagePanel.css';
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Icon } from "../../primitives/Icon/Icon";
+import { Camera, ChevronUp, ChevronDown, Target } from "lucide-react";
+import type { ReferenceImageData } from "../../../types/referenceImage";
+import "./ReferenceImagePanel.css";
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -40,11 +40,14 @@ interface ReferenceImagePanelProps {
   onMinimizedChange: (minimized: boolean) => void;
   /** The persisted position, as percentages of the canvas area. */
   persistedPosition: { topPercent: number; leftPercent: number } | undefined;
-  onPositionChange: (position: { topPercent: number; leftPercent: number }) => void;
-  onSelectTool: (tool: 'pixel' | 'reference-trace') => void;
+  onPositionChange: (position: {
+    topPercent: number;
+    leftPercent: number;
+  }) => void;
+  onSelectTool: (tool: "pixel" | "reference-trace") => void;
   /** `ReferenceUIStore.adjustBoxSize` — was `adjustReferenceBoxSize`. */
   onAdjustBoxSize: (
-    direction: 'up' | 'down' | 'left' | 'right',
+    direction: "up" | "down" | "left" | "right",
     increase: boolean,
   ) => ReferenceImageData | null;
   /** `ReferenceUIStore.shiftSelection` — was `shiftReferenceSelection`. */
@@ -87,37 +90,49 @@ export function ReferenceImagePanel({
   const [position, setPosition] = useState({ top: 20, left: 20 });
 
   // Helper to convert percentage to pixels
-  const percentageToPixels = useCallback((percentPos: { topPercent: number; leftPercent: number } | undefined) => {
-    const canvasArea = document.querySelector('.canvas-area');
-    if (!canvasArea || !panelRef.current || !percentPos) {
-      return { top: 20, left: 20 };
-    }
+  const percentageToPixels = useCallback(
+    (percentPos: { topPercent: number; leftPercent: number } | undefined) => {
+      const canvasArea = document.querySelector(".canvas-area");
+      if (!canvasArea || !panelRef.current || !percentPos) {
+        return { top: 20, left: 20 };
+      }
 
-    const canvasRect = canvasArea.getBoundingClientRect();
-    const panelRect = panelRef.current.getBoundingClientRect();
+      const canvasRect = canvasArea.getBoundingClientRect();
+      const panelRect = panelRef.current.getBoundingClientRect();
 
-    const maxLeft = canvasRect.width - panelRect.width;
-    const maxTop = canvasRect.height - panelRect.height;
+      const maxLeft = canvasRect.width - panelRect.width;
+      const maxTop = canvasRect.height - panelRect.height;
 
-    return {
-      top: Math.max(0, Math.min(maxTop, (percentPos.topPercent / 100) * canvasRect.height)),
-      left: Math.max(0, Math.min(maxLeft, (percentPos.leftPercent / 100) * canvasRect.width))
-    };
-  }, []);
+      return {
+        top: Math.max(
+          0,
+          Math.min(maxTop, (percentPos.topPercent / 100) * canvasRect.height),
+        ),
+        left: Math.max(
+          0,
+          Math.min(maxLeft, (percentPos.leftPercent / 100) * canvasRect.width),
+        ),
+      };
+    },
+    [],
+  );
 
   // Helper to convert pixels to percentage
-  const pixelsToPercentage = useCallback((pixelPos: { top: number; left: number }) => {
-    const canvasArea = document.querySelector('.canvas-area');
-    if (!canvasArea) {
-      return { topPercent: 0, leftPercent: 0 };
-    }
+  const pixelsToPercentage = useCallback(
+    (pixelPos: { top: number; left: number }) => {
+      const canvasArea = document.querySelector(".canvas-area");
+      if (!canvasArea) {
+        return { topPercent: 0, leftPercent: 0 };
+      }
 
-    const canvasRect = canvasArea.getBoundingClientRect();
-    return {
-      topPercent: (pixelPos.top / canvasRect.height) * 100,
-      leftPercent: (pixelPos.left / canvasRect.width) * 100
-    };
-  }, []);
+      const canvasRect = canvasArea.getBoundingClientRect();
+      return {
+        topPercent: (pixelPos.top / canvasRect.height) * 100,
+        leftPercent: (pixelPos.left / canvasRect.width) * 100,
+      };
+    },
+    [],
+  );
 
   // Initialize position from project
   useEffect(() => {
@@ -141,8 +156,8 @@ export function ReferenceImagePanel({
       }
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, [persistedPosition, percentageToPixels]);
 
   // Render the reference image
@@ -151,7 +166,7 @@ export function ReferenceImagePanel({
 
     const frameId = requestAnimationFrame(() => {
       const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d', { willReadFrequently: false });
+      const ctx = canvas?.getContext("2d", { willReadFrequently: false });
       if (!canvas || !ctx || !referenceImage) return;
 
       const displayWidth = referenceImage.width * zoom;
@@ -183,7 +198,7 @@ export function ReferenceImagePanel({
 
   // Drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.reference-image-panel__minimize')) {
+    if ((e.target as HTMLElement).closest(".reference-image-panel__minimize")) {
       return;
     }
 
@@ -192,7 +207,7 @@ export function ReferenceImagePanel({
     if (rect) {
       setDragStart({
         x: e.clientX - rect.left,
-        y: e.clientY - rect.top
+        y: e.clientY - rect.top,
       });
     }
   };
@@ -201,7 +216,7 @@ export function ReferenceImagePanel({
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const canvasArea = document.querySelector('.canvas-area');
+      const canvasArea = document.querySelector(".canvas-area");
       if (!canvasArea || !panelRef.current) return;
 
       const canvasRect = canvasArea.getBoundingClientRect();
@@ -222,13 +237,13 @@ export function ReferenceImagePanel({
     const handleMouseUp = () => {
       setIsDragging(false);
       if (panelRef.current) {
-        const canvasArea = document.querySelector('.canvas-area');
+        const canvasArea = document.querySelector(".canvas-area");
         if (canvasArea) {
           const canvasRect = canvasArea.getBoundingClientRect();
           const panelRect = panelRef.current.getBoundingClientRect();
           const finalPixelPosition = {
             top: panelRect.top - canvasRect.top,
-            left: panelRect.left - canvasRect.left
+            left: panelRect.left - canvasRect.left,
           };
           const percentPosition = pixelsToPercentage(finalPixelPosition);
           onPositionChange(percentPosition);
@@ -236,12 +251,12 @@ export function ReferenceImagePanel({
       }
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging, dragStart, onPositionChange, pixelsToPercentage]);
 
@@ -250,13 +265,13 @@ export function ReferenceImagePanel({
   return (
     <div
       ref={panelRef}
-      className={`reference-image-panel ${isMinimized ? 'reference-image-panel--minimized' : ''} ${isDragging ? 'reference-image-panel--dragging' : ''}`}
+      className={`reference-image-panel ${isMinimized ? "reference-image-panel--minimized" : ""} ${isDragging ? "reference-image-panel--dragging" : ""}`}
       style={{ top: `${position.top}px`, left: `${position.left}px` }}
     >
       <div
         className="reference-image-panel__header"
         onMouseDown={handleMouseDown}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        style={{ cursor: isDragging ? "grabbing" : "grab" }}
       >
         <span className="reference-image-panel__title">
           <Icon icon={Camera} size={12} /> Reference Image
@@ -268,7 +283,7 @@ export function ReferenceImagePanel({
             onMinimizedChange(!isMinimized);
           }}
           onMouseDown={(e) => e.stopPropagation()}
-          title={isMinimized ? 'Expand' : 'Minimize'}
+          title={isMinimized ? "Expand" : "Minimize"}
         >
           <Icon icon={isMinimized ? ChevronUp : ChevronDown} size={12} />
         </button>
@@ -285,7 +300,7 @@ export function ReferenceImagePanel({
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--top-increase"
                     onClick={() => {
-                      const newData = onAdjustBoxSize('up', true);
+                      const newData = onAdjustBoxSize("up", true);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Increase Reference Box Up"
@@ -295,7 +310,7 @@ export function ReferenceImagePanel({
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--top-decrease"
                     onClick={() => {
-                      const newData = onAdjustBoxSize('up', false);
+                      const newData = onAdjustBoxSize("up", false);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Decrease Reference Box Up"
@@ -307,7 +322,7 @@ export function ReferenceImagePanel({
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--bottom-increase"
                     onClick={() => {
-                      const newData = onAdjustBoxSize('down', true);
+                      const newData = onAdjustBoxSize("down", true);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Increase Reference Box Down"
@@ -317,7 +332,7 @@ export function ReferenceImagePanel({
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--bottom-decrease"
                     onClick={() => {
-                      const newData = onAdjustBoxSize('down', false);
+                      const newData = onAdjustBoxSize("down", false);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Decrease Reference Box Down"
@@ -329,7 +344,7 @@ export function ReferenceImagePanel({
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--left-increase"
                     onClick={() => {
-                      const newData = onAdjustBoxSize('left', true);
+                      const newData = onAdjustBoxSize("left", true);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Increase Reference Box Left"
@@ -339,7 +354,7 @@ export function ReferenceImagePanel({
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--left-decrease"
                     onClick={() => {
-                      const newData = onAdjustBoxSize('left', false);
+                      const newData = onAdjustBoxSize("left", false);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Decrease Reference Box Left"
@@ -351,7 +366,7 @@ export function ReferenceImagePanel({
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--right-increase"
                     onClick={() => {
-                      const newData = onAdjustBoxSize('right', true);
+                      const newData = onAdjustBoxSize("right", true);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Increase Reference Box Right"
@@ -361,7 +376,7 @@ export function ReferenceImagePanel({
                   <button
                     className="reference-image-panel__box-btn reference-image-panel__box-btn--right-decrease"
                     onClick={() => {
-                      const newData = onAdjustBoxSize('right', false);
+                      const newData = onAdjustBoxSize("right", false);
                       if (newData) onReferenceImageChange(newData);
                     }}
                     title="Decrease Reference Box Right"
@@ -405,7 +420,12 @@ export function ReferenceImagePanel({
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = onShiftSelectionBySize(-1, 0, referenceImage.width, referenceImage.height);
+                    const newData = onShiftSelectionBySize(
+                      -1,
+                      0,
+                      referenceImage.width,
+                      referenceImage.height,
+                    );
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Next Left"
@@ -415,7 +435,12 @@ export function ReferenceImagePanel({
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = onShiftSelectionBySize(1, 0, referenceImage.width, referenceImage.height);
+                    const newData = onShiftSelectionBySize(
+                      1,
+                      0,
+                      referenceImage.width,
+                      referenceImage.height,
+                    );
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Next Right"
@@ -445,7 +470,12 @@ export function ReferenceImagePanel({
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = onShiftSelectionBySize(0, -1, referenceImage.width, referenceImage.height);
+                    const newData = onShiftSelectionBySize(
+                      0,
+                      -1,
+                      referenceImage.width,
+                      referenceImage.height,
+                    );
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Next Up"
@@ -455,7 +485,12 @@ export function ReferenceImagePanel({
                 <button
                   className="reference-image-panel__nav-btn"
                   onClick={() => {
-                    const newData = onShiftSelectionBySize(0, 1, referenceImage.width, referenceImage.height);
+                    const newData = onShiftSelectionBySize(
+                      0,
+                      1,
+                      referenceImage.width,
+                      referenceImage.height,
+                    );
                     if (newData) onReferenceImageChange(newData);
                   }}
                   title="Next Down"
@@ -464,13 +499,13 @@ export function ReferenceImagePanel({
                 </button>
               </div>
               <button
-                className={`reference-image-panel__trace-btn ${isReferenceTraceActive ? 'reference-image-panel__trace-btn--active' : ''}`}
+                className={`reference-image-panel__trace-btn ${isReferenceTraceActive ? "reference-image-panel__trace-btn--active" : ""}`}
                 onClick={() => {
                   // Toggle trace mode: if already active, switch to pixel tool
                   if (isReferenceTraceActive) {
-                    onSelectTool('pixel');
+                    onSelectTool("pixel");
                   } else {
-                    onSelectTool('reference-trace');
+                    onSelectTool("reference-trace");
                   }
                 }}
                 title="Trace Reference (WASD to align, click to copy)"
@@ -484,4 +519,3 @@ export function ReferenceImagePanel({
     </div>
   );
 }
-

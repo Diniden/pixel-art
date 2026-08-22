@@ -27,7 +27,10 @@ describe("URL building", () => {
         return HttpResponse.json({ ok: true });
       }),
     );
-    await request({ path: "/echo", query: { name: "Base Unit", skip: undefined, n: 3 } });
+    await request({
+      path: "/echo",
+      query: { name: "Base Unit", skip: undefined, n: 3 },
+    });
     expect(seenUrl).toContain("name=Base%20Unit");
     expect(seenUrl).toContain("n=3");
     expect(seenUrl).not.toContain("skip");
@@ -133,11 +136,13 @@ describe("error mapping", () => {
 
   it("falls back cleanly when the error body is HTML, keeping the real status", async () => {
     server.use(
-      http.get("*/api/proxy502", () =>
-        new HttpResponse("<html><body>Bad Gateway</body></html>", {
-          status: 502,
-          headers: { "Content-Type": "text/html" },
-        }),
+      http.get(
+        "*/api/proxy502",
+        () =>
+          new HttpResponse("<html><body>Bad Gateway</body></html>", {
+            status: 502,
+            headers: { "Content-Type": "text/html" },
+          }),
       ),
     );
     const err = await request({ path: "/proxy502" }).then(
@@ -151,11 +156,13 @@ describe("error mapping", () => {
 
   it("throws (kind 'unknown') for a 2xx body that is not valid JSON — never a fabricated value", async () => {
     server.use(
-      http.get("*/api/garbage", () =>
-        new HttpResponse("definitely-not-json", {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
+      http.get(
+        "*/api/garbage",
+        () =>
+          new HttpResponse("definitely-not-json", {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
       ),
     );
     const err = await request({ path: "/garbage" }).then(

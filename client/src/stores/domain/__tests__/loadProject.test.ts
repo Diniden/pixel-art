@@ -160,7 +160,8 @@ function cleanProject(): CompactProject {
   });
 }
 
-const backupCalls = () => calls.filter((c) => c.url.includes("/project/backup"));
+const backupCalls = () =>
+  calls.filter((c) => c.url.includes("/project/backup"));
 
 beforeEach(() => {
   calls = [];
@@ -195,7 +196,9 @@ describe("L1 — backup fires BEFORE any migration", () => {
     // And the body is the payload as it was BEFORE migration — the legacy
     // scalar pixel is still a scalar. This is what makes the backup useful.
     const body = calls[1].body as CompactProject;
-    expect(body.objects[0].frames[0].layers[0].pixels[0][1]).toBe(0xff_00_00_ff);
+    expect(body.objects[0].frames[0].layers[0].pixels[0][1]).toBe(
+      0xff_00_00_ff,
+    );
   });
 });
 
@@ -213,7 +216,8 @@ describe("L2 — a failing backup does NOT block the migration", () => {
     // follow-up. Changing it requires owner sign-off.
     const legacy = legacyPixelProject();
     stubFetch((url) => {
-      if (url.includes("/project/backup")) return Promise.reject(new Error("disk full"));
+      if (url.includes("/project/backup"))
+        return Promise.reject(new Error("disk full"));
       return okResponse(legacy);
     });
 
@@ -239,7 +243,8 @@ describe("L3 — legacy pixel format takes the migrateLegacyProject branch only"
     // `api.ts:221-227` is an if / else-if, so the two never both run.
     // `migrateLegacyProject` handles variants itself.
     const legacy = legacyPixelProject();
-    legacy.objects[0].variantGroups = objectVariantProject().objects[0].variantGroups;
+    legacy.objects[0].variantGroups =
+      objectVariantProject().objects[0].variantGroups;
 
     stubFetch((url) =>
       url.includes("/project/backup")
@@ -385,9 +390,19 @@ describe("L8 — isCompactFormat === false", () => {
     // had is what the store receives.
     const expanded = {
       version: "0.9.0",
-      objects: [{ id: "raw", name: "Raw", gridSize: { width: 1, height: 1 }, frames: [] }],
+      objects: [
+        {
+          id: "raw",
+          name: "Raw",
+          gridSize: { width: 1, height: 1 },
+          frames: [],
+        },
+      ],
       palettes: [{ id: "p", name: "P", colors: [{ r: 1, g: 2, b: 3, a: 4 }] }],
-      uiState: { selectedColor: { r: 1, g: 2, b: 3, a: 4 }, marker: "untouched" },
+      uiState: {
+        selectedColor: { r: 1, g: 2, b: 3, a: 4 },
+        marker: "untouched",
+      },
     };
     stubFetch(() => okResponse(expanded));
 

@@ -134,7 +134,10 @@ import {
   renderNormalAsRGB,
   renderHeightAsGrayscale,
 } from "../utils/lightingRenderer";
-import { getSquarePixels, getCirclePixels } from "../components/Canvas/drawingUtils";
+import {
+  getSquarePixels,
+  getCirclePixels,
+} from "../components/Canvas/drawingUtils";
 import {
   backgroundTheme,
   strokeGrid,

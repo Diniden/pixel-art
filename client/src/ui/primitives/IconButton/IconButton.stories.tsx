@@ -13,7 +13,7 @@ const meta = {
         component:
           "BEM block `icon-btn` (primitive-local). The skin is the " +
           "13-fold-duplicated modal close button; `Modal` renders its close " +
-          "control through this component with `className=\"modal__close\"` " +
+          'control through this component with `className="modal__close"` ' +
           "(the task 18 vocabulary name). `label` is required and becomes " +
           "`aria-label` — 12 of the 13 legacy close buttons had none.",
       },

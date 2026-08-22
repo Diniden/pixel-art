@@ -437,9 +437,9 @@ export const CanvasContainer = observer(function CanvasContainer({
 
       /* gesture state */
       endDrawing: () => app.canvasInteraction.endDrawing(),
-      setPreviewPixels: (pixels: Parameters<
-        typeof app.canvasInteraction.setPreviewPixels
-      >[0]) => app.canvasInteraction.setPreviewPixels(pixels),
+      setPreviewPixels: (
+        pixels: Parameters<typeof app.canvasInteraction.setPreviewPixels>[0],
+      ) => app.canvasInteraction.setPreviewPixels(pixels),
       clearPreviewPixels: () => app.canvasInteraction.clearPreviewPixels(),
 
       /* layer / object / variant / frame */
@@ -907,7 +907,12 @@ export const CanvasContainer = observer(function CanvasContainer({
           const y = Math.floor(idx / selection.width);
           const destX = x + dragDx;
           const destY = y + dragDy;
-          if (destX < 0 || destX >= gridWidth || destY < 0 || destY >= gridHeight)
+          if (
+            destX < 0 ||
+            destX >= gridWidth ||
+            destY < 0 ||
+            destY >= gridHeight
+          )
             continue;
           const pixel = getPixelColor(srcPixels[y]?.[x]);
           if (!pixel || pixel.a === 0) continue;
@@ -1314,7 +1319,12 @@ export const CanvasContainer = observer(function CanvasContainer({
 
       const frameX = canvasX - frameOverlayOffset.x;
       const frameY = canvasY - frameOverlayOffset.y;
-      if (frameX < 0 || frameX >= objWidth || frameY < 0 || frameY >= objHeight) {
+      if (
+        frameX < 0 ||
+        frameX >= objWidth ||
+        frameY < 0 ||
+        frameY >= objHeight
+      ) {
         return null;
       }
 
@@ -1390,14 +1400,7 @@ export const CanvasContainer = observer(function CanvasContainer({
 
       return null;
     },
-    [
-      frameTraceFrame,
-      obj,
-      objWidth,
-      objHeight,
-      frameOverlayOffset,
-      app.domain,
-    ],
+    [frameTraceFrame, obj, objWidth, objHeight, frameOverlayOffset, app.domain],
   );
 
   /* ── the brush/trace inputs both devices share ─────────────────────────── */
@@ -1474,7 +1477,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       currentColor,
       pencilShape:
         pencilBrushShape === "circle" ? getCirclePixels : getSquarePixels,
-      eraserShapeFn: eraserShape === "circle" ? getCirclePixels : getSquarePixels,
+      eraserShapeFn:
+        eraserShape === "circle" ? getCirclePixels : getSquarePixels,
       line: getLinePixels,
       shapeMode,
       borderRadius,
@@ -1517,12 +1521,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       squarePixelsAt: (p) =>
         getSquarePixels(p as Point, brushSize, currentColor) as never,
       rectanglePreview: (from, to) =>
-        getRectanglePixels(
-          from as Point,
-          to as Point,
-          shapeMode,
-          borderRadius,
-        ),
+        getRectanglePixels(from as Point, to as Point, shapeMode, borderRadius),
       ellipsePreview: (from, to) =>
         getEllipsePixels(from as Point, to as Point, shapeMode),
       linePreview: (from, to) => getLinePixels(from as Point, to as Point),
@@ -1628,7 +1627,9 @@ export const CanvasContainer = observer(function CanvasContainer({
       if (isEditingVariantResolved && variantData) {
         const variantLayer = variantData.variantFrame.layers[0];
         if (variantLayer) {
-          const pixel = getPixelColor(variantLayer.pixels[coords.y]?.[coords.x]);
+          const pixel = getPixelColor(
+            variantLayer.pixels[coords.y]?.[coords.x],
+          );
           if (pixel && pixel.a > 0) {
             app.setColorAndAddToHistory(pixel);
             app.ui.tool.revertToPreviousTool();
@@ -1811,7 +1812,10 @@ export const CanvasContainer = observer(function CanvasContainer({
       if (dx !== 0 || dy !== 0) {
         if (selectionDragMode === "pixels") {
           // Non-destructive preview; the real move commits on mouse-up.
-          setPixelDragOffset((prev) => ({ dx: prev.dx + dx, dy: prev.dy + dy }));
+          setPixelDragOffset((prev) => ({
+            dx: prev.dx + dx,
+            dy: prev.dy + dy,
+          }));
         } else {
           actions.moveSelection(dx, dy);
         }

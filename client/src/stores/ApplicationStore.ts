@@ -70,10 +70,7 @@ import type {
   Project,
   UIState,
 } from "../types";
-import type {
-  ColorAdjustmentState,
-  SelectionState,
-} from "../store/storeTypes";
+import type { ColorAdjustmentState, SelectionState } from "../store/storeTypes";
 import type { ReferenceImageData } from "../types/referenceImage";
 
 /**
@@ -1001,9 +998,10 @@ export class ApplicationStore {
     const selectedVariantId = layer.selectedVariantId;
     const offset = layer.variantOffsets?.[selectedVariantId ?? ""] ??
       layer.variantOffset ??
-      variant.baseFrameOffsets?.[
-        baseFrameIndex >= 0 ? baseFrameIndex : 0
-      ] ?? { x: 0, y: 0 };
+      variant.baseFrameOffsets?.[baseFrameIndex >= 0 ? baseFrameIndex : 0] ?? {
+        x: 0,
+        y: 0,
+      };
 
     return { variantGroup, variant, variantFrame, baseFrameIndex, offset };
   }
@@ -1237,7 +1235,9 @@ export class ApplicationStore {
               if (!affectedPixelsByFrame.has(frame.id)) {
                 affectedPixelsByFrame.set(frame.id, new Map());
               }
-              affectedPixelsByFrame.get(frame.id)!.set(matchingLayer.id, pixels);
+              affectedPixelsByFrame
+                .get(frame.id)!
+                .set(matchingLayer.id, pixels);
             }
           }
         }

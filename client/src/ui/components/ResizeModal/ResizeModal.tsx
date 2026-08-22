@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
-import { Icon } from '../../primitives/Icon/Icon';
-import { X } from 'lucide-react';
-import './ResizeModal.css';
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { AnchorGrid, AnchorPosition } from "../AnchorGrid/AnchorGrid";
+import { Icon } from "../../primitives/Icon/Icon";
+import { X } from "lucide-react";
+import "./ResizeModal.css";
 
 interface ResizeModalProps {
   isOpen: boolean;
@@ -22,18 +22,18 @@ export function ResizeModal({
   currentWidth,
   currentHeight,
   title,
-  maxSize = 256
+  maxSize = 256,
 }: ResizeModalProps) {
   const [width, setWidth] = useState(currentWidth);
   const [height, setHeight] = useState(currentHeight);
-  const [anchor, setAnchor] = useState<AnchorPosition>('middle-center');
+  const [anchor, setAnchor] = useState<AnchorPosition>("middle-center");
 
   // Reset state when modal opens with new dimensions
   useEffect(() => {
     if (isOpen) {
       setWidth(currentWidth);
       setHeight(currentHeight);
-      setAnchor('middle-center');
+      setAnchor("middle-center");
     }
   }, [isOpen, currentWidth, currentHeight]);
 
@@ -54,10 +54,12 @@ export function ResizeModal({
 
   return createPortal(
     <div className="resize-modal__backdrop" onClick={handleBackdropClick}>
-      <div className="resize-modal" onClick={e => e.stopPropagation()}>
+      <div className="resize-modal" onClick={(e) => e.stopPropagation()}>
         <div className="resize-modal__header">
           <h4>{title}</h4>
-          <button className="resize-modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <button className="resize-modal__close" onClick={onClose}>
+            <Icon icon={X} size={14} />
+          </button>
         </div>
 
         <div className="resize-modal__content">
@@ -67,7 +69,14 @@ export function ResizeModal({
               <input
                 type="number"
                 value={width}
-                onChange={(e) => setWidth(Math.max(1, Math.min(maxSize, parseInt(e.target.value) || 1)))}
+                onChange={(e) =>
+                  setWidth(
+                    Math.max(
+                      1,
+                      Math.min(maxSize, parseInt(e.target.value) || 1),
+                    ),
+                  )
+                }
                 min={1}
                 max={maxSize}
               />
@@ -78,7 +87,14 @@ export function ResizeModal({
               <input
                 type="number"
                 value={height}
-                onChange={(e) => setHeight(Math.max(1, Math.min(maxSize, parseInt(e.target.value) || 1)))}
+                onChange={(e) =>
+                  setHeight(
+                    Math.max(
+                      1,
+                      Math.min(maxSize, parseInt(e.target.value) || 1),
+                    ),
+                  )
+                }
                 min={1}
                 max={maxSize}
               />
@@ -99,12 +115,15 @@ export function ResizeModal({
         </div>
 
         <div className="resize-modal__actions">
-          <button className="resize-modal__cancel" onClick={onClose}>Cancel</button>
-          <button className="resize-modal__apply" onClick={handleApply}>Apply</button>
+          <button className="resize-modal__cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="resize-modal__apply" onClick={handleApply}>
+            Apply
+          </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
-

@@ -43,12 +43,7 @@
  * DOM. That keeps it runnable in the `unit` lane.
  */
 import { generateId } from "../../types";
-import type {
-  Frame,
-  Layer,
-  PixelData,
-  VariantFrame,
-} from "../../types";
+import type { Frame, Layer, PixelData, VariantFrame } from "../../types";
 import type { DomainStore } from "./DomainStore";
 import type { DomainMutator } from "./DomainMutator";
 
@@ -83,8 +78,7 @@ export interface ApplyInterpolationToVariant extends ApplyInterpolationBase {
 }
 
 export type ApplyInterpolationInput =
-  | ApplyInterpolationToObject
-  | ApplyInterpolationToVariant;
+  ApplyInterpolationToObject | ApplyInterpolationToVariant;
 
 export interface ApplyInterpolationDeps {
   domain: DomainStore;
@@ -212,11 +206,7 @@ interface SpliceOptions<F> {
   loopBack: boolean;
   pairs: PairPixelData;
   /** Build the generated frames for one pair. */
-  makeFrames: (
-    grids: PixelData[][][],
-    pairIdx: number,
-    isLoop: boolean,
-  ) => F[];
+  makeFrames: (grids: PixelData[][][], pairIdx: number, isLoop: boolean) => F[];
 }
 
 /**

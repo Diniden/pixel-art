@@ -52,7 +52,10 @@ export function LightingStudioPanel({
         </div>
         <div className="panel__body panel__body--stack">
           {editMode === "height" ? (
-            <div className="lighting-studio-panel__brush-controls" style={{ paddingTop: 8 }}>
+            <div
+              className="lighting-studio-panel__brush-controls"
+              style={{ paddingTop: 8 }}
+            >
               <div className="lighting-studio-panel__size-control">
                 <label>Value</label>
                 <input
@@ -64,7 +67,9 @@ export function LightingStudioPanel({
                     onHeightBrushValueChange(parseInt(e.target.value))
                   }
                 />
-                <span className="lighting-studio-panel__size-value">{heightBrushValue}</span>
+                <span className="lighting-studio-panel__size-value">
+                  {heightBrushValue}
+                </span>
               </div>
               <div className="lighting-studio-panel__hint">
                 Tip: hold Shift to erase (set height to 0).
@@ -84,7 +89,9 @@ export function LightingStudioPanel({
                 value={brushSize}
                 onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
               />
-              <span className="lighting-studio-panel__size-value">{brushSize}</span>
+              <span className="lighting-studio-panel__size-value">
+                {brushSize}
+              </span>
             </div>
 
             <div className="lighting-studio-panel__shape-control">
@@ -112,9 +119,7 @@ export function LightingStudioPanel({
 
       <div className="panel lighting-studio-panel__section">
         <div className="panel__header">Light Settings</div>
-        <div className="panel__body panel__body--stack">
-          {lightControl}
-        </div>
+        <div className="panel__body panel__body--stack">{lightControl}</div>
       </div>
     </div>
   );

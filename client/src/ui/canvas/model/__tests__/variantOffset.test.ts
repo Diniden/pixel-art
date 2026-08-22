@@ -27,7 +27,11 @@ describe("resolveVariantOffset — the four levels in priority order", () => {
 
   it("level 2 — the legacy variantOffset when the map has no entry", () => {
     const offset = resolveVariantOffset(
-      { selectedVariantId: "v1", variantOffsets: {}, variantOffset: { x: 3, y: 4 } },
+      {
+        selectedVariantId: "v1",
+        variantOffsets: {},
+        variantOffset: { x: 3, y: 4 },
+      },
       variant([{ x: 8, y: 8 }]),
       0,
     );
@@ -37,14 +41,20 @@ describe("resolveVariantOffset — the four levels in priority order", () => {
   it("level 3 — baseFrameOffsets[baseFrameIndex] when 1 and 2 are absent", () => {
     const offset = resolveVariantOffset(
       { selectedVariantId: "v1" },
-      variant([{ x: 5, y: 6 }, { x: 7, y: 8 }]),
+      variant([
+        { x: 5, y: 6 },
+        { x: 7, y: 8 },
+      ]),
       1,
     );
     expect(offset).toEqual({ x: 7, y: 8 });
   });
 
   it("level 4 — the zero offset when nothing resolves", () => {
-    expect(resolveVariantOffset({}, variant(undefined), 0)).toEqual({ x: 0, y: 0 });
+    expect(resolveVariantOffset({}, variant(undefined), 0)).toEqual({
+      x: 0,
+      y: 0,
+    });
   });
 });
 
@@ -84,7 +94,10 @@ describe("edge cases the original copies had, preserved", () => {
 
   it("falls through when the map has no entry for the selected variant", () => {
     const offset = resolveVariantOffset(
-      { selectedVariantId: "missing", variantOffsets: { other: { x: 1, y: 1 } } },
+      {
+        selectedVariantId: "missing",
+        variantOffsets: { other: { x: 1, y: 1 } },
+      },
       variant([{ x: 2, y: 2 }]),
       0,
     );
@@ -94,15 +107,17 @@ describe("edge cases the original copies had, preserved", () => {
   it("a baseFrameIndex of -1 (frame not found) falls through to zero", () => {
     // Callers pass `frames.findIndex(...)`, which is -1 on a miss. The lookup
     // misses and level 4 answers — the same as the originals did.
-    expect(
-      resolveVariantOffset({}, variant([{ x: 5, y: 5 }]), -1),
-    ).toEqual({ x: 0, y: 0 });
+    expect(resolveVariantOffset({}, variant([{ x: 5, y: 5 }]), -1)).toEqual({
+      x: 0,
+      y: 0,
+    });
   });
 
   it("an index past the end of baseFrameOffsets falls through to zero", () => {
-    expect(
-      resolveVariantOffset({}, variant([{ x: 5, y: 5 }]), 9),
-    ).toEqual({ x: 0, y: 0 });
+    expect(resolveVariantOffset({}, variant([{ x: 5, y: 5 }]), 9)).toEqual({
+      x: 0,
+      y: 0,
+    });
   });
 
   it("returns a FRESH zero object each time — callers may mutate it", () => {

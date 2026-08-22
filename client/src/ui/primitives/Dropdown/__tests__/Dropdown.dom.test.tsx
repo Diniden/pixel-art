@@ -12,14 +12,24 @@ const options = [
 describe("Dropdown", () => {
   it("renders the closed trigger", () => {
     const { container } = render(
-      <Dropdown options={options} value="frames" onChange={() => {}} label="View mode" />,
+      <Dropdown
+        options={options}
+        value="frames"
+        onChange={() => {}}
+        label="View mode"
+      />,
     );
     expect(container.firstChild).toMatchSnapshot();
   });
 
   it("renders the open listbox with the selected option", async () => {
     const { container } = render(
-      <Dropdown options={options} value="timeline" onChange={() => {}} label="View mode" />,
+      <Dropdown
+        options={options}
+        value="timeline"
+        onChange={() => {}}
+        label="View mode"
+      />,
     );
     await userEvent.click(screen.getByRole("button", { name: "View mode" }));
     expect(screen.getByRole("listbox")).toBeInTheDocument();
@@ -28,7 +38,13 @@ describe("Dropdown", () => {
 
   it("renders disabled", () => {
     const { container } = render(
-      <Dropdown options={options} value="frames" onChange={() => {}} label="View mode" disabled />,
+      <Dropdown
+        options={options}
+        value="frames"
+        onChange={() => {}}
+        label="View mode"
+        disabled
+      />,
     );
     expect(container.firstChild).toMatchSnapshot();
   });
@@ -36,7 +52,12 @@ describe("Dropdown", () => {
   it("keyboard: opens with ArrowDown, navigates, commits with Enter", async () => {
     const onChange = vi.fn();
     render(
-      <Dropdown options={options} value="frames" onChange={onChange} label="View mode" />,
+      <Dropdown
+        options={options}
+        value="frames"
+        onChange={onChange}
+        label="View mode"
+      />,
     );
     const trigger = screen.getByRole("button", { name: "View mode" });
     trigger.focus();

@@ -242,10 +242,7 @@ export class SelectionUIStore {
    * Replace the selection wholesale. A mask with no bounds (empty) collapses
    * to `null`, which is the legacy "no selection" representation.
    */
-  private commit(
-    mask: Set<number>,
-    dims: SelectionDims,
-  ): void {
+  private commit(mask: Set<number>, dims: SelectionDims): void {
     const bounds = computeBounds(mask, dims.width);
     this.selection = bounds
       ? { width: dims.width, height: dims.height, mask, bounds }
@@ -448,7 +445,8 @@ export class SelectionUIStore {
       const row = grid[yy];
       if (!row) continue;
       for (let xx = 0; xx < width; xx++) {
-        if (samePixelColor(row[xx]?.color, target)) mask.add(pack(xx, yy, width));
+        if (samePixelColor(row[xx]?.color, target))
+          mask.add(pack(xx, yy, width));
       }
     }
     this.commit(mask, dims);
@@ -485,7 +483,8 @@ export class SelectionUIStore {
     const mask = new Set<number>();
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        if (isPointInPolygon(x + 0.5, y + 0.5, poly)) mask.add(pack(x, y, width));
+        if (isPointInPolygon(x + 0.5, y + 0.5, poly))
+          mask.add(pack(x, y, width));
       }
     }
     this.commit(mask, dims);

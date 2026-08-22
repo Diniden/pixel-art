@@ -23,7 +23,7 @@ const meta = {
           "`modal__overlay > modal > modal__header (h2, modal__close) > " +
           "modal__body[--fill] > modal__footer[--end] > modal__actions`. " +
           "Fixes the measured accessibility hole in all 14 legacy modals at " +
-          "adoption: `role=\"dialog\"`, `aria-modal`, focus trap, Escape, " +
+          'adoption: `role="dialog"`, `aria-modal`, focus trap, Escape, ' +
           "focus restore, and mousedown-origin backdrop close (the one " +
           "correct legacy implementation, AIInterpolateModal's). `isOpen` " +
           "defaults to true so the 6 conditionally-mounted modals adopt " +
@@ -166,6 +166,8 @@ function NestedConfirmDemo({ container }: { container?: HTMLElement | null }) {
  */
 export const NestedConfirm: Story = {
   render: (args) => (
-    <NestedConfirmDemo container={(args as { container?: HTMLElement | null }).container} />
+    <NestedConfirmDemo
+      container={(args as { container?: HTMLElement | null }).container}
+    />
   ),
 };

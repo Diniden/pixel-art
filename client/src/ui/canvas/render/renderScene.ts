@@ -133,9 +133,14 @@ function paintCell(
       const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
       if (outAlpha > 0.01) {
         const inv = 1 / outAlpha;
-        data[idx] = (pixel.r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * inv;
-        data[idx + 1] = (pixel.g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) * inv;
-        data[idx + 2] = (pixel.b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) * inv;
+        data[idx] =
+          (pixel.r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * inv;
+        data[idx + 1] =
+          (pixel.g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) *
+          inv;
+        data[idx + 2] =
+          (pixel.b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) *
+          inv;
         data[idx + 3] = outAlpha * 255;
       }
     }
@@ -153,9 +158,22 @@ export function renderScene(
   opts: RenderSceneOptions,
 ): PixelBuffer {
   const {
-    mode, layers, gridWidth, gridHeight, objWidth, objHeight, zoom,
-    viewMinX, viewMinY, viewMaxX, viewMaxY,
-    variants, variantFrameIndices, baseFrameIndex, currentLayerId, getPixelColor,
+    mode,
+    layers,
+    gridWidth,
+    gridHeight,
+    objWidth,
+    objHeight,
+    zoom,
+    viewMinX,
+    viewMinY,
+    viewMaxX,
+    viewMaxY,
+    variants,
+    variantFrameIndices,
+    baseFrameIndex,
+    currentLayerId,
+    getPixelColor,
   } = opts;
 
   const editing = mode === "variant-edit";
@@ -194,8 +212,10 @@ export function renderScene(
             if (editing) {
               // Variant-edit clips on WORLD position against the view bounds.
               if (
-                worldX < viewMinX || worldX >= viewMaxX ||
-                worldY < viewMinY || worldY >= viewMaxY
+                worldX < viewMinX ||
+                worldX >= viewMaxX ||
+                worldY < viewMinY ||
+                worldY >= viewMaxY
               ) {
                 continue;
               }
@@ -204,14 +224,23 @@ export function renderScene(
               const drawX = worldX * zoom;
               const drawY = worldY * zoom;
               if (
-                drawX < 0 || drawX >= buffer.width ||
-                drawY < 0 || drawY >= buffer.height
+                drawX < 0 ||
+                drawX >= buffer.width ||
+                drawY < 0 ||
+                drawY >= buffer.height
               ) {
                 continue;
               }
             }
 
-            paintCell(buffer, worldX - viewMinX, worldY - viewMinY, pixel, zoom, opacity);
+            paintCell(
+              buffer,
+              worldX - viewMinX,
+              worldY - viewMinY,
+              pixel,
+              zoom,
+              opacity,
+            );
           }
         }
       }
@@ -265,8 +294,15 @@ export function paintPreviewPixels(
   opts: PreviewPixelsOptions,
 ): PixelBuffer {
   const {
-    points, color, gridWidth, gridHeight, zoom,
-    offsetX, offsetY, viewMinX, viewMinY,
+    points,
+    color,
+    gridWidth,
+    gridHeight,
+    zoom,
+    offsetX,
+    offsetY,
+    viewMinX,
+    viewMinY,
   } = opts;
 
   for (const { x, y } of points) {

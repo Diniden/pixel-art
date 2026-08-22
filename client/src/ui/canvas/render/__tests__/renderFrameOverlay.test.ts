@@ -88,7 +88,10 @@ describe("DIFFERENCE 1 — blend vs overwrite", () => {
   // A solid blue layer, then a half-transparent white layer on top.
   const layers = [
     { visible: true, pixels: [[{ color: BLUE }]] },
-    { visible: true, pixels: [[{ color: { r: 255, g: 255, b: 255, a: 128 } }]] },
+    {
+      visible: true,
+      pixels: [[{ color: { r: 255, g: 255, b: 255, a: 128 } }]],
+    },
   ];
   const opts = { layers, refObjWidth: 1, refObjHeight: 1 };
 
@@ -201,7 +204,9 @@ describe("DIFFERENCE 6 — clamped vs whole-cell edge fill", () => {
   // rightmost/bottom column of cells STRADDLES the edge.
   const straddle = { refObjWidth: 4, refObjHeight: 4, zoom: 4 };
 
-  const renderInto = (mode: typeof FRAME_OVERLAY_MODE | typeof FRAME_TRACE_MODE) => {
+  const renderInto = (
+    mode: typeof FRAME_OVERLAY_MODE | typeof FRAME_TRACE_MODE,
+  ) => {
     const buf = createBuffer(14, 14);
     renderFrameOverlay(
       buf,
@@ -273,9 +278,7 @@ describe("DIFFERENCE 6 — clamped vs whole-cell edge fill", () => {
 describe("renderOrphanVariantLayers — the else-branch difference", () => {
   // A layer flagged isVariant but with NO variantGroupId: it fails the
   // bound-variant test and falls to the else branch.
-  const orphan = [
-    { visible: true, isVariant: true, pixels: DIAGONAL_4 },
-  ];
+  const orphan = [{ visible: true, isVariant: true, pixels: DIAGONAL_4 }];
 
   it("#8 SKIPS an orphaned variant layer (it required !isVariant)", () => {
     const buf = render({ ...FRAME_OVERLAY_MODE, layers: orphan });
@@ -380,7 +383,10 @@ describe("overlayVariantFrameIndices", () => {
 
   it("omits a group whose first variant has no frames", () => {
     const empty = [
-      { id: "vg2", variants: [{ id: "v", gridSize: { width: 1, height: 1 }, frames: [] }] },
+      {
+        id: "vg2",
+        variants: [{ id: "v", gridSize: { width: 1, height: 1 }, frames: [] }],
+      },
     ];
     expect(overlayVariantFrameIndices(empty, 0)).toEqual({});
   });

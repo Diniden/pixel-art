@@ -115,12 +115,7 @@ interface HarnessProps {
  * Stands in for `LightingCanvasContainer` — holds the refs and drives the
  * imperative draw. It reads NO store; every value it forwards is a literal.
  */
-function LightingHarness({
-  surface,
-  source,
-  light,
-  brushCells,
-}: HarnessProps) {
+function LightingHarness({ surface, source, light, brushCells }: HarnessProps) {
   const editCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

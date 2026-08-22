@@ -317,7 +317,10 @@ describe("R6 — compact idempotency across the whole real corpus", () => {
 describe("R7 — pixel codec", () => {
   const cases: [string, PixelData][] = [
     ["EMPTY_PIXEL_DATA", EMPTY_PIXEL_DATA],
-    ["colour only", { color: { r: 1, g: 2, b: 3, a: 255 }, normal: 0, height: 0 }],
+    [
+      "colour only",
+      { color: { r: 1, g: 2, b: 3, a: 255 }, normal: 0, height: 0 },
+    ],
     ["normal only", { color: 0, normal: { x: -5, y: 6, z: 200 }, height: 0 }],
     ["height only", { color: 0, normal: 0, height: 128 }],
     [
@@ -332,9 +335,12 @@ describe("R7 — pixel codec", () => {
     ["a=255", { color: { r: 9, g: 9, b: 9, a: 255 }, normal: 0, height: 1 }],
   ];
 
-  it.each(cases)("compactToPixelData(pixelDataToCompact(%s)) is identity", (_n, pd) => {
-    expect(compactToPixelData(pixelDataToCompact(pd))).toEqual(pd);
-  });
+  it.each(cases)(
+    "compactToPixelData(pixelDataToCompact(%s)) is identity",
+    (_n, pd) => {
+      expect(compactToPixelData(pixelDataToCompact(pd))).toEqual(pd);
+    },
+  );
 
   it("collapses a fully-empty pixel to the scalar 0", () => {
     expect(pixelDataToCompact(EMPTY_PIXEL_DATA)).toBe(0);
@@ -346,7 +352,11 @@ describe("R7 — pixel codec", () => {
     // all the literal 0 sentinel. `{r:0,g:0,b:0,a:0}` is an object, so it
     // encodes as `[0, 0, 0]` — a tuple, not the scalar 0 — and decodes back to
     // `color: 0`. The colour object is therefore NOT preserved.
-    const pd: PixelData = { color: { r: 0, g: 0, b: 0, a: 0 }, normal: 0, height: 0 };
+    const pd: PixelData = {
+      color: { r: 0, g: 0, b: 0, a: 0 },
+      normal: 0,
+      height: 0,
+    };
     expect(pixelDataToCompact(pd)).toEqual([0, 0, 0]);
     expect(compactToPixelData([0, 0, 0] as CompactPixelData)).toEqual(
       EMPTY_PIXEL_DATA,
@@ -387,7 +397,9 @@ describe("R10 — compaction size guard", () => {
     const path = corpusPath("base-unit.json");
     const onDisk = statSync(path).size;
     const compact = JSON.parse(readFileSync(path, "utf8"));
-    const recompacted = JSON.stringify(projectToCompact(compactToProject(compact)));
+    const recompacted = JSON.stringify(
+      projectToCompact(compactToProject(compact)),
+    );
 
     expect(onDisk).toBe(1_129_965);
     expect(recompacted.length).toBe(onDisk);
@@ -396,7 +408,9 @@ describe("R10 — compaction size guard", () => {
   it("the expanded runtime form is roughly 10x the compact form", () => {
     // Documents WHY the corpus regression gate uses digests rather than
     // `toMatchSnapshot()`: the runtime form of the corpus is enormous.
-    const compact = JSON.parse(readFileSync(corpusPath("base-unit.json"), "utf8"));
+    const compact = JSON.parse(
+      readFileSync(corpusPath("base-unit.json"), "utf8"),
+    );
     const runtimeBytes = JSON.stringify(compactToProject(compact)).length;
     expect(runtimeBytes).toBeGreaterThan(9_000_000);
     expect(runtimeBytes).toBeLessThan(13_000_000);

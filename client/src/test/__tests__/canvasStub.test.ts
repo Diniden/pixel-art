@@ -140,16 +140,15 @@ describe("canvasStub 2D context", () => {
 
 describe("renderToHash", () => {
   it("is deterministic for the same fixture", () => {
-    const checkerboard =
-      (size: number, cell: number) => (ctx: StubContext) => {
-        for (let y = 0; y < size; y += cell) {
-          for (let x = 0; x < size; x += cell) {
-            ctx.fillStyle =
-              (x / cell + y / cell) % 2 === 0 ? "#cccccc" : "#888888";
-            ctx.fillRect(x, y, cell, cell);
-          }
+    const checkerboard = (size: number, cell: number) => (ctx: StubContext) => {
+      for (let y = 0; y < size; y += cell) {
+        for (let x = 0; x < size; x += cell) {
+          ctx.fillStyle =
+            (x / cell + y / cell) % 2 === 0 ? "#cccccc" : "#888888";
+          ctx.fillRect(x, y, cell, cell);
         }
-      };
+      }
+    };
     const a = renderToHash(16, 16, checkerboard(16, 4));
     const b = renderToHash(16, 16, checkerboard(16, 4));
     expect(a).toBe(b);

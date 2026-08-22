@@ -21,10 +21,7 @@ import {
   syntheticProject,
   syntheticUIState,
 } from "@test/__fixtures__/projects";
-import {
-  needsVariantMigration,
-  runMigrations,
-} from "@/services/migrations";
+import { needsVariantMigration, runMigrations } from "@/services/migrations";
 import type { CompactProject } from "@/types";
 
 let consoleLog: ReturnType<typeof vi.spyOn>;

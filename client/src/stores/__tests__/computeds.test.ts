@@ -464,9 +464,7 @@ describe("equivalence with the LIVE helpers.ts implementation", () => {
     expect(app.currentFrame).toEqual(helpers.getCurrentFrame());
     expect(app.currentLayer).toEqual(helpers.getCurrentLayer());
     expect(app.currentVariant).toEqual(helpers.getCurrentVariant());
-    expect(app.selectedVariantLayer).toEqual(
-      helpers.getSelectedVariantLayer(),
-    );
+    expect(app.selectedVariantLayer).toEqual(helpers.getSelectedVariantLayer());
     expect(app.isEditingVariant).toEqual(helpers.isEditingVariant());
   });
 });

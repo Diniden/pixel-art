@@ -95,8 +95,7 @@ function cell(
   x: number,
   y: number,
 ): Color | 0 {
-  const layer =
-    app.domain.objects[0]?.frames[frameIndex]?.layers[layerIndex];
+  const layer = app.domain.objects[0]?.frames[frameIndex]?.layers[layerIndex];
   return layer?.pixels[y]?.[x]?.color ?? 0;
 }
 
@@ -210,9 +209,8 @@ describe("ApplicationStore.startColorAdjustment — the scan", () => {
     );
     const twin = makeApp(project);
     twin.startColorAdjustment(RED, true);
-    const inner = twin.ui.tool.colorAdjustment!.affectedPixelsByFrame!.get(
-      "frame-1",
-    )!;
+    const inner =
+      twin.ui.tool.colorAdjustment!.affectedPixelsByFrame!.get("frame-1")!;
     expect([...inner.keys()].sort()).toEqual(["body-a", "body-b"]);
   });
 
@@ -366,10 +364,7 @@ describe("PixelStore.adjustColorAcross — the multi-target write", () => {
 
   it("a SINGLE-layer write needs no transaction and still yields one entry", () => {
     const single = new Map([
-      [
-        "frame-1",
-        new Map([["body-f1", [{ x: 1, y: 1 }]]]),
-      ],
+      ["frame-1", new Map([["body-f1", [{ x: 1, y: 1 }]]])],
     ]);
     app.pixels.adjustColorAcross(single, BLUE, { trackHistory: true });
     expect(app.history.entries).toHaveLength(1);
@@ -409,9 +404,9 @@ describe("PixelStore.adjustColorAcross — the multi-target write", () => {
       ["no-such-frame", new Map([["no-such-layer", [{ x: 1, y: 1 }]]])],
       ["frame-1", new Map([["no-such-layer", [{ x: 1, y: 1 }]]])],
     ]);
-    expect(app.pixels.adjustColorAcross(bogus, BLUE, { trackHistory: true })).toBe(
-      0,
-    );
+    expect(
+      app.pixels.adjustColorAcross(bogus, BLUE, { trackHistory: true }),
+    ).toBe(0);
     expect(app.history.entries).toHaveLength(0);
   });
 
@@ -419,13 +414,17 @@ describe("PixelStore.adjustColorAcross — the multi-target write", () => {
     const oob = new Map([
       ["frame-1", new Map([["body-f1", [{ x: 99, y: 99 }]]])],
     ]);
-    expect(app.pixels.adjustColorAcross(oob, BLUE, { trackHistory: true })).toBe(0);
+    expect(
+      app.pixels.adjustColorAcross(oob, BLUE, { trackHistory: true }),
+    ).toBe(0);
   });
 
   it("skips a cell already holding the target colour (no empty patch)", () => {
     const map = startedMap();
     // Adjust to the colour they already are.
-    expect(app.pixels.adjustColorAcross(map, RED, { trackHistory: true })).toBe(0);
+    expect(app.pixels.adjustColorAcross(map, RED, { trackHistory: true })).toBe(
+      0,
+    );
     expect(app.history.entries).toHaveLength(0);
   });
 
@@ -464,7 +463,9 @@ describe("ApplicationStore.editableGrid / selectionDims", () => {
     const editable = app.editableGrid!;
     expect(editable.dims).toEqual({ width: 6, height: 5 });
     // BY REFERENCE — never a copy. `layer.pixels` is `observable.ref` (R2).
-    expect(editable.grid).toBe(app.domain.objects[0].frames[0].layers[0].pixels);
+    expect(editable.grid).toBe(
+      app.domain.objects[0].frames[0].layers[0].pixels,
+    );
   });
 
   it("selectionDims follows editableGrid", () => {
@@ -692,10 +693,7 @@ function variantProject(): Project {
             frames: [0, 1, 2].map((f) => ({
               id: `vf-${f}`,
               name: `VF ${f}`,
-              layers: [
-                mkLayer(`vl-${f}-a`, 4, 4),
-                mkLayer(`vl-${f}-b`, 4, 4),
-              ],
+              layers: [mkLayer(`vl-${f}-a`, 4, 4), mkLayer(`vl-${f}-b`, 4, 4)],
             })),
           },
         ],
@@ -845,9 +843,7 @@ describe("W29h — PixelStore.adjustVariantColorAcross", () => {
   });
 
   it("skips an unknown layer id rather than guessing at layers[0]", () => {
-    const map = new Map([
-      [0, new Map([["not-a-layer", [{ x: 1, y: 1 }]]])],
-    ]);
+    const map = new Map([[0, new Map([["not-a-layer", [{ x: 1, y: 1 }]]])]]);
     expect(
       app.pixels.adjustVariantColorAcross("vg-1", "v-1", map, BLUE, {
         trackHistory: true,
@@ -858,7 +854,9 @@ describe("W29h — PixelStore.adjustVariantColorAcross", () => {
 
   it("skips an out-of-range frame index", () => {
     const map = new Map([[9, new Map([["vl-0-a", [{ x: 1, y: 1 }]]])]]);
-    expect(app.pixels.adjustVariantColorAcross("vg-1", "v-1", map, BLUE)).toBe(0);
+    expect(app.pixels.adjustVariantColorAcross("vg-1", "v-1", map, BLUE)).toBe(
+      0,
+    );
   });
 
   it("returns 0 for an unknown variant group, writing nothing", () => {
@@ -985,7 +983,9 @@ describe("W29h — ApplicationStore.adjustColor (the container's entry point)", 
   }
 
   it("is a NO-OP with nothing pending — returns 0, publishes nothing", () => {
-    const { app, published } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    const { app, published } = makeAppWithSink(
+      paintBodyRed(multiFrameProject()),
+    );
     expect(app.adjustColor(BLUE, true)).toBe(0);
     expect(published).toEqual([]);
     expect(app.history.entries).toHaveLength(0);
@@ -1042,7 +1042,9 @@ describe("W29h — ApplicationStore.adjustColor (the container's entry point)", 
   });
 
   it("publishes `selectedColor` through the ZUSTAND sink, not MobX-only", () => {
-    const { app, published } = makeAppWithSink(paintBodyRed(multiFrameProject()));
+    const { app, published } = makeAppWithSink(
+      paintBodyRed(multiFrameProject()),
+    );
     app.startColorAdjustment(RED, true);
     app.adjustColor(BLUE, true);
     // A MobX-only write is reverted by the next unrelated Zustand change —

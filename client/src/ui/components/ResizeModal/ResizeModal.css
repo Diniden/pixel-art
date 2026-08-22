@@ -10,7 +10,11 @@
 }
 
 .resize-modal {
-  background: linear-gradient(135deg, var(--modal-gradient-a) 0%, var(--modal-gradient-b) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--modal-gradient-a) 0%,
+    var(--modal-gradient-b) 100%
+  );
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg-ring);
@@ -165,4 +169,3 @@
   filter: brightness(1.15);
   box-shadow: var(--glow-accent-12-40);
 }
-

@@ -160,7 +160,7 @@ function cell(x: number, y: number, seed: number): PixelData {
       b: (n * 7 + 29) % 256,
       // Deliberately includes 0, 1 and 2 — the alphas where the shared
       // `blendOverChannels` cutoff would have diverged.
-      a: (x + y + seed) % 4 === 0 ? (x + y + seed) % 3 : ((n * 5) % 256),
+      a: (x + y + seed) % 4 === 0 ? (x + y + seed) % 3 : (n * 5) % 256,
     },
     normal: 0,
     height: 0,
@@ -177,11 +177,7 @@ function grid(seed: number, width = W, height = H): PixelData[][] {
   return rows;
 }
 
-function layer(
-  id: string,
-  seed: number,
-  extra: Partial<Layer> = {},
-): Layer {
+function layer(id: string, seed: number, extra: Partial<Layer> = {}): Layer {
   return {
     id,
     name: id,
@@ -208,7 +204,11 @@ const fixtureFrame: Frame = {
 /** VariantFrame layers have no `isVariant`; only `visible` filters. */
 const fixtureVariantFrame: VariantFrame = {
   id: "vf1",
-  layers: [layer("v-base", 6), layer("v-hidden", 7, { visible: false }), layer("v-top", 8)],
+  layers: [
+    layer("v-base", 6),
+    layer("v-hidden", 7, { visible: false }),
+    layer("v-top", 8),
+  ],
 };
 
 function buf(): Uint8ClampedArray {
@@ -340,7 +340,9 @@ describe("frameEncoding byte-equality gate (task 34)", () => {
       id: "ghost",
       name: "ghost",
       visible: true,
-      pixels: [[{ color: { r: 36, g: 99, b: 200, a: 0 }, normal: 0, height: 0 }]],
+      pixels: [
+        [{ color: { r: 36, g: 99, b: 200, a: 0 }, normal: 0, height: 0 }],
+      ],
     };
 
     const assigned = new Uint8ClampedArray(4);

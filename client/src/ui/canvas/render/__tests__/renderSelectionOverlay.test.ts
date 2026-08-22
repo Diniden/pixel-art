@@ -24,7 +24,12 @@ import {
   MASK_FILL_LIMIT,
   SELECTION_COLOR,
 } from "@/ui/canvas/render/renderSelectionOverlay";
-import { createBuffer, createStubContext, getPixel, hashBuffer } from "@/test/canvasStub";
+import {
+  createBuffer,
+  createStubContext,
+  getPixel,
+  hashBuffer,
+} from "@/test/canvasStub";
 import { RED } from "./fixtures";
 
 describe("paintMaskFill — golden hash (selection active)", () => {
@@ -148,7 +153,11 @@ describe("lassoPath — geometry (the lasso CANNOT be hashed)", () => {
 });
 
 describe("drawLasso — asserted via ctx.calls", () => {
-  const pts = [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 0 }];
+  const pts = [
+    { x: 0, y: 0 },
+    { x: 1, y: 1 },
+    { x: 2, y: 0 },
+  ];
 
   it("strokes a 3-3 dashed cyan path through every point", () => {
     const ctx = createStubContext(16, 16);

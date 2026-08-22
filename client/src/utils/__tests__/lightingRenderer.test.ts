@@ -105,8 +105,7 @@ const PARAMS = {
   heightScale: 100,
 };
 
-const asBuffer = (img: ImageData): PixelBuffer =>
-  img as unknown as PixelBuffer;
+const asBuffer = (img: ImageData): PixelBuffer => img as unknown as PixelBuffer;
 
 const frameOf = (...layers: Layer[]): Frame => ({
   id: "f",
@@ -271,14 +270,9 @@ describe("composeLayers — variant offset resolution", () => {
 
   /** Which cell of a 3×3 did the 1×1 variant land in? */
   const landedAt = (layer: Layer, baseFrameIndex = 0, vs = variants) => {
-    const composed = composeLayers(
-      frameOf(layer),
-      3,
-      3,
-      baseFrameIndex,
-      vs,
-      { vg1: 0 },
-    );
+    const composed = composeLayers(frameOf(layer), 3, 3, baseFrameIndex, vs, {
+      vg1: 0,
+    });
     return Array.from(composed.heightBuffer).indexOf(42);
   };
 
@@ -413,7 +407,9 @@ describe("renderWithLighting", () => {
       ...PARAMS,
       lightDirection: { x: 0, y: 0, z: -255 },
     });
-    expect(hashBuffer(asBuffer(inFront))).not.toBe(hashBuffer(asBuffer(behind)));
+    expect(hashBuffer(asBuffer(inFront))).not.toBe(
+      hashBuffer(asBuffer(behind)),
+    );
     // In BOTH cases `calculateShadow` returns 1 immediately: its early return
     // (:233) only inspects lightDir x and y, which are zero here.
   });
@@ -433,7 +429,9 @@ describe("renderWithLighting", () => {
   it("OBSERVED: heightScale 1000 renders identically to 100 (shadow saturates)", () => {
     expect(
       hashBuffer(
-        asBuffer(renderWithLighting(composed(), { ...PARAMS, heightScale: 1000 })),
+        asBuffer(
+          renderWithLighting(composed(), { ...PARAMS, heightScale: 1000 }),
+        ),
       ),
     ).toBe("4x4:c52bc483");
   });
@@ -466,7 +464,9 @@ describe("renderWithLighting", () => {
     }));
     expect(
       hashBuffer(
-        asBuffer(renderWithLighting(composeLayers(frameOf(flat), 4, 4), PARAMS)),
+        asBuffer(
+          renderWithLighting(composeLayers(frameOf(flat), 4, 4), PARAMS),
+        ),
       ),
     ).toBe("4x4:d3a69545");
   });
@@ -481,7 +481,10 @@ describe("renderWithLighting", () => {
           }
         : E(),
     );
-    const out = renderWithLighting(composeLayers(frameOf(sparse), 2, 2), PARAMS);
+    const out = renderWithLighting(
+      composeLayers(frameOf(sparse), 2, 2),
+      PARAMS,
+    );
     expect(Array.from(out.data.slice(4))).toEqual([
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ]);
@@ -616,9 +619,18 @@ describe("renderHeightAsGrayscale", () => {
       height: [0, 1, 255][x],
     }));
     expect(Array.from(renderHeightAsGrayscale(ramp, 3, 1).data)).toEqual([
-      0, 0, 0, 0, // height 0 -> fully transparent, NOT black
-      0, 0, 0, 255, // height 1 -> opaque black
-      255, 255, 255, 255, // height 255 -> opaque white
+      0,
+      0,
+      0,
+      0, // height 0 -> fully transparent, NOT black
+      0,
+      0,
+      0,
+      255, // height 1 -> opaque black
+      255,
+      255,
+      255,
+      255, // height 255 -> opaque white
     ]);
   });
 

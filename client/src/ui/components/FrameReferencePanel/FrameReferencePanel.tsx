@@ -14,12 +14,28 @@
  * and `ui/` may not import a container without dragging MobX across the
  * purity boundary transitively.
  */
-import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
-import type { PixelObject, VariantGroup } from '../../../types';
-import { renderFramePreview } from '../../../utils/previewRenderer';
-import { Icon } from '../../primitives/Icon/Icon';
-import { Film, Package, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Target } from 'lucide-react';
-import './FrameReferencePanel.css';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import type { PixelObject, VariantGroup } from "../../../types";
+import { renderFramePreview } from "../../../utils/previewRenderer";
+import { Icon } from "../../primitives/Icon/Icon";
+import {
+  Film,
+  Package,
+  ChevronUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Target,
+} from "lucide-react";
+import "./FrameReferencePanel.css";
 
 interface FrameReferencePanelProps {
   onOverlayChange: (frameIndex: number | null) => void;
@@ -38,11 +54,17 @@ interface FrameReferencePanelProps {
   selectedFrameId: string | null;
   /** Persisted panel position, as percentages. Own key — do not unify. */
   panelPosition: { topPercent: number; leftPercent: number } | undefined;
-  onPanelPositionChange: (pos: { topPercent: number; leftPercent: number }) => void;
+  onPanelPositionChange: (pos: {
+    topPercent: number;
+    leftPercent: number;
+  }) => void;
   /** Frame-trace state. */
   frameTraceActive: boolean;
   frameTraceFrameIndex: number | null;
-  onFrameTraceActiveChange: (active: boolean, frameIndex?: number | null) => void;
+  onFrameTraceActiveChange: (
+    active: boolean,
+    frameIndex?: number | null,
+  ) => void;
   /** The referenced object's id, or null when referencing the current object. */
   frameReferenceObjectId: string | null;
   onFrameReferenceObjectIdChange: (objectId: string | null) => void;
@@ -95,37 +117,49 @@ export function FrameReferencePanel({
   const [position, setPosition] = useState({ top: 20, left: 20 }); // Position in pixels (for rendering)
 
   // Helper to convert percentage to pixels
-  const percentageToPixels = useCallback((percentPos: { topPercent: number; leftPercent: number } | undefined) => {
-    const canvasArea = document.querySelector('.canvas-area');
-    if (!canvasArea || !panelRef.current || !percentPos) {
-      return { top: 20, left: 20 }; // Default fallback
-    }
+  const percentageToPixels = useCallback(
+    (percentPos: { topPercent: number; leftPercent: number } | undefined) => {
+      const canvasArea = document.querySelector(".canvas-area");
+      if (!canvasArea || !panelRef.current || !percentPos) {
+        return { top: 20, left: 20 }; // Default fallback
+      }
 
-    const canvasRect = canvasArea.getBoundingClientRect();
-    const panelRect = panelRef.current.getBoundingClientRect();
+      const canvasRect = canvasArea.getBoundingClientRect();
+      const panelRect = panelRef.current.getBoundingClientRect();
 
-    const maxLeft = canvasRect.width - panelRect.width;
-    const maxTop = canvasRect.height - panelRect.height;
+      const maxLeft = canvasRect.width - panelRect.width;
+      const maxTop = canvasRect.height - panelRect.height;
 
-    return {
-      top: Math.max(0, Math.min(maxTop, (percentPos.topPercent / 100) * canvasRect.height)),
-      left: Math.max(0, Math.min(maxLeft, (percentPos.leftPercent / 100) * canvasRect.width))
-    };
-  }, []);
+      return {
+        top: Math.max(
+          0,
+          Math.min(maxTop, (percentPos.topPercent / 100) * canvasRect.height),
+        ),
+        left: Math.max(
+          0,
+          Math.min(maxLeft, (percentPos.leftPercent / 100) * canvasRect.width),
+        ),
+      };
+    },
+    [],
+  );
 
   // Helper to convert pixels to percentage
-  const pixelsToPercentage = useCallback((pixelPos: { top: number; left: number }) => {
-    const canvasArea = document.querySelector('.canvas-area');
-    if (!canvasArea) {
-      return { topPercent: 0, leftPercent: 0 };
-    }
+  const pixelsToPercentage = useCallback(
+    (pixelPos: { top: number; left: number }) => {
+      const canvasArea = document.querySelector(".canvas-area");
+      if (!canvasArea) {
+        return { topPercent: 0, leftPercent: 0 };
+      }
 
-    const canvasRect = canvasArea.getBoundingClientRect();
-    return {
-      topPercent: (pixelPos.top / canvasRect.height) * 100,
-      leftPercent: (pixelPos.left / canvasRect.width) * 100
-    };
-  }, []);
+      const canvasRect = canvasArea.getBoundingClientRect();
+      return {
+        topPercent: (pixelPos.top / canvasRect.height) * 100,
+        leftPercent: (pixelPos.left / canvasRect.width) * 100,
+      };
+    },
+    [],
+  );
 
   // Initialize position from project (convert percentage to pixels)
   useEffect(() => {
@@ -149,15 +183,17 @@ export function FrameReferencePanel({
       }
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, [panelPosition, percentageToPixels]);
 
   const currentObj = currentObject;
   const referenceObj = referenceObject;
 
   // Determine if we're referencing a different object
-  const isReferencingDifferentObject = frameReferenceObjectId !== null && frameReferenceObjectId !== currentObj?.id;
+  const isReferencingDifferentObject =
+    frameReferenceObjectId !== null &&
+    frameReferenceObjectId !== currentObj?.id;
 
   // The object to show frames from
   const displayObj = referenceObj;
@@ -178,13 +214,16 @@ export function FrameReferencePanel({
 
   // Current frame index (timeline selection) for same-object comparison and "go to current"
   const rawCurrentIndex = currentObj.frames.findIndex(
-    (f) => f.id === (selectedFrameId ?? '')
+    (f) => f.id === (selectedFrameId ?? ""),
   );
   const currentFrameIndex = rawCurrentIndex >= 0 ? rawCurrentIndex : 0;
 
   // Get the reference frame
-  const isValidReference = referenceFrameIndex >= 0 && referenceFrameIndex < displayObj.frames.length;
-  const referenceFrame = isValidReference ? displayObj.frames[referenceFrameIndex] : null;
+  const isValidReference =
+    referenceFrameIndex >= 0 && referenceFrameIndex < displayObj.frames.length;
+  const referenceFrame = isValidReference
+    ? displayObj.frames[referenceFrameIndex]
+    : null;
 
   const gridWidth = displayObj.gridSize.width;
   const gridHeight = displayObj.gridSize.height;
@@ -198,14 +237,14 @@ export function FrameReferencePanel({
     // Use requestAnimationFrame to ensure canvas is mounted in DOM
     const frameId = requestAnimationFrame(() => {
       const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d', { willReadFrequently: false });
+      const ctx = canvas?.getContext("2d", { willReadFrequently: false });
       if (!canvas || !ctx || !referenceFrame) return;
 
       canvas.width = thumbSize;
       canvas.height = thumbSize;
 
       // Calculate variant frame indices for the reference frame
-      
+
       let variantFrameIndices: { [key: string]: number } | undefined;
 
       if (variants && referenceFrame) {
@@ -216,7 +255,11 @@ export function FrameReferencePanel({
         // First, collect all variant groups that are used in this frame's layers
         const variantGroupsInFrame = new Set<string>();
         for (const layer of referenceFrame.layers) {
-          if (layer.isVariant && layer.variantGroupId && layer.selectedVariantId) {
+          if (
+            layer.isVariant &&
+            layer.variantGroupId &&
+            layer.selectedVariantId
+          ) {
             variantGroupsInFrame.add(layer.variantGroupId);
           }
         }
@@ -229,8 +272,14 @@ export function FrameReferencePanel({
           // Find the selected variant in this frame's layers
           let selectedVariant = null;
           for (const layer of referenceFrame.layers) {
-            if (layer.isVariant && layer.variantGroupId === vg.id && layer.selectedVariantId) {
-              selectedVariant = vg.variants.find(v => v.id === layer.selectedVariantId);
+            if (
+              layer.isVariant &&
+              layer.variantGroupId === vg.id &&
+              layer.selectedVariantId
+            ) {
+              selectedVariant = vg.variants.find(
+                (v) => v.id === layer.selectedVariantId,
+              );
               if (selectedVariant) break;
             }
           }
@@ -238,7 +287,8 @@ export function FrameReferencePanel({
           // If we found a selected variant, use its frame count
           if (selectedVariant && selectedVariant.frames.length > 0) {
             // Use frame index modulo variant frame count to determine which variant frame to show
-            variantFrameIndices[vg.id] = referenceFrameIndex % selectedVariant.frames.length;
+            variantFrameIndices[vg.id] =
+              referenceFrameIndex % selectedVariant.frames.length;
           }
         }
       }
@@ -250,14 +300,22 @@ export function FrameReferencePanel({
         frame: referenceFrame,
         frameIndex: referenceFrameIndex,
         variants,
-        variantFrameIndices
+        variantFrameIndices,
       });
     });
 
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [referenceFrame, gridWidth, gridHeight, thumbSize, variants, referenceFrameIndex, isMinimized]);
+  }, [
+    referenceFrame,
+    gridWidth,
+    gridHeight,
+    thumbSize,
+    variants,
+    referenceFrameIndex,
+    isMinimized,
+  ]);
 
   const handlePrevious = () => {
     if (referenceFrameIndex > 0) {
@@ -300,13 +358,16 @@ export function FrameReferencePanel({
   };
 
   const isOverlayActive = overlayFrameIndex === referenceFrameIndex;
-  const isTraceActive = frameTraceActive && frameTraceFrameIndex === referenceFrameIndex;
+  const isTraceActive =
+    frameTraceActive && frameTraceFrameIndex === referenceFrameIndex;
 
   // Drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     // Don't start drag if clicking on the minimize button or object select button
-    if ((e.target as HTMLElement).closest('.frame-reference-panel__minimize') ||
-        (e.target as HTMLElement).closest('.frame-reference-panel__object-btn')) {
+    if (
+      (e.target as HTMLElement).closest(".frame-reference-panel__minimize") ||
+      (e.target as HTMLElement).closest(".frame-reference-panel__object-btn")
+    ) {
       return;
     }
 
@@ -315,7 +376,7 @@ export function FrameReferencePanel({
     if (rect) {
       setDragStart({
         x: e.clientX - rect.left,
-        y: e.clientY - rect.top
+        y: e.clientY - rect.top,
       });
     }
   };
@@ -324,7 +385,7 @@ export function FrameReferencePanel({
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const canvasArea = document.querySelector('.canvas-area');
+      const canvasArea = document.querySelector(".canvas-area");
       if (!canvasArea || !panelRef.current) return;
 
       const canvasRect = canvasArea.getBoundingClientRect();
@@ -350,13 +411,13 @@ export function FrameReferencePanel({
       setIsDragging(false);
       // Save position as percentage when dragging ends
       if (panelRef.current) {
-        const canvasArea = document.querySelector('.canvas-area');
+        const canvasArea = document.querySelector(".canvas-area");
         if (canvasArea) {
           const canvasRect = canvasArea.getBoundingClientRect();
           const panelRect = panelRef.current.getBoundingClientRect();
           const finalPixelPosition = {
             top: panelRect.top - canvasRect.top,
-            left: panelRect.left - canvasRect.left
+            left: panelRect.left - canvasRect.left,
           };
           // Convert to percentage and save
           const percentPosition = pixelsToPercentage(finalPixelPosition);
@@ -365,17 +426,20 @@ export function FrameReferencePanel({
       }
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging, dragStart, onPanelPositionChange, pixelsToPercentage]);
 
   const handleGoToCurrentFrame = () => {
-    const target = Math.min(Math.max(0, currentFrameIndex), displayObj.frames.length - 1);
+    const target = Math.min(
+      Math.max(0, currentFrameIndex),
+      displayObj.frames.length - 1,
+    );
     setReferenceFrameIndex(target);
   };
 
@@ -383,22 +447,22 @@ export function FrameReferencePanel({
   const frameDelta = referenceFrameIndex - currentFrameIndex;
   const framesAheadBehindLabel =
     frameDelta === 0
-      ? 'Current frame'
+      ? "Current frame"
       : frameDelta > 0
-        ? `${frameDelta} frame${frameDelta === 1 ? '' : 's'} ahead`
-        : `${-frameDelta} frame${-frameDelta === 1 ? '' : 's'} behind`;
+        ? `${frameDelta} frame${frameDelta === 1 ? "" : "s"} ahead`
+        : `${-frameDelta} frame${-frameDelta === 1 ? "" : "s"} behind`;
 
   return (
     <>
       <div
         ref={panelRef}
-        className={`frame-reference-panel ${isMinimized ? 'frame-reference-panel--minimized' : ''} ${isDragging ? 'frame-reference-panel--dragging' : ''} ${isReferencingDifferentObject ? 'frame-reference-panel--foreign-object' : ''}`}
+        className={`frame-reference-panel ${isMinimized ? "frame-reference-panel--minimized" : ""} ${isDragging ? "frame-reference-panel--dragging" : ""} ${isReferencingDifferentObject ? "frame-reference-panel--foreign-object" : ""}`}
         style={{ top: `${position.top}px`, left: `${position.left}px` }}
       >
         <div
           className="frame-reference-panel__header"
           onMouseDown={handleMouseDown}
-          style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+          style={{ cursor: isDragging ? "grabbing" : "grab" }}
         >
           <span className="frame-reference-panel__title">
             <Icon icon={Film} size={12} /> Frame Reference
@@ -421,7 +485,7 @@ export function FrameReferencePanel({
               onMinimizedChange(!isMinimized);
             }}
             onMouseDown={(e) => e.stopPropagation()}
-            title={isMinimized ? 'Expand' : 'Minimize'}
+            title={isMinimized ? "Expand" : "Minimize"}
           >
             <Icon icon={isMinimized ? ChevronUp : ChevronDown} size={12} />
           </button>
@@ -432,8 +496,12 @@ export function FrameReferencePanel({
             {/* Show which object we're referencing */}
             {isReferencingDifferentObject && (
               <div className="frame-reference-panel__object-info">
-                <span className="frame-reference-panel__object-label">Viewing:</span>
-                <span className="frame-reference-panel__object-name">{displayObj.name}</span>
+                <span className="frame-reference-panel__object-label">
+                  Viewing:
+                </span>
+                <span className="frame-reference-panel__object-name">
+                  {displayObj.name}
+                </span>
               </div>
             )}
 
@@ -449,14 +517,20 @@ export function FrameReferencePanel({
               <div className="frame-reference-panel__info">
                 {isValidReference ? (
                   <>
-                    <span className="frame-reference-panel__number">Frame {referenceFrameIndex + 1}</span>
-                    <span className="frame-reference-panel__name">{referenceFrame?.name || 'Unnamed'}</span>
+                    <span className="frame-reference-panel__number">
+                      Frame {referenceFrameIndex + 1}
+                    </span>
+                    <span className="frame-reference-panel__name">
+                      {referenceFrame?.name || "Unnamed"}
+                    </span>
                     <span className="frame-reference-panel__index">
                       {displayObj.frames.length} total
                     </span>
                   </>
                 ) : (
-                  <span className="frame-reference-panel__invalid">No frame</span>
+                  <span className="frame-reference-panel__invalid">
+                    No frame
+                  </span>
                 )}
               </div>
               <button
@@ -471,7 +545,10 @@ export function FrameReferencePanel({
 
             {/* Frames ahead/behind indicator and Go to current frame */}
             <div className="frame-reference-panel__sync-row">
-              <span className="frame-reference-panel__ahead-behind" title="Relative to timeline">
+              <span
+                className="frame-reference-panel__ahead-behind"
+                title="Relative to timeline"
+              >
                 {framesAheadBehindLabel}
               </span>
               <button
@@ -487,23 +564,36 @@ export function FrameReferencePanel({
             {isValidReference && referenceFrame && (
               <>
                 <div className="frame-reference-panel__preview">
-                  <canvas ref={canvasRef} width={thumbSize} height={thumbSize} />
+                  <canvas
+                    ref={canvasRef}
+                    width={thumbSize}
+                    height={thumbSize}
+                  />
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                <div style={{ display: "flex", gap: "8px", width: "100%" }}>
                   <button
-                    className={`frame-reference-panel__overlay-btn ${isOverlayActive ? 'frame-reference-panel__overlay-btn--active' : ''}`}
+                    className={`frame-reference-panel__overlay-btn ${isOverlayActive ? "frame-reference-panel__overlay-btn--active" : ""}`}
                     onClick={handleToggleOverlay}
-                    title={isOverlayActive ? 'Hide overlay' : 'Show overlay on canvas'}
+                    title={
+                      isOverlayActive
+                        ? "Hide overlay"
+                        : "Show overlay on canvas"
+                    }
                     style={{ flex: 1 }}
                   >
-                    <Icon icon={isOverlayActive ? EyeOff : Eye} size={14} /> {isOverlayActive ? 'Hide Overlay' : 'Show Overlay'}
+                    <Icon icon={isOverlayActive ? EyeOff : Eye} size={14} />{" "}
+                    {isOverlayActive ? "Hide Overlay" : "Show Overlay"}
                   </button>
                   <button
-                    className={`frame-reference-panel__trace-btn ${isTraceActive ? 'frame-reference-panel__trace-btn--active' : ''}`}
+                    className={`frame-reference-panel__trace-btn ${isTraceActive ? "frame-reference-panel__trace-btn--active" : ""}`}
                     onClick={handleToggleTrace}
-                    title={isTraceActive ? 'Exit trace mode (ESC)' : 'Trace mode (WASD to align, click to copy)'}
-                    style={{ flex: '0 0 auto', padding: '10px 16px' }}
+                    title={
+                      isTraceActive
+                        ? "Exit trace mode (ESC)"
+                        : "Trace mode (WASD to align, click to copy)"
+                    }
+                    style={{ flex: "0 0 auto", padding: "10px 16px" }}
                   >
                     <Icon icon={Target} size={14} />
                   </button>

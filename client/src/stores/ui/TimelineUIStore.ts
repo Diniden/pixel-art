@@ -217,9 +217,7 @@ export class TimelineUIStore {
    * `variantFrameIndices` is `observableRef`, so the caller's record is
    * adopted wholesale, exactly as `setVariantFrameIndex` adopts its rebuild.
    */
-  replaceVariantFrameIndices(next: {
-    [variantGroupId: string]: number;
-  }): void {
+  replaceVariantFrameIndices(next: { [variantGroupId: string]: number }): void {
     this.variantFrameIndices = next;
     this.context.publishSelection({ variantFrameIndices: next });
   }
@@ -253,9 +251,7 @@ export class TimelineUIStore {
    * publish back into Zustand: the value came FROM Zustand, and echoing it
    * would restart the loop. Same shape as `UIStore.hydrateLighting`.
    */
-  adoptVariantFrameIndices(next: {
-    [variantGroupId: string]: number;
-  }): void {
+  adoptVariantFrameIndices(next: { [variantGroupId: string]: number }): void {
     this.variantFrameIndices = next;
   }
 

@@ -39,15 +39,15 @@ export function grid(
   palette: Record<string, TestPixel>,
 ): TestCell[][] {
   return rows.map((row) =>
-    [...row].map((ch) => cell(ch === "." ? null : palette[ch] ?? null)),
+    [...row].map((ch) => cell(ch === "." ? null : (palette[ch] ?? null))),
   );
 }
 
 /** A 4×4 layer with a red diagonal and one blue corner. */
-export const DIAGONAL_4 = grid(
-  ["R...", ".R..", "..R.", "B..R"],
-  { R: RED, B: BLUE },
-);
+export const DIAGONAL_4 = grid(["R...", ".R..", "..R.", "B..R"], {
+  R: RED,
+  B: BLUE,
+});
 
 /** A 2×2 variant layer, all green. */
 export const VARIANT_2 = grid(["GG", "GG"], { G: GREEN });

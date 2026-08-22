@@ -64,7 +64,9 @@ function regions(density: Density) {
     objectLibrary: <StubList label="ObjectLibrary" density={density} />,
     layerPanel: <StubList label="LayerPanel" density={density} grow />,
     rightControls: <StubRegion label="RightSidebarTopControls" height={64} />,
-    studioPanel: <StubList label="LightingStudioPanel" density={density} grow />,
+    studioPanel: (
+      <StubList label="LightingStudioPanel" density={density} grow />
+    ),
     timeline: <StubRegion label="FrameTimeline" height={120} />,
     canvas: <StubCanvas label="LightingSurface" />,
     previewPanel: (

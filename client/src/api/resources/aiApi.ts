@@ -161,10 +161,7 @@ export const aiApi = {
    * the caller decides what a failed job means), the deadline passes
    * (`TimeoutError`), or the signal aborts (unwrapped `AbortError`).
    */
-  async pollJob(
-    jobId: string,
-    opts: PollJobOptions,
-  ): Promise<JobStatusResult> {
+  async pollJob(jobId: string, opts: PollJobOptions): Promise<JobStatusResult> {
     const {
       aiServiceUrl,
       signal,

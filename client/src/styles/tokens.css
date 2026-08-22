@@ -46,8 +46,8 @@
   --radius-md: 8px;
   --radius-lg: 12px;
 
-  --font-sans: 'Outfit', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
@@ -264,7 +264,8 @@
      --shadow-danger derives from the owner-confirmed #ff3366 red. */
   --shadow-xl: 0 12px 48px rgba(0, 0, 0, 0.6);
   --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.5);
-  --shadow-modal-glow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 217, 255, 0.1);
+  --shadow-modal-glow:
+    0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 217, 255, 0.1);
   --shadow-accent: 0 4px 12px rgba(0, 217, 255, 0.3);
   --shadow-accent-sm: 0 2px 6px rgba(0, 217, 255, 0.3);
   --shadow-variant: 0 6px 20px rgba(139, 92, 246, 0.4);
@@ -285,13 +286,15 @@
   --glow-accent-16-60: 0 0 16px var(--accent-primary-60);
   --ring-accent-1: 0 0 0 1px var(--accent-primary);
   --ring-accent-1-30: 0 0 0 1px var(--accent-primary-30);
-  --ring-variant-accent: 0 0 0 2px var(--accent-variant), 0 0 0 3px var(--accent-primary);
+  --ring-variant-accent:
+    0 0 0 2px var(--accent-variant), 0 0 0 3px var(--accent-primary);
   --glow-variant-12: 0 4px 12px var(--accent-variant-30);
   --glow-variant-15: 0 0 15px var(--accent-variant-30);
   --glow-variant-16: 0 0 16px var(--accent-variant-30);
   --shadow-variant-lift: 0 4px 16px var(--accent-variant-40);
   --glow-danger-8-60: 0 0 8px var(--accent-danger-60);
-  --ring-warning-glow: 0 0 0 2px var(--accent-warning-40), 0 0 8px var(--accent-warning-60);
+  --ring-warning-glow:
+    0 0 0 2px var(--accent-warning-40), 0 0 8px var(--accent-warning-60);
   --glow-warn-12: 0 0 12px var(--status-warn-40);
   --glow-ok-15: 0 0 15px var(--status-ok-30);
   --shadow-ok: 0 6px 20px var(--status-ok-40);
@@ -301,11 +304,15 @@
   --glow-white-toggle: 0 0 6px var(--white-40), inset 0 0 4px var(--white-20);
   --glow-lightgrid: 0 0 8px var(--tool-lightgrid-50);
   --shadow-lg-ring: var(--shadow-lg), 0 0 0 1px var(--accent-primary-10);
-  --shadow-canvas: 0 0 0 1px var(--overlay-50), var(--shadow-lg), 0 0 40px var(--accent-primary-10);
-  --shadow-swatch: 0 0 0 1px var(--overlay-50), inset 0 0 0 1px var(--overlay-30);
+  --shadow-canvas:
+    0 0 0 1px var(--overlay-50), var(--shadow-lg),
+    0 0 40px var(--accent-primary-10);
+  --shadow-swatch:
+    0 0 0 1px var(--overlay-50), inset 0 0 0 1px var(--overlay-30);
   --inset-well: inset 0 2px 4px var(--overlay-30), 0 2px 8px var(--overlay-20);
   --inset-thumb: inset 0 1px 2px var(--overlay-20);
-  --inset-panel: inset 0 0 0 1px var(--border-primary), 0 4px 12px var(--overlay-20);
+  --inset-panel:
+    inset 0 0 0 1px var(--border-primary), 0 4px 12px var(--overlay-20);
 
   /* z-index — a layered scale replacing 15 magic numbers (-1 to 99999).
      Rules: never write a numeric z-index; a modal backdrop and its dialog

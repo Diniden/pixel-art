@@ -261,12 +261,7 @@ export function parseColor(value: string): RGBA {
     }
     if (hex.length === 6 || hex.length === 8) {
       const byte = (i: number) => parseInt(hex.slice(i, i + 2), 16);
-      return [
-        byte(0),
-        byte(2),
-        byte(4),
-        hex.length === 8 ? byte(6) : 255,
-      ];
+      return [byte(0), byte(2), byte(4), hex.length === 8 ? byte(6) : 255];
     }
     throw new Error(`canvasStub.parseColor: unsupported hex colour "${value}"`);
   }
@@ -418,10 +413,7 @@ function isPixelBuffer(v: unknown): v is PixelBuffer {
  * from one of these: rectangles and image data are exact, paths and text are
  * recorded but draw nothing.
  */
-export function createStubContext(
-  width: number,
-  height: number,
-): StubContext {
+export function createStubContext(width: number, height: number): StubContext {
   const buffer = createBuffer(width, height);
   const calls: RecordedCall[] = [];
   const stack: CtxState[] = [];
@@ -680,7 +672,8 @@ export function createStubContext(
     save() {
       record("save");
       stack.push({
-        fillStyle: typeof ctx.fillStyle === "string" ? ctx.fillStyle : "#000000",
+        fillStyle:
+          typeof ctx.fillStyle === "string" ? ctx.fillStyle : "#000000",
         strokeStyle:
           typeof ctx.strokeStyle === "string" ? ctx.strokeStyle : "#000000",
         globalAlpha: ctx.globalAlpha,

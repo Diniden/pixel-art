@@ -50,7 +50,12 @@
  *  Testability        A class taking its collaborators and a clock —
  *                     constructed per test under `vi.useFakeTimers()`.
  */
-import { IReactionDisposer, compareStructural, reaction, runInAction } from "mobx";
+import {
+  IReactionDisposer,
+  compareStructural,
+  reaction,
+  runInAction,
+} from "mobx";
 import { CompactProject } from "../../types";
 import { isApiError, projectApi } from "../../api";
 import type { DomainStore } from "../domain/DomainStore";
@@ -151,7 +156,8 @@ export class AutoSaveController {
     this.session = session;
     this.history = history;
     this.persistedUI = persistedUI;
-    this.save = options.save ?? ((project, name) => projectApi.save(project, name));
+    this.save =
+      options.save ?? ((project, name) => projectApi.save(project, name));
     this.clock = options.clock ?? realClock;
     // The construction-time counters are the clean baseline: a load that
     // merely OPENS the gate (trigger `null` → `[g, n, n]`) is not an edit and

@@ -158,16 +158,16 @@ export function recomputeHistoryMirror(app: ApplicationStore): void {
   // its rewind inside `runInAction` for the same reason) — without it the
   // strict-mode `observableRequiresReaction` meter logs every recompute.
   untracked(() => {
-  const entries = app.history.entries;
-  const list: Project[] = new Array(entries.length);
-  const live = app.domain.currentProject();
-  let state = live;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (!state) break;
-    state = rewindCommand(state, entries[i]);
-    list[i] = state;
-  }
-  mirrorEntries = list.filter((entry): entry is Project => Boolean(entry));
+    const entries = app.history.entries;
+    const list: Project[] = new Array(entries.length);
+    const live = app.domain.currentProject();
+    let state = live;
+    for (let i = entries.length - 1; i >= 0; i--) {
+      if (!state) break;
+      state = rewindCommand(state, entries[i]);
+      list[i] = state;
+    }
+    mirrorEntries = list.filter((entry): entry is Project => Boolean(entry));
   });
 }
 
@@ -186,19 +186,22 @@ interface HistoryFingerprint {
 
 function historyFingerprint(app: ApplicationStore): HistoryFingerprint {
   return untracked(() => {
-  const h = app.history;
-  return {
-    length: h.entries.length,
-    index: h.index,
-    inTransaction: h.inTransaction,
-    isTransactionEmpty: h.isTransactionEmpty,
-    first: h.entries[0],
-    last: h.entries[h.entries.length - 1],
-  };
+    const h = app.history;
+    return {
+      length: h.entries.length,
+      index: h.index,
+      inTransaction: h.inTransaction,
+      isTransactionEmpty: h.isTransactionEmpty,
+      first: h.entries[0],
+      last: h.entries[h.entries.length - 1],
+    };
   });
 }
 
-function sameFingerprint(a: HistoryFingerprint, b: HistoryFingerprint): boolean {
+function sameFingerprint(
+  a: HistoryFingerprint,
+  b: HistoryFingerprint,
+): boolean {
   return (
     a.length === b.length &&
     a.index === b.index &&
@@ -289,7 +292,8 @@ const TABLE: Record<string, Action> = {
   setObjectOrigin: (app, id, origin) => app.objects.setObjectOrigin(id, origin),
 
   /* ── frames + timeline + layers (task 25 delegates) ────────────────────── */
-  addFrame: (app, name, copyPrevious) => app.frames.addFrame(name, copyPrevious),
+  addFrame: (app, name, copyPrevious) =>
+    app.frames.addFrame(name, copyPrevious),
   deleteFrame: (app, id) => app.frames.deleteFrame(id),
   deleteSelectedFrame: (app) => app.frames.deleteSelectedFrame(),
   renameFrame: (app, id, name) => app.frames.renameFrame(id, name),
@@ -442,7 +446,13 @@ const TABLE: Record<string, Action> = {
   renameVariantGroup: (app, variantGroupId, name) =>
     app.variants.renameVariantGroup(variantGroupId, name),
   resizeVariant: (app, variantGroupId, variantId, width, height, anchor) =>
-    app.variants.resizeVariant(variantGroupId, variantId, width, height, anchor),
+    app.variants.resizeVariant(
+      variantGroupId,
+      variantId,
+      width,
+      height,
+      anchor,
+    ),
   setVariantOffset: (app, dx, dy, allFrames) =>
     app.variants.setVariantOffset(dx, dy, allFrames),
   duplicateVariantFrame: (app, variantGroupId, variantId, frameId) =>
@@ -456,9 +466,19 @@ const TABLE: Record<string, Action> = {
   addVariantFrame: (app, variantGroupId, variantId, copyPrevious) =>
     app.variants.addVariantFrame(variantGroupId, variantId, copyPrevious),
   moveVariantFrame: (app, variantGroupId, variantId, frameId, direction) =>
-    app.variants.moveVariantFrame(variantGroupId, variantId, frameId, direction),
+    app.variants.moveVariantFrame(
+      variantGroupId,
+      variantId,
+      frameId,
+      direction,
+    ),
   reorderVariantFrame: (app, variantGroupId, variantId, frameId, toIndex) =>
-    app.variants.reorderVariantFrame(variantGroupId, variantId, frameId, toIndex),
+    app.variants.reorderVariantFrame(
+      variantGroupId,
+      variantId,
+      frameId,
+      toIndex,
+    ),
   addVariantLayerFromExisting: (
     app,
     variantGroupId,

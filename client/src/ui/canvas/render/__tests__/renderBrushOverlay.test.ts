@@ -18,7 +18,13 @@ import {
   strokeBrushOutlines,
   BRUSH_OVERLAY_STYLE,
 } from "@/ui/canvas/render/renderBrushOverlay";
-import { createBuffer, createStubContext, getPixel, hashBuffer, isBlank } from "@/test/canvasStub";
+import {
+  createBuffer,
+  createStubContext,
+  getPixel,
+  hashBuffer,
+  isBlank,
+} from "@/test/canvasStub";
 
 /** A 3-cell brush footprint — enough to see placement AND spacing. */
 const CELLS = [
@@ -73,7 +79,14 @@ describe("paintBrushCells — the properties behind the hashes", () => {
   it("clips cells that hang off the buffer rather than throwing", () => {
     const buf = createBuffer(8, 8);
     expect(() =>
-      paintBrushCells(buf, [{ x: 3, y: 3 }, { x: -1, y: -1 }], 4),
+      paintBrushCells(
+        buf,
+        [
+          { x: 3, y: 3 },
+          { x: -1, y: -1 },
+        ],
+        4,
+      ),
     ).not.toThrow();
     // (3,3) at zoom 4 starts at (12,12), fully outside an 8×8 buffer.
     expect(isBlank(buf)).toBe(true);

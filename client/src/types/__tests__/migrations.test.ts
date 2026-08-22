@@ -54,7 +54,9 @@ import {
 // implementations. If `api.ts:111-143` ever changes, this copy must change with
 // it — the M6 divergence assertions are the tripwire.
 // ---------------------------------------------------------------------------
-function apiMigrateVariantsToProjectLevel(data: CompactProject): CompactProject {
+function apiMigrateVariantsToProjectLevel(
+  data: CompactProject,
+): CompactProject {
   const allVariantGroups: Record<string, CompactVariantGroup> = {};
   for (const obj of data.objects) {
     if (obj.variantGroups) {
@@ -86,19 +88,23 @@ describe("M1 — isCompactFormat", () => {
   });
 
   it("detects compact format from numeric palette colours", () => {
-    expect(isCompactFormat({ palettes: [{ colors: [0xff_00_00_ff] }] })).toBe(true);
+    expect(isCompactFormat({ palettes: [{ colors: [0xff_00_00_ff] }] })).toBe(
+      true,
+    );
   });
 
   it("detects expanded format from object palette colours", () => {
     expect(
-      isCompactFormat({ palettes: [{ colors: [{ r: 0, g: 0, b: 0, a: 255 }] }] }),
+      isCompactFormat({
+        palettes: [{ colors: [{ r: 0, g: 0, b: 0, a: 255 }] }],
+      }),
     ).toBe(false);
   });
 
   it("falls back to typeof uiState.selectedColor === 'number' when palettes are empty", () => {
-    expect(isCompactFormat({ palettes: [], uiState: { selectedColor: 255 } })).toBe(
-      true,
-    );
+    expect(
+      isCompactFormat({ palettes: [], uiState: { selectedColor: 255 } }),
+    ).toBe(true);
     expect(
       isCompactFormat({ palettes: [], uiState: { selectedColor: { r: 1 } } }),
     ).toBe(false);
@@ -221,11 +227,15 @@ describe("M2 — isLegacyCompactFormat detection", () => {
   }
 
   it("detects a legacy project from its first non-zero pixel", () => {
-    expect(isLegacyCompactFormat(projectWithObjects([LEGACY_PIXELS]))).toBe(true);
+    expect(isLegacyCompactFormat(projectWithObjects([LEGACY_PIXELS]))).toBe(
+      true,
+    );
   });
 
   it("detects a modern project from its first non-zero pixel", () => {
-    expect(isLegacyCompactFormat(projectWithObjects([MODERN_PIXELS]))).toBe(false);
+    expect(isLegacyCompactFormat(projectWithObjects([MODERN_PIXELS]))).toBe(
+      false,
+    );
   });
 
   it("samples exactly ONE pixel: a mixed project with a legacy object 3 reports false", () => {
@@ -412,7 +422,9 @@ describe("M3 — uiState defaults on load", () => {
 // M4 — variant frame `offset` → `baseFrameOffsets` (`types/index.ts:807-826`)
 // ===========================================================================
 describe("M4 — baseFrameOffsets back-fill", () => {
-  function projectWith14BaseFrames(variantFrameOffsets: boolean): CompactProject {
+  function projectWith14BaseFrames(
+    variantFrameOffsets: boolean,
+  ): CompactProject {
     return {
       version: "1.1.0",
       objects: [
@@ -470,7 +482,16 @@ describe("M4 — baseFrameOffsets back-fill", () => {
     const map = result.variants![0].variants[0].baseFrameOffsets;
 
     expect(Object.keys(map)).toEqual([
-      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
     ]);
     expect(Object.keys(map).length).toBe(10);
     expect(map[10]).toBeUndefined();
@@ -700,8 +721,12 @@ describe("M6 — object-level variantGroups hoisted to project level", () => {
       apiMigrateVariantsToProjectLevel(objectLevelVariantProject()),
     );
     expect(result.variants?.map((v) => v.id)).toEqual(["vg1"]);
-    expect(result.objects[0].frames[0].layers[0].variantOffsets).toBeUndefined();
-    expect(result.objects[0].frames[1].layers[0].variantOffsets).toBeUndefined();
+    expect(
+      result.objects[0].frames[0].layers[0].variantOffsets,
+    ).toBeUndefined();
+    expect(
+      result.objects[0].frames[1].layers[0].variantOffsets,
+    ).toBeUndefined();
   });
 
   it("THE DIVERGENCE, stated concretely", () => {
@@ -739,7 +764,9 @@ describe("M6 — object-level variantGroups hoisted to project level", () => {
     expect(viaTypes.objects[0].frames[0].layers[0].variantOffsets).toEqual({
       v1: { x: 11, y: 22 },
     });
-    expect(viaApi.objects[0].frames[0].layers[0].variantOffsets).toBeUndefined();
+    expect(
+      viaApi.objects[0].frames[0].layers[0].variantOffsets,
+    ).toBeUndefined();
   });
 
   it("duplicate vg.id: api.ts keeps the FIRST and discards the second", () => {
@@ -797,12 +824,18 @@ describe("M6 — object-level variantGroups hoisted to project level", () => {
     expect(
       (viaTypes.objects[0] as { variantGroups?: unknown }).variantGroups,
     ).toBeUndefined();
-    const viaApi = apiMigrateVariantsToProjectLevel(objectLevelVariantProject());
+    const viaApi = apiMigrateVariantsToProjectLevel(
+      objectLevelVariantProject(),
+    );
     expect(viaApi.objects[0].variantGroups).toBeUndefined();
   });
 
   function duplicateIdProject(): CompactProject {
-    const mk = (name: string, variantId: string, x: number): CompactVariantGroup => ({
+    const mk = (
+      name: string,
+      variantId: string,
+      x: number,
+    ): CompactVariantGroup => ({
       id: "dup",
       name,
       variants: [
@@ -891,22 +924,27 @@ describe("synthetic idempotency", () => {
     ],
   ];
 
-  it.each(fixtures)("%s: migrate(migrate(x)) === migrate(x) by value", (_name, build) => {
-    // Deep-equal, not digest: the M5 fixture that DOES migrate leaves an
-    // explicit `variantOffset: undefined` key on the first pass which is absent
-    // on the second (see the M5 block above, where that is pinned explicitly).
-    // The VALUES are stable, which is the property that matters here.
-    const once = compactToProject(build());
-    const twice = compactToProject(projectToCompact(once));
-    expect(twice).toEqual(once);
-  });
+  it.each(fixtures)(
+    "%s: migrate(migrate(x)) === migrate(x) by value",
+    (_name, build) => {
+      // Deep-equal, not digest: the M5 fixture that DOES migrate leaves an
+      // explicit `variantOffset: undefined` key on the first pass which is absent
+      // on the second (see the M5 block above, where that is pinned explicitly).
+      // The VALUES are stable, which is the property that matters here.
+      const once = compactToProject(build());
+      const twice = compactToProject(projectToCompact(once));
+      expect(twice).toEqual(once);
+    },
+  );
 
   it.each(fixtures)(
     "%s: is digest-stable from the SECOND pass onward",
     (_name, build) => {
       // Once the explicit-undefined key has been normalised away, the canonical
       // digest is frozen too.
-      const once = compactToProject(projectToCompact(compactToProject(build())));
+      const once = compactToProject(
+        projectToCompact(compactToProject(build())),
+      );
       const twice = compactToProject(projectToCompact(once));
       expect(digest(twice)).toBe(digest(once));
     },
@@ -955,10 +993,16 @@ describe("corpus golden digests — the real regression gate", () => {
       const perSnapshot: string[] = [];
       for (const { key, data } of snapshots) {
         // No migration must fire on this data.
-        expect(isCompactFormat(data), `${file}/${key} isCompactFormat`).toBe(true);
-        expect(isLegacyCompactFormat(data), `${file}/${key} isLegacy`).toBe(false);
+        expect(isCompactFormat(data), `${file}/${key} isCompactFormat`).toBe(
+          true,
+        );
+        expect(isLegacyCompactFormat(data), `${file}/${key} isLegacy`).toBe(
+          false,
+        );
         expect(
-          data.objects.some((o) => o.variantGroups && o.variantGroups.length > 0),
+          data.objects.some(
+            (o) => o.variantGroups && o.variantGroups.length > 0,
+          ),
           `${file}/${key} has object-level variantGroups`,
         ).toBe(false);
 

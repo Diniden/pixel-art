@@ -2,7 +2,11 @@
 
 .reference-image-panel {
   position: absolute;
-  background: linear-gradient(135deg, var(--bg-hover) 0%, var(--bg-tertiary) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--bg-hover) 0%,
+    var(--bg-tertiary) 100%
+  );
   border: 2px solid var(--bg-active);
   border-radius: var(--radius-lg);
   padding: var(--space-3);
@@ -24,7 +28,8 @@
   gap: var(--space-3);
   user-select: none;
   padding: var(--space-1);
-  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1)) var(--space-2) calc(-1 * var(--space-1));
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1)) var(--space-2)
+    calc(-1 * var(--space-1));
   border-radius: var(--radius-md);
   transition: background-color var(--transition-base);
 }

@@ -130,9 +130,9 @@ describe("computeEdgeInterpolatedNormals", () => {
       3.0,
     );
     expect(result).toHaveLength(25);
-    expect(result.every((n) => n !== 0 && n.x === 0 && n.y === 0 && n.z === 255)).toBe(
-      true,
-    );
+    expect(
+      result.every((n) => n !== 0 && n.x === 0 && n.y === 0 && n.z === 255),
+    ).toBe(true);
   });
 
   it("at startAngle 90 the edges point OUTWARD and the centre stays DEFAULT_NORMAL", () => {

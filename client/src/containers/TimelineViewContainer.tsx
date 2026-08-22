@@ -97,8 +97,9 @@ export const TimelineViewContainer = observer(function TimelineViewContainer({
 }: TimelineViewContainerProps) {
   const { layers: layerStore, timelineUI, session, ui } = useStores();
 
-  const [selectedCell, setSelectedCell] =
-    useState<TimelineSelectedCell | null>(null);
+  const [selectedCell, setSelectedCell] = useState<TimelineSelectedCell | null>(
+    null,
+  );
   const [emptyCellSelection, setEmptyCellSelection] =
     useState<TimelineEmptyCellSelection | null>(null);
   const [hoveredLayerName, setHoveredLayerName] = useState<string | null>(null);
@@ -324,7 +325,10 @@ export const TimelineViewContainer = observer(function TimelineViewContainer({
       if ((e.metaKey || e.ctrlKey) && e.key === "c") {
         if (selectedCell) {
           e.preventDefault();
-          layerStore.copyTimelineCell(selectedCell.frameId, selectedCell.layerId);
+          layerStore.copyTimelineCell(
+            selectedCell.frameId,
+            selectedCell.layerId,
+          );
         }
       }
 

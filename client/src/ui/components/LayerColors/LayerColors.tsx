@@ -74,7 +74,6 @@ export function LayerColors({
   onStartColorAdjustment,
   onClearColorAdjustment,
 }: LayerColorsProps) {
-
   if (!hasLayer) {
     return (
       <div className="layer-colors">

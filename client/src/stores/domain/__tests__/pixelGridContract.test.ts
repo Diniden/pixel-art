@@ -28,12 +28,15 @@ import { isObservable, isObservableArray, observable, runInAction } from "mobx";
 
 import { DomainStore, type ProjectHost } from "@/stores/domain/DomainStore";
 import { SessionStore } from "@/stores/session/SessionStore";
-import {
-  assertGridsAreRaw,
-  collectGrids,
-} from "@/stores/domain/gridSafety";
+import { assertGridsAreRaw, collectGrids } from "@/stores/domain/gridSafety";
 import { createEmptyPixelGrid } from "@/types";
-import type { Layer, PixelData, PixelObject, Project, VariantGroup } from "@/types";
+import type {
+  Layer,
+  PixelData,
+  PixelObject,
+  Project,
+  VariantGroup,
+} from "@/types";
 
 /* ── fixtures ────────────────────────────────────────────────────────────── */
 
@@ -89,7 +92,9 @@ function projectWith(w: number, h: number, layers = 1): Project {
   return {
     version: "1.1.0",
     objects: [object],
-    palettes: [{ id: "pal-1", name: "P", colors: [{ r: 1, g: 2, b: 3, a: 4 }] }],
+    palettes: [
+      { id: "pal-1", name: "P", colors: [{ r: 1, g: 2, b: 3, a: 4 }] },
+    ],
     variants,
     uiState: {} as Project["uiState"],
   };

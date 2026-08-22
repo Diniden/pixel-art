@@ -200,7 +200,11 @@
 .variant-select-modal__add-btn {
   width: 100%;
   padding: var(--space-3);
-  background: linear-gradient(135deg, var(--accent-variant-20) 0%, var(--accent-primary-10) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-variant-20) 0%,
+    var(--accent-primary-10) 100%
+  );
   border: 2px dashed var(--accent-variant-40);
   border-radius: var(--radius-md);
   color: var(--accent-variant);
@@ -211,7 +215,11 @@
 
 .variant-select-modal__add-btn:hover {
   border-color: var(--accent-variant);
-  background: linear-gradient(135deg, var(--accent-variant-30) 0%, var(--accent-primary-15) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-variant-30) 0%,
+    var(--accent-primary-15) 100%
+  );
 }
 
 .variant-select-modal__add-options {

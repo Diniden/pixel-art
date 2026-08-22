@@ -79,7 +79,9 @@ export function makeCellThumbnailDraw(
   return (ctx, thumbSize) => {
     // Handle variant layers
     if (layer.isVariant && layer.variantGroupId && variants) {
-      const variantGroup = variants.find((vg) => vg.id === layer.variantGroupId);
+      const variantGroup = variants.find(
+        (vg) => vg.id === layer.variantGroupId,
+      );
       const variant = variantGroup?.variants.find(
         (v) => v.id === layer.selectedVariantId,
       );
@@ -106,11 +108,7 @@ export function makeCellThumbnailDraw(
           ) {
             const row = vLayer.pixels[y];
             if (!row) continue;
-            for (
-              let x = 0;
-              x < row.length && x < variant.gridSize.width;
-              x++
-            ) {
+            for (let x = 0; x < row.length && x < variant.gridSize.width; x++) {
               const pixelData = row[x];
               if (!pixelData || pixelData.color === 0) continue;
               const color = pixelData.color;

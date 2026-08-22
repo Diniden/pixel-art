@@ -28,7 +28,9 @@
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  transition: transform 0.1s ease, border-color 0.1s ease;
+  transition:
+    transform 0.1s ease,
+    border-color 0.1s ease;
 }
 
 .color-picker__history-swatch:hover {
@@ -125,7 +127,11 @@
     linear-gradient(45deg, transparent 75%, var(--swatch-border) 75%),
     linear-gradient(-45deg, transparent 75%, var(--swatch-border) 75%);
   background-size: 8px 8px;
-  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0px;
 }
 
 .color-picker__hex-input {
@@ -164,33 +170,47 @@
    (`slider__label color-picker__label--${channel}`) — never a literal.
    Do not delete as dead. */
 .color-picker__label--r,
-.color-picker__label--h { color: var(--channel-r); }
+.color-picker__label--h {
+  color: var(--channel-r);
+}
 .color-picker__label--g,
-.color-picker__label--s { color: var(--channel-g); }
+.color-picker__label--s {
+  color: var(--channel-g);
+}
 .color-picker__label--b,
-.color-picker__label--l { color: var(--channel-b); }
-.color-picker__label--a { color: var(--text-secondary); }
+.color-picker__label--l {
+  color: var(--channel-b);
+}
+.color-picker__label--a {
+  color: var(--text-secondary);
+}
 
 /* Channel-specific slider backgrounds */
 /* dynamic: color-picker__slider--{r|g|b} built at ColorPicker.tsx:621
    (`slider color-picker__slider--${channel}`) — never a literal.
    Do not delete as dead. */
 .slider.color-picker__slider--r {
-  background: linear-gradient(to right,
+  background: linear-gradient(
+    to right,
     rgb(0, var(--g, 0), var(--b, 0)),
-    rgb(255, var(--g, 0), var(--b, 0)));
+    rgb(255, var(--g, 0), var(--b, 0))
+  );
 }
 
 .slider.color-picker__slider--g {
-  background: linear-gradient(to right,
+  background: linear-gradient(
+    to right,
     rgb(var(--r, 0), 0, var(--b, 0)),
-    rgb(var(--r, 0), 255, var(--b, 0)));
+    rgb(var(--r, 0), 255, var(--b, 0))
+  );
 }
 
 .slider.color-picker__slider--b {
-  background: linear-gradient(to right,
+  background: linear-gradient(
+    to right,
     rgb(var(--r, 0), var(--g, 0), 0),
-    rgb(var(--r, 0), var(--g, 0), 255));
+    rgb(var(--r, 0), var(--g, 0), 255)
+  );
 }
 
 /* Channel slider thumbs */

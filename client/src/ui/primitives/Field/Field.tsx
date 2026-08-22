@@ -53,16 +53,12 @@ export function Field({
     control = cloneElement(children, {
       id: controlId,
       ...(error != null ? { "aria-invalid": true } : {}),
-      ...(hint != null || error != null
-        ? { "aria-describedby": hintId }
-        : {}),
+      ...(hint != null || error != null ? { "aria-describedby": hintId } : {}),
     });
   }
 
   return (
-    <div
-      className={classNames("field", inline && "field--inline", className)}
-    >
+    <div className={classNames("field", inline && "field--inline", className)}>
       <label className="field__label" htmlFor={controlId}>
         {label}
       </label>
@@ -70,7 +66,10 @@ export function Field({
       {(error ?? hint) != null && (
         <div
           id={hintId}
-          className={classNames("field__hint", error != null && "field__hint--error")}
+          className={classNames(
+            "field__hint",
+            error != null && "field__hint--error",
+          )}
         >
           {error ?? hint}
         </div>

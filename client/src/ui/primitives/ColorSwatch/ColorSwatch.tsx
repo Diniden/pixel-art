@@ -20,11 +20,10 @@ import "./ColorSwatch.css";
  * the legacy swatches were divs or nameless buttons.
  */
 
-export interface ColorSwatchProps
-  extends Omit<
-    ButtonHTMLAttributes<HTMLButtonElement>,
-    "className" | "children" | "title"
-  > {
+export interface ColorSwatchProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "className" | "children" | "title"
+> {
   /** Red channel, 0-255. */
   r: number;
   /** Green channel, 0-255. */
@@ -67,7 +66,11 @@ export function ColorSwatch({
   return (
     <button
       type={type}
-      className={classNames("swatch", selected && "swatch--selected", className)}
+      className={classNames(
+        "swatch",
+        selected && "swatch--selected",
+        className,
+      )}
       style={{ width: size, height: size, ...style }}
       title={name}
       aria-label={name}
@@ -75,7 +78,11 @@ export function ColorSwatch({
       {...rest}
     >
       <span className="swatch__bg" aria-hidden="true" />
-      <span className="swatch__color" style={{ background }} aria-hidden="true" />
+      <span
+        className="swatch__color"
+        style={{ background }}
+        aria-hidden="true"
+      />
     </button>
   );
 }

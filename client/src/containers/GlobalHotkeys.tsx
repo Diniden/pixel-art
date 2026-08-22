@@ -96,7 +96,9 @@ export const GlobalHotkeys = observer(function GlobalHotkeys() {
         if (isTypingTarget(e.target)) return;
 
         e.preventDefault();
-        lightingUI.setStudioMode(studioMode === "lighting" ? "pixel" : "lighting");
+        lightingUI.setStudioMode(
+          studioMode === "lighting" ? "pixel" : "lighting",
+        );
         return;
       }
 

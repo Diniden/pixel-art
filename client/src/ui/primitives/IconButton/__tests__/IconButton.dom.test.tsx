@@ -19,7 +19,12 @@ describe("IconButton", () => {
 
   it("renders a custom size and explicit title", () => {
     const { container } = render(
-      <IconButton icon={Trash2} label="Delete layer" title="Delete" size={16} />,
+      <IconButton
+        icon={Trash2}
+        label="Delete layer"
+        title="Delete"
+        size={16}
+      />,
     );
     expect(container.firstChild).toMatchSnapshot();
   });

@@ -4,7 +4,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FloatingPanel } from "../FloatingPanel";
 
-function renderInContainer(ui: (ref: React.RefObject<HTMLDivElement | null>) => React.ReactElement) {
+function renderInContainer(
+  ui: (ref: React.RefObject<HTMLDivElement | null>) => React.ReactElement,
+) {
   const containerRef = createRef<HTMLDivElement>();
   return render(
     <div ref={containerRef} style={{ position: "relative" }}>

@@ -20,11 +20,10 @@ import { classNames } from "../../classNames";
  * clamp.
  */
 
-export interface NumberInputProps
-  extends Omit<
-    InputHTMLAttributes<HTMLInputElement>,
-    "type" | "className" | "onChange" | "value" | "min" | "max" | "step"
-  > {
+export interface NumberInputProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "type" | "className" | "onChange" | "value" | "min" | "max" | "step"
+> {
   value: number;
   min?: number;
   max?: number;

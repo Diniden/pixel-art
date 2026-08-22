@@ -1,6 +1,6 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
-import { Normal } from '../../../types';
-import './NormalPicker.css';
+import { useRef, useEffect, useCallback, useState } from "react";
+import { Normal } from "../../../types";
+import "./NormalPicker.css";
 
 /**
  * NormalPicker — PURE (REFRESH task 36, W27).
@@ -64,7 +64,7 @@ function spherePosToNormal(x: number, y: number): Normal {
   return {
     x: Math.round(x * 127),
     y: Math.round(y * 127),
-    z: Math.round(z * 255) // z is 0-255 (unsigned)
+    z: Math.round(z * 255), // z is 0-255 (unsigned)
   };
 }
 
@@ -86,7 +86,7 @@ export function NormalPicker({
   // Draw the sphere and normal indicator
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
+    const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
     const centerX = sphereSize / 2;
@@ -101,11 +101,11 @@ export function NormalPicker({
       0,
       centerX,
       centerY,
-      sphereRadius
+      sphereRadius,
     );
-    gradient.addColorStop(0, '#4a5568');
-    gradient.addColorStop(0.7, '#2d3748');
-    gradient.addColorStop(1, '#1a202c');
+    gradient.addColorStop(0, "#4a5568");
+    gradient.addColorStop(0.7, "#2d3748");
+    gradient.addColorStop(1, "#1a202c");
 
     ctx.beginPath();
     ctx.arc(centerX, centerY, sphereRadius, 0, Math.PI * 2);
@@ -113,12 +113,12 @@ export function NormalPicker({
     ctx.fill();
 
     // Draw sphere border
-    ctx.strokeStyle = '#718096';
+    ctx.strokeStyle = "#718096";
     ctx.lineWidth = 2;
     ctx.stroke();
 
     // Draw cross-hairs (equator lines)
-    ctx.strokeStyle = 'rgba(113, 128, 150, 0.4)';
+    ctx.strokeStyle = "rgba(113, 128, 150, 0.4)";
     ctx.lineWidth = 1;
 
     // Horizontal line
@@ -145,19 +145,21 @@ export function NormalPicker({
     ctx.beginPath();
     ctx.moveTo(indicatorX, indicatorY);
     // Line points outward based on z component
-    const lineEndX = indicatorX + spherePos.x * lineLength * (1 - normalizedZ * 0.5);
-    const lineEndY = indicatorY + spherePos.y * lineLength * (1 - normalizedZ * 0.5);
+    const lineEndX =
+      indicatorX + spherePos.x * lineLength * (1 - normalizedZ * 0.5);
+    const lineEndY =
+      indicatorY + spherePos.y * lineLength * (1 - normalizedZ * 0.5);
     ctx.lineTo(lineEndX, lineEndY);
-    ctx.strokeStyle = isLightDirection ? '#f59e0b' : '#00d9ff';
+    ctx.strokeStyle = isLightDirection ? "#f59e0b" : "#00d9ff";
     ctx.lineWidth = 3;
     ctx.stroke();
 
     // Draw circle at indicator position
     ctx.beginPath();
     ctx.arc(indicatorX, indicatorY, 8, 0, Math.PI * 2);
-    ctx.fillStyle = isLightDirection ? '#f59e0b' : '#00d9ff';
+    ctx.fillStyle = isLightDirection ? "#f59e0b" : "#00d9ff";
     ctx.fill();
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = "#fff";
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -166,7 +168,7 @@ export function NormalPicker({
     if (innerRadius > 0.5) {
       ctx.beginPath();
       ctx.arc(indicatorX, indicatorY, innerRadius, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = "#fff";
       ctx.fill();
     }
   }, [normal, isLightDirection, sphereRadius, sphereSize]);
@@ -176,21 +178,24 @@ export function NormalPicker({
   }, [draw]);
 
   // Handle mouse/touch interaction
-  const handleInteraction = useCallback((clientX: number, clientY: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const handleInteraction = useCallback(
+    (clientX: number, clientY: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const centerX = sphereSize / 2;
-    const centerY = sphereSize / 2;
+      const rect = canvas.getBoundingClientRect();
+      const centerX = sphereSize / 2;
+      const centerY = sphereSize / 2;
 
-    // Get position relative to sphere center, normalized to -1 to 1
-    const x = ((clientX - rect.left) - centerX) / sphereRadius;
-    const y = ((clientY - rect.top) - centerY) / sphereRadius;
+      // Get position relative to sphere center, normalized to -1 to 1
+      const x = (clientX - rect.left - centerX) / sphereRadius;
+      const y = (clientY - rect.top - centerY) / sphereRadius;
 
-    const newNormal = spherePosToNormal(x, y);
-    setNormal(newNormal);
-  }, [sphereRadius, sphereSize, setNormal]);
+      const newNormal = spherePosToNormal(x, y);
+      setNormal(newNormal);
+    },
+    [sphereRadius, sphereSize, setNormal],
+  );
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
@@ -218,12 +223,12 @@ export function NormalPicker({
       setIsDragging(false);
     };
 
-    window.addEventListener('mousemove', handleGlobalMouseMove);
-    window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener("mousemove", handleGlobalMouseMove);
+    window.addEventListener("mouseup", handleGlobalMouseUp);
 
     return () => {
-      window.removeEventListener('mousemove', handleGlobalMouseMove);
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener("mousemove", handleGlobalMouseMove);
+      window.removeEventListener("mouseup", handleGlobalMouseUp);
     };
   }, [isDragging, handleInteraction]);
 
@@ -248,8 +253,8 @@ export function NormalPicker({
       setNormal(newNormal);
     };
 
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
   }, [enableScrollControl, normal, setNormal]);
 
   // Format normal for display
@@ -260,7 +265,7 @@ export function NormalPicker({
   return (
     <div className="normal-picker" ref={containerRef}>
       <div className="normal-picker__header">
-        {isLightDirection ? 'Light Direction' : 'Normal Direction'}
+        {isLightDirection ? "Light Direction" : "Normal Direction"}
       </div>
       <div className="normal-picker__canvas-frame">
         <canvas
@@ -273,15 +278,10 @@ export function NormalPicker({
           onMouseUp={handleMouseUp}
         />
       </div>
-      <div className="normal-picker__value">
-        {formatNormal(normal)}
-      </div>
+      <div className="normal-picker__value">{formatNormal(normal)}</div>
       {enableScrollControl && (
-        <div className="normal-picker__hint">
-          Scroll to adjust
-        </div>
+        <div className="normal-picker__hint">Scroll to adjust</div>
       )}
     </div>
   );
 }
-

@@ -125,16 +125,13 @@ const PERSISTED_EDITS: [name: string, edit: (ui: UIStore) => void][] = [
 ];
 
 describe("persistedUIVersion — every persisted field bumps it", () => {
-  it.each(PERSISTED_EDITS)(
-    "editing %s schedules a save",
-    (_name, edit) => {
-      const ui = makeUI();
-      const before = ui.persistedUIVersion;
-      runInAction(() => edit(ui));
-      expect(ui.persistedUIVersion).toBeGreaterThan(before);
-      ui.dispose();
-    },
-  );
+  it.each(PERSISTED_EDITS)("editing %s schedules a save", (_name, edit) => {
+    const ui = makeUI();
+    const before = ui.persistedUIVersion;
+    runInAction(() => edit(ui));
+    expect(ui.persistedUIVersion).toBeGreaterThan(before);
+    ui.dispose();
+  });
 
   it("covers every field the builder emits", () => {
     // Guards the list above against drift: if the builder grows a field, the

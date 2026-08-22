@@ -1,103 +1,190 @@
-import { useState, useRef, useEffect, useLayoutEffect, memo, useCallback, ReactNode } from 'react';
-import { Frame, PixelObject, TimelineProjectView } from '../../types';
-import { renderFramePreview } from '../../utils/previewRenderer';
-import { PreviewModal } from '../../ui/components/PreviewModal/PreviewModal';
-import { ResizeModal } from '../../ui/components/ResizeModal/ResizeModal';
-import { tagColorForTag } from '../../ui/components/FrameTagsModal/FrameTagsModal';
-import { FrameTagsModalContainer } from '../../containers/FrameTagsModalContainer';
-import type { FrameTagsContext } from '../../ui/components/FrameTagsModal/FrameTagsModal';
-import { AnchorPosition } from '../../ui/components/AnchorGrid/AnchorGrid';
-import { AIInterpolateContainer } from '../../containers/AIInterpolateContainer';
-import { Icon } from '../../ui/primitives/Icon/Icon';
-import { Tag, SquareIcon, Play, Zap, Maximize, Wand2, Copy, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  memo,
+  useCallback,
+  ReactNode,
+} from "react";
+import { Frame, PixelObject, TimelineProjectView } from "../../types";
+import { renderFramePreview } from "../../utils/previewRenderer";
+import { PreviewModal } from "../../ui/components/PreviewModal/PreviewModal";
+import { ResizeModal } from "../../ui/components/ResizeModal/ResizeModal";
+import { tagColorForTag } from "../../ui/components/FrameTagsModal/FrameTagsModal";
+import { FrameTagsModalContainer } from "../../containers/FrameTagsModalContainer";
+import type { FrameTagsContext } from "../../ui/components/FrameTagsModal/FrameTagsModal";
+import { AnchorPosition } from "../../ui/components/AnchorGrid/AnchorGrid";
+import { AIInterpolateContainer } from "../../containers/AIInterpolateContainer";
+import { Icon } from "../../ui/primitives/Icon/Icon";
+import {
+  Tag,
+  SquareIcon,
+  Play,
+  Zap,
+  Maximize,
+  Wand2,
+  Copy,
+  ChevronLeft,
+  ChevronRight,
+  X,
+} from "lucide-react";
 
 // Memoized thumbnail component that only re-renders when frame data actually changes
-export const FrameThumbnail = memo(function FrameThumbnail({
-  frame,
-  width,
-  height,
-  variants,
-  project,
-  frameIndex,
-  isSelected
-}: {
-  frame: Frame;
-  width: number;
-  height: number;
-  variants?: import('../../types').VariantGroup[];  // Project-level variants
-  project?: { uiState?: { variantFrameIndices?: { [key: string]: number } } };
-  frameIndex: number;
-  isSelected: boolean;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const thumbSize = 48;
+export const FrameThumbnail = memo(
+  function FrameThumbnail({
+    frame,
+    width,
+    height,
+    variants,
+    project,
+    frameIndex,
+    isSelected,
+  }: {
+    frame: Frame;
+    width: number;
+    height: number;
+    variants?: import("../../types").VariantGroup[]; // Project-level variants
+    project?: { uiState?: { variantFrameIndices?: { [key: string]: number } } };
+    frameIndex: number;
+    isSelected: boolean;
+  }) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const thumbSize = 48;
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d', { willReadFrequently: false });
-    if (!canvas || !ctx) return;
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d", { willReadFrequently: false });
+      if (!canvas || !ctx) return;
 
-    // For static thumbnails (non-selected frames), calculate variant frame indices
-    // based on the frame's position in the timeline. For the selected frame,
-    // use the current variantFrameIndices to show live updates.
-    let variantFrameIndices: { [key: string]: number } | undefined;
+      // For static thumbnails (non-selected frames), calculate variant frame indices
+      // based on the frame's position in the timeline. For the selected frame,
+      // use the current variantFrameIndices to show live updates.
+      let variantFrameIndices: { [key: string]: number } | undefined;
 
-    if (isSelected) {
-      // Use current indices for the selected frame (allows live updates while editing)
-      variantFrameIndices = project?.uiState?.variantFrameIndices;
-    } else if (variants) {
-      // Calculate static indices based on frame position
-      variantFrameIndices = {};
-      for (const vg of variants) {
-        const variant = vg.variants[0]; // All variants should have same frame count
-        if (variant && variant.frames.length > 0) {
-          // Use frame index modulo variant frame count to determine which variant frame to show
-          variantFrameIndices[vg.id] = frameIndex % variant.frames.length;
+      if (isSelected) {
+        // Use current indices for the selected frame (allows live updates while editing)
+        variantFrameIndices = project?.uiState?.variantFrameIndices;
+      } else if (variants) {
+        // Calculate static indices based on frame position
+        variantFrameIndices = {};
+        for (const vg of variants) {
+          const variant = vg.variants[0]; // All variants should have same frame count
+          if (variant && variant.frames.length > 0) {
+            // Use frame index modulo variant frame count to determine which variant frame to show
+            variantFrameIndices[vg.id] = frameIndex % variant.frames.length;
+          }
         }
       }
+
+      renderFramePreview(ctx, {
+        thumbSize,
+        gridWidth: width,
+        gridHeight: height,
+        frame,
+        frameIndex, // Pass base frame index for offset lookup
+        variants,
+        variantFrameIndices,
+      });
+    }, [frame, width, height, variants, project, frameIndex, isSelected]);
+
+    return (
+      <canvas
+        ref={canvasRef}
+        width={thumbSize}
+        height={thumbSize}
+        className="frame-timeline__thumb-canvas"
+      />
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison: only re-render if frame content actually changed
+    if (
+      prevProps.width !== nextProps.width ||
+      prevProps.height !== nextProps.height
+    ) {
+      return false;
     }
 
-    renderFramePreview(ctx, {
-      thumbSize,
-      gridWidth: width,
-      gridHeight: height,
-      frame,
-      frameIndex, // Pass base frame index for offset lookup
-      variants,
-      variantFrameIndices
-    });
-  }, [frame, width, height, variants, project, frameIndex, isSelected]);
+    if (prevProps.frameIndex !== nextProps.frameIndex) {
+      // Frame index changed - only re-render if not selected (selected frame uses current indices)
+      if (!nextProps.isSelected) return false;
+    }
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="frame-timeline__thumb-canvas" />;
-}, (prevProps, nextProps) => {
-  // Custom comparison: only re-render if frame content actually changed
-  if (prevProps.width !== nextProps.width || prevProps.height !== nextProps.height) {
-    return false;
-  }
+    // Check if variant offsets changed for this frame (now stored on layers)
+    const prevFrame = prevProps.frame;
+    const nextFrame = nextProps.frame;
 
-  if (prevProps.frameIndex !== nextProps.frameIndex) {
-    // Frame index changed - only re-render if not selected (selected frame uses current indices)
-    if (!nextProps.isSelected) return false;
-  }
+    if (prevFrame === nextFrame) {
+      // Frame is the same - check if variant selectedVariantId changed in any variant layers
+      // This handles variant switching when not editing a variant
+      for (let i = 0; i < prevFrame.layers.length; i++) {
+        const prevLayer = prevFrame.layers[i];
+        const nextLayer = nextFrame.layers[i];
+        if (prevLayer.isVariant && nextLayer.isVariant) {
+          if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
+            return false; // Variant selection changed, re-render
+          }
+          // Check if variantOffsets changed for the selected variant type
+          const prevOffset =
+            prevLayer.variantOffsets?.[prevLayer.selectedVariantId ?? ""] ??
+            prevLayer.variantOffset;
+          const nextOffset =
+            nextLayer.variantOffsets?.[nextLayer.selectedVariantId ?? ""] ??
+            nextLayer.variantOffset;
+          if (
+            prevOffset?.x !== nextOffset?.x ||
+            prevOffset?.y !== nextOffset?.y
+          ) {
+            return false;
+          }
+        }
+      }
 
-  // Check if variant offsets changed for this frame (now stored on layers)
-  const prevFrame = prevProps.frame;
-  const nextFrame = nextProps.frame;
+      // Only check variant frame indices if this is the selected frame
+      if (nextProps.isSelected && prevProps.variants) {
+        const prevIndices = prevProps.project?.uiState?.variantFrameIndices;
+        const nextIndices = nextProps.project?.uiState?.variantFrameIndices;
+        if (prevIndices !== nextIndices) {
+          // Check if any relevant variant frame indices changed
+          for (const vg of prevProps.variants) {
+            const prevIdx = prevIndices?.[vg.id] ?? 0;
+            const nextIdx = nextIndices?.[vg.id] ?? 0;
+            if (prevIdx !== nextIdx) return false;
+          }
+        }
+      }
+      // For non-selected frames, ignore variantFrameIndices changes (they use static indices)
+      return true;
+    }
 
-  if (prevFrame === nextFrame) {
-    // Frame is the same - check if variant selectedVariantId changed in any variant layers
-    // This handles variant switching when not editing a variant
+    if (prevFrame.id !== nextFrame.id) return false;
+    if (prevFrame.layers.length !== nextFrame.layers.length) return false;
+
+    // Check if any layer pixels changed
     for (let i = 0; i < prevFrame.layers.length; i++) {
       const prevLayer = prevFrame.layers[i];
       const nextLayer = nextFrame.layers[i];
+
+      if (prevLayer.visible !== nextLayer.visible) return false;
+      if (prevLayer.pixels !== nextLayer.pixels) return false;
+
+      // Check if variant layer's selectedVariantId or offset changed
       if (prevLayer.isVariant && nextLayer.isVariant) {
         if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
           return false; // Variant selection changed, re-render
         }
         // Check if variantOffsets changed for the selected variant type
-        const prevOffset = prevLayer.variantOffsets?.[prevLayer.selectedVariantId ?? ''] ?? prevLayer.variantOffset;
-        const nextOffset = nextLayer.variantOffsets?.[nextLayer.selectedVariantId ?? ''] ?? nextLayer.variantOffset;
-        if (prevOffset?.x !== nextOffset?.x || prevOffset?.y !== nextOffset?.y) {
+        const prevOffset2 =
+          prevLayer.variantOffsets?.[prevLayer.selectedVariantId ?? ""] ??
+          prevLayer.variantOffset;
+        const nextOffset2 =
+          nextLayer.variantOffsets?.[nextLayer.selectedVariantId ?? ""] ??
+          nextLayer.variantOffset;
+        if (
+          prevOffset2?.x !== nextOffset2?.x ||
+          prevOffset2?.y !== nextOffset2?.y
+        ) {
           return false;
         }
       }
@@ -116,51 +203,10 @@ export const FrameThumbnail = memo(function FrameThumbnail({
         }
       }
     }
-    // For non-selected frames, ignore variantFrameIndices changes (they use static indices)
+
     return true;
-  }
-
-  if (prevFrame.id !== nextFrame.id) return false;
-  if (prevFrame.layers.length !== nextFrame.layers.length) return false;
-
-  // Check if any layer pixels changed
-  for (let i = 0; i < prevFrame.layers.length; i++) {
-    const prevLayer = prevFrame.layers[i];
-    const nextLayer = nextFrame.layers[i];
-
-    if (prevLayer.visible !== nextLayer.visible) return false;
-    if (prevLayer.pixels !== nextLayer.pixels) return false;
-
-    // Check if variant layer's selectedVariantId or offset changed
-    if (prevLayer.isVariant && nextLayer.isVariant) {
-      if (prevLayer.selectedVariantId !== nextLayer.selectedVariantId) {
-        return false; // Variant selection changed, re-render
-      }
-      // Check if variantOffsets changed for the selected variant type
-      const prevOffset2 = prevLayer.variantOffsets?.[prevLayer.selectedVariantId ?? ''] ?? prevLayer.variantOffset;
-      const nextOffset2 = nextLayer.variantOffsets?.[nextLayer.selectedVariantId ?? ''] ?? nextLayer.variantOffset;
-      if (prevOffset2?.x !== nextOffset2?.x || prevOffset2?.y !== nextOffset2?.y) {
-        return false;
-      }
-    }
-  }
-
-  // Only check variant frame indices if this is the selected frame
-  if (nextProps.isSelected && prevProps.variants) {
-    const prevIndices = prevProps.project?.uiState?.variantFrameIndices;
-    const nextIndices = nextProps.project?.uiState?.variantFrameIndices;
-    if (prevIndices !== nextIndices) {
-      // Check if any relevant variant frame indices changed
-      for (const vg of prevProps.variants) {
-        const prevIdx = prevIndices?.[vg.id] ?? 0;
-        const nextIdx = nextIndices?.[vg.id] ?? 0;
-        if (prevIdx !== nextIdx) return false;
-      }
-    }
-  }
-
-  return true;
-});
+  },
+);
 
 // Memoized frame item to prevent unnecessary re-renders
 const FrameItem = memo(function FrameItem({
@@ -187,7 +233,7 @@ const FrameItem = memo(function FrameItem({
   onDrop,
   onDragLeave,
   onDragEnd,
-  setItemRef
+  setItemRef,
 }: {
   frame: Frame;
   index: number;
@@ -204,7 +250,7 @@ const FrameItem = memo(function FrameItem({
   onEditingNameChange: (name: string) => void;
   onFinishRename: (id: string) => void;
   onOpenTags: (context: FrameTagsContext) => void;
-  variants?: import('../../types').VariantGroup[];  // Project-level variants
+  variants?: import("../../types").VariantGroup[]; // Project-level variants
   project?: { uiState?: { variantFrameIndices?: { [key: string]: number } } };
   isDragging?: boolean;
   onDragStart?: (e: React.DragEvent, frameId: string) => void;
@@ -221,13 +267,13 @@ const FrameItem = memo(function FrameItem({
       itemRef.current = el;
       setItemRef?.(el, index);
     },
-    [index, setItemRef]
+    [index, setItemRef],
   );
 
   return (
     <div
       ref={setRef}
-      className={`frames-view__item ${isSelected ? 'frames-view__item--selected' : ''} ${isDragging ? 'frames-view__item--dragging' : ''}`}
+      className={`frames-view__item ${isSelected ? "frames-view__item--selected" : ""} ${isDragging ? "frames-view__item--dragging" : ""}`}
       onClick={() => onSelect(frame.id)}
       draggable={onDragStart != null}
       onDragStart={onDragStart ? (e) => onDragStart(e, frame.id) : undefined}
@@ -263,7 +309,7 @@ const FrameItem = memo(function FrameItem({
             value={editingName}
             onChange={(e) => onEditingNameChange(e.target.value)}
             onBlur={() => onFinishRename(frame.id)}
-            onKeyDown={(e) => e.key === 'Enter' && onFinishRename(frame.id)}
+            onKeyDown={(e) => e.key === "Enter" && onFinishRename(frame.id)}
             onClick={(e) => e.stopPropagation()}
             autoFocus
           />
@@ -284,7 +330,7 @@ const FrameItem = memo(function FrameItem({
             <span
               className="frame-timeline__tag-dot"
               style={{ backgroundColor: tagColorForTag(frame.tags[0]) }}
-              title={frame.tags.join(', ')}
+              title={frame.tags.join(", ")}
             />
           ) : null}
         </span>
@@ -295,11 +341,17 @@ const FrameItem = memo(function FrameItem({
           className="frames-view__action-btn frames-view__action-btn--tags"
           onClick={(e) => {
             e.stopPropagation();
-            onOpenTags({ type: 'object', frameId: frame.id, frameName: frame.name });
+            onOpenTags({
+              type: "object",
+              frameId: frame.id,
+              frameName: frame.name,
+            });
           }}
           title="Frame tags"
         >
-          <span className="frame-timeline__tags-icon"><Icon icon={Tag} size={10} /></span>
+          <span className="frame-timeline__tags-icon">
+            <Icon icon={Tag} size={10} />
+          </span>
         </button>
         <button
           className="frames-view__action-btn"
@@ -356,13 +408,13 @@ interface FramesViewProps {
   renameFrame: (id: string, name: string) => void;
   selectFrame: (id: string, syncVariants?: boolean) => void;
   duplicateFrame: (id: string) => void;
-  moveFrame: (id: string, direction: 'left' | 'right') => void;
+  moveFrame: (id: string, direction: "left" | "right") => void;
   reorderFrame: (frameId: string, toIndex: number) => void;
   resizeObject: (
     id: string,
     width: number,
     height: number,
-    anchor?: AnchorPosition
+    anchor?: AnchorPosition,
   ) => void;
 }
 
@@ -381,7 +433,7 @@ export function FramesView({
   duplicateFrame,
   moveFrame,
   reorderFrame,
-  resizeObject
+  resizeObject,
 }: FramesViewProps) {
   const [showResizeModal, setShowResizeModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
@@ -392,21 +444,25 @@ export function FramesView({
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Wrapper to ensure variant timelines always sync when clicking frames
-  const handleFrameSelect = useCallback((frameId: string) => {
-    selectFrame(frameId, true); // Always sync variant timelines
-  }, [selectFrame]);
+  const handleFrameSelect = useCallback(
+    (frameId: string) => {
+      selectFrame(frameId, true); // Always sync variant timelines
+    },
+    [selectFrame],
+  );
 
-  const [newFrameName, setNewFrameName] = useState('');
+  const [newFrameName, setNewFrameName] = useState("");
   const [copyPrevious, setCopyPrevious] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
-  const [tagsModalContext, setTagsModalContext] = useState<FrameTagsContext | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [tagsModalContext, setTagsModalContext] =
+    useState<FrameTagsContext | null>(null);
 
   const handleAddFrame = useCallback(() => {
     const frames = obj?.frames ?? [];
     const name = newFrameName.trim() || `Frame ${frames.length + 1}`;
     addFrame(name, copyPrevious);
-    setNewFrameName('');
+    setNewFrameName("");
   }, [obj?.frames, newFrameName, copyPrevious, addFrame]);
 
   const handleStartRename = useCallback((id: string, name: string) => {
@@ -414,13 +470,16 @@ export function FramesView({
     setEditingName(name);
   }, []);
 
-  const handleFinishRename = useCallback((id: string) => {
-    if (editingName.trim()) {
-      renameFrame(id, editingName.trim());
-    }
-    setEditingId(null);
-    setEditingName('');
-  }, [editingName, renameFrame]);
+  const handleFinishRename = useCallback(
+    (id: string) => {
+      if (editingName.trim()) {
+        renameFrame(id, editingName.trim());
+      }
+      setEditingId(null);
+      setEditingName("");
+    },
+    [editingName, renameFrame],
+  );
 
   const handleEditingNameChange = useCallback((name: string) => {
     setEditingName(name);
@@ -428,39 +487,43 @@ export function FramesView({
 
   const { selectedFrameId } = project.uiState;
   const frames = obj.frames;
-  const selectedFrameIndex = frames.findIndex(f => f.id === selectedFrameId);
+  const selectedFrameIndex = frames.findIndex((f) => f.id === selectedFrameId);
   const canMoveLeft = selectedFrameIndex > 0;
-  const canMoveRight = selectedFrameIndex >= 0 && selectedFrameIndex < frames.length - 1;
+  const canMoveRight =
+    selectedFrameIndex >= 0 && selectedFrameIndex < frames.length - 1;
 
   const handleMoveLeft = () => {
     if (selectedFrameId && canMoveLeft) {
-      moveFrame(selectedFrameId, 'left');
+      moveFrame(selectedFrameId, "left");
     }
   };
 
   const handleMoveRight = () => {
     if (selectedFrameId && canMoveRight) {
-      moveFrame(selectedFrameId, 'right');
+      moveFrame(selectedFrameId, "right");
     }
   };
 
-  const handleFrameDragStart = useCallback((e: React.DragEvent, frameId: string) => {
-    setDragFrameId(frameId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', frameId);
-  }, []);
+  const handleFrameDragStart = useCallback(
+    (e: React.DragEvent, frameId: string) => {
+      setDragFrameId(frameId);
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", frameId);
+    },
+    [],
+  );
 
   const handleFrameDragOver = useCallback(
     (e: React.DragEvent, index: number, rect: DOMRect) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
+      e.dataTransfer.dropEffect = "move";
       const clientX = e.clientX;
       const midX = rect.left + rect.width / 2;
       const insertIndex = clientX < midX ? index : index + 1;
       const clamped = Math.max(0, Math.min(frames.length, insertIndex));
       setDropInsertIndex(clamped);
     },
-    [frames.length]
+    [frames.length],
   );
 
   const handleFrameDrop = useCallback(
@@ -473,7 +536,7 @@ export function FramesView({
       setDropInsertIndex(null);
       setIndicatorLeft(null);
     },
-    [dragFrameId, dropInsertIndex, reorderFrame]
+    [dragFrameId, dropInsertIndex, reorderFrame],
   );
 
   const handleFrameDragLeave = useCallback(() => {
@@ -484,7 +547,7 @@ export function FramesView({
   const handleListContainerDragOver = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
+      e.dataTransfer.dropEffect = "move";
       if (!dragFrameId || frames.length === 0) return;
       const lastEl = itemRefs.current[frames.length - 1];
       if (!lastEl) return;
@@ -494,7 +557,7 @@ export function FramesView({
         setDropInsertIndex(frames.length);
       }
     },
-    [dragFrameId, frames.length]
+    [dragFrameId, frames.length],
   );
 
   const handleFrameDragEnd = useCallback(() => {
@@ -521,7 +584,9 @@ export function FramesView({
       left = first ? first.getBoundingClientRect().left - listRect.left : 0;
     } else if (dropInsertIndex >= n) {
       const last = itemRefs.current[n - 1];
-      left = last ? last.getBoundingClientRect().right - listRect.left : listRect.width;
+      left = last
+        ? last.getBoundingClientRect().right - listRect.left
+        : listRect.width;
     } else {
       const leftItem = itemRefs.current[dropInsertIndex - 1];
       const rightItem = itemRefs.current[dropInsertIndex];
@@ -536,9 +601,12 @@ export function FramesView({
     setIndicatorLeft(left);
   }, [dropInsertIndex, dragFrameId, frames.length]);
 
-  const handleResize = useCallback((width: number, height: number, anchor: AnchorPosition) => {
-    resizeObject(obj.id, width, height, anchor);
-  }, [resizeObject, obj.id]);
+  const handleResize = useCallback(
+    (width: number, height: number, anchor: AnchorPosition) => {
+      resizeObject(obj.id, width, height, anchor);
+    },
+    [resizeObject, obj.id],
+  );
 
   // Normal frames timeline
   return (
@@ -565,11 +633,15 @@ export function FramesView({
         </div>
         <div className="frame-timeline__controls">
           <button
-            className={`frame-timeline__play-btn ${isPlaying ? 'frame-timeline__play-btn--playing' : ''}`}
+            className={`frame-timeline__play-btn ${isPlaying ? "frame-timeline__play-btn--playing" : ""}`}
             onClick={togglePlayback}
-            title={isPlaying ? 'Stop (Enter)' : 'Play (Enter)'}
+            title={isPlaying ? "Stop (Enter)" : "Play (Enter)"}
           >
-            {isPlaying ? <Icon icon={SquareIcon} size={14} /> : <Icon icon={Play} size={14} />}
+            {isPlaying ? (
+              <Icon icon={SquareIcon} size={14} />
+            ) : (
+              <Icon icon={Play} size={14} />
+            )}
           </button>
           <button
             className="frame-timeline__preview-btn"
@@ -592,7 +664,10 @@ export function FramesView({
           >
             <Icon icon={Wand2} size={14} />
           </button>
-          <label className="frame-timeline__copy-previous" title="Copy pixels from current frame">
+          <label
+            className="frame-timeline__copy-previous"
+            title="Copy pixels from current frame"
+          >
             <input
               type="checkbox"
               checked={copyPrevious}
@@ -606,9 +681,12 @@ export function FramesView({
             placeholder="New frame..."
             value={newFrameName}
             onChange={(e) => setNewFrameName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddFrame()}
+            onKeyDown={(e) => e.key === "Enter" && handleAddFrame()}
           />
-          <button className="frame-timeline__add-frame-btn" onClick={handleAddFrame}>
+          <button
+            className="frame-timeline__add-frame-btn"
+            onClick={handleAddFrame}
+          >
             + Add
           </button>
         </div>
@@ -706,4 +784,3 @@ export function FramesView({
     </>
   );
 }
-

@@ -69,9 +69,9 @@ describe("shiftedSelection", () => {
 
 describe("sizeSteppedSelection", () => {
   it("jumps by exactly one reference width to the right", () => {
-    expect(sizeSteppedSelection(box(0, 0, 10, 10), bounds, 1, 0, 10, 10)).toEqual(
-      box(10, 0, 20, 10),
-    );
+    expect(
+      sizeSteppedSelection(box(0, 0, 10, 10), bounds, 1, 0, 10, 10),
+    ).toEqual(box(10, 0, 20, 10));
   });
 
   it("REFUSES a partial step rather than clamping it", () => {
@@ -123,25 +123,29 @@ describe("resizedSelection", () => {
     expect(resizedSelection(box(10, 10, 20, 20), bounds, "left", true)).toEqual(
       box(9, 10, 20, 20),
     );
-    expect(resizedSelection(box(10, 10, 20, 20), bounds, "right", true)).toEqual(
-      box(10, 10, 21, 20),
-    );
+    expect(
+      resizedSelection(box(10, 10, 20, 20), bounds, "right", true),
+    ).toEqual(box(10, 10, 21, 20));
   });
 
   it("CLAMPS growth at the image edge instead of exceeding it", () => {
     expect(resizedSelection(box(0, 0, 10, 10), bounds, "up", true)).toEqual(
       box(0, 0, 10, 10),
     );
-    expect(
-      resizedSelection(box(0, 70, 10, 80), bounds, "down", true),
-    ).toEqual(box(0, 70, 10, 80));
+    expect(resizedSelection(box(0, 70, 10, 80), bounds, "down", true)).toEqual(
+      box(0, 70, 10, 80),
+    );
   });
 
   it("REFUSES a shrink that would collapse the box below 1x1", () => {
     // A 1px-tall box shrunk from the top would be 0px tall → null, so the
     // selection can never be reduced to nothing by the arrow buttons.
-    expect(resizedSelection(box(10, 10, 20, 11), bounds, "up", false)).toBeNull();
-    expect(resizedSelection(box(10, 10, 11, 20), bounds, "left", false)).toBeNull();
+    expect(
+      resizedSelection(box(10, 10, 20, 11), bounds, "up", false),
+    ).toBeNull();
+    expect(
+      resizedSelection(box(10, 10, 11, 20), bounds, "left", false),
+    ).toBeNull();
   });
 
   it("PRESERVES an inverted box's corner order, unlike a nudge", () => {

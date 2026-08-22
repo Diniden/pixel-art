@@ -381,12 +381,7 @@ export const FrameOverlay: Story = {
       ctx.strokeStyle = "rgba(139, 92, 246, 0.7)";
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
-      ctx.strokeRect(
-        2 * ZOOM,
-        1 * ZOOM,
-        GRID.width * ZOOM,
-        GRID.height * ZOOM,
-      );
+      ctx.strokeRect(2 * ZOOM, 1 * ZOOM, GRID.width * ZOOM, GRID.height * ZOOM);
       ctx.setLineDash([]);
     },
   },

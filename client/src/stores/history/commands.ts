@@ -491,9 +491,7 @@ export function isPixelCommand(command: Command): command is PixelCommand {
  * project. This is the "< 0.1 ms per history-tracked pixel mutation" the task
  * promises against the snapshot family's measured 5.1 ms round trip.
  */
-export function createPixelCommand(
-  options: PixelCommandOptions,
-): PixelCommand {
+export function createPixelCommand(options: PixelCommandOptions): PixelCommand {
   const { label, target, host } = options;
   // PACKED at construction. The caller may keep mutating its working buffer
   // during a stroke, and — the point of the representation — nothing retained

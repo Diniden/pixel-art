@@ -1,4 +1,4 @@
-import { Pixel, PixelData } from '../types';
+import { Pixel, PixelData } from "../types";
 
 /**
  * Blends two pixels using proper alpha compositing.
@@ -22,15 +22,18 @@ function alphaBlend(src: Pixel, dst: Pixel): Pixel {
 
   // Calculate blended color using premultiplied alpha
   const invOutAlpha = 1 / outAlpha;
-  const r = (src.r * srcAlpha + dst.r * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-  const g = (src.g * srcAlpha + dst.g * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
-  const b = (src.b * srcAlpha + dst.b * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+  const r =
+    (src.r * srcAlpha + dst.r * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+  const g =
+    (src.g * srcAlpha + dst.g * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
+  const b =
+    (src.b * srcAlpha + dst.b * dstAlpha * (1 - srcAlpha)) * invOutAlpha;
 
   return {
     r: Math.round(Math.max(0, Math.min(255, r))),
     g: Math.round(Math.max(0, Math.min(255, g))),
     b: Math.round(Math.max(0, Math.min(255, b))),
-    a: Math.round(Math.max(0, Math.min(255, outAlpha * 255)))
+    a: Math.round(Math.max(0, Math.min(255, outAlpha * 255))),
   };
 }
 
@@ -71,10 +74,9 @@ export function blendPixels(src: PixelData, dst: PixelData): PixelData {
   return {
     color: blendedColor,
     normal,
-    height
+    height,
   };
 }
-
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Buffer-level compositing — the shared implementation (task 30, §9.12)
@@ -128,11 +130,17 @@ export function blendOverInto(
   r: number,
   g: number,
   b: number,
-  a: number
+  a: number,
 ): void {
   const blended = blendOverChannels(
-    r, g, b, a,
-    data[idx], data[idx + 1], data[idx + 2], data[idx + 3]
+    r,
+    g,
+    b,
+    a,
+    data[idx],
+    data[idx + 1],
+    data[idx + 2],
+    data[idx + 3],
   );
 
   // NOTE: no else-branch. When the result is essentially transparent the
@@ -159,8 +167,14 @@ export function blendOverInto(
  * @returns `[r, g, b, outAlpha01]` or `null`
  */
 export function blendOverChannels(
-  srcR: number, srcG: number, srcB: number, srcA: number,
-  dstR: number, dstG: number, dstB: number, dstA: number
+  srcR: number,
+  srcG: number,
+  srcB: number,
+  srcA: number,
+  dstR: number,
+  dstG: number,
+  dstB: number,
+  dstA: number,
 ): [number, number, number, number] | null {
   const srcAlpha = srcA / 255;
   const dstAlpha = dstA / 255;
@@ -192,7 +206,7 @@ export function writeOverInto(
   r: number,
   g: number,
   b: number,
-  a: number
+  a: number,
 ): void {
   data[idx] = r;
   data[idx + 1] = g;

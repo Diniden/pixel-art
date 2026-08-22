@@ -124,7 +124,11 @@
     linear-gradient(45deg, transparent 75%, var(--swatch-border) 75%),
     linear-gradient(-45deg, transparent 75%, var(--swatch-border) 75%);
   background-size: 6px 6px;
-  background-position: 0 0, 0 3px, 3px -3px, -3px 0px;
+  background-position:
+    0 0,
+    0 3px,
+    3px -3px,
+    -3px 0px;
 }
 
 .palette-manager__swatch-remove {
@@ -194,4 +198,3 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
-

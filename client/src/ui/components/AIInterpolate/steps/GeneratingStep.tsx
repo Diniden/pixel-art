@@ -35,11 +35,7 @@
 
 /** Mirrors `PairJobStatus` in `containers/hooks/useInterpolationJob.ts`. */
 export type GenPairStatus =
-  | "pending"
-  | "queued"
-  | "processing"
-  | "completed"
-  | "failed";
+  "pending" | "queued" | "processing" | "completed" | "failed";
 
 export interface GenPairView {
   /** Position in the pair list; used for the label only. */

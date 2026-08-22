@@ -95,14 +95,16 @@
    below outrank both reset.css's input[type="range"] background and the
    --thick variant without it. */
 .slider.slider__hue {
-  background: linear-gradient(to right,
+  background: linear-gradient(
+    to right,
     hsl(0, 100%, 50%),
     hsl(60, 100%, 50%),
     hsl(120, 100%, 50%),
     hsl(180, 100%, 50%),
     hsl(240, 100%, 50%),
     hsl(300, 100%, 50%),
-    hsl(360, 100%, 50%));
+    hsl(360, 100%, 50%)
+  );
 }
 
 /* ── Row ───────────────────────────────────────────────────────────────── */
@@ -159,7 +161,7 @@
   margin: 0;
 }
 
-.slider__input[type=number] {
+.slider__input[type="number"] {
   -moz-appearance: textfield;
 }
 

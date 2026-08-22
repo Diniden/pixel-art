@@ -1,6 +1,6 @@
-import { Frame, Layer, VariantGroup, Normal, Color, Pixel } from '../types';
-import { blendOverChannels } from './alphaBlend';
-import { resolveVariantOffset } from '../ui/canvas/model/variantOffset';
+import { Frame, Layer, VariantGroup, Normal, Color, Pixel } from "../types";
+import { blendOverChannels } from "./alphaBlend";
+import { resolveVariantOffset } from "../ui/canvas/model/variantOffset";
 
 export interface LightingParams {
   lightDirection: Normal;
@@ -18,7 +18,11 @@ interface ComposedBuffers {
 }
 
 // Normalize a normal vector
-function normalizeVec3(x: number, y: number, z: number): [number, number, number] {
+function normalizeVec3(
+  x: number,
+  y: number,
+  z: number,
+): [number, number, number] {
   const len = Math.sqrt(x * x + y * y + z * z);
   if (len === 0) return [0, 0, 1]; // Default to facing camera
   return [x / len, y / len, z / len];
@@ -30,7 +34,10 @@ function dot(a: [number, number, number], b: [number, number, number]): number {
 }
 
 // Convert Normal type to normalized float vector
-function normalToVec3(normal: Normal, negateZ: boolean = false): [number, number, number] {
+function normalToVec3(
+  normal: Normal,
+  negateZ: boolean = false,
+): [number, number, number] {
   // x, y are signed (-128 to 127), z is unsigned (0 to 255)
   const x = normal.x / 127;
   const y = normal.y / 127;
@@ -58,15 +65,35 @@ function normalToVec3(normal: Normal, negateZ: boolean = false): [number, number
  * rather than becoming a call to `blendOverInto`.
  */
 function alphaBlend(
-  srcR: number, srcG: number, srcB: number, srcA: number,
-  dstR: number, dstG: number, dstB: number, dstA: number
+  srcR: number,
+  srcG: number,
+  srcB: number,
+  srcA: number,
+  dstR: number,
+  dstG: number,
+  dstB: number,
+  dstA: number,
 ): [number, number, number, number] {
-  const blended = blendOverChannels(srcR, srcG, srcB, srcA, dstR, dstG, dstB, dstA);
+  const blended = blendOverChannels(
+    srcR,
+    srcG,
+    srcB,
+    srcA,
+    dstR,
+    dstG,
+    dstB,
+    dstA,
+  );
   if (!blended) {
     return [0, 0, 0, 0];
   }
   const [outR, outG, outB, outAlpha] = blended;
-  return [Math.round(outR), Math.round(outG), Math.round(outB), Math.round(outAlpha * 255)];
+  return [
+    Math.round(outR),
+    Math.round(outG),
+    Math.round(outB),
+    Math.round(outAlpha * 255),
+  ];
 }
 
 /**
@@ -78,8 +105,8 @@ export function composeLayers(
   gridWidth: number,
   gridHeight: number,
   baseFrameIndex: number = 0,
-  variants?: VariantGroup[],  // Project-level variants (renamed from variantGroups)
-  variantFrameIndices?: { [variantGroupId: string]: number }
+  variants?: VariantGroup[], // Project-level variants (renamed from variantGroups)
+  variantFrameIndices?: { [variantGroupId: string]: number },
 ): ComposedBuffers {
   const totalPixels = gridWidth * gridHeight;
 
@@ -98,9 +125,16 @@ export function composeLayers(
     if (!layer.visible) continue;
 
     // Handle variant layers
-    if (layer.isVariant && layer.variantGroupId && variants && variantFrameIndices) {
-      const vg = variants.find(g => g.id === layer.variantGroupId);
-      const variant = vg?.variants.find(v => v.id === layer.selectedVariantId);
+    if (
+      layer.isVariant &&
+      layer.variantGroupId &&
+      variants &&
+      variantFrameIndices
+    ) {
+      const vg = variants.find((g) => g.id === layer.variantGroupId);
+      const variant = vg?.variants.find(
+        (v) => v.id === layer.selectedVariantId,
+      );
 
       if (variant) {
         const variantFrameIdx = variantFrameIndices[layer.variantGroupId] ?? 0;
@@ -126,7 +160,13 @@ export function composeLayers(
                 const baseY = vy + vOffset.y;
 
                 // Skip if outside bounds
-                if (baseX < 0 || baseX >= gridWidth || baseY < 0 || baseY >= gridHeight) continue;
+                if (
+                  baseX < 0 ||
+                  baseX >= gridWidth ||
+                  baseY < 0 ||
+                  baseY >= gridHeight
+                )
+                  continue;
 
                 const idx = baseY * gridWidth + baseX;
                 const colorIdx = idx * 4;
@@ -136,11 +176,14 @@ export function composeLayers(
 
                 // Alpha blend color
                 const [outR, outG, outB, outA] = alphaBlend(
-                  color.r, color.g, color.b, color.a,
+                  color.r,
+                  color.g,
+                  color.b,
+                  color.a,
                   colorBuffer.data[colorIdx],
                   colorBuffer.data[colorIdx + 1],
                   colorBuffer.data[colorIdx + 2],
-                  colorBuffer.data[colorIdx + 3]
+                  colorBuffer.data[colorIdx + 3],
                 );
 
                 colorBuffer.data[colorIdx] = outR;
@@ -183,11 +226,14 @@ export function composeLayers(
 
           // Alpha blend color
           const [outR, outG, outB, outA] = alphaBlend(
-            color.r, color.g, color.b, color.a,
+            color.r,
+            color.g,
+            color.b,
+            color.a,
             colorBuffer.data[colorIdx],
             colorBuffer.data[colorIdx + 1],
             colorBuffer.data[colorIdx + 2],
-            colorBuffer.data[colorIdx + 3]
+            colorBuffer.data[colorIdx + 3],
           );
 
           colorBuffer.data[colorIdx] = outR;
@@ -217,7 +263,7 @@ export function composeLayers(
     normalBuffer,
     heightBuffer,
     width: gridWidth,
-    height: gridHeight
+    height: gridHeight,
   };
 }
 
@@ -233,7 +279,7 @@ function calculateShadow(
   lightDir: [number, number, number],
   width: number,
   height: number,
-  heightScale: number = 100
+  heightScale: number = 100,
 ): number {
   // If no height data or light pointing straight down, no shadow
   if (currentHeight === 0 || (lightDir[0] === 0 && lightDir[1] === 0)) {
@@ -304,14 +350,17 @@ function calculateShadow(
  */
 export function renderWithLighting(
   composed: ComposedBuffers,
-  params: LightingParams
+  params: LightingParams,
 ): ImageData {
   const { colorBuffer, normalBuffer, heightBuffer, width, height } = composed;
   const result = new ImageData(width, height);
 
   // Normalize light direction
   // Negate z so light direction points toward the camera (illuminating outward-facing surfaces)
-  const lightDir: [number, number, number] = normalToVec3(params.lightDirection, true);
+  const lightDir: [number, number, number] = normalToVec3(
+    params.lightDirection,
+    true,
+  );
 
   // Normalize colors to 0-1 range
   const lightR = params.lightColor.r / 255;
@@ -364,7 +413,16 @@ export function renderWithLighting(
         // Calculate shadow
         const currentHeight = heightBuffer[idx];
         const heightScale = params.heightScale ?? 100;
-        const shadowFactor = calculateShadow(x, y, currentHeight, heightBuffer, lightDir, width, height, heightScale);
+        const shadowFactor = calculateShadow(
+          x,
+          y,
+          currentHeight,
+          heightBuffer,
+          lightDir,
+          width,
+          height,
+          heightScale,
+        );
 
         // Combine ambient + diffuse with shadow
         const diffuseR = NdotL * lightR * shadowFactor;
@@ -377,9 +435,18 @@ export function renderWithLighting(
       }
 
       // Clamp and convert back to 0-255
-      result.data[colorIdx] = Math.min(255, Math.max(0, Math.round(finalR * 255)));
-      result.data[colorIdx + 1] = Math.min(255, Math.max(0, Math.round(finalG * 255)));
-      result.data[colorIdx + 2] = Math.min(255, Math.max(0, Math.round(finalB * 255)));
+      result.data[colorIdx] = Math.min(
+        255,
+        Math.max(0, Math.round(finalR * 255)),
+      );
+      result.data[colorIdx + 1] = Math.min(
+        255,
+        Math.max(0, Math.round(finalG * 255)),
+      );
+      result.data[colorIdx + 2] = Math.min(
+        255,
+        Math.max(0, Math.round(finalB * 255)),
+      );
       result.data[colorIdx + 3] = alpha;
     }
   }
@@ -394,7 +461,7 @@ export function renderWithLighting(
 export function renderNormalAsRGB(
   layer: Layer,
   width: number,
-  height: number
+  height: number,
 ): ImageData {
   const result = new ImageData(width, height);
 
@@ -422,9 +489,9 @@ export function renderNormalAsRGB(
       // Z is unsigned byte (0 to 255), use directly
       // Ensure we properly handle negative values by converting to number first
       // Handle potential undefined/null values and ensure we have valid numbers
-      const xValue = typeof normal.x === 'number' ? normal.x : 0;
-      const yValue = typeof normal.y === 'number' ? normal.y : 0;
-      const zValue = typeof normal.z === 'number' ? normal.z : 0;
+      const xValue = typeof normal.x === "number" ? normal.x : 0;
+      const yValue = typeof normal.y === "number" ? normal.y : 0;
+      const zValue = typeof normal.z === "number" ? normal.z : 0;
 
       // Map signed bytes (-128 to 127) to unsigned (0 to 255) by adding 128
       // Clamp to ensure values stay in 0-255 range
@@ -433,10 +500,10 @@ export function renderNormalAsRGB(
       const gValue = yValue + 128;
       const bValue = zValue;
 
-      result.data[idx] = Math.max(0, Math.min(255, Math.round(rValue)));     // R = X (mapped from -128..127 to 0..255)
+      result.data[idx] = Math.max(0, Math.min(255, Math.round(rValue))); // R = X (mapped from -128..127 to 0..255)
       result.data[idx + 1] = Math.max(0, Math.min(255, Math.round(gValue))); // G = Y (mapped from -128..127 to 0..255)
-      result.data[idx + 2] = Math.max(0, Math.min(255, Math.round(bValue)));       // B = Z (already 0..255)
-      result.data[idx + 3] = 255;            // Fully opaque
+      result.data[idx + 2] = Math.max(0, Math.min(255, Math.round(bValue))); // B = Z (already 0..255)
+      result.data[idx + 3] = 255; // Fully opaque
     }
   }
 
@@ -450,7 +517,7 @@ export function renderNormalAsRGB(
 export function renderHeightAsGrayscale(
   layer: Layer,
   width: number,
-  height: number
+  height: number,
 ): ImageData {
   const result = new ImageData(width, height);
 
@@ -484,4 +551,3 @@ export function renderHeightAsGrayscale(
 
   return result;
 }
-

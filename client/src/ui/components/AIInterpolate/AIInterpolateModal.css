@@ -30,13 +30,23 @@
 }
 
 @keyframes ai-slide-up {
-  from { transform: translateY(16px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .ai-interpolate-modal__icon {
   font-size: 1.2rem;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-variant));
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary),
+    var(--accent-variant)
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -316,7 +326,7 @@
 }
 
 .ai-interpolate-modal__loop-switch::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 2px;
   left: 2px;
@@ -327,17 +337,23 @@
   transition: all var(--transition-fast);
 }
 
-.ai-interpolate-modal__loop-toggle input:checked + .ai-interpolate-modal__loop-switch {
+.ai-interpolate-modal__loop-toggle
+  input:checked
+  + .ai-interpolate-modal__loop-switch {
   background: var(--status-warn-20);
   border-color: var(--status-warn);
 }
 
-.ai-interpolate-modal__loop-toggle input:checked + .ai-interpolate-modal__loop-switch::after {
+.ai-interpolate-modal__loop-toggle
+  input:checked
+  + .ai-interpolate-modal__loop-switch::after {
   transform: translateX(16px);
   background: var(--status-warn);
 }
 
-.ai-interpolate-modal__loop-toggle input:disabled + .ai-interpolate-modal__loop-switch {
+.ai-interpolate-modal__loop-toggle
+  input:disabled
+  + .ai-interpolate-modal__loop-switch {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -348,7 +364,9 @@
   color: var(--text-secondary);
 }
 
-.ai-interpolate-modal__loop-toggle input:checked ~ .ai-interpolate-modal__loop-label {
+.ai-interpolate-modal__loop-toggle
+  input:checked
+  ~ .ai-interpolate-modal__loop-label {
   color: var(--status-warn);
 }
 
@@ -378,7 +396,7 @@
 }
 
 .ai-interpolate-modal__loop-line::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -8px;
   left: -6px;
@@ -390,7 +408,7 @@
 }
 
 .ai-interpolate-modal__loop-line::after {
-  content: '';
+  content: "";
   position: absolute;
   top: -6px;
   right: -5px;
@@ -694,7 +712,9 @@
 }
 
 @keyframes ai-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Animation preview */
@@ -785,7 +805,11 @@
 
 .ai-interpolate-modal__btn--primary {
   padding: var(--space-2) var(--space-6);
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-variant));
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary),
+    var(--accent-variant)
+  );
   border: none;
   border-radius: var(--radius-md);
   color: var(--white);

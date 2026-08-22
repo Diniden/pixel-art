@@ -17,10 +17,7 @@
  * Coverage: all 9 anchors × grow/shrink × even/odd deltas, plus the invariants.
  */
 import { describe, expect, it } from "vitest";
-import {
-  getAnchorPadding,
-  type AnchorPosition,
-} from "@/utils/variantHelpers";
+import { getAnchorPadding, type AnchorPosition } from "@/utils/variantHelpers";
 
 const ANCHORS: AnchorPosition[] = [
   "top-left",
@@ -39,9 +36,7 @@ describe("getAnchorPadding", () => {
     // Rows: top -> all padding to the bottom; middle -> split; bottom -> to top.
     // Cols: left -> all to the right; center -> split; right -> all to the left.
     expect(
-      Object.fromEntries(
-        ANCHORS.map((a) => [a, getAnchorPadding(a, 4, 4)]),
-      ),
+      Object.fromEntries(ANCHORS.map((a) => [a, getAnchorPadding(a, 4, 4)])),
     ).toEqual({
       "top-left": { left: 0, top: 0, right: 4, bottom: 4 },
       "top-center": { left: 2, top: 0, right: 2, bottom: 4 },
@@ -58,9 +53,7 @@ describe("getAnchorPadding", () => {
   it("covers all 9 anchor positions with an ODD growth of +3×+3", () => {
     // The centred cases use Math.floor, so the EXTRA pixel goes right/bottom.
     expect(
-      Object.fromEntries(
-        ANCHORS.map((a) => [a, getAnchorPadding(a, 3, 3)]),
-      ),
+      Object.fromEntries(ANCHORS.map((a) => [a, getAnchorPadding(a, 3, 3)])),
     ).toEqual({
       "top-left": { left: 0, top: 0, right: 3, bottom: 3 },
       "top-center": { left: 1, top: 0, right: 2, bottom: 3 },
@@ -76,9 +69,7 @@ describe("getAnchorPadding", () => {
 
   it("covers all 9 anchor positions with an EVEN shrink of -4×-4", () => {
     expect(
-      Object.fromEntries(
-        ANCHORS.map((a) => [a, getAnchorPadding(a, -4, -4)]),
-      ),
+      Object.fromEntries(ANCHORS.map((a) => [a, getAnchorPadding(a, -4, -4)])),
     ).toEqual({
       "top-left": { left: 0, top: 0, right: -4, bottom: -4 },
       "top-center": { left: -2, top: 0, right: -2, bottom: -4 },
@@ -98,9 +89,7 @@ describe("getAnchorPadding", () => {
     // of the growth case, not a symmetric one. Recorded, not fixed: any later
     // "fix" to Math.trunc or Math.round silently repositions existing art.
     expect(
-      Object.fromEntries(
-        ANCHORS.map((a) => [a, getAnchorPadding(a, -3, -3)]),
-      ),
+      Object.fromEntries(ANCHORS.map((a) => [a, getAnchorPadding(a, -3, -3)])),
     ).toEqual({
       "top-left": { left: 0, top: 0, right: -3, bottom: -3 },
       "top-center": { left: -2, top: 0, right: -1, bottom: -3 },
@@ -187,9 +176,9 @@ describe("getAnchorPadding", () => {
   it("INVARIANT: `*-left` never pads left and `top-*` never pads top", () => {
     for (const d of [-6, -1, 1, 6]) {
       for (const row of ["top", "middle", "bottom"] as const) {
-        expect(getAnchorPadding(`${row}-left` as AnchorPosition, d, d).left).toBe(
-          0,
-        );
+        expect(
+          getAnchorPadding(`${row}-left` as AnchorPosition, d, d).left,
+        ).toBe(0);
       }
       for (const col of ["left", "center", "right"] as const) {
         expect(getAnchorPadding(`top-${col}` as AnchorPosition, d, d).top).toBe(

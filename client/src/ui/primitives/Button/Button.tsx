@@ -34,8 +34,10 @@ export type ButtonVariant =
 
 export type ButtonSize = "md" | "lg";
 
-export interface ButtonProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className"> {
+export interface ButtonProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "className"
+> {
   children: ReactNode;
   /** Skin modifier (`btn--<variant>`). `"default"` renders the bare block. */
   variant?: ButtonVariant;

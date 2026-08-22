@@ -18,7 +18,9 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
   overflow: hidden;
@@ -53,7 +55,9 @@ body {
 }
 
 /* Input styles */
-input, select, button {
+input,
+select,
+button {
   font-family: inherit;
   font-size: inherit;
 }
@@ -139,18 +143,35 @@ button:active {
  * ------------------------------------------------------------------------ */
 
 @keyframes app-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @keyframes app-fade-in {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* copied verbatim from ProjectSelectModal.css's `slideIn` (-20px, not -10px),
    which is the definition BrowseBackupsModal.css was actually resolving to. */
 @keyframes app-slide-in {
-  from { transform: translateY(-20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }

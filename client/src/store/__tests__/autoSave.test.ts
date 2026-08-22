@@ -334,10 +334,7 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
         save.mockClear();
         const before = JSON.stringify(harness.getUiState());
 
-        harness.dispatch(
-          name as never,
-          ...(args as never[]),
-        );
+        harness.dispatch(name as never, ...(args as never[]));
 
         // The project DID change…
         expect(JSON.stringify(harness.getUiState())).not.toBe(before);
@@ -377,10 +374,7 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
       const originalName = harness.getProjectName();
       save.mockClear();
       vi.spyOn(projectApi, "rename").mockResolvedValue(undefined);
-      vi.spyOn(projectApi, "list").mockResolvedValue([
-        originalName,
-        "renamed",
-      ]);
+      vi.spyOn(projectApi, "list").mockResolvedValue([originalName, "renamed"]);
 
       // Queue a save against the current name…
       harness.dispatch("setPixel", 0, 0, RED);
@@ -391,9 +385,9 @@ describe.each(HARNESSES)("%s — auto-save", (_name, makeHarness) => {
       await vi.advanceTimersByTimeAsync(500);
 
       // THE INVARIANT: no write ever reaches the pre-rename file.
-      expect(
-        save.mock.calls.filter((c) => c[1] === originalName),
-      ).toHaveLength(0);
+      expect(save.mock.calls.filter((c) => c[1] === originalName)).toHaveLength(
+        0,
+      );
       // NEW: the queued edit is deferred, not discarded — one save, new name.
       expect(save).toHaveBeenCalledTimes(1);
       expect(save.mock.calls[0][1]).toBe("renamed");

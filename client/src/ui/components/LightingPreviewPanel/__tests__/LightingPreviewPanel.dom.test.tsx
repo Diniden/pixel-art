@@ -68,7 +68,9 @@ describe("LightingPreviewPanel — built on the FloatingPanel primitive", () => 
 
   it("UNMOUNTS the canvas when minimised — which is why expanding must repaint", () => {
     const { container } = render(<composed.Minimized />);
-    expect(container.querySelector(".floating-panel--minimized")).not.toBeNull();
+    expect(
+      container.querySelector(".floating-panel--minimized"),
+    ).not.toBeNull();
     expect(container.querySelector("canvas")).toBeNull();
     // The header survives, so there is something left to click.
     expect(container.querySelector(".floating-panel__header")).not.toBeNull();
@@ -80,7 +82,9 @@ describe("LightingPreviewPanel — built on the FloatingPanel primitive", () => 
 
     fireEvent.click(getByLabelText("Minimize panel"));
 
-    expect(container.querySelector(".floating-panel--minimized")).not.toBeNull();
+    expect(
+      container.querySelector(".floating-panel--minimized"),
+    ).not.toBeNull();
     expect(container.querySelector("canvas")).toBeNull();
   });
 

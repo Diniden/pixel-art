@@ -37,7 +37,12 @@ import type { ProjectHost } from "@/stores/domain/DomainStore";
 import type { SelectionSink } from "@/stores/domain/ObjectStore";
 import { assertGridsAreRaw } from "@/stores/domain/gridSafety";
 import { getAnchorPadding } from "@/utils/variantHelpers";
-import { RED, GREEN, mkLayer, tinyProject } from "@/store/__tests__/storeContract";
+import {
+  RED,
+  GREEN,
+  mkLayer,
+  tinyProject,
+} from "@/store/__tests__/storeContract";
 import type { Color, Layer, PixelData, Project } from "@/types";
 
 /* ── the rig ─────────────────────────────────────────────────────────────── */
@@ -183,7 +188,8 @@ function variantFixture(): Project {
 }
 
 const objOf = (rig: Rig) => rig.app.domain.objects[0];
-const layersOf = (rig: Rig, frameIndex = 0) => objOf(rig).frames[frameIndex].layers;
+const layersOf = (rig: Rig, frameIndex = 0) =>
+  objOf(rig).frames[frameIndex].layers;
 
 /** Make a variant of "Body" and return the ids the store generated. */
 function makeBodyVariant(rig: Rig) {
@@ -329,7 +335,11 @@ describe("VariantStore — variantFrameIndices goes through the UI callbacks", (
     // Two base frames → two variant frames already.
     expect(variant.frames).toHaveLength(2);
 
-    rig.app.variants.deleteVariantFrame(group.id, variant.id, variant.frames[1].id);
+    rig.app.variants.deleteVariantFrame(
+      group.id,
+      variant.id,
+      variant.frames[1].id,
+    );
     expect(rig.app.domain.variants[0].variants[0].frames).toHaveLength(1);
     // index 1 deleted → max(0, 1-1) = 0
     expect(rig.app.timelineUI.variantFrameIndices[group.id]).toBe(0);

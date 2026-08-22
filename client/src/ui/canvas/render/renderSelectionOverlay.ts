@@ -51,10 +51,20 @@ export const MASK_FILL_LIMIT = 20000;
 export const SELECTION_COLOR = "#00d9ff";
 
 /** Mask fill tint, as premultiplied-free RGBA 0-255. `rgba(0, 217, 255, 0.14)`. */
-export const MASK_FILL: RgbaPixel = { r: 0, g: 217, b: 255, a: Math.round(0.14 * 255) };
+export const MASK_FILL: RgbaPixel = {
+  r: 0,
+  g: 217,
+  b: 255,
+  a: Math.round(0.14 * 255),
+};
 
 /** Shade drawn over the ORIGINAL area while dragging pixels. `rgba(0,0,0,0.12)`. */
-export const DRAG_SHADE: RgbaPixel = { r: 0, g: 0, b: 0, a: Math.round(0.12 * 255) };
+export const DRAG_SHADE: RgbaPixel = {
+  r: 0,
+  g: 0,
+  b: 0,
+  a: Math.round(0.12 * 255),
+};
 
 /**
  * Blend a flat colour over one cell of the buffer, source-over.
@@ -86,9 +96,14 @@ function fillCell(
       const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
       if (outAlpha > 0.01) {
         const inv = 1 / outAlpha;
-        data[idx] = (color.r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * inv;
-        data[idx + 1] = (color.g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) * inv;
-        data[idx + 2] = (color.b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) * inv;
+        data[idx] =
+          (color.r * srcAlpha + data[idx] * dstAlpha * (1 - srcAlpha)) * inv;
+        data[idx + 1] =
+          (color.g * srcAlpha + data[idx + 1] * dstAlpha * (1 - srcAlpha)) *
+          inv;
+        data[idx + 2] =
+          (color.b * srcAlpha + data[idx + 2] * dstAlpha * (1 - srcAlpha)) *
+          inv;
         data[idx + 3] = outAlpha * 255;
       }
     }
@@ -157,8 +172,16 @@ export function paintDragPreview(
   opts: DragPreviewOptions,
 ): boolean {
   const {
-    mask, maskWidth, zoom, offsetX, offsetY,
-    dragDx, dragDy, gridWidth, gridHeight, readPixel,
+    mask,
+    maskWidth,
+    zoom,
+    offsetX,
+    offsetY,
+    dragDx,
+    dragDy,
+    gridWidth,
+    gridHeight,
+    readPixel,
   } = opts;
   if (mask.size > MASK_FILL_LIMIT) return false;
 
@@ -284,7 +307,14 @@ export function drawMarchingAnts(
   dragDx = 0,
   dragDy = 0,
 ): void {
-  const { outer, inner } = marchingAntsRects(box, zoom, offsetX, offsetY, dragDx, dragDy);
+  const { outer, inner } = marchingAntsRects(
+    box,
+    zoom,
+    offsetX,
+    offsetY,
+    dragDx,
+    dragDy,
+  );
 
   ctx.strokeStyle = SELECTION_COLOR;
   ctx.lineWidth = 2;

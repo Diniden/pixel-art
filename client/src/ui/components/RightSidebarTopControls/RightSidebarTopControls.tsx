@@ -30,10 +30,7 @@
 import { ZoomControls } from "./ZoomControls";
 import { BrushControls, type GaussianFillParams } from "./BrushControls";
 import { ShapeControls } from "./ShapeControls";
-import {
-  SelectionControls,
-  type SelectionSummary,
-} from "./SelectionControls";
+import { SelectionControls, type SelectionSummary } from "./SelectionControls";
 import type { ShapeControlsProps } from "./ShapeControls";
 import type { SelectionControlsProps } from "./SelectionControls";
 import "./RightSidebarTopControls.css";

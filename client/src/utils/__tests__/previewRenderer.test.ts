@@ -20,13 +20,7 @@ import {
   renderVariantLayerPreview,
 } from "@/utils/previewRenderer";
 import { createStubContext, hashBuffer } from "@test/canvasStub";
-import type {
-  Frame,
-  Layer,
-  PixelData,
-  Variant,
-  VariantGroup,
-} from "@/types";
+import type { Frame, Layer, PixelData, Variant, VariantGroup } from "@/types";
 
 /* ── fixtures ────────────────────────────────────────────────────────────── */
 
@@ -55,7 +49,9 @@ function mkLayer(
 }
 
 /** Opaque red on the main diagonal of a 4×4. */
-const DIAGONAL = mkLayer("diag", 4, 4, (x, y) => (x === y ? px(255, 0, 0) : E()));
+const DIAGONAL = mkLayer("diag", 4, 4, (x, y) =>
+  x === y ? px(255, 0, 0) : E(),
+);
 /** Half-alpha green in the bottom-right 2×2 quadrant — forces real compositing. */
 const QUADRANT = mkLayer("quad", 4, 4, (x, y) =>
   x >= 2 && y >= 2 ? px(0, 255, 0, 128) : E(),
@@ -346,9 +342,7 @@ describe("renderFramePreview — variant offset resolution", () => {
         {
           id: "vg1",
           name: "vg",
-          variants: [
-            { ...variant, baseFrameOffsets: { 0: { x: 2, y: 2 } } },
-          ],
+          variants: [{ ...variant, baseFrameOffsets: { 0: { x: 2, y: 2 } } }],
         },
       ],
       variantFrameIndices: { vg1: 0 },

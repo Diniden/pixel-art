@@ -14,7 +14,7 @@ const meta = {
           "Shown when the health check concluded the service cannot take " +
           "work. The three stories are the three DISTINCT failure modes the " +
           "check separates — which is why it cannot simply trust " +
-          "`status === \"ok\"`.",
+          '`status === "ok"`.',
       },
     },
   },

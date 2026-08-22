@@ -374,8 +374,13 @@ function ObjectPreviewRow({
       {variantInfos.length > 0 && (
         <div className="export-preview-modal__variant-panel">
           {variantInfos.map((vi) => (
-            <div key={vi.layer.id} className="export-preview-modal__variant-row">
-              <span className="export-preview-modal__variant-layer-name">{vi.layer.name}</span>
+            <div
+              key={vi.layer.id}
+              className="export-preview-modal__variant-row"
+            >
+              <span className="export-preview-modal__variant-layer-name">
+                {vi.layer.name}
+              </span>
               <div className="export-preview-modal__variant-thumbs">
                 {vi.layer.variants.map((v: ExportedVariant) => (
                   <VariantThumbnail
@@ -483,7 +488,9 @@ export function ExportPreviewModal({
         {/* Body */}
         {error ? (
           <div className="export-preview-modal__error">
-            <span className="export-preview-modal__error-icon"><Icon icon={AlertTriangle} size={16} /></span>
+            <span className="export-preview-modal__error-icon">
+              <Icon icon={AlertTriangle} size={16} />
+            </span>
             <span className="export-preview-modal__error-msg">{error}</span>
           </div>
         ) : !loaded ? (

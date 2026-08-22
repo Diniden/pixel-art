@@ -1,9 +1,17 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { PixelObject, Frame, VariantGroup, Layer, Variant, Pixel, PixelData } from '../../../types';
-import { Icon } from '../../primitives/Icon/Icon';
-import { Zap, X } from 'lucide-react';
-import './PreviewModal.css';
+import { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
+import {
+  PixelObject,
+  Frame,
+  VariantGroup,
+  Layer,
+  Variant,
+  Pixel,
+  PixelData,
+} from "../../../types";
+import { Icon } from "../../primitives/Icon/Icon";
+import { Zap, X } from "lucide-react";
+import "./PreviewModal.css";
 
 // Helper to extract color from PixelData
 function getPixelColor(pd: PixelData | undefined): Pixel | null {
@@ -16,7 +24,7 @@ interface PreviewModalProps {
   onClose: () => void;
   object: PixelObject;
   frames: Frame[];
-  variants?: VariantGroup[];  // Project-level variants
+  variants?: VariantGroup[]; // Project-level variants
   zoom: number;
 }
 
@@ -33,7 +41,10 @@ interface PreRenderedData {
   // Each frame has layers rendered in order, keyed by layer index
   baseFrameLayers: Map<number, Map<number, ImageBitmap>>;
   // Variant frames, keyed by variantGroupId -> variantId -> frameIndex -> layerIndex -> ImageBitmap
-  variantFrames: Map<string, Map<string, Map<number, Map<number, ImageBitmap>>>>;
+  variantFrames: Map<
+    string,
+    Map<string, Map<number, Map<number, ImageBitmap>>>
+  >;
   // Variant layer info per base frame (which variants are used and at what layer position)
   variantLayerInfoPerFrame: Map<number, VariantLayerInfo[]>;
   // Variant data for offset lookup, keyed by "variantGroupId:variantId"
@@ -44,7 +55,7 @@ interface PreRenderedData {
 function rasterizeLayer(
   layer: Layer,
   gridWidth: number,
-  gridHeight: number
+  gridHeight: number,
 ): ImageData {
   const imageData = new ImageData(gridWidth, gridHeight);
   const data = imageData.data;
@@ -72,7 +83,7 @@ function rasterizeLayer(
 function rasterizeVariantLayer(
   layer: Layer,
   variantWidth: number,
-  variantHeight: number
+  variantHeight: number,
 ): ImageData {
   const imageData = new ImageData(variantWidth, variantHeight);
   const data = imageData.data;
@@ -101,10 +112,13 @@ async function preRenderAllLayers(
   frames: Frame[],
   gridWidth: number,
   gridHeight: number,
-  variants?: VariantGroup[]  // Project-level variants
+  variants?: VariantGroup[], // Project-level variants
 ): Promise<PreRenderedData> {
   const baseFrameLayers = new Map<number, Map<number, ImageBitmap>>();
-  const variantFrames = new Map<string, Map<string, Map<number, Map<number, ImageBitmap>>>>();
+  const variantFrames = new Map<
+    string,
+    Map<string, Map<number, Map<number, ImageBitmap>>>
+  >();
   const variantLayerInfoPerFrame = new Map<number, VariantLayerInfo[]>();
   const variantsLookup = new Map<string, Variant>();
 
@@ -137,7 +151,7 @@ async function preRenderAllLayers(
             const imageData = rasterizeVariantLayer(
               layer,
               variant.gridSize.width,
-              variant.gridSize.height
+              variant.gridSize.height,
             );
             const bitmap = await createImageBitmap(imageData);
             layerMap.set(layerIdx, bitmap);
@@ -164,7 +178,7 @@ async function preRenderAllLayers(
         variantInfos.push({
           variantGroupId: layer.variantGroupId,
           selectedVariantId: layer.selectedVariantId,
-          layerIndex: layerIdx
+          layerIndex: layerIdx,
         });
       } else {
         // Pre-render regular layer
@@ -182,16 +196,25 @@ async function preRenderAllLayers(
     baseFrameLayers,
     variantFrames,
     variantLayerInfoPerFrame,
-    variants: variantsLookup
+    variants: variantsLookup,
   };
 }
 
-export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }: PreviewModalProps) {
+export function PreviewModal({
+  isOpen,
+  onClose,
+  object,
+  frames,
+  variants,
+  zoom,
+}: PreviewModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [preRendered, setPreRendered] = useState<PreRenderedData | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   // Independent playheads for each variant group
-  const [variantPlayheads, setVariantPlayheads] = useState<Map<string, number>>(new Map());
+  const [variantPlayheads, setVariantPlayheads] = useState<Map<string, number>>(
+    new Map(),
+  );
   const [fps, setFps] = useState(12);
   const [isLoading, setIsLoading] = useState(true);
   const animationRef = useRef<number | null>(null);
@@ -222,13 +245,13 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
       }
       // Release ImageBitmaps
       if (preRendered) {
-        preRendered.baseFrameLayers.forEach(layerMap => {
-          layerMap.forEach(bitmap => bitmap.close());
+        preRendered.baseFrameLayers.forEach((layerMap) => {
+          layerMap.forEach((bitmap) => bitmap.close());
         });
-        preRendered.variantFrames.forEach(vgMap => {
-          vgMap.forEach(variantMap => {
-            variantMap.forEach(frameMap => {
-              frameMap.forEach(bitmap => bitmap.close());
+        preRendered.variantFrames.forEach((vgMap) => {
+          vgMap.forEach((variantMap) => {
+            variantMap.forEach((frameMap) => {
+              frameMap.forEach((bitmap) => bitmap.close());
             });
           });
         });
@@ -242,58 +265,61 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
 
     // Pre-render all layers
     setIsLoading(true);
-    preRenderAllLayers(frames, gridWidth, gridHeight, variants)
-      .then(data => {
-        setPreRendered(data);
-        // Initialize variant playheads to 0
-        const initialPlayheads = new Map<string, number>();
-        if (variants) {
-          for (const vg of variants) {
-            initialPlayheads.set(vg.id, 0);
-          }
+    preRenderAllLayers(frames, gridWidth, gridHeight, variants).then((data) => {
+      setPreRendered(data);
+      // Initialize variant playheads to 0
+      const initialPlayheads = new Map<string, number>();
+      if (variants) {
+        for (const vg of variants) {
+          initialPlayheads.set(vg.id, 0);
         }
-        setVariantPlayheads(initialPlayheads);
-        setIsLoading(false);
-      });
+      }
+      setVariantPlayheads(initialPlayheads);
+      setIsLoading(false);
+    });
   }, [isOpen, frames, gridWidth, gridHeight, variants]);
 
   // Animation loop using requestAnimationFrame
-  const animate = useCallback((timestamp: number) => {
-    if (!preRendered || frames.length === 0) return;
+  const animate = useCallback(
+    (timestamp: number) => {
+      if (!preRendered || frames.length === 0) return;
 
-    const frameInterval = 1000 / fps;
-    const elapsed = timestamp - lastFrameTimeRef.current;
+      const frameInterval = 1000 / fps;
+      const elapsed = timestamp - lastFrameTimeRef.current;
 
-    if (elapsed >= frameInterval) {
-      // Advance base frame
-      setCurrentFrame(prev => (prev + 1) % frames.length);
+      if (elapsed >= frameInterval) {
+        // Advance base frame
+        setCurrentFrame((prev) => (prev + 1) % frames.length);
 
-      // Advance each variant's playhead independently
-      const variantCounts = getVariantFrameCounts();
-      setVariantPlayheads(prev => {
-        const next = new Map(prev);
-        // For each variant layer info in the current frame, advance its playhead
-        const variantInfos = preRendered.variantLayerInfoPerFrame.get(currentFrame) || [];
-        const advancedGroups = new Set<string>();
+        // Advance each variant's playhead independently
+        const variantCounts = getVariantFrameCounts();
+        setVariantPlayheads((prev) => {
+          const next = new Map(prev);
+          // For each variant layer info in the current frame, advance its playhead
+          const variantInfos =
+            preRendered.variantLayerInfoPerFrame.get(currentFrame) || [];
+          const advancedGroups = new Set<string>();
 
-        for (const info of variantInfos) {
-          if (advancedGroups.has(info.variantGroupId)) continue;
-          advancedGroups.add(info.variantGroupId);
+          for (const info of variantInfos) {
+            if (advancedGroups.has(info.variantGroupId)) continue;
+            advancedGroups.add(info.variantGroupId);
 
-          const key = `${info.variantGroupId}:${info.selectedVariantId}`;
-          const frameCount = variantCounts.get(key) || 1;
-          const currentPlayhead = prev.get(info.variantGroupId) || 0;
-          next.set(info.variantGroupId, (currentPlayhead + 1) % frameCount);
-        }
+            const key = `${info.variantGroupId}:${info.selectedVariantId}`;
+            const frameCount = variantCounts.get(key) || 1;
+            const currentPlayhead = prev.get(info.variantGroupId) || 0;
+            next.set(info.variantGroupId, (currentPlayhead + 1) % frameCount);
+          }
 
-        return next;
-      });
+          return next;
+        });
 
-      lastFrameTimeRef.current = timestamp - (elapsed % frameInterval);
-    }
+        lastFrameTimeRef.current = timestamp - (elapsed % frameInterval);
+      }
 
-    animationRef.current = requestAnimationFrame(animate);
-  }, [preRendered, frames.length, fps, getVariantFrameCounts, currentFrame]);
+      animationRef.current = requestAnimationFrame(animate);
+    },
+    [preRendered, frames.length, fps, getVariantFrameCounts, currentFrame],
+  );
 
   // Start animation when frames are ready
   useEffect(() => {
@@ -313,7 +339,7 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
   // Composite and render current frame to canvas
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
+    const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx || !preRendered) return;
 
     ctx.imageSmoothingEnabled = false;
@@ -323,8 +349,8 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
     const checkSize = Math.max(zoom, 4);
     for (let y = 0; y < canvas.height; y += checkSize) {
       for (let x = 0; x < canvas.width; x += checkSize) {
-        const isLight = ((x / checkSize) + (y / checkSize)) % 2 === 0;
-        ctx.fillStyle = isLight ? '#2a2a3a' : '#222230';
+        const isLight = (x / checkSize + y / checkSize) % 2 === 0;
+        ctx.fillStyle = isLight ? "#2a2a3a" : "#222230";
         ctx.fillRect(x, y, checkSize, checkSize);
       }
     }
@@ -333,30 +359,43 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
     if (!currentFrameData) return;
 
     const baseLayers = preRendered.baseFrameLayers.get(currentFrame);
-    const variantInfos = preRendered.variantLayerInfoPerFrame.get(currentFrame) || [];
+    const variantInfos =
+      preRendered.variantLayerInfoPerFrame.get(currentFrame) || [];
 
     // Build a list of all layers to render in order
-    const layersToRender: { type: 'base' | 'variant'; layerIndex: number; info?: VariantLayerInfo }[] = [];
+    const layersToRender: {
+      type: "base" | "variant";
+      layerIndex: number;
+      info?: VariantLayerInfo;
+    }[] = [];
 
-    for (let layerIdx = 0; layerIdx < currentFrameData.layers.length; layerIdx++) {
+    for (
+      let layerIdx = 0;
+      layerIdx < currentFrameData.layers.length;
+      layerIdx++
+    ) {
       // Layer visibility is ignored in optimized playback
 
-      const variantInfo = variantInfos.find(v => v.layerIndex === layerIdx);
+      const variantInfo = variantInfos.find((v) => v.layerIndex === layerIdx);
       if (variantInfo) {
-        layersToRender.push({ type: 'variant', layerIndex: layerIdx, info: variantInfo });
+        layersToRender.push({
+          type: "variant",
+          layerIndex: layerIdx,
+          info: variantInfo,
+        });
       } else if (baseLayers?.has(layerIdx)) {
-        layersToRender.push({ type: 'base', layerIndex: layerIdx });
+        layersToRender.push({ type: "base", layerIndex: layerIdx });
       }
     }
 
     // Render layers in order (bottom to top)
     for (const item of layersToRender) {
-      if (item.type === 'base') {
+      if (item.type === "base") {
         const bitmap = baseLayers?.get(item.layerIndex);
         if (bitmap) {
           ctx.drawImage(bitmap, 0, 0, gridWidth * zoom, gridHeight * zoom);
         }
-      } else if (item.type === 'variant' && item.info) {
+      } else if (item.type === "variant" && item.info) {
         const { variantGroupId, selectedVariantId } = item.info;
         const variantPlayhead = variantPlayheads.get(variantGroupId) || 0;
 
@@ -367,11 +406,15 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
 
         if (frameLayerMap) {
           // Get offset for this variant at the current base frame
-          const variant = preRendered.variants.get(`${variantGroupId}:${selectedVariantId}`);
+          const variant = preRendered.variants.get(
+            `${variantGroupId}:${selectedVariantId}`,
+          );
           // Get the layer to check for layer.variantOffsets (new system)
           const layer = currentFrameData.layers[item.info.layerIndex];
           // Use layer's variantOffsets for the selected variant, falling back to variantOffset (legacy) then variant.baseFrameOffsets
-          const offset = layer?.variantOffsets?.[selectedVariantId] ?? layer?.variantOffset ?? variant?.baseFrameOffsets?.[currentFrame] ?? { x: 0, y: 0 };
+          const offset = layer?.variantOffsets?.[selectedVariantId] ??
+            layer?.variantOffset ??
+            variant?.baseFrameOffsets?.[currentFrame] ?? { x: 0, y: 0 };
 
           // Render all layers of this variant frame
           frameLayerMap.forEach((bitmap) => {
@@ -380,27 +423,35 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
               offset.x * zoom,
               offset.y * zoom,
               bitmap.width * zoom,
-              bitmap.height * zoom
+              bitmap.height * zoom,
             );
           });
         }
       }
     }
-  }, [currentFrame, variantPlayheads, preRendered, zoom, gridWidth, gridHeight, frames]);
+  }, [
+    currentFrame,
+    variantPlayheads,
+    preRendered,
+    zoom,
+    gridWidth,
+    gridHeight,
+    frames,
+  ]);
 
   // Handle keyboard
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         onClose();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -410,10 +461,14 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
 
   return createPortal(
     <div className="preview-modal__overlay" onClick={onClose}>
-      <div className="preview-modal" onClick={e => e.stopPropagation()}>
+      <div className="preview-modal" onClick={(e) => e.stopPropagation()}>
         <div className="preview-modal__header">
-          <h3 className="preview-modal__title"><Icon icon={Zap} size={16} /> Optimized Preview</h3>
-          <button className="preview-modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <h3 className="preview-modal__title">
+            <Icon icon={Zap} size={16} /> Optimized Preview
+          </h3>
+          <button className="preview-modal__close" onClick={onClose}>
+            <Icon icon={X} size={14} />
+          </button>
         </div>
 
         <div className="preview-modal__content">
@@ -442,7 +497,7 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
               min="1"
               max="60"
               value={fps}
-              onChange={e => setFps(Number(e.target.value))}
+              onChange={(e) => setFps(Number(e.target.value))}
               className="preview-modal__fps-slider"
             />
             <input
@@ -450,7 +505,9 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
               min="1"
               max="60"
               value={fps}
-              onChange={e => setFps(Math.max(1, Math.min(60, Number(e.target.value) || 1)))}
+              onChange={(e) =>
+                setFps(Math.max(1, Math.min(60, Number(e.target.value) || 1)))
+              }
               className="preview-modal__fps-input"
             />
           </div>
@@ -466,7 +523,6 @@ export function PreviewModal({ isOpen, onClose, object, frames, variants, zoom }
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
-

@@ -53,9 +53,11 @@ export const LightingStudioToolsContainer = observer(
      * Resolves the grid the compute should run against. Shared by both
      * handlers — they had byte-identical copies of this block.
      */
-    const resolveTarget = ():
-      | { layer: Layer; gridWidth: number; gridHeight: number }
-      | null => {
+    const resolveTarget = (): {
+      layer: Layer;
+      gridWidth: number;
+      gridHeight: number;
+    } | null => {
       const layer = app.currentLayer;
       const obj = app.currentObject;
       const frame = app.currentFrame;

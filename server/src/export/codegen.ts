@@ -13,10 +13,7 @@
  * source; they are not exports of this module.
  */
 
-import type {
-  ExportedObject,
-  ExportedVariantLayerDef,
-} from "./exportTypes.js";
+import type { ExportedObject, ExportedVariantLayerDef } from "./exportTypes.js";
 
 export interface CodegenInput {
   projectName: string;

@@ -129,12 +129,16 @@
   transition: all var(--transition-fast);
 }
 
-.right-sidebar-top-controls__toggle input:checked + .right-sidebar-top-controls__toggle-slider {
+.right-sidebar-top-controls__toggle
+  input:checked
+  + .right-sidebar-top-controls__toggle-slider {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
 }
 
-.right-sidebar-top-controls__toggle input:checked + .right-sidebar-top-controls__toggle-slider::before {
+.right-sidebar-top-controls__toggle
+  input:checked
+  + .right-sidebar-top-controls__toggle-slider::before {
   transform: translateX(16px);
   background: var(--white);
 }
@@ -146,7 +150,9 @@
   white-space: nowrap;
 }
 
-.right-sidebar-top-controls__toggle input:checked ~ .right-sidebar-top-controls__toggle-label {
+.right-sidebar-top-controls__toggle
+  input:checked
+  ~ .right-sidebar-top-controls__toggle-label {
   color: var(--accent-primary);
 }
 

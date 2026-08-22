@@ -35,11 +35,7 @@
 import { runInAction } from "mobx";
 import { currentHarnessApp, registerHarnessApp } from "@/store";
 import { ApplicationStore } from "@/stores/ApplicationStore";
-import {
-  DEFAULT_UI_STATE,
-  compactToProject,
-  projectToCompact,
-} from "@/types";
+import { DEFAULT_UI_STATE, compactToProject, projectToCompact } from "@/types";
 import type {
   Color,
   Frame,
@@ -188,7 +184,8 @@ export function layerOf(
   objectIndex = 0,
 ): Layer | null {
   return (
-    project?.objects[objectIndex]?.frames[frameIndex]?.layers[layerIndex] ?? null
+    project?.objects[objectIndex]?.frames[frameIndex]?.layers[layerIndex] ??
+    null
   );
 }
 

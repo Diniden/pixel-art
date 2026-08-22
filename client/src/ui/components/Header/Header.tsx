@@ -25,14 +25,23 @@
  * than imports — `ui/` may not import a container without pulling MobX across
  * the purity boundary transitively.
  */
-import { useState, useRef, useEffect, type ReactNode } from 'react';
-import { AiConfigPopover, type AiHealthStatus } from '../AiConfigPopover/AiConfigPopover';
-import { Icon } from '../../primitives/Icon/Icon';
-import { Diamond, History, FolderOpen, ExternalLink, PenLine } from 'lucide-react';
-import './Header.css';
+import { useState, useRef, useEffect, type ReactNode } from "react";
+import {
+  AiConfigPopover,
+  type AiHealthStatus,
+} from "../AiConfigPopover/AiConfigPopover";
+import { Icon } from "../../primitives/Icon/Icon";
+import {
+  Diamond,
+  History,
+  FolderOpen,
+  ExternalLink,
+  PenLine,
+} from "lucide-react";
+import "./Header.css";
 
 /** Save-state indicator. Mirrors `SaveStatus` without importing the store. */
-export type HeaderSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+export type HeaderSaveStatus = "idle" | "saving" | "saved" | "error";
 
 export interface HeaderProps {
   /** From SessionStore via HeaderContainer (task 14). Header is its sole reader. */
@@ -88,13 +97,15 @@ export function Header({
   const [editValue, setEditValue] = useState(projectName);
   const [error, setError] = useState<string | null>(null);
   const [showProjectModal, setShowProjectModal] = useState(false);
-  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success' | 'error'>('idle');
+  const [exportStatus, setExportStatus] = useState<
+    "idle" | "exporting" | "success" | "error"
+  >("idle");
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [exportKebabName, setExportKebabName] = useState<string | null>(null);
   const [showExportPreview, setShowExportPreview] = useState(false);
   const [showBackupsModal, setShowBackupsModal] = useState(false);
   const [showAiConfig, setShowAiConfig] = useState(false);
-  const [aiUrlInput, setAiUrlInput] = useState(aiServiceUrl || '');
+  const [aiUrlInput, setAiUrlInput] = useState(aiServiceUrl || "");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Update editValue when projectName changes
@@ -112,28 +123,26 @@ export function Header({
 
   const handleExport = async () => {
     if (!projectName) return;
-    setExportStatus('exporting');
+    setExportStatus("exporting");
     setExportMessage(null);
     try {
       // Task 36: the `exportApi.run` call moved to the container; the
       // status/message/timeout choreography stays here because it is this
       // component's own view state.
       const result = await onExport();
-      setExportStatus('success');
+      setExportStatus("success");
       setExportMessage(`Exported to ${result.path}`);
       setExportKebabName(result.kebabName);
       setShowExportPreview(true);
       setTimeout(() => {
-        setExportStatus('idle');
+        setExportStatus("idle");
         setExportMessage(null);
       }, 3000);
     } catch (err) {
-      setExportStatus('error');
-      setExportMessage(
-        err instanceof Error ? err.message : 'Export failed',
-      );
+      setExportStatus("error");
+      setExportMessage(err instanceof Error ? err.message : "Export failed");
       setTimeout(() => {
-        setExportStatus('idle');
+        setExportStatus("idle");
         setExportMessage(null);
       }, 5000);
     }
@@ -155,12 +164,12 @@ export function Header({
     const trimmedName = editValue.trim();
 
     if (!trimmedName) {
-      setError('Project name cannot be empty');
+      setError("Project name cannot be empty");
       return;
     }
 
     if (!/^[a-zA-Z0-9\s\-_]+$/.test(trimmedName)) {
-      setError('Invalid characters in name');
+      setError("Invalid characters in name");
       return;
     }
 
@@ -170,7 +179,7 @@ export function Header({
     }
 
     if (projectList.includes(trimmedName)) {
-      setError('Name already exists');
+      setError("Name already exists");
       return;
     }
 
@@ -179,33 +188,41 @@ export function Header({
       setIsEditing(false);
       setError(null);
     } else {
-      setError('Failed to rename');
+      setError("Failed to rename");
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleSaveEdit();
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       handleCancelEdit();
     }
   };
 
   const getStatusText = () => {
     switch (saveStatus) {
-      case 'saving': return 'Saving...';
-      case 'saved': return 'Saved';
-      case 'error': return 'Save failed';
-      default: return '';
+      case "saving":
+        return "Saving...";
+      case "saved":
+        return "Saved";
+      case "error":
+        return "Save failed";
+      default:
+        return "";
     }
   };
 
   const getStatusClass = () => {
     switch (saveStatus) {
-      case 'saving': return 'header__save-status--saving';
-      case 'saved': return 'header__save-status--saved';
-      case 'error': return 'header__save-status--error';
-      default: return '';
+      case "saving":
+        return "header__save-status--saving";
+      case "saved":
+        return "header__save-status--saved";
+      case "error":
+        return "header__save-status--error";
+      default:
+        return "";
     }
   };
 
@@ -213,7 +230,9 @@ export function Header({
     <header className="header">
       <div className="header__left">
         <div className="header__logo">
-          <span className="header__logo-icon"><Icon icon={Diamond} size={16} /></span>
+          <span className="header__logo-icon">
+            <Icon icon={Diamond} size={16} />
+          </span>
           <span className="header__logo-text">Pixel Studio</span>
         </div>
       </div>
@@ -225,7 +244,7 @@ export function Header({
               <input
                 ref={inputRef}
                 type="text"
-                className={`header__project-input ${error ? 'header__project-input--error' : ''}`}
+                className={`header__project-input ${error ? "header__project-input--error" : ""}`}
                 value={editValue}
                 onChange={(e) => {
                   setEditValue(e.target.value);
@@ -238,14 +257,20 @@ export function Header({
               {error && <span className="header__edit-error">{error}</span>}
             </div>
           ) : (
-            <button className="header__project-btn" onClick={handleStartEdit} title="Click to rename project">
+            <button
+              className="header__project-btn"
+              onClick={handleStartEdit}
+              title="Click to rename project"
+            >
               <span className="header__project-name">{projectName}</span>
-              <span className="header__edit-hint"><Icon icon={PenLine} size={12} /></span>
+              <span className="header__edit-hint">
+                <Icon icon={PenLine} size={12} />
+              </span>
             </button>
           )}
         </div>
 
-        {saveStatus !== 'idle' && (
+        {saveStatus !== "idle" && (
           <div className={`header__save-status ${getStatusClass()}`}>
             <span className="header__status-dot"></span>
             {getStatusText()}
@@ -259,7 +284,7 @@ export function Header({
           onOpenChange={(open) => {
             // Re-seed the draft from the effective URL each time it opens,
             // exactly as the inline version did.
-            if (open) setAiUrlInput(aiServiceUrl || serverDefaultUrl || '');
+            if (open) setAiUrlInput(aiServiceUrl || serverDefaultUrl || "");
             setShowAiConfig(open);
           }}
           aiHealthStatus={aiHealthStatus}
@@ -273,25 +298,43 @@ export function Header({
             setShowAiConfig(false);
           }}
         />
-        <button className="header__backups-btn" onClick={() => setShowBackupsModal(true)} title="Browse Backups">
-          <span className="header__backups-icon"><Icon icon={History} size={14} /></span>
+        <button
+          className="header__backups-btn"
+          onClick={() => setShowBackupsModal(true)}
+          title="Browse Backups"
+        >
+          <span className="header__backups-icon">
+            <Icon icon={History} size={14} />
+          </span>
           Backups
         </button>
-        <button className="header__switch-btn" onClick={() => setShowProjectModal(true)} title="Switch Projects">
-          <span className="header__folder-icon"><Icon icon={FolderOpen} size={14} /></span>
+        <button
+          className="header__switch-btn"
+          onClick={() => setShowProjectModal(true)}
+          title="Switch Projects"
+        >
+          <span className="header__folder-icon">
+            <Icon icon={FolderOpen} size={14} />
+          </span>
           Projects
         </button>
         <button
           className="header__export-btn"
           onClick={handleExport}
-          disabled={exportStatus === 'exporting'}
-          title={exportMessage ?? 'Export project to server folder'}
+          disabled={exportStatus === "exporting"}
+          title={exportMessage ?? "Export project to server folder"}
         >
-          <span className="header__export-icon"><Icon icon={ExternalLink} size={14} /></span>
-          {exportStatus === 'exporting' ? 'Exporting...' : 'Export'}
+          <span className="header__export-icon">
+            <Icon icon={ExternalLink} size={14} />
+          </span>
+          {exportStatus === "exporting" ? "Exporting..." : "Export"}
         </button>
-        {exportStatus !== 'idle' && exportMessage && (
-          <span className={`header__export-status header__export-status--${exportStatus}`}>{exportMessage}</span>
+        {exportStatus !== "idle" && exportMessage && (
+          <span
+            className={`header__export-status header__export-status--${exportStatus}`}
+          >
+            {exportMessage}
+          </span>
         )}
       </div>
 

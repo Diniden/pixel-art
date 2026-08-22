@@ -321,7 +321,10 @@ export const AIInterpolateContainer = observer(function AIInterpolateContainer({
 
   /** Encode one keyframe pair's endpoints. `null` signals a missing layer. */
   const encodePair = useCallback(
-    (startIdx: number, endIdx: number): { startB64: string; endB64: string } | null => {
+    (
+      startIdx: number,
+      endIdx: number,
+    ): { startB64: string; endB64: string } | null => {
       const { width, height } = gridSize;
       if (mode === "variant" && variantData) {
         return {

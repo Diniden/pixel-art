@@ -139,7 +139,9 @@ export function PixelStudioPanel({
                     min="1"
                     max={pencilBrushMax ?? 16}
                     value={Math.min(brushSize, pencilBrushMax ?? 16)}
-                    onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
+                    onChange={(e) =>
+                      onBrushSizeChange(parseInt(e.target.value))
+                    }
                   />
                   <span className="pixel-studio-panel__size-value">
                     {Math.min(brushSize, pencilBrushMax ?? 16)}
@@ -199,9 +201,13 @@ export function PixelStudioPanel({
                     min="1"
                     max={pencilBrushMax ?? 16}
                     value={brushSize}
-                    onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
+                    onChange={(e) =>
+                      onBrushSizeChange(parseInt(e.target.value))
+                    }
                   />
-                  <span className="pixel-studio-panel__size-value">{brushSize}</span>
+                  <span className="pixel-studio-panel__size-value">
+                    {brushSize}
+                  </span>
                 </div>
               </div>
 

@@ -14,7 +14,7 @@ const meta = {
           "BEM classes `slider`, `slider--thick`, `slider__hue` " +
           "(`styles/blocks/slider.css`, task 18 — the thick and hue variants " +
           "are compound selectors so they outrank reset.css's " +
-          "`input[type=\"range\"]` rules, as measured). Replaces the 27 raw " +
+          '`input[type="range"]` rules, as measured). Replaces the 27 raw ' +
           "range inputs. `onChange` receives the parsed number.",
       },
     },

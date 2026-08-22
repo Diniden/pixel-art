@@ -90,13 +90,26 @@ export function encodeRgbaToPngBase64(
   for (let off = 0; off < rawBytes.length; off += MAX) {
     const len = Math.min(MAX, rawBytes.length - off);
     const last = off + len >= rawBytes.length ? 1 : 0;
-    z.push(last, len & 0xff, (len >>> 8) & 0xff, ~len & 0xff, (~len >>> 8) & 0xff);
+    z.push(
+      last,
+      len & 0xff,
+      (len >>> 8) & 0xff,
+      ~len & 0xff,
+      (~len >>> 8) & 0xff,
+    );
     for (let i = 0; i < len; i++) z.push(rawBytes[off + i]);
   }
   z.push(...u32(adler32(rawBytes)));
 
   const png = [
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
     ...chunk("IHDR", [...u32(width), ...u32(height), 8, 6, 0, 0, 0]),
     ...chunk("IDAT", z),
     ...chunk("IEND", []),

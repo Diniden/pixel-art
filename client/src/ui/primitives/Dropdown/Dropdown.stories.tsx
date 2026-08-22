@@ -80,7 +80,11 @@ export const WithDisabledOption: Story = {
       options={[
         { value: "frames", label: "Frames" },
         { value: "timeline", label: "Timeline" },
-        { value: "variant", label: "Variant (no variant layer)", disabled: true },
+        {
+          value: "variant",
+          label: "Variant (no variant layer)",
+          disabled: true,
+        },
       ]}
       initial="timeline"
     />

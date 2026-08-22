@@ -20,7 +20,11 @@ import { fileURLToPath } from "url";
 import { ensureDir, getProjectFilePath } from "../backup.js";
 import { collectStrings, toCompactExport } from "./compactExport.js";
 import { generateIndexTs } from "./codegen.js";
-import type { CompactProject, ExportedProject, ExportResult } from "./exportTypes.js";
+import type {
+  CompactProject,
+  ExportedProject,
+  ExportResult,
+} from "./exportTypes.js";
 import { applyMaxCanvas } from "./maxCanvas.js";
 import { toKebabCase, toPascalCase } from "./naming.js";
 import {

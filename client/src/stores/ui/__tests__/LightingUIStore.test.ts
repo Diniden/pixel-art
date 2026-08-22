@@ -134,16 +134,13 @@ const NINE: {
 ];
 
 describe("LightingUIStore — all 9 fields bump persistedUIVersion (THE GATE)", () => {
-  it.each(NINE)(
-    "$name schedules a save",
-    ({ edit }) => {
-      const { ui, lighting } = makeRig();
-      const before = ui.persistedUIVersion;
-      runInAction(() => edit(lighting));
-      expect(ui.persistedUIVersion).toBeGreaterThan(before);
-      ui.dispose();
-    },
-  );
+  it.each(NINE)("$name schedules a save", ({ edit }) => {
+    const { ui, lighting } = makeRig();
+    const before = ui.persistedUIVersion;
+    runInAction(() => edit(lighting));
+    expect(ui.persistedUIVersion).toBeGreaterThan(before);
+    ui.dispose();
+  });
 
   it.each(NINE)(
     "$name round-trips through toPersistedUIState()",

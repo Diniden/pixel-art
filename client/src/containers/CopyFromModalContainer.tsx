@@ -20,31 +20,31 @@ interface CopyFromModalContainerProps {
   onClose: () => void;
 }
 
-export const CopyFromModalContainer = observer(
-  function CopyFromModalContainer({ onClose }: CopyFromModalContainerProps) {
-    const { domain, currentObject, layers } = useStores();
-    return (
-      <CopyFromModal
-        onClose={onClose}
-        objects={domain.objects}
-        variants={domain.variants}
-        currentObject={currentObject}
-        onCopyLayerFromObject={(
+export const CopyFromModalContainer = observer(function CopyFromModalContainer({
+  onClose,
+}: CopyFromModalContainerProps) {
+  const { domain, currentObject, layers } = useStores();
+  return (
+    <CopyFromModal
+      onClose={onClose}
+      objects={domain.objects}
+      variants={domain.variants}
+      currentObject={currentObject}
+      onCopyLayerFromObject={(
+        sourceObjectId,
+        sourceLayerId,
+        isVariant,
+        variantGroupId,
+        variantId,
+      ) =>
+        layers.copyLayerFromObject(
           sourceObjectId,
           sourceLayerId,
           isVariant,
           variantGroupId,
           variantId,
-        ) =>
-          layers.copyLayerFromObject(
-            sourceObjectId,
-            sourceLayerId,
-            isVariant,
-            variantGroupId,
-            variantId,
-          )
-        }
-      />
-    );
-  },
-);
+        )
+      }
+    />
+  );
+});

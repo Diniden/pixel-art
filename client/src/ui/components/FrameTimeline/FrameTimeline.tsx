@@ -33,18 +33,24 @@
  *
  * This component only forwards both; it does not read either.
  */
-import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
-import type { PixelObject, Layer, TimelineProjectView } from '../../../types';
-import type { CurrentVariant } from '../../../types';
-import './FrameTimeline.css';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import type { PixelObject, Layer, TimelineProjectView } from "../../../types";
+import type { CurrentVariant } from "../../../types";
+import "./FrameTimeline.css";
 
-type ViewMode = 'frames' | 'timeline' | 'variant';
+type ViewMode = "frames" | "timeline" | "variant";
 
 // Dropdown component for switching between Frames, Timeline, and Variant views
 function ViewModeDropdown({
   value,
   onChange,
-  variantAvailable
+  variantAvailable,
 }: {
   value: ViewMode;
   onChange: (mode: ViewMode) => void;
@@ -56,44 +62,51 @@ function ViewModeDropdown({
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
 
     if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen]);
 
   const baseOptions: { value: ViewMode; label: string }[] = [
-    { value: 'frames', label: 'Frames' },
-    { value: 'timeline', label: 'Timeline' }
+    { value: "frames", label: "Frames" },
+    { value: "timeline", label: "Timeline" },
   ];
 
   // Only include Variant option if a variant layer is selected
   const options = variantAvailable
-    ? [...baseOptions, { value: 'variant' as ViewMode, label: 'Variant' }]
+    ? [...baseOptions, { value: "variant" as ViewMode, label: "Variant" }]
     : baseOptions;
 
-  const selectedLabel = options.find(o => o.value === value)?.label || 'Frames';
+  const selectedLabel =
+    options.find((o) => o.value === value)?.label || "Frames";
 
   return (
     <div className="frame-timeline__dropdown" ref={dropdownRef}>
       <button
-        className={`frame-timeline__dropdown-trigger ${value === 'variant' ? 'frame-timeline__dropdown-trigger--variant' : ''}`}
+        className={`frame-timeline__dropdown-trigger ${value === "variant" ? "frame-timeline__dropdown-trigger--variant" : ""}`}
         onClick={() => setIsOpen(!isOpen)}
       >
         <span>{selectedLabel}</span>
-        <span className="frame-timeline__dropdown-arrow">{isOpen ? '▴' : '▾'}</span>
+        <span className="frame-timeline__dropdown-arrow">
+          {isOpen ? "▴" : "▾"}
+        </span>
       </button>
       {isOpen && (
         <div className="frame-timeline__dropdown-menu">
-          {options.map(option => (
+          {options.map((option) => (
             <button
               key={option.value}
-              className={`frame-timeline__dropdown-item ${option.value === value ? 'frame-timeline__dropdown-item--selected' : ''} ${option.value === 'variant' ? 'frame-timeline__dropdown-item--variant' : ''}`}
+              className={`frame-timeline__dropdown-item ${option.value === value ? "frame-timeline__dropdown-item--selected" : ""} ${option.value === "variant" ? "frame-timeline__dropdown-item--variant" : ""}`}
               onClick={() => {
                 onChange(option.value);
                 setIsOpen(false);
@@ -142,7 +155,10 @@ interface FrameTimelineProps {
   framesView: (props: TimelineViewRenderProps) => ReactNode;
   timelineView: (props: TimelineViewRenderProps) => ReactNode;
   variantView: (
-    props: TimelineViewRenderProps & { layer: Layer; variantData: CurrentVariant },
+    props: TimelineViewRenderProps & {
+      layer: Layer;
+      variantData: CurrentVariant;
+    },
   ) => ReactNode;
 }
 
@@ -159,7 +175,7 @@ export function FrameTimeline({
   timelineView,
   variantView,
 }: FrameTimelineProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('frames');
+  const [viewMode, setViewMode] = useState<ViewMode>("frames");
   const [isPlaying, setIsPlaying] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const playInterval = useRef<number | null>(null);
@@ -183,20 +199,26 @@ export function FrameTimeline({
   // - Switching frames (doesn't change selection counter) does NOT activate variant mode
   useEffect(() => {
     const currentIsVariant = layer?.isVariant === true;
-    const selectionCounterChanged = layerSelectionCounter !== previousSelectionCounterRef.current;
+    const selectionCounterChanged =
+      layerSelectionCounter !== previousSelectionCounterRef.current;
 
     // Switch to variant mode if:
     // 1. A layer was actually clicked (selection counter changed)
     // 2. The current layer is a variant
     // 3. We're not already in variant mode
     // 4. We're NOT in timeline mode (only switch when clicking from layer panel in frames mode)
-    if (selectionCounterChanged && currentIsVariant && viewMode !== 'variant' && viewMode !== 'timeline') {
-      setViewMode('variant');
+    if (
+      selectionCounterChanged &&
+      currentIsVariant &&
+      viewMode !== "variant" &&
+      viewMode !== "timeline"
+    ) {
+      setViewMode("variant");
     }
 
     // If we're in variant mode but no variant layer is selected, go back to frames
-    if (viewMode === 'variant' && !currentIsVariant) {
-      setViewMode('frames');
+    if (viewMode === "variant" && !currentIsVariant) {
+      setViewMode("frames");
     }
 
     previousSelectionCounterRef.current = layerSelectionCounter;
@@ -214,7 +236,7 @@ export function FrameTimeline({
       }
       setIsPlaying(false);
     } else {
-      let currentIndex = frames.findIndex(f => f.id === selectedFrameId);
+      let currentIndex = frames.findIndex((f) => f.id === selectedFrameId);
       if (currentIndex < 0) currentIndex = 0;
 
       playInterval.current = window.setInterval(() => {
@@ -248,33 +270,37 @@ export function FrameTimeline({
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger if user is typing in an input or textarea
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
         return;
       }
 
       // Escape to exit variant mode and return to frames
-      if (e.key === 'Escape' && viewModeRef.current === 'variant') {
+      if (e.key === "Escape" && viewModeRef.current === "variant") {
         e.preventDefault();
-        setViewMode('frames');
+        setViewMode("frames");
         return;
       }
 
       // Cmd+Enter (or Ctrl+Enter) to open optimized preview
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
         e.preventDefault();
         setShowPreview(true);
         return;
       }
 
       // Enter to toggle playback
-      if (e.key === 'Enter') {
+      if (e.key === "Enter") {
         e.preventDefault();
         togglePlaybackRef.current();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   if (!project || !obj) return null;
@@ -289,7 +315,7 @@ export function FrameTimeline({
 
   return (
     <div className="frame-timeline">
-      {viewMode === 'variant' && variantData && layer
+      {viewMode === "variant" && variantData && layer
         ? variantView({
             project,
             obj,
@@ -301,7 +327,7 @@ export function FrameTimeline({
             setShowPreview,
             viewModeDropdown,
           })
-        : viewMode === 'timeline'
+        : viewMode === "timeline"
           ? timelineView({
               project,
               obj,

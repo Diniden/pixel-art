@@ -189,7 +189,11 @@
 
 /* Lighting mode indicator */
 .toolbar__studio-mode-btn--active[aria-label="Lighting Studio"] {
-  background: linear-gradient(135deg, var(--status-warn) 0%, var(--status-warn-deep) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--status-warn) 0%,
+    var(--status-warn-deep) 100%
+  );
   box-shadow: var(--glow-warn-12);
 }
 

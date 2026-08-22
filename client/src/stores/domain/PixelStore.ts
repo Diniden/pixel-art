@@ -63,7 +63,10 @@
  */
 import { flow, makeObservable, observable, runInAction } from "mobx";
 import type { Color, Layer, Normal, PixelData, Project } from "../../types";
-import { flipGridHorizontal, flipGridVertical } from "../../utils/normalCompute";
+import {
+  flipGridHorizontal,
+  flipGridVertical,
+} from "../../utils/normalCompute";
 import { computeEdgeInterpolatedNormals } from "../../utils/edgeInterpolate";
 import { createPixelCommand } from "../history/commands";
 import type {
@@ -188,9 +191,7 @@ function copyCell(pd: PixelData | undefined): PixelData {
         ? 0
         : { r: pd.color.r, g: pd.color.g, b: pd.color.b, a: pd.color.a },
     normal:
-      pd.normal === 0
-        ? 0
-        : { x: pd.normal.x, y: pd.normal.y, z: pd.normal.z },
+      pd.normal === 0 ? 0 : { x: pd.normal.x, y: pd.normal.y, z: pd.normal.z },
     height: pd.height,
   } as PixelData;
 }
@@ -200,7 +201,10 @@ function copyCell(pd: PixelData | undefined): PixelData {
  * legacy path did: erasing clears everything; drawing keeps the existing
  * normal and height, defaulting height to 1 on a previously-empty cell.
  */
-function nextCell(existing: PixelData | undefined, color: Color | 0): PixelData {
+function nextCell(
+  existing: PixelData | undefined,
+  color: Color | 0,
+): PixelData {
   if (color === 0) return { color: 0, normal: 0, height: 0 };
   return {
     color,
@@ -326,7 +330,12 @@ export class PixelStore {
    */
   private resolveTarget(
     variantFrameIndexOverride?: number,
-  ): { target: PixelTarget; layer: Layer; width: number; height: number } | null {
+  ): {
+    target: PixelTarget;
+    layer: Layer;
+    width: number;
+    height: number;
+  } | null {
     const objectId = this.source.selectedObjectId;
     const frameId = this.source.selectedFrameId;
     const layerId = this.source.selectedLayerId;
@@ -412,7 +421,12 @@ export class PixelStore {
   private resolveTargetFor(
     frameId: string,
     layerId: string,
-  ): { target: PixelTarget; layer: Layer; width: number; height: number } | null {
+  ): {
+    target: PixelTarget;
+    layer: Layer;
+    width: number;
+    height: number;
+  } | null {
     const objectId = this.source.selectedObjectId;
     if (!objectId) return null;
 
@@ -966,7 +980,10 @@ export class PixelStore {
    * @returns the number of layers actually written.
    */
   adjustColorAcross(
-    byFrame: ReadonlyMap<string, ReadonlyMap<string, readonly { x: number; y: number }[]>>,
+    byFrame: ReadonlyMap<
+      string,
+      ReadonlyMap<string, readonly { x: number; y: number }[]>
+    >,
     newColor: Color,
     options: PixelWriteOptions = {},
   ): number {
@@ -1171,7 +1188,11 @@ export class PixelStore {
    * strand an open transaction and swallow every subsequent edit into it.
    */
   private commitAdjustment(
-    work: readonly { target: PixelTarget; layer: Layer; patches: PixelPatch[] }[],
+    work: readonly {
+      target: PixelTarget;
+      layer: Layer;
+      patches: PixelPatch[];
+    }[],
     trackHistory: boolean,
   ): number {
     if (work.length === 0) return 0;
@@ -1269,13 +1290,10 @@ export class PixelStore {
       target,
       layer,
       "Set normals",
-      collectLightingPatches(
-        layer,
-        width,
-        height,
-        pixels,
-        (before, p) => ({ ...before, normal: p.normal }),
-      ),
+      collectLightingPatches(layer, width, height, pixels, (before, p) => ({
+        ...before,
+        normal: p.normal,
+      })),
       options.trackHistory ?? true,
     );
   }
@@ -1300,13 +1318,10 @@ export class PixelStore {
       target,
       layer,
       "Set heights",
-      collectLightingPatches(
-        layer,
-        width,
-        height,
-        pixels,
-        (before, p) => ({ ...before, height: p.height }),
-      ),
+      collectLightingPatches(layer, width, height, pixels, (before, p) => ({
+        ...before,
+        height: p.height,
+      })),
       options.trackHistory ?? true,
     );
   }

@@ -157,13 +157,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    repeating-conic-gradient(var(--bg-tertiary) 0% 25%, var(--canvas-checker-b) 0% 50%) 50% / 16px 16px;
+  background: repeating-conic-gradient(
+      var(--bg-tertiary) 0% 25%,
+      var(--canvas-checker-b) 0% 50%
+    )
+    50% / 16px 16px;
   border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
 }
-
 
 .reference-image-modal__pan {
   display: flex;

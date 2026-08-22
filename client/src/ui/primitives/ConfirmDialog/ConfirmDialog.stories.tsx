@@ -15,7 +15,7 @@ const meta = {
           "task 18): `confirm-dialog__backdrop > confirm-dialog[--danger] > " +
           "__header / __body / __warning[--callout] / __undo / __actions`. " +
           "Replaces the three measured nested confirms (ObjectLibrary, " +
-          "AddVariantModal, BrowseBackupsModal). `role=\"alertdialog\"`, " +
+          'AddVariantModal, BrowseBackupsModal). `role="alertdialog"`, ' +
           "`aria-modal`, focus trap and Escape-cancels are built in; Escape " +
           "closes only this dialog when nested inside a Modal. " +
           "`__warning--callout` is the amber callout preserved from " +

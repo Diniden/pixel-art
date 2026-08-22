@@ -1,10 +1,13 @@
-import { useRef, useEffect, memo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Layer, PixelObject, Variant, VariantGroup } from '../../../types';
-import { renderLayerPreview, renderVariantLayerPreview } from '../../../utils/previewRenderer';
-import { Icon } from '../../primitives/Icon/Icon';
-import { Hexagon, ClipboardCopy, X } from 'lucide-react';
-import './CopyFromModal.css';
+import { useRef, useEffect, memo, useState } from "react";
+import { createPortal } from "react-dom";
+import { Layer, PixelObject, Variant, VariantGroup } from "../../../types";
+import {
+  renderLayerPreview,
+  renderVariantLayerPreview,
+} from "../../../utils/previewRenderer";
+import { Icon } from "../../primitives/Icon/Icon";
+import { Hexagon, ClipboardCopy, X } from "lucide-react";
+import "./CopyFromModal.css";
 
 interface CopyFromModalProps {
   onClose: () => void;
@@ -31,62 +34,82 @@ interface CopyFromModalProps {
 }
 
 // Memoized thumbnail component for a regular layer
-const LayerThumbnail = memo(function LayerThumbnail({
-  layer,
-  gridWidth,
-  gridHeight
-}: {
-  layer: Layer;
-  gridWidth: number;
-  gridHeight: number;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const thumbSize = 44;
+const LayerThumbnail = memo(
+  function LayerThumbnail({
+    layer,
+    gridWidth,
+    gridHeight,
+  }: {
+    layer: Layer;
+    gridWidth: number;
+    gridHeight: number;
+  }) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const thumbSize = 44;
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d', { willReadFrequently: false });
-    if (!canvas || !ctx) return;
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d", { willReadFrequently: false });
+      if (!canvas || !ctx) return;
 
-    renderLayerPreview(ctx, thumbSize, layer, gridWidth, gridHeight);
-  }, [layer, gridWidth, gridHeight]);
+      renderLayerPreview(ctx, thumbSize, layer, gridWidth, gridHeight);
+    }, [layer, gridWidth, gridHeight]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="copy-from-modal__thumb-canvas" />;
-}, (prevProps, nextProps) => {
-  const prev = prevProps.layer;
-  const next = nextProps.layer;
+    return (
+      <canvas
+        ref={canvasRef}
+        width={thumbSize}
+        height={thumbSize}
+        className="copy-from-modal__thumb-canvas"
+      />
+    );
+  },
+  (prevProps, nextProps) => {
+    const prev = prevProps.layer;
+    const next = nextProps.layer;
 
-  if (prev === next) return true;
-  if (prev.id !== next.id) return false;
-  if (prev.visible !== next.visible) return false;
-  if (prev.pixels !== next.pixels) return false;
+    if (prev === next) return true;
+    if (prev.id !== next.id) return false;
+    if (prev.visible !== next.visible) return false;
+    if (prev.pixels !== next.pixels) return false;
 
-  return true;
-});
+    return true;
+  },
+);
 
 // Memoized thumbnail component for a variant layer
-const VariantThumbnail = memo(function VariantThumbnail({ variant }: { variant: Variant }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const thumbSize = 44;
+const VariantThumbnail = memo(
+  function VariantThumbnail({ variant }: { variant: Variant }) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const thumbSize = 44;
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d', { willReadFrequently: false });
-    if (!canvas || !ctx) return;
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d", { willReadFrequently: false });
+      if (!canvas || !ctx) return;
 
-    renderVariantLayerPreview(ctx, thumbSize, variant);
-  }, [variant]);
+      renderVariantLayerPreview(ctx, thumbSize, variant);
+    }, [variant]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="copy-from-modal__thumb-canvas" />;
-}, (prevProps, nextProps) => {
-  const prev = prevProps.variant;
-  const next = nextProps.variant;
+    return (
+      <canvas
+        ref={canvasRef}
+        width={thumbSize}
+        height={thumbSize}
+        className="copy-from-modal__thumb-canvas"
+      />
+    );
+  },
+  (prevProps, nextProps) => {
+    const prev = prevProps.variant;
+    const next = nextProps.variant;
 
-  if (prev === next) return true;
-  if (prev.id !== next.id) return false;
+    if (prev === next) return true;
+    if (prev.id !== next.id) return false;
 
-  return true;
-});
+    return true;
+  },
+);
 
 /**
  * Cursor-following tooltip — DELIBERATELY NOT the `Tooltip` primitive.
@@ -112,7 +135,17 @@ const VariantThumbnail = memo(function VariantThumbnail({ variant }: { variant: 
  * implementation stays. Unifying the two mechanisms is a real task, but it is
  * a design decision about hover affordances, not a relocation.
  */
-function Tooltip({ text, x, y, visible }: { text: string; x: number; y: number; visible: boolean }) {
+function Tooltip({
+  text,
+  x,
+  y,
+  visible,
+}: {
+  text: string;
+  x: number;
+  y: number;
+  visible: boolean;
+}) {
   if (!visible) return null;
 
   return createPortal(
@@ -120,19 +153,19 @@ function Tooltip({ text, x, y, visible }: { text: string; x: number; y: number; 
       className="copy-from-modal__tooltip"
       style={{
         left: x + 12,
-        top: y + 12
+        top: y + 12,
       }}
     >
       {text}
     </div>,
-    document.body
+    document.body,
   );
 }
 
 interface LayerCellProps {
   obj: PixelObject;
   layer: Layer;
-  variants?: VariantGroup[];  // Project-level variants
+  variants?: VariantGroup[]; // Project-level variants
   onCopy: () => void;
 }
 
@@ -141,10 +174,13 @@ function LayerCell({ obj, layer, variants, onCopy }: LayerCellProps) {
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
   // Get variant info if this is a variant layer (now from variants)
-  const variantGroup = layer.isVariant && layer.variantGroupId
-    ? variants?.find(vg => vg.id === layer.variantGroupId)
-    : null;
-  const selectedVariant = variantGroup?.variants.find(v => v.id === layer.selectedVariantId);
+  const variantGroup =
+    layer.isVariant && layer.variantGroupId
+      ? variants?.find((vg) => vg.id === layer.variantGroupId)
+      : null;
+  const selectedVariant = variantGroup?.variants.find(
+    (v) => v.id === layer.selectedVariantId,
+  );
 
   const handleMouseMove = (e: React.MouseEvent) => {
     setTooltipPos({ x: e.clientX, y: e.clientY });
@@ -157,14 +193,15 @@ function LayerCell({ obj, layer, variants, onCopy }: LayerCellProps) {
     setTooltipVisible(false);
   };
 
-  const tooltipText = layer.isVariant && selectedVariant
-    ? `${layer.name} (${selectedVariant.name})`
-    : layer.name;
+  const tooltipText =
+    layer.isVariant && selectedVariant
+      ? `${layer.name} (${selectedVariant.name})`
+      : layer.name;
 
   return (
     <>
       <div
-        className={`copy-from-modal__cell ${layer.isVariant ? 'copy-from-modal__cell--variant' : ''}`}
+        className={`copy-from-modal__cell ${layer.isVariant ? "copy-from-modal__cell--variant" : ""}`}
         onClick={onCopy}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
@@ -179,7 +216,9 @@ function LayerCell({ obj, layer, variants, onCopy }: LayerCellProps) {
           />
         )}
         {layer.isVariant && (
-          <span className="copy-from-modal__badge--variant"><Icon icon={Hexagon} size={10} /></span>
+          <span className="copy-from-modal__badge--variant">
+            <Icon icon={Hexagon} size={10} />
+          </span>
         )}
       </div>
       <Tooltip
@@ -199,7 +238,6 @@ export function CopyFromModal({
   currentObject,
   onCopyLayerFromObject,
 }: CopyFromModalProps) {
-
   const handleCopyLayer = (sourceObj: PixelObject, layer: Layer) => {
     if (layer.isVariant && layer.variantGroupId && layer.selectedVariantId) {
       onCopyLayerFromObject(
@@ -207,7 +245,7 @@ export function CopyFromModal({
         layer.id,
         true,
         layer.variantGroupId,
-        layer.selectedVariantId
+        layer.selectedVariantId,
       );
     } else {
       onCopyLayerFromObject(sourceObj.id, layer.id, false);
@@ -225,14 +263,20 @@ export function CopyFromModal({
     <div className="copy-from-modal__backdrop" onClick={handleBackdropClick}>
       <div className="copy-from-modal">
         <div className="copy-from-modal__header">
-          <h3><Icon icon={ClipboardCopy} size={16} /> Copy Layer From</h3>
-          <span className="copy-from-modal__hint">Click a layer to copy it to the current object</span>
-          <button className="modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <h3>
+            <Icon icon={ClipboardCopy} size={16} /> Copy Layer From
+          </h3>
+          <span className="copy-from-modal__hint">
+            Click a layer to copy it to the current object
+          </span>
+          <button className="modal__close" onClick={onClose}>
+            <Icon icon={X} size={14} />
+          </button>
         </div>
 
         <div className="copy-from-modal__content">
           <div className="copy-from-modal__grid">
-            {objects.map(obj => {
+            {objects.map((obj) => {
               // Get first frame layers
               const firstFrame = obj.frames[0];
               if (!firstFrame) return null;
@@ -243,13 +287,20 @@ export function CopyFromModal({
               const isCurrentObject = currentObject?.id === obj.id;
 
               return (
-                <div key={obj.id} className={`copy-from-modal__row ${isCurrentObject ? 'copy-from-modal__row--current' : ''}`}>
+                <div
+                  key={obj.id}
+                  className={`copy-from-modal__row ${isCurrentObject ? "copy-from-modal__row--current" : ""}`}
+                >
                   <div className="copy-from-modal__name" title={obj.name}>
                     {obj.name}
-                    {isCurrentObject && <span className="copy-from-modal__badge--current">(current)</span>}
+                    {isCurrentObject && (
+                      <span className="copy-from-modal__badge--current">
+                        (current)
+                      </span>
+                    )}
                   </div>
                   <div className="copy-from-modal__layers">
-                    {layers.map(layer => (
+                    {layers.map((layer) => (
                       <LayerCell
                         key={layer.id}
                         obj={obj}
@@ -259,7 +310,9 @@ export function CopyFromModal({
                       />
                     ))}
                     {layers.length === 0 && (
-                      <div className="copy-from-modal__no-layers">No layers</div>
+                      <div className="copy-from-modal__no-layers">
+                        No layers
+                      </div>
                     )}
                   </div>
                 </div>
@@ -269,8 +322,6 @@ export function CopyFromModal({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
-
-

@@ -18,7 +18,11 @@
  */
 
 // HSL to RGB conversion
-export function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+export function hslToRgb(
+  h: number,
+  s: number,
+  l: number,
+): { r: number; g: number; b: number } {
   h = h / 360;
   s = s / 100;
   l = l / 100;
@@ -47,13 +51,18 @@ export function hslToRgb(h: number, s: number, l: number): { r: number; g: numbe
   return {
     r: Math.round(r * 255),
     g: Math.round(g * 255),
-    b: Math.round(b * 255)
+    b: Math.round(b * 255),
   };
 }
 
 // RGB to HSL conversion
 // prevHsl is optional and used to preserve H and S when L is 0 or 100
-export function rgbToHsl(r: number, g: number, b: number, prevHsl?: { h: number; s: number; l: number }): { h: number; s: number; l: number } {
+export function rgbToHsl(
+  r: number,
+  g: number,
+  b: number,
+  prevHsl?: { h: number; s: number; l: number },
+): { h: number; s: number; l: number } {
   r /= 255;
   g /= 255;
   b /= 255;
@@ -89,13 +98,13 @@ export function rgbToHsl(r: number, g: number, b: number, prevHsl?: { h: number;
     return {
       h: prevHsl.h,
       s: prevHsl.s,
-      l: lPercent
+      l: lPercent,
     };
   }
 
   return {
     h: Math.round(h * 360),
     s: Math.round(s * 100),
-    l: lPercent
+    l: lPercent,
   };
 }

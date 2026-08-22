@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState } from "react";
 import { Color, Palette } from "../../../types";
-import { Icon } from '../../primitives/Icon/Icon';
-import { ChevronDown, ChevronRight, X } from 'lucide-react';
-import './PaletteManager.css';
+import { Icon } from "../../primitives/Icon/Icon";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
+import "./PaletteManager.css";
 
 /**
  * Props supplied by `PaletteManagerContainer` (REFRESH task 23). `palettes`
@@ -42,15 +42,15 @@ export function PaletteManager({
   selectedColor,
   onSelectColor,
 }: PaletteManagerProps) {
-  const [newPaletteName, setNewPaletteName] = useState('');
+  const [newPaletteName, setNewPaletteName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
+  const [editingName, setEditingName] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const handleAddPalette = () => {
     const name = newPaletteName.trim() || `Palette ${palettes.length + 1}`;
     onAddPalette(name);
-    setNewPaletteName('');
+    setNewPaletteName("");
   };
 
   const handleStartRename = (id: string, name: string) => {
@@ -63,7 +63,7 @@ export function PaletteManager({
       onRenamePalette(id, editingName.trim());
     }
     setEditingId(null);
-    setEditingName('');
+    setEditingName("");
   };
 
   const handleAddCurrentColor = (paletteId: string) => {
@@ -78,7 +78,11 @@ export function PaletteManager({
     <div className="panel palette-manager">
       <div className="panel__header">
         Palettes
-        <button className="palette-manager__header-btn" onClick={handleAddPalette} title="New Palette">
+        <button
+          className="palette-manager__header-btn"
+          onClick={handleAddPalette}
+          title="New Palette"
+        >
           +
         </button>
       </div>
@@ -89,7 +93,7 @@ export function PaletteManager({
             placeholder="New palette name..."
             value={newPaletteName}
             onChange={(e) => setNewPaletteName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddPalette()}
+            onKeyDown={(e) => e.key === "Enter" && handleAddPalette()}
           />
         </div>
 
@@ -97,13 +101,22 @@ export function PaletteManager({
           {palettes.map((palette) => (
             <div
               key={palette.id}
-              className={`palette-manager__item ${expandedId === palette.id ? 'palette-manager__item--expanded' : ''}`}
+              className={`palette-manager__item ${expandedId === palette.id ? "palette-manager__item--expanded" : ""}`}
             >
               <div
                 className="palette-manager__item-header"
-                onClick={() => setExpandedId(expandedId === palette.id ? null : palette.id)}
+                onClick={() =>
+                  setExpandedId(expandedId === palette.id ? null : palette.id)
+                }
               >
-                <span className="palette-manager__expand-icon"><Icon icon={expandedId === palette.id ? ChevronDown : ChevronRight} size={12} /></span>
+                <span className="palette-manager__expand-icon">
+                  <Icon
+                    icon={
+                      expandedId === palette.id ? ChevronDown : ChevronRight
+                    }
+                    size={12}
+                  />
+                </span>
                 {editingId === palette.id ? (
                   <input
                     type="text"
@@ -111,7 +124,9 @@ export function PaletteManager({
                     value={editingName}
                     onChange={(e) => setEditingName(e.target.value)}
                     onBlur={() => handleFinishRename(palette.id)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(palette.id)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleFinishRename(palette.id)
+                    }
                     onClick={(e) => e.stopPropagation()}
                     autoFocus
                   />
@@ -126,7 +141,9 @@ export function PaletteManager({
                     {palette.name}
                   </span>
                 )}
-                <span className="palette-manager__count">{palette.colors.length}</span>
+                <span className="palette-manager__count">
+                  {palette.colors.length}
+                </span>
               </div>
 
               {expandedId === palette.id && (
@@ -147,7 +164,9 @@ export function PaletteManager({
                         </button>
                         <button
                           className="palette-manager__swatch-remove"
-                          onClick={() => onRemoveColorFromPalette(palette.id, index)}
+                          onClick={() =>
+                            onRemoveColorFromPalette(palette.id, index)
+                          }
                           title="Remove color"
                         >
                           <Icon icon={X} size={8} />
@@ -186,4 +205,3 @@ export function PaletteManager({
     </div>
   );
 }
-

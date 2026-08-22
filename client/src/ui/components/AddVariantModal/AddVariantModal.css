@@ -1,7 +1,11 @@
 /* add-variant-modal — BEM block (task 20, G2). */
 
 .add-variant-modal {
-  background: linear-gradient(135deg, var(--modal-gradient-a) 0%, var(--modal-gradient-b) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--modal-gradient-a) 0%,
+    var(--modal-gradient-b) 100%
+  );
   border-radius: var(--radius-lg);
   border: 1px solid var(--white-10);
   box-shadow: var(--shadow-lg);
@@ -283,7 +287,11 @@
 
 .add-variant-modal__confirm-btn {
   padding: var(--space-2-5) var(--space-6);
-  background: linear-gradient(135deg, var(--accent-variant) 0%, var(--accent-variant) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-variant) 0%,
+    var(--accent-variant) 100%
+  );
   border: none;
   border-radius: var(--radius-md);
   color: var(--white);

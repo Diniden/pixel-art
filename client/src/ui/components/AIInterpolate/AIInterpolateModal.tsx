@@ -166,7 +166,10 @@ export function AIInterpolateModal(props: AIInterpolateModalProps) {
       {(step === "unavailable" ||
         step === "checking" ||
         step === "select-layer") && (
-        <button className="ai-interpolate-modal__btn--neutral" onClick={onClose}>
+        <button
+          className="ai-interpolate-modal__btn--neutral"
+          onClick={onClose}
+        >
           {step === "unavailable" ? "Close" : "Cancel"}
         </button>
       )}
@@ -230,9 +233,7 @@ export function AIInterpolateModal(props: AIInterpolateModalProps) {
 
       {step === "checking" && <CheckingStep />}
 
-      {step === "unavailable" && (
-        <UnavailableStep detail={unavailableDetail} />
-      )}
+      {step === "unavailable" && <UnavailableStep detail={unavailableDetail} />}
 
       {step === "select-layer" && mode === "base" && (
         <SelectLayerStep

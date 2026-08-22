@@ -96,11 +96,17 @@ export function useFloatingPanel({
       return {
         top: Math.max(
           0,
-          Math.min(maxTop, (percentPos.topPercent / 100) * containerRect.height),
+          Math.min(
+            maxTop,
+            (percentPos.topPercent / 100) * containerRect.height,
+          ),
         ),
         left: Math.max(
           0,
-          Math.min(maxLeft, (percentPos.leftPercent / 100) * containerRect.width),
+          Math.min(
+            maxLeft,
+            (percentPos.leftPercent / 100) * containerRect.width,
+          ),
         ),
       };
     },

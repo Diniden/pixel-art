@@ -27,7 +27,14 @@ import { createBuffer, getPixel, hashBuffer } from "@/test/canvasStub";
  */
 function source4(): PixelBuffer {
   const buf = createBuffer(4, 4);
-  const put = (x: number, y: number, r: number, g: number, b: number, a = 255) => {
+  const put = (
+    x: number,
+    y: number,
+    r: number,
+    g: number,
+    b: number,
+    a = 255,
+  ) => {
     const i = (y * 4 + x) * 4;
     buf.data[i] = r;
     buf.data[i + 1] = g;

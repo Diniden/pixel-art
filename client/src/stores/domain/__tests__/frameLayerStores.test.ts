@@ -529,7 +529,12 @@ describe("LayerStore", () => {
       // switch happens to call it. The two task-08 CROSS-PROJECT tests in
       // `src/store/__tests__/layers.test.ts` cover the behaviour itself.
       const session = rig.app.session as unknown as Record<string, unknown>;
-      for (const name of ["reset", "clear", "clearClipboards", "onProjectSwitch"]) {
+      for (const name of [
+        "reset",
+        "clear",
+        "clearClipboards",
+        "onProjectSwitch",
+      ]) {
         expect(session[name]).toBeUndefined();
       }
     });

@@ -29,7 +29,7 @@ const meta = {
         component:
           "The danger-skinned confirm, on the `ConfirmDialog` primitive. " +
           "Replaces 35 lines of hand-written `createPortal` and ADDS what " +
-          "the hand-rolled copy lacked: `role=\"alertdialog\"`, `aria-modal`, " +
+          'the hand-rolled copy lacked: `role="alertdialog"`, `aria-modal`, ' +
           "a focus trap, and topmost-only Escape handling.",
       },
     },

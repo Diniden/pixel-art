@@ -137,7 +137,7 @@ describe("M8 — export-time variantOffset → variantOffsets", () => {
     ).toEqual({ v1: { x: 3, y: 4 } });
   });
 
-  it('emits an EMPTY-STRING key when selectedVariantId is absent', () => {
+  it("emits an EMPTY-STRING key when selectedVariantId is absent", () => {
     // BUG: `export.ts:579` keys the new map on `layer.selectedVariantId ?? ""`.
     // A layer carrying a `variantOffset` but no `selectedVariantId` therefore
     // exports as `{"": {x, y}}` — an entry no consumer can ever look up, since

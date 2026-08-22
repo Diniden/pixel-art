@@ -1,12 +1,12 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import './ReferenceImageModal.css';
-import { Icon } from '../../primitives/Icon/Icon';
-import { ImagePlus, RotateCcw, Camera, X, Trash2, Search } from 'lucide-react';
-import type { ReferenceImageData } from '../../../types/referenceImage';
+import { useState, useRef, useCallback, useEffect } from "react";
+import "./ReferenceImageModal.css";
+import { Icon } from "../../primitives/Icon/Icon";
+import { ImagePlus, RotateCcw, Camera, X, Trash2, Search } from "lucide-react";
+import type { ReferenceImageData } from "../../../types/referenceImage";
 import {
   extractPixelsFromSelection,
   type ReferenceSelectionBox,
-} from '../../../utils/referenceImage';
+} from "../../../utils/referenceImage";
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -76,7 +76,7 @@ interface ReferenceImageModalProps {
   ) => void;
 }
 
-type InteractionMode = 'none' | 'selecting' | 'dragging-selection' | 'panning';
+type InteractionMode = "none" | "selecting" | "dragging-selection" | "panning";
 
 export function ReferenceImageModal({
   isOpen,
@@ -89,7 +89,8 @@ export function ReferenceImageModal({
   onSelectionChange,
   onSave,
 }: ReferenceImageModalProps) {
-  const [interactionMode, setInteractionMode] = useState<InteractionMode>('none');
+  const [interactionMode, setInteractionMode] =
+    useState<InteractionMode>("none");
   const [isDragging, setIsDragging] = useState(false);
   /**
    * ⚠️ `zoom` and `panOffset` are COMPONENT-LOCAL, deliberately (task 29).
@@ -103,8 +104,13 @@ export function ReferenceImageModal({
    */
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
-  const [selectionDragOffset, setSelectionDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const [selectionDragOffset, setSelectionDragOffset] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [isHoveringSelection, setIsHoveringSelection] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -163,7 +169,7 @@ export function ReferenceImageModal({
   // Render the image and selection
   const render = useCallback(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
+    const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx || !image) return;
 
     const scale = getDisplayScale();
@@ -181,35 +187,55 @@ export function ReferenceImageModal({
       const h = Math.abs(selection.endY - selection.startY) * scale;
 
       // Darken non-selected areas
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
       ctx.fillRect(0, 0, canvas.width, y);
       ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h);
       ctx.fillRect(0, y, x, h);
       ctx.fillRect(x + w, y, canvas.width - x - w, h);
 
       // Draw selection border
-      ctx.strokeStyle = '#00d9ff';
+      ctx.strokeStyle = "#00d9ff";
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 5]);
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
 
       // Draw corner handles
-      ctx.fillStyle = '#00d9ff';
+      ctx.fillStyle = "#00d9ff";
       const handleSize = 8;
-      ctx.fillRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
-      ctx.fillRect(x + w - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
-      ctx.fillRect(x - handleSize / 2, y + h - handleSize / 2, handleSize, handleSize);
-      ctx.fillRect(x + w - handleSize / 2, y + h - handleSize / 2, handleSize, handleSize);
+      ctx.fillRect(
+        x - handleSize / 2,
+        y - handleSize / 2,
+        handleSize,
+        handleSize,
+      );
+      ctx.fillRect(
+        x + w - handleSize / 2,
+        y - handleSize / 2,
+        handleSize,
+        handleSize,
+      );
+      ctx.fillRect(
+        x - handleSize / 2,
+        y + h - handleSize / 2,
+        handleSize,
+        handleSize,
+      );
+      ctx.fillRect(
+        x + w - handleSize / 2,
+        y + h - handleSize / 2,
+        handleSize,
+        handleSize,
+      );
 
       // Draw center move handle
-      ctx.fillStyle = 'rgba(0, 217, 255, 0.3)';
+      ctx.fillStyle = "rgba(0, 217, 255, 0.3)";
       ctx.fillRect(x, y, w, h);
 
       // Draw move icon in center
       const centerX = x + w / 2;
       const centerY = y + h / 2;
-      ctx.strokeStyle = '#00d9ff';
+      ctx.strokeStyle = "#00d9ff";
       ctx.lineWidth = 2;
       ctx.setLineDash([]);
 
@@ -225,8 +251,8 @@ export function ReferenceImageModal({
       // Show dimensions
       const selW = Math.abs(selection.endX - selection.startX);
       const selH = Math.abs(selection.endY - selection.startY);
-      ctx.fillStyle = '#00d9ff';
-      ctx.font = '12px monospace';
+      ctx.fillStyle = "#00d9ff";
+      ctx.font = "12px monospace";
       ctx.fillText(`${selW} × ${selH}px`, x + 4, y - 8);
     }
   }, [image, selection, getDisplayScale]);
@@ -257,7 +283,7 @@ export function ReferenceImageModal({
     img.src = url;
 
     // Reset file input so the same file can be selected again
-    e.target.value = '';
+    e.target.value = "";
   };
 
   // Handle drag and drop
@@ -266,7 +292,7 @@ export function ReferenceImageModal({
     setIsDragging(false);
 
     const file = e.dataTransfer.files[0];
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!file || !file.type.startsWith("image/")) return;
 
     // Clear old URL if exists
     if (imageUrl) {
@@ -293,23 +319,30 @@ export function ReferenceImageModal({
   };
 
   // Get coordinates relative to original image
-  const getImageCoords = useCallback((clientX: number, clientY: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !image) return null;
+  const getImageCoords = useCallback(
+    (clientX: number, clientY: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas || !image) return null;
 
-    const rect = canvas.getBoundingClientRect();
-    const scale = getDisplayScale();
-    const x = Math.round((clientX - rect.left) / scale);
-    const y = Math.round((clientY - rect.top) / scale);
+      const rect = canvas.getBoundingClientRect();
+      const scale = getDisplayScale();
+      const x = Math.round((clientX - rect.left) / scale);
+      const y = Math.round((clientY - rect.top) / scale);
 
-    return {
-      x: Math.max(0, Math.min(x, image.width)),
-      y: Math.max(0, Math.min(y, image.height))
-    };
-  }, [image, getDisplayScale]);
+      return {
+        x: Math.max(0, Math.min(x, image.width)),
+        y: Math.max(0, Math.min(y, image.height)),
+      };
+    },
+    [image, getDisplayScale],
+  );
 
   // Check if a point is inside the selection (non-memoized to always use latest selection)
-  const isInsideSelection = (sel: ReferenceSelectionBox | null, imageX: number, imageY: number) => {
+  const isInsideSelection = (
+    sel: ReferenceSelectionBox | null,
+    imageX: number,
+    imageY: number,
+  ) => {
     if (!sel) return false;
     const minX = Math.min(sel.startX, sel.endX);
     const maxX = Math.max(sel.startX, sel.endX);
@@ -335,22 +368,24 @@ export function ReferenceImageModal({
         // Pinch-to-zoom (trackpad) shows up as wheel events with ctrlKey
         if (e.ctrlKey || e.metaKey) {
           const delta = -e.deltaY * 0.01;
-          setZoom(prev => Math.max(0.5, Math.min(10, prev + delta)));
+          setZoom((prev) => Math.max(0.5, Math.min(10, prev + delta)));
         } else {
           // Regular trackpad scroll for panning
-          setPanOffset(prev => ({
+          setPanOffset((prev) => ({
             x: prev.x - e.deltaX,
-            y: prev.y - e.deltaY
+            y: prev.y - e.deltaY,
           }));
         }
       };
 
       // Use passive: false to allow preventDefault
-      canvasArea.addEventListener('wheel', handleWheelNative, { passive: false });
+      canvasArea.addEventListener("wheel", handleWheelNative, {
+        passive: false,
+      });
 
       // Store cleanup function
       (canvasArea as any)._wheelCleanup = () => {
-        canvasArea.removeEventListener('wheel', handleWheelNative);
+        canvasArea.removeEventListener("wheel", handleWheelNative);
       };
     }, 50);
 
@@ -370,7 +405,7 @@ export function ReferenceImageModal({
 
     // Middle mouse button or space key held = pan
     if (e.button === 1) {
-      setInteractionMode('panning');
+      setInteractionMode("panning");
       setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
       return;
     }
@@ -380,33 +415,33 @@ export function ReferenceImageModal({
 
     // Check if clicking inside existing selection to drag it
     if (selection && isInsideSelection(selection, coords.x, coords.y)) {
-      setInteractionMode('dragging-selection');
+      setInteractionMode("dragging-selection");
       const minX = Math.min(selection.startX, selection.endX);
       const minY = Math.min(selection.startY, selection.endY);
       setSelectionDragOffset({
         x: coords.x - minX,
-        y: coords.y - minY
+        y: coords.y - minY,
       });
       return;
     }
 
     // Start new selection
-    setInteractionMode('selecting');
+    setInteractionMode("selecting");
     onSelectionChange({
       startX: coords.x,
       startY: coords.y,
       endX: coords.x,
-      endY: coords.y
+      endY: coords.y,
     });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!image) return;
 
-    if (interactionMode === 'panning' && dragStart) {
+    if (interactionMode === "panning" && dragStart) {
       setPanOffset({
         x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y
+        y: e.clientY - dragStart.y,
       });
       return;
     }
@@ -415,20 +450,24 @@ export function ReferenceImageModal({
     if (!coords) return;
 
     // Track if hovering over selection (for cursor feedback)
-    if (interactionMode === 'none') {
+    if (interactionMode === "none") {
       const hovering = isInsideSelection(selection, coords.x, coords.y);
       if (hovering !== isHoveringSelection) {
         setIsHoveringSelection(hovering);
       }
     }
 
-    if (interactionMode === 'selecting' && selection) {
+    if (interactionMode === "selecting" && selection) {
       onSelectionChange({
         ...selection,
         endX: coords.x,
-        endY: coords.y
+        endY: coords.y,
       });
-    } else if (interactionMode === 'dragging-selection' && selection && selectionDragOffset) {
+    } else if (
+      interactionMode === "dragging-selection" &&
+      selection &&
+      selectionDragOffset
+    ) {
       const width = Math.abs(selection.endX - selection.startX);
       const height = Math.abs(selection.endY - selection.startY);
 
@@ -444,13 +483,13 @@ export function ReferenceImageModal({
         startX: newX,
         startY: newY,
         endX: newX + width,
-        endY: newY + height
+        endY: newY + height,
       });
     }
   };
 
   const handleMouseUp = () => {
-    setInteractionMode('none');
+    setInteractionMode("none");
     setDragStart(null);
     setSelectionDragOffset(null);
   };
@@ -478,7 +517,7 @@ export function ReferenceImageModal({
   };
 
   const handleClearImage = () => {
-    if (imageUrl && !imageUrl.startsWith('data:')) {
+    if (imageUrl && !imageUrl.startsWith("data:")) {
       // Only revoke object URLs, not data URLs (base64)
       URL.revokeObjectURL(imageUrl);
     }
@@ -497,7 +536,7 @@ export function ReferenceImageModal({
         startX: 0,
         startY: 0,
         endX: image.width,
-        endY: image.height
+        endY: image.height,
       });
     }
   };
@@ -508,39 +547,50 @@ export function ReferenceImageModal({
   };
 
   const handleZoomIn = () => {
-    setZoom(prev => Math.min(10, prev * 1.25));
+    setZoom((prev) => Math.min(10, prev * 1.25));
   };
 
   const handleZoomOut = () => {
-    setZoom(prev => Math.max(0.5, prev / 1.25));
+    setZoom((prev) => Math.max(0.5, prev / 1.25));
   };
 
   if (!isOpen) return null;
 
-  const selectionWidth = selection ? Math.abs(selection.endX - selection.startX) : 0;
-  const selectionHeight = selection ? Math.abs(selection.endY - selection.startY) : 0;
+  const selectionWidth = selection
+    ? Math.abs(selection.endX - selection.startX)
+    : 0;
+  const selectionHeight = selection
+    ? Math.abs(selection.endY - selection.startY)
+    : 0;
   const hasValidSelection = selectionWidth > 0 && selectionHeight > 0;
 
   // Determine cursor based on state
   const getCursorStyle = () => {
-    if (interactionMode === 'panning') return 'grabbing';
-    if (interactionMode === 'dragging-selection') return 'move';
-    if (isHoveringSelection) return 'move';
-    return 'crosshair';
+    if (interactionMode === "panning") return "grabbing";
+    if (interactionMode === "dragging-selection") return "move";
+    if (isHoveringSelection) return "move";
+    return "crosshair";
   };
 
   return (
     <div className="modal__overlay" onClick={handleClose}>
-      <div className="modal reference-image-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal reference-image-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal__header">
-          <h2><Icon icon={Camera} size={18} /> Add Reference Image</h2>
-          <button className="modal__close" onClick={handleClose}><Icon icon={X} size={14} /></button>
+          <h2>
+            <Icon icon={Camera} size={18} /> Add Reference Image
+          </h2>
+          <button className="modal__close" onClick={handleClose}>
+            <Icon icon={X} size={14} />
+          </button>
         </div>
 
         <div className="modal__body modal__body--fill">
           {!image ? (
             <div
-              className={`reference-image-modal__upload-zone ${isDragging ? 'reference-image-modal__upload-zone--dragging' : ''}`}
+              className={`reference-image-modal__upload-zone ${isDragging ? "reference-image-modal__upload-zone--dragging" : ""}`}
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -551,11 +601,17 @@ export function ReferenceImageModal({
                 type="file"
                 accept="image/*"
                 onChange={handleFileChange}
-                style={{ display: 'none' }}
+                style={{ display: "none" }}
               />
-              <div className="reference-image-modal__upload-icon"><Icon icon={ImagePlus} size={32} /></div>
-              <p className="reference-image-modal__upload-text">Drop an image here or click to upload</p>
-              <p className="reference-image-modal__upload-hint">Supports PNG, JPG, GIF, WebP</p>
+              <div className="reference-image-modal__upload-icon">
+                <Icon icon={ImagePlus} size={32} />
+              </div>
+              <p className="reference-image-modal__upload-text">
+                Drop an image here or click to upload
+              </p>
+              <p className="reference-image-modal__upload-hint">
+                Supports PNG, JPG, GIF, WebP
+              </p>
             </div>
           ) : (
             <div className="reference-image-modal__editor" ref={containerRef}>
@@ -564,18 +620,35 @@ export function ReferenceImageModal({
                   {image.width} × {image.height}px
                 </span>
                 <div className="reference-image-modal__zoom-controls">
-                  <button className="reference-image-modal__toolbar-btn" onClick={handleZoomOut} title="Zoom Out">
+                  <button
+                    className="reference-image-modal__toolbar-btn"
+                    onClick={handleZoomOut}
+                    title="Zoom Out"
+                  >
                     −
                   </button>
-                  <span className="reference-image-modal__zoom-level">{Math.round(zoom * 100)}%</span>
-                  <button className="reference-image-modal__toolbar-btn" onClick={handleZoomIn} title="Zoom In">
+                  <span className="reference-image-modal__zoom-level">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <button
+                    className="reference-image-modal__toolbar-btn"
+                    onClick={handleZoomIn}
+                    title="Zoom In"
+                  >
                     +
                   </button>
-                  <button className="reference-image-modal__toolbar-btn reference-image-modal__toolbar-btn--reset" onClick={handleResetView} title="Reset View">
+                  <button
+                    className="reference-image-modal__toolbar-btn reference-image-modal__toolbar-btn--reset"
+                    onClick={handleResetView}
+                    title="Reset View"
+                  >
                     <Icon icon={RotateCcw} size={12} />
                   </button>
                 </div>
-                <button className="reference-image-modal__select-all-btn" onClick={handleSelectAll}>
+                <button
+                  className="reference-image-modal__select-all-btn"
+                  onClick={handleSelectAll}
+                >
                   Select All
                 </button>
                 <button
@@ -596,7 +669,7 @@ export function ReferenceImageModal({
                   type="file"
                   accept="image/*"
                   onChange={handleFileChange}
-                  style={{ display: 'none' }}
+                  style={{ display: "none" }}
                 />
               </div>
               <div
@@ -620,7 +693,9 @@ export function ReferenceImageModal({
                 </div>
               </div>
               <p className="reference-image-modal__selection-hint">
-                <Icon icon={Search} size={12} /> Pinch or scroll to zoom • Two-finger swipe to pan • Click and drag to select • Drag inside selection to move it
+                <Icon icon={Search} size={12} /> Pinch or scroll to zoom •
+                Two-finger swipe to pan • Click and drag to select • Drag inside
+                selection to move it
               </p>
             </div>
           )}
@@ -629,7 +704,9 @@ export function ReferenceImageModal({
         <div className="modal__footer">
           <div className="reference-image-modal__selection-info">
             {hasValidSelection && (
-              <span>Selection: {selectionWidth} × {selectionHeight}px</span>
+              <span>
+                Selection: {selectionWidth} × {selectionHeight}px
+              </span>
             )}
           </div>
           <div className="modal__actions">

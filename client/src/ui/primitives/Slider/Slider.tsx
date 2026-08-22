@@ -20,11 +20,10 @@ import { classNames } from "../../classNames";
  * accessible name, which was the norm across all 27.
  */
 
-export interface SliderProps
-  extends Omit<
-    InputHTMLAttributes<HTMLInputElement>,
-    "type" | "className" | "onChange" | "value" | "min" | "max" | "step"
-  > {
+export interface SliderProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "type" | "className" | "onChange" | "value" | "min" | "max" | "step"
+> {
   value: number;
   min?: number;
   max?: number;

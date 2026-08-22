@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect, memo } from 'react';
-import { createPortal } from 'react-dom';
-import { Layer, VariantGroup, Variant } from '../../../types';
-import { renderVariantFramePreview } from '../../../utils/previewRenderer';
-import { AnchorGrid, AnchorPosition } from '../AnchorGrid/AnchorGrid';
-import { Icon } from '../../primitives/Icon/Icon';
-import { Hexagon, X, Scaling, Copy, Check } from 'lucide-react';
-import './VariantSelectModal.css';
+import { useState, useRef, useEffect, memo } from "react";
+import { createPortal } from "react-dom";
+import { Layer, VariantGroup, Variant } from "../../../types";
+import { renderVariantFramePreview } from "../../../utils/previewRenderer";
+import { AnchorGrid, AnchorPosition } from "../AnchorGrid/AnchorGrid";
+import { Icon } from "../../primitives/Icon/Icon";
+import { Hexagon, X, Scaling, Copy, Check } from "lucide-react";
+import "./VariantSelectModal.css";
 
 /**
  * Props supplied by `VariantSelectModalContainer` (REFRESH task 28).
@@ -39,54 +39,68 @@ interface VariantSelectModalProps {
 }
 
 // Optimized thumbnail component with memoization
-const VariantThumbnail = memo(function VariantThumbnail({ variant }: { variant: Variant }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const thumbSize = 64;
+const VariantThumbnail = memo(
+  function VariantThumbnail({ variant }: { variant: Variant }) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const thumbSize = 64;
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d', { willReadFrequently: false });
-    if (!canvas || !ctx) return;
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d", { willReadFrequently: false });
+      if (!canvas || !ctx) return;
 
-    // Use first frame for thumbnail
-    const frameToRender = variant.frames[0];
-    if (!frameToRender) return;
+      // Use first frame for thumbnail
+      const frameToRender = variant.frames[0];
+      if (!frameToRender) return;
 
-    renderVariantFramePreview(ctx, thumbSize, variant, frameToRender);
-  }, [variant]);
+      renderVariantFramePreview(ctx, thumbSize, variant, frameToRender);
+    }, [variant]);
 
-  return <canvas ref={canvasRef} width={thumbSize} height={thumbSize} className="variant-select-modal__thumb-canvas" />;
-}, (prevProps, nextProps) => {
-  // Custom comparison: only re-render if variant actually changed
-  const prev = prevProps.variant;
-  const next = nextProps.variant;
+    return (
+      <canvas
+        ref={canvasRef}
+        width={thumbSize}
+        height={thumbSize}
+        className="variant-select-modal__thumb-canvas"
+      />
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison: only re-render if variant actually changed
+    const prev = prevProps.variant;
+    const next = nextProps.variant;
 
-  if (prev === next) return true;
-  if (prev.id !== next.id) return false;
-  if (prev.name !== next.name) return false;
-  if (prev.gridSize.width !== next.gridSize.width || prev.gridSize.height !== next.gridSize.height) return false;
-  if (prev.frames.length !== next.frames.length) return false;
+    if (prev === next) return true;
+    if (prev.id !== next.id) return false;
+    if (prev.name !== next.name) return false;
+    if (
+      prev.gridSize.width !== next.gridSize.width ||
+      prev.gridSize.height !== next.gridSize.height
+    )
+      return false;
+    if (prev.frames.length !== next.frames.length) return false;
 
-  // Check if frame data changed (only check first frame for thumbnails)
-  if (prev.frames.length > 0 && next.frames.length > 0) {
-    const prevFrame = prev.frames[0];
-    const nextFrame = next.frames[0];
+    // Check if frame data changed (only check first frame for thumbnails)
+    if (prev.frames.length > 0 && next.frames.length > 0) {
+      const prevFrame = prev.frames[0];
+      const nextFrame = next.frames[0];
 
-    if (prevFrame.id !== nextFrame.id) return false;
-    if (prevFrame.layers.length !== nextFrame.layers.length) return false;
+      if (prevFrame.id !== nextFrame.id) return false;
+      if (prevFrame.layers.length !== nextFrame.layers.length) return false;
 
-    // Check if layer pixels changed
-    for (let i = 0; i < prevFrame.layers.length; i++) {
-      const prevLayer = prevFrame.layers[i];
-      const nextLayer = nextFrame.layers[i];
+      // Check if layer pixels changed
+      for (let i = 0; i < prevFrame.layers.length; i++) {
+        const prevLayer = prevFrame.layers[i];
+        const nextLayer = nextFrame.layers[i];
 
-      if (prevLayer.visible !== nextLayer.visible) return false;
-      if (prevLayer.pixels !== nextLayer.pixels) return false;
+        if (prevLayer.visible !== nextLayer.visible) return false;
+        if (prevLayer.pixels !== nextLayer.pixels) return false;
+      }
     }
-  }
 
-  return true;
-});
+    return true;
+  },
+);
 
 export function VariantSelectModal({
   layer,
@@ -98,14 +112,16 @@ export function VariantSelectModal({
   onRenameVariant: renameVariant,
   onResizeVariant: resizeVariant,
 }: VariantSelectModalProps) {
-
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
+  const [editingName, setEditingName] = useState("");
   const [showAddOptions, setShowAddOptions] = useState(false);
-  const [resizingVariantId, setResizingVariantId] = useState<string | null>(null);
+  const [resizingVariantId, setResizingVariantId] = useState<string | null>(
+    null,
+  );
   const [resizeWidth, setResizeWidth] = useState(0);
   const [resizeHeight, setResizeHeight] = useState(0);
-  const [resizeAnchor, setResizeAnchor] = useState<AnchorPosition>('middle-center');
+  const [resizeAnchor, setResizeAnchor] =
+    useState<AnchorPosition>("middle-center");
   const [originalWidth, setOriginalWidth] = useState(0);
   const [originalHeight, setOriginalHeight] = useState(0);
 
@@ -125,7 +141,7 @@ export function VariantSelectModal({
       renameVariant(variantGroup.id, variantId, editingName.trim());
     }
     setEditingVariantId(null);
-    setEditingName('');
+    setEditingName("");
   };
 
   const handleAddNew = (copyFromId?: string) => {
@@ -134,7 +150,7 @@ export function VariantSelectModal({
   };
 
   const handleDelete = (variantId: string) => {
-    if (confirm('Delete this variant? This cannot be undone.')) {
+    if (confirm("Delete this variant? This cannot be undone.")) {
       deleteVariant(variantGroup.id, variantId);
     }
   };
@@ -145,12 +161,18 @@ export function VariantSelectModal({
     setResizeHeight(variant.gridSize.height);
     setOriginalWidth(variant.gridSize.width);
     setOriginalHeight(variant.gridSize.height);
-    setResizeAnchor('middle-center');
+    setResizeAnchor("middle-center");
   };
 
   const handleFinishResize = () => {
     if (resizingVariantId && resizeWidth > 0 && resizeHeight > 0) {
-      resizeVariant(variantGroup.id, resizingVariantId, resizeWidth, resizeHeight, resizeAnchor);
+      resizeVariant(
+        variantGroup.id,
+        resizingVariantId,
+        resizeWidth,
+        resizeHeight,
+        resizeAnchor,
+      );
     }
     setResizingVariantId(null);
   };
@@ -162,20 +184,29 @@ export function VariantSelectModal({
   };
 
   return createPortal(
-    <div className="variant-select-modal__backdrop" onClick={handleBackdropClick}>
+    <div
+      className="variant-select-modal__backdrop"
+      onClick={handleBackdropClick}
+    >
       <div className="variant-select-modal">
         <div className="variant-select-modal__header">
-          <h3><Icon icon={Hexagon} size={16} /> Select Variant</h3>
-          <span className="variant-select-modal__group-name">{variantGroup.name}</span>
-          <button className="modal__close" onClick={onClose}><Icon icon={X} size={14} /></button>
+          <h3>
+            <Icon icon={Hexagon} size={16} /> Select Variant
+          </h3>
+          <span className="variant-select-modal__group-name">
+            {variantGroup.name}
+          </span>
+          <button className="modal__close" onClick={onClose}>
+            <Icon icon={X} size={14} />
+          </button>
         </div>
 
         <div className="variant-select-modal__content">
           <div className="variant-select-modal__grid">
-            {variantGroup.variants.map(variant => (
+            {variantGroup.variants.map((variant) => (
               <div
                 key={variant.id}
-                className={`variant-select-modal__card ${selectedVariantId === variant.id ? 'variant-select-modal__card--selected' : ''}`}
+                className={`variant-select-modal__card ${selectedVariantId === variant.id ? "variant-select-modal__card--selected" : ""}`}
                 onClick={() => handleSelectVariant(variant.id)}
               >
                 <div className="variant-select-modal__thumb">
@@ -190,7 +221,9 @@ export function VariantSelectModal({
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
                       onBlur={() => handleFinishRename(variant.id)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleFinishRename(variant.id)}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleFinishRename(variant.id)
+                      }
                       onClick={(e) => e.stopPropagation()}
                       autoFocus
                     />
@@ -245,7 +278,9 @@ export function VariantSelectModal({
                 </div>
 
                 {selectedVariantId === variant.id && (
-                  <div className="variant-select-modal__badge--selected"><Icon icon={Check} size={12} /></div>
+                  <div className="variant-select-modal__badge--selected">
+                    <Icon icon={Check} size={12} />
+                  </div>
                 )}
               </div>
             ))}
@@ -258,12 +293,13 @@ export function VariantSelectModal({
                 <button onClick={() => handleAddNew()}>
                   + New Empty Variant
                 </button>
-                <button onClick={() => setShowAddOptions(false)}>
-                  Cancel
-                </button>
+                <button onClick={() => setShowAddOptions(false)}>Cancel</button>
               </div>
             ) : (
-              <button className="variant-select-modal__add-btn" onClick={() => setShowAddOptions(true)}>
+              <button
+                className="variant-select-modal__add-btn"
+                onClick={() => setShowAddOptions(true)}
+              >
                 + Add Variant
               </button>
             )}
@@ -272,8 +308,14 @@ export function VariantSelectModal({
 
         {/* Resize dialog */}
         {resizingVariantId && (
-          <div className="variant-select-modal__resize-backdrop" onClick={() => setResizingVariantId(null)}>
-            <div className="variant-select-modal__resize-dialog" onClick={e => e.stopPropagation()}>
+          <div
+            className="variant-select-modal__resize-backdrop"
+            onClick={() => setResizingVariantId(null)}
+          >
+            <div
+              className="variant-select-modal__resize-dialog"
+              onClick={(e) => e.stopPropagation()}
+            >
               <h4>Resize Variant</h4>
               <div className="variant-select-modal__resize-inputs">
                 <label>
@@ -281,7 +323,9 @@ export function VariantSelectModal({
                   <input
                     type="number"
                     value={resizeWidth}
-                    onChange={(e) => setResizeWidth(Math.max(1, parseInt(e.target.value) || 1))}
+                    onChange={(e) =>
+                      setResizeWidth(Math.max(1, parseInt(e.target.value) || 1))
+                    }
                     min={1}
                   />
                 </label>
@@ -290,13 +334,19 @@ export function VariantSelectModal({
                   <input
                     type="number"
                     value={resizeHeight}
-                    onChange={(e) => setResizeHeight(Math.max(1, parseInt(e.target.value) || 1))}
+                    onChange={(e) =>
+                      setResizeHeight(
+                        Math.max(1, parseInt(e.target.value) || 1),
+                      )
+                    }
                     min={1}
                   />
                 </label>
               </div>
               <div className="variant-select-modal__resize-anchor">
-                <label className="variant-select-modal__anchor-label">Anchor Point:</label>
+                <label className="variant-select-modal__anchor-label">
+                  Anchor Point:
+                </label>
                 <AnchorGrid
                   anchor={resizeAnchor}
                   onChange={setResizeAnchor}
@@ -308,14 +358,15 @@ export function VariantSelectModal({
               </div>
               <div className="variant-select-modal__resize-actions">
                 <button onClick={handleFinishResize}>Apply</button>
-                <button onClick={() => setResizingVariantId(null)}>Cancel</button>
+                <button onClick={() => setResizingVariantId(null)}>
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
         )}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
-

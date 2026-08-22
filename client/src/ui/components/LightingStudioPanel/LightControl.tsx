@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { ReactNode } from 'react';
-import { Color } from '../../../types';
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { ReactNode } from "react";
+import { Color } from "../../../types";
 // Task 36: the LIGHT DIRECTION half of `NormalPicker` arrives as the
 // `lightDirectionPicker` ELEMENT prop rather than an import — it is
 // `LightDirectionPickerContainer`, and `ui/` may not import a container. The
@@ -10,9 +10,8 @@ import { Color } from '../../../types';
 // Task 36: `hslToRgb`/`rgbToHsl` were duplicated here VERBATIM from
 // `ColorPicker.tsx` (verified byte-identical by diff). Both now come from the
 // single extracted module, so the two copies cannot drift.
-import { hslToRgb, rgbToHsl } from '../../utils/colorMath';
-import './LightControl.css';
-
+import { hslToRgb, rgbToHsl } from "../../utils/colorMath";
+import "./LightControl.css";
 
 interface ColorSliderProps {
   label: string;
@@ -27,9 +26,9 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
 
   useEffect(() => {
     // Use last valid H/S as fallback when converting from RGB
-    const prevHsl = lastValidHsRef.current ?
-                    { ...lastValidHsRef.current, l: 0 } :
-                    hsl;
+    const prevHsl = lastValidHsRef.current
+      ? { ...lastValidHsRef.current, l: 0 }
+      : hsl;
     const newHsl = rgbToHsl(color.r, color.g, color.b, prevHsl);
     setHsl(newHsl);
     // Update last valid H and S if L is not 0 or 100
@@ -38,26 +37,29 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
     }
   }, [color]);
 
-  const updateColor = useCallback((newHsl: { h: number; s: number; l: number }) => {
-    // Preserve H and S when L is 0 or 100
-    let finalHsl = { ...newHsl };
-    if (newHsl.l === 0 || newHsl.l === 100) {
-      // Use last valid H and S if available, otherwise keep current values
-      if (lastValidHsRef.current) {
-        finalHsl = { ...lastValidHsRef.current, l: newHsl.l };
+  const updateColor = useCallback(
+    (newHsl: { h: number; s: number; l: number }) => {
+      // Preserve H and S when L is 0 or 100
+      let finalHsl = { ...newHsl };
+      if (newHsl.l === 0 || newHsl.l === 100) {
+        // Use last valid H and S if available, otherwise keep current values
+        if (lastValidHsRef.current) {
+          finalHsl = { ...lastValidHsRef.current, l: newHsl.l };
+        } else {
+          // If we don't have a last valid value, preserve current H and S
+          finalHsl = { h: hsl.h, s: hsl.s, l: newHsl.l };
+        }
       } else {
-        // If we don't have a last valid value, preserve current H and S
-        finalHsl = { h: hsl.h, s: hsl.s, l: newHsl.l };
+        // Update last valid H and S when L is not 0 or 100
+        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
       }
-    } else {
-      // Update last valid H and S when L is not 0 or 100
-      lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-    }
 
-    setHsl(finalHsl);
-    const rgb = hslToRgb(finalHsl.h, finalHsl.s, finalHsl.l);
-    onChange({ ...rgb, a: 255 });
-  }, [onChange, hsl]);
+      setHsl(finalHsl);
+      const rgb = hslToRgb(finalHsl.h, finalHsl.s, finalHsl.l);
+      onChange({ ...rgb, a: 255 });
+    },
+    [onChange, hsl],
+  );
 
   const getColorPreview = () => {
     return `rgb(${color.r}, ${color.g}, ${color.b})`;
@@ -126,7 +128,9 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
           min="0"
           max="360"
           value={hsl.h}
-          onChange={(e) => updateColor({ ...hsl, h: parseInt(e.target.value) || 0 })}
+          onChange={(e) =>
+            updateColor({ ...hsl, h: parseInt(e.target.value) || 0 })
+          }
         />
       </div>
 
@@ -142,7 +146,7 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
           style={{
             background: `linear-gradient(to right,
               hsl(${hsl.h}, 0%, ${hsl.l}%),
-              hsl(${hsl.h}, 100%, ${hsl.l}%))`
+              hsl(${hsl.h}, 100%, ${hsl.l}%))`,
           }}
         />
         <input
@@ -151,7 +155,9 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
           min="0"
           max="100"
           value={hsl.s}
-          onChange={(e) => updateColor({ ...hsl, s: parseInt(e.target.value) || 0 })}
+          onChange={(e) =>
+            updateColor({ ...hsl, s: parseInt(e.target.value) || 0 })
+          }
         />
       </div>
 
@@ -168,7 +174,7 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
             background: `linear-gradient(to right,
               hsl(${hsl.h}, ${hsl.s}%, 0%),
               hsl(${hsl.h}, ${hsl.s}%, 50%),
-              hsl(${hsl.h}, ${hsl.s}%, 100%))`
+              hsl(${hsl.h}, ${hsl.s}%, 100%))`,
           }}
         />
         <input
@@ -177,7 +183,9 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
           min="0"
           max="100"
           value={hsl.l}
-          onChange={(e) => updateColor({ ...hsl, l: parseInt(e.target.value) || 0 })}
+          onChange={(e) =>
+            updateColor({ ...hsl, l: parseInt(e.target.value) || 0 })
+          }
         />
       </div>
     </div>
@@ -216,9 +224,7 @@ export function LightControl({
 }: LightControlProps) {
   return (
     <div className="light-control">
-      <div className="light-control__section">
-        {lightDirectionPicker}
-      </div>
+      <div className="light-control__section">{lightDirectionPicker}</div>
 
       <div className="light-control__section">
         <ColorSlider
@@ -239,7 +245,9 @@ export function LightControl({
       <div className="light-control__section">
         <div className="light-control__color-section">
           <div className="light-control__color-header">
-            <span className="light-control__color-label">Shadow Height Scale</span>
+            <span className="light-control__color-label">
+              Shadow Height Scale
+            </span>
           </div>
           <div className="light-control__row">
             <label className="slider__label slider__label--muted">Scale</label>
@@ -257,7 +265,9 @@ export function LightControl({
               min="1"
               max="500"
               value={heightScale}
-              onChange={(e) => onHeightScaleChange(parseInt(e.target.value) || 100)}
+              onChange={(e) =>
+                onHeightScaleChange(parseInt(e.target.value) || 100)
+              }
             />
           </div>
         </div>
@@ -265,4 +275,3 @@ export function LightControl({
     </div>
   );
 }
-
