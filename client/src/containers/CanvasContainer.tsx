@@ -163,6 +163,14 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
+import {
+  ACCENT_PRIMARY_14,
+  ACCENT_VARIANT,
+  BLACK_12,
+  WARN_ORANGE_40,
+  WARN_ORANGE_60,
+  WHITE_08,
+} from "../ui/theme/canvasTokens";
 import { useStores } from "../stores/context";
 import { strokeControl } from "../stores/history/editorHistory";
 import type { Color, Point, SelectionBox, Pixel, PixelData } from "../types";
@@ -738,7 +746,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       }
 
       // Grid lines over the variant edit area only.
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.strokeStyle = WHITE_08;
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let x = 0; x <= gridWidth; x++) {
@@ -754,14 +762,14 @@ export const CanvasContainer = observer(function CanvasContainer({
       ctx.stroke();
 
       // Object bounds.
-      ctx.strokeStyle = "rgba(255, 171, 0, 0.4)";
+      ctx.strokeStyle = WARN_ORANGE_40;
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
       ctx.strokeRect(0, 0, objWidth * zoom, objHeight * zoom);
       ctx.setLineDash([]);
 
       // The variant editing area.
-      ctx.strokeStyle = "#8b5cf6";
+      ctx.strokeStyle = ACCENT_VARIANT;
       ctx.lineWidth = 2;
       ctx.strokeRect(
         variantOffset.x * zoom,
@@ -866,7 +874,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       // Skipped above 20,000 cells — on the owner's real project a select-all
       // is 300,249 and painting it per frame would stall the drag.
       if (selection.mask.size <= 20000) {
-        ctx.fillStyle = "rgba(0, 217, 255, 0.14)";
+        ctx.fillStyle = ACCENT_PRIMARY_14;
         for (const idx of selection.mask) {
           const x = idx % selection.width;
           const y = Math.floor(idx / selection.width);
@@ -895,7 +903,7 @@ export const CanvasContainer = observer(function CanvasContainer({
         : layer?.pixels;
 
       if (srcPixels && selection.mask.size <= 20000) {
-        ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+        ctx.fillStyle = BLACK_12;
         for (const idx of selection.mask) {
           const x = idx % selection.width;
           const y = Math.floor(idx / selection.width);
@@ -1047,7 +1055,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     }
     ctx.globalAlpha = 1;
 
-    ctx.strokeStyle = "rgba(255, 171, 0, 0.6)";
+    ctx.strokeStyle = WARN_ORANGE_60;
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 4]);
     ctx.strokeRect(

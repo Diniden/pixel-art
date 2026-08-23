@@ -328,9 +328,7 @@ export class PixelStore {
    * in the chain is missing — every legacy action bailed out silently in that
    * case and that is preserved.
    */
-  private resolveTarget(
-    variantFrameIndexOverride?: number,
-  ): {
+  private resolveTarget(variantFrameIndexOverride?: number): {
     target: PixelTarget;
     layer: Layer;
     width: number;

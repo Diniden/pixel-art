@@ -1,5 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import "./ReferenceImageModal.css";
+import {
+  ACCENT_PRIMARY,
+  ACCENT_PRIMARY_30,
+  OVERLAY_60,
+} from "../../theme/canvasTokens";
 import { Icon } from "../../primitives/Icon/Icon";
 import { ImagePlus, RotateCcw, Camera, X, Trash2, Search } from "lucide-react";
 import type { ReferenceImageData } from "../../../types/referenceImage";
@@ -187,21 +192,21 @@ export function ReferenceImageModal({
       const h = Math.abs(selection.endY - selection.startY) * scale;
 
       // Darken non-selected areas
-      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.fillStyle = OVERLAY_60;
       ctx.fillRect(0, 0, canvas.width, y);
       ctx.fillRect(0, y + h, canvas.width, canvas.height - y - h);
       ctx.fillRect(0, y, x, h);
       ctx.fillRect(x + w, y, canvas.width - x - w, h);
 
       // Draw selection border
-      ctx.strokeStyle = "#00d9ff";
+      ctx.strokeStyle = ACCENT_PRIMARY;
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 5]);
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
 
       // Draw corner handles
-      ctx.fillStyle = "#00d9ff";
+      ctx.fillStyle = ACCENT_PRIMARY;
       const handleSize = 8;
       ctx.fillRect(
         x - handleSize / 2,
@@ -229,13 +234,13 @@ export function ReferenceImageModal({
       );
 
       // Draw center move handle
-      ctx.fillStyle = "rgba(0, 217, 255, 0.3)";
+      ctx.fillStyle = ACCENT_PRIMARY_30;
       ctx.fillRect(x, y, w, h);
 
       // Draw move icon in center
       const centerX = x + w / 2;
       const centerY = y + h / 2;
-      ctx.strokeStyle = "#00d9ff";
+      ctx.strokeStyle = ACCENT_PRIMARY;
       ctx.lineWidth = 2;
       ctx.setLineDash([]);
 
@@ -251,7 +256,7 @@ export function ReferenceImageModal({
       // Show dimensions
       const selW = Math.abs(selection.endX - selection.startX);
       const selH = Math.abs(selection.endY - selection.startY);
-      ctx.fillStyle = "#00d9ff";
+      ctx.fillStyle = ACCENT_PRIMARY;
       ctx.font = "12px monospace";
       ctx.fillText(`${selW} × ${selH}px`, x + 4, y - 8);
     }

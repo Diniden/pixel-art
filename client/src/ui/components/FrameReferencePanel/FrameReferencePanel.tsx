@@ -571,7 +571,13 @@ export function FrameReferencePanel({
                   />
                 </div>
 
-                <div style={{ display: "flex", gap: "var(--space-2)", width: "100%" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "var(--space-2)",
+                    width: "100%",
+                  }}
+                >
                   <button
                     className={`frame-reference-panel__overlay-btn ${isOverlayActive ? "frame-reference-panel__overlay-btn--active" : ""}`}
                     onClick={handleToggleOverlay}
@@ -593,7 +599,10 @@ export function FrameReferencePanel({
                         ? "Exit trace mode (ESC)"
                         : "Trace mode (WASD to align, click to copy)"
                     }
-                    style={{ flex: "0 0 auto", padding: "var(--space-2-5) var(--space-4)" }}
+                    style={{
+                      flex: "0 0 auto",
+                      padding: "var(--space-2-5) var(--space-4)",
+                    }}
                   >
                     <Icon icon={Target} size={14} />
                   </button>

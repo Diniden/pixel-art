@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { BLACK } from "../../theme/canvasTokens";
 import { Layer, Pixel, PixelData, PixelObject } from "../../../types";
 import type { CurrentVariant } from "../../../types";
 import { Icon } from "../../primitives/Icon/Icon";
@@ -138,7 +139,7 @@ export function HeightMapModal({
     }
 
     if (channelValues.length === 0) {
-      ctx.fillStyle = "#000";
+      ctx.fillStyle = BLACK;
       ctx.fillRect(0, 0, gridWidth, gridHeight);
       return;
     }

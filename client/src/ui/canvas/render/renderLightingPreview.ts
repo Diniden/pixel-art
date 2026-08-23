@@ -39,6 +39,7 @@
  * Pure: no store, no MobX, no API, no DOM.
  */
 
+import { ACCENT_PRIMARY_25 } from "../../theme/canvasTokens";
 import type { BackgroundTheme } from "./canvasBackground";
 
 /** A minimal structural stand-in for `ImageData`. */
@@ -57,7 +58,7 @@ export const PREVIEW_THUMB_SIZE = 200;
  * is optional.
  */
 export const PREVIEW_BORDER = {
-  strokeStyle: "rgba(0, 217, 255, 0.25)",
+  strokeStyle: ACCENT_PRIMARY_25,
   lineWidth: 2,
 } as const;
 

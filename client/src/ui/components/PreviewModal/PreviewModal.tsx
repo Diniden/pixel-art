@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { CHECKER_DARK_A, CHECKER_DARK_B } from "../../theme/canvasTokens";
 import {
   PixelObject,
   Frame,
@@ -350,7 +351,7 @@ export function PreviewModal({
     for (let y = 0; y < canvas.height; y += checkSize) {
       for (let x = 0; x < canvas.width; x += checkSize) {
         const isLight = (x / checkSize + y / checkSize) % 2 === 0;
-        ctx.fillStyle = isLight ? "#2a2a3a" : "#222230";
+        ctx.fillStyle = isLight ? CHECKER_DARK_A : CHECKER_DARK_B;
         ctx.fillRect(x, y, checkSize, checkSize);
       }
     }
