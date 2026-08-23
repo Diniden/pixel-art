@@ -98,7 +98,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.9rem;
+  font-size: var(--text-90);
 }
 
 .edge-interpolate-modal__label-text {
@@ -173,7 +173,7 @@
 }
 
 .edge-interpolate-modal__description {
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   color: var(--text-secondary);
   line-height: var(--leading-snug);
   margin-top: var(--space-1);
@@ -239,5 +239,5 @@
 .edge-interpolate-modal__checkbox-text {
   color: var(--text-primary);
   font-weight: var(--weight-medium);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
 }

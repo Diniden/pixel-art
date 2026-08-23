@@ -127,7 +127,7 @@
   left: 50%;
   transform: translateX(-50%);
   margin-top: var(--space-1);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--accent-danger);
   white-space: nowrap;
   background: var(--bg-secondary);
@@ -387,7 +387,7 @@
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-family: var(--font-mono);
   outline: none;
 }
@@ -403,7 +403,7 @@
   border-radius: var(--radius-md);
   color: var(--black);
   font-weight: var(--weight-semibold);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   cursor: pointer;
   transition: opacity var(--transition-fast);
 }
@@ -427,7 +427,7 @@
 .header__ai-hint {
   display: block;
   margin-top: var(--space-1-5);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--text-tertiary);
 }
 
@@ -443,7 +443,7 @@
 
   .header__project-name {
     max-width: 120px;
-    font-size: 0.85rem;
+    font-size: var(--text-85);
   }
 
   .header__backups-btn {

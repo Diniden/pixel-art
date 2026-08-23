@@ -42,7 +42,7 @@
 
 .right-sidebar-top-controls__value {
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   color: var(--text-primary);
   min-width: 40px;
   text-align: center;
@@ -55,7 +55,7 @@
 }
 
 .right-sidebar-top-controls__label {
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -73,7 +73,7 @@
 .right-sidebar-top-controls__segment {
   flex: 1;
   padding: var(--space-1-5) var(--space-2);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   font-weight: var(--weight-semibold);
   background: transparent;
   border: none;

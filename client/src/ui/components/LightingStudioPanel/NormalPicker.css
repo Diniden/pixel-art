@@ -47,7 +47,7 @@
 
 .normal-picker__hint {
   margin-top: var(--space-1-5);
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   color: var(--text-muted);
   font-style: italic;
 }

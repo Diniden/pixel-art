@@ -124,7 +124,7 @@
 
 .layer-panel__name {
   flex: 1;
-  font-size: 0.8125rem;
+  font-size: var(--text-81);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -134,14 +134,14 @@
 .layer-panel__name-input {
   flex: 1;
   padding: var(--space-0-5) var(--space-1-5);
-  font-size: 0.8125rem;
+  font-size: var(--text-81);
 }
 
 .layer-panel__group-badge {
   display: inline-block;
   margin-left: var(--space-1);
   padding: var(--space-px) var(--space-1);
-  font-size: 0.6rem;
+  font-size: var(--text-60);
   background: var(--accent-variant-30);
   border-radius: var(--radius-base);
   color: var(--accent-variant-light);
@@ -154,7 +154,7 @@
   display: inline-block;
   margin-left: var(--space-0-5);
   padding: var(--space-px) var(--space-1);
-  font-size: 0.6rem;
+  font-size: var(--text-60);
   background: var(--accent-variant-30);
   border-radius: var(--radius-base);
   color: var(--accent-variant-light);
@@ -176,7 +176,7 @@
   width: 18px;
   height: 18px;
   padding: 0;
-  font-size: 9px;
+  font-size: var(--text-px-9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -271,7 +271,7 @@
 }
 
 .layer-panel__header-btn--move-all {
-  font-size: 9px;
+  font-size: var(--text-px-9);
 }
 
 .layer-panel__header-btn--move-all:hover:not(:disabled) {
@@ -300,7 +300,7 @@
 }
 
 .layer-panel__header-btn--squash-all {
-  font-size: 9px;
+  font-size: var(--text-px-9);
 }
 
 .layer-panel__header-btn--squash-all:hover:not(:disabled) {
@@ -347,11 +347,11 @@
   opacity: 1;
   width: 18px;
   height: 18px;
-  font-size: 9px;
+  font-size: var(--text-px-9);
 }
 
 .layer-panel__action-btn--copy {
-  font-size: 8px;
+  font-size: var(--text-px-8);
 }
 
 .layer-panel__action-btn--copy:hover:not(:disabled) {
@@ -360,7 +360,7 @@
 }
 
 .layer-panel__action-btn--squash {
-  font-size: 9px;
+  font-size: var(--text-px-9);
 }
 
 .layer-panel__action-btn--squash:hover:not(:disabled) {

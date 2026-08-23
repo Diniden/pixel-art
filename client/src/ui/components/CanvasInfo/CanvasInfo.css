@@ -31,7 +31,7 @@
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 6px;
+  font-size: var(--text-px-6);
   cursor: pointer;
   transition:
     color var(--transition-fast),
@@ -47,7 +47,7 @@
 .canvas-info__arrow {
   display: block;
   line-height: var(--leading-none);
-  font-size: 6px;
+  font-size: var(--text-px-6);
 }
 
 .canvas-info__panel {
@@ -103,7 +103,7 @@
   .canvas-info__row {
     padding: var(--space-1-5) var(--space-3);
     padding-top: var(--space-1);
-    font-size: 0.7rem;
+    font-size: var(--text-70);
   }
 
   .canvas-info__panel {

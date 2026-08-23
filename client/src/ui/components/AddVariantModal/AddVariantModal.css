@@ -268,7 +268,7 @@
 }
 
 .add-variant-modal__type-name {
-  font-size: 13px;
+  font-size: var(--text-px-13);
   color: var(--text-secondary);
 }
 

@@ -98,7 +98,7 @@
   align-items: center;
   gap: var(--space-4);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
 }
 
 .preview-modal__spinner {
@@ -149,7 +149,7 @@
 }
 
 .preview-modal__fps-label {
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -196,7 +196,7 @@
 .preview-modal__fps-input {
   width: 60px;
   padding: var(--space-1-5) var(--space-2);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-family: var(--font-mono);
   text-align: center;
   background: var(--bg-tertiary);
@@ -218,7 +218,7 @@
 }
 
 .preview-modal__frame-counter {
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-family: var(--font-mono);
   color: var(--accent-primary);
   background: var(--accent-primary-10);
@@ -228,7 +228,7 @@
 }
 
 .preview-modal__size {
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   font-family: var(--font-mono);
   color: var(--text-muted);
 }

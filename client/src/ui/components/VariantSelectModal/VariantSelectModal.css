@@ -47,13 +47,13 @@
 .variant-select-modal__header h3 {
   margin: 0;
   color: var(--accent-variant);
-  font-size: 1.1rem;
+  font-size: var(--text-110);
   font-weight: var(--weight-semibold);
 }
 
 .variant-select-modal__group-name {
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
 }
 
 /* The close button is blocks/modal.css's `modal__close` now; only the
@@ -115,7 +115,7 @@
 }
 
 .variant-select-modal__name {
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   color: var(--text-primary);
   text-align: center;
   white-space: nowrap;
@@ -127,12 +127,12 @@
 .variant-select-modal__name-input {
   width: 100%;
   padding: var(--space-1) var(--space-2);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   text-align: center;
 }
 
 .variant-select-modal__size {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--text-muted);
 }
 
@@ -151,7 +151,7 @@
   width: 24px;
   height: 24px;
   padding: 0;
-  font-size: 11px;
+  font-size: var(--text-px-11);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -208,7 +208,7 @@
   border: 2px dashed var(--accent-variant-40);
   border-radius: var(--radius-md);
   color: var(--accent-variant);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -295,7 +295,7 @@
   align-items: center;
   gap: var(--space-3);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
 }
 
 .variant-select-modal__resize-inputs input {
@@ -345,7 +345,7 @@
 .variant-select-modal__anchor-label {
   display: block;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
   margin-bottom: var(--space-2);
 }
 

@@ -37,7 +37,7 @@
 
 .frame-tags-modal__header h4 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--text-95);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
@@ -84,7 +84,7 @@
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   font-weight: var(--weight-medium);
   color: var(--white);
   border-radius: var(--radius-md);
@@ -132,7 +132,7 @@
 .frame-tags-modal__input {
   flex: 1;
   padding: var(--space-2-5) var(--space-3);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
@@ -171,7 +171,7 @@
 }
 
 .frame-tags-modal__project-title {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   font-weight: var(--weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -185,7 +185,7 @@
 }
 
 .frame-tags-modal__project-empty {
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   color: var(--text-muted);
   padding: var(--space-2) 0;
 }

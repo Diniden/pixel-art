@@ -123,14 +123,14 @@
 .slider__label {
   width: 14px;
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   font-weight: var(--weight-semibold);
   text-align: center;
   flex-shrink: 0;
 }
 
 .slider__label--muted {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--text-muted);
 }
 
@@ -140,7 +140,7 @@
   width: 42px;
   padding: var(--space-0-5) var(--space-1);
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   text-align: right;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
@@ -169,7 +169,7 @@
    input[type="number"], as its .color-slider-row ancestor selector did. */
 .slider__input.slider__input--boxed {
   padding: var(--space-1) var(--space-1-5);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   text-align: center;
   background: var(--bg-primary);
 }

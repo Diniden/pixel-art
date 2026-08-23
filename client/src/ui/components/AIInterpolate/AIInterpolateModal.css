@@ -41,7 +41,7 @@
 }
 
 .ai-interpolate-modal__icon {
-  font-size: 1.2rem;
+  font-size: var(--text-120);
   background: linear-gradient(
     135deg,
     var(--accent-primary),
@@ -60,7 +60,7 @@
   border: 1px solid var(--accent-danger-30);
   border-radius: var(--radius-md);
   color: var(--accent-danger);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
 }
 
 /* Content: the scroll area is `modal__body` (task 19 primitive). */
@@ -92,7 +92,7 @@
 }
 
 .ai-interpolate-modal__heartbeat-subtext {
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   color: var(--text-tertiary);
   margin: 0;
   text-align: center;
@@ -110,20 +110,20 @@
 }
 
 .ai-interpolate-modal__unavailable-icon {
-  font-size: 2.4rem;
+  font-size: var(--text-240);
   opacity: 0.25;
   color: var(--text-tertiary);
 }
 
 .ai-interpolate-modal__unavailable-title {
-  font-size: 1.1rem;
+  font-size: var(--text-110);
   font-weight: var(--weight-bold);
   color: var(--text-primary);
   margin: 0;
 }
 
 .ai-interpolate-modal__unavailable-detail {
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   color: var(--accent-danger);
   margin: 0;
   text-align: center;
@@ -135,7 +135,7 @@
 }
 
 .ai-interpolate-modal__unavailable-hint {
-  font-size: 0.78rem;
+  font-size: var(--text-78);
   color: var(--text-tertiary);
   margin: var(--space-1) 0 0;
   text-align: center;
@@ -144,14 +144,14 @@
 
 /* Step: Layer Selection */
 .ai-interpolate-modal__step-title {
-  font-size: 0.95rem;
+  font-size: var(--text-95);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
   margin: 0 0 var(--space-1-5);
 }
 
 .ai-interpolate-modal__step-desc {
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   color: var(--text-tertiary);
   margin: 0 0 var(--space-4);
 }
@@ -168,7 +168,7 @@
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
   text-align: left;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -187,7 +187,7 @@
 }
 
 .ai-interpolate-modal__empty {
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   color: var(--text-tertiary);
   text-align: center;
   padding: var(--space-5);
@@ -202,7 +202,7 @@
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-3);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   color: var(--text-secondary);
 }
 
@@ -248,7 +248,7 @@
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -276,7 +276,7 @@
 .ai-interpolate-modal__tab-badge {
   background: var(--accent-primary);
   color: var(--black);
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   font-weight: var(--weight-bold);
   padding: var(--space-px) var(--space-1-5);
   border-radius: var(--radius-pill);
@@ -359,7 +359,7 @@
 }
 
 .ai-interpolate-modal__loop-label {
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
 }
@@ -447,7 +447,7 @@
 }
 
 .ai-interpolate-modal__frame-label {
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   color: var(--text-tertiary);
   font-weight: var(--weight-medium);
   text-transform: uppercase;
@@ -470,7 +470,7 @@
   border: 1px solid var(--accent-warning-30);
   border-radius: var(--radius-md);
   color: var(--accent-warning);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   margin-bottom: var(--space-3);
 }
 
@@ -490,7 +490,7 @@
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
   border-left: 3px solid var(--border-secondary);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
 }
 
 /* ⚠️ dynamic: ai-interpolate-modal__gen-pair--{pending|queued|processing|completed|failed}
@@ -559,7 +559,7 @@
 }
 
 .ai-interpolate-modal__setting-label {
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
@@ -577,7 +577,7 @@
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
   font-family: var(--font-mono);
   text-align: center;
 }
@@ -636,7 +636,7 @@
 .ai-interpolate-modal__setting-value {
   min-width: 48px;
   text-align: right;
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-family: var(--font-mono);
   color: var(--accent-primary);
   font-weight: var(--weight-semibold);
@@ -650,7 +650,7 @@
 }
 
 .ai-interpolate-modal__preview-label {
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   margin: 0 0 var(--space-2-5);
@@ -688,7 +688,7 @@
 }
 
 .ai-interpolate-modal__preview-item-label {
-  font-size: 0.6rem;
+  font-size: var(--text-60);
   color: var(--text-tertiary);
 }
 
@@ -733,7 +733,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-1-5);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   color: var(--text-tertiary);
 }
 
@@ -744,7 +744,7 @@
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   font-family: var(--font-mono);
   text-align: center;
 }
@@ -791,7 +791,7 @@
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -813,7 +813,7 @@
   border: none;
   border-radius: var(--radius-md);
   color: var(--white);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -836,7 +836,7 @@
   border: none;
   border-radius: var(--radius-md);
   color: var(--black);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all var(--transition-fast);

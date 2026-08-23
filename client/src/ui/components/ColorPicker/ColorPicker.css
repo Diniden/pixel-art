@@ -137,7 +137,7 @@
 .color-picker__hex-input {
   flex: 1;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: var(--space-1-5) var(--space-2);
@@ -157,7 +157,7 @@
 }
 
 .color-picker__section-label {
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   font-weight: var(--weight-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
