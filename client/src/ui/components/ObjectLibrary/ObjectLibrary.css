@@ -186,7 +186,7 @@
 }
 
 .object-library__details {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
@@ -302,7 +302,7 @@
 }
 
 .object-library__name-small {
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -315,7 +315,7 @@
   flex: 1;
   min-width: 0;
   padding: var(--space-px) var(--space-1);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   background: var(--bg-secondary);
   border: 1px solid var(--accent-primary);
   border-radius: var(--radius-sm);
@@ -383,7 +383,7 @@
 }
 
 .object-library__tooltip-details {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--text-muted);
   font-family: var(--font-mono);
   white-space: nowrap;

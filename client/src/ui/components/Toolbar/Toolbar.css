@@ -79,7 +79,7 @@
   position: absolute;
   bottom: 1px;
   right: 1px;
-  font-size: 8px;
+  font-size: var(--text-px-8);
   font-weight: var(--weight-semibold);
   font-family: var(--font-mono);
   color: var(--text-muted);
@@ -209,7 +209,7 @@
   }
 
   .toolbar__tool-icon {
-    font-size: 13px;
+    font-size: var(--text-px-13);
   }
 
   .toolbar__tool-hotkey {

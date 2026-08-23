@@ -161,7 +161,7 @@ export function BrowseBackupsModal({
         {error && (
           <div
             className="browse-backups-modal__error"
-            style={{ margin: "12px 20px 0" }}
+            style={{ margin: "var(--space-3) var(--space-5) 0" }}
           >
             {error}
           </div>
@@ -175,7 +175,7 @@ export function BrowseBackupsModal({
           ) : loadError ? (
             <div
               className="browse-backups-modal__error"
-              style={{ margin: "12px 0" }}
+              style={{ margin: "var(--space-3) 0" }}
             >
               Could not load backups — {loadError}. Your backups are NOT gone;
               check that the server is running and reopen this dialog.

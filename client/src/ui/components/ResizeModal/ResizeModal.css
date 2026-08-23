@@ -106,7 +106,7 @@
 }
 
 .resize-modal__separator {
-  font-size: 1.2rem;
+  font-size: var(--text-120);
   color: var(--text-muted);
   padding-bottom: var(--space-2-5);
 }

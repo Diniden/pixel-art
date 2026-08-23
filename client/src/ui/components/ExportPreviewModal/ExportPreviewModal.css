@@ -78,7 +78,7 @@
 }
 
 .export-preview-modal__subtitle {
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
@@ -114,7 +114,7 @@
   gap: var(--space-4);
   padding: 60px var(--space-6);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
 }
 
 .export-preview-modal__spinner {
@@ -144,11 +144,11 @@
 }
 
 .export-preview-modal__error-icon {
-  font-size: 2rem;
+  font-size: var(--text-200);
 }
 
 .export-preview-modal__error-msg {
-  font-size: 0.9rem;
+  font-size: var(--text-90);
   text-align: center;
   max-width: 400px;
 }
@@ -219,7 +219,7 @@
 }
 
 .export-preview-modal__object-name {
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
   white-space: nowrap;
@@ -228,7 +228,7 @@
 }
 
 .export-preview-modal__object-meta {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   font-family: var(--font-mono);
   color: var(--text-muted);
   display: flex;
@@ -236,21 +236,21 @@
 }
 
 .export-preview-modal__object-frames {
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   font-family: var(--font-mono);
   color: var(--accent-primary);
   opacity: 0.7;
 }
 
 .export-preview-modal__object-origin {
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   font-family: var(--font-mono);
   color: var(--accent-danger);
   opacity: 0.85;
 }
 
 .export-preview-modal__object-max-canvas {
-  font-size: 0.65rem;
+  font-size: var(--text-65);
   font-family: var(--font-mono);
   color: var(--status-warn);
   opacity: 0.85;
@@ -277,7 +277,7 @@
 }
 
 .export-preview-modal__variant-layer-name {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -351,7 +351,7 @@
 }
 
 .export-preview-modal__fps-label {
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -398,7 +398,7 @@
 .export-preview-modal__fps-value {
   width: 50px;
   padding: var(--space-1) var(--space-1-5);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   font-family: var(--font-mono);
   text-align: center;
   background: var(--bg-tertiary);
@@ -417,7 +417,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  font-size: 0.8rem;
+  font-size: var(--text-80);
   color: var(--text-muted);
   font-family: var(--font-mono);
 }

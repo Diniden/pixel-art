@@ -38,6 +38,7 @@
  * Pure: buffer in, buffer out. No store, no MobX, no DOM.
  */
 
+import { ACCENT_VARIANT_60, WARN_ORANGE_60 } from "../../theme/canvasTokens";
 import { resolveVariantOffset } from "../model/variantOffset";
 import type { Offset } from "../model/variantOffset";
 import { blendOverInto, writeOverInto } from "../../../utils/alphaBlend";
@@ -321,7 +322,7 @@ export const FRAME_OVERLAY_MODE = {
   cellFill: "clamped",
   renderOrphanVariantLayers: false,
   opacity: 0.4,
-  borderColor: "rgba(139, 92, 246, 0.6)",
+  borderColor: ACCENT_VARIANT_60,
   borderDash: [6, 6],
 } as const;
 
@@ -332,6 +333,6 @@ export const FRAME_TRACE_MODE = {
   cellFill: "whole",
   renderOrphanVariantLayers: true,
   opacity: 0.5,
-  borderColor: "rgba(255, 171, 0, 0.6)",
+  borderColor: WARN_ORANGE_60,
   borderDash: [4, 4],
 } as const;

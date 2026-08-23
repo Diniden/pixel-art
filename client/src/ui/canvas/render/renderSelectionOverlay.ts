@@ -23,6 +23,8 @@
  */
 
 /** A minimal structural stand-in for `ImageData`. */
+import { ACCENT_PRIMARY, WHITE } from "../../theme/canvasTokens";
+
 export interface PixelBuffer {
   data: Uint8ClampedArray;
   width: number;
@@ -48,7 +50,7 @@ export interface SelectionBounds {
 export const MASK_FILL_LIMIT = 20000;
 
 /** The cyan the selection chrome is drawn in. */
-export const SELECTION_COLOR = "#00d9ff";
+export const SELECTION_COLOR = ACCENT_PRIMARY;
 
 /** Mask fill tint, as premultiplied-free RGBA 0-255. `rgba(0, 217, 255, 0.14)`. */
 export const MASK_FILL: RgbaPixel = {
@@ -322,7 +324,7 @@ export function drawMarchingAnts(
   ctx.strokeRect(outer.x, outer.y, outer.width, outer.height);
   ctx.setLineDash([]);
 
-  ctx.strokeStyle = "#ffffff";
+  ctx.strokeStyle = WHITE;
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 4]);
   ctx.lineDashOffset = 4;

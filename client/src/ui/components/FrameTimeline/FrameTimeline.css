@@ -17,7 +17,7 @@
   width: 20px;
   height: 20px;
   padding: 0;
-  font-size: 11px;
+  font-size: var(--text-px-11);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -152,7 +152,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
@@ -341,7 +341,7 @@
 }
 
 .frame-timeline__tags-icon {
-  font-size: 13px;
+  font-size: var(--text-px-13);
   font-weight: var(--weight-bold);
   font-family: var(--font-sans);
   line-height: var(--leading-none);
@@ -377,7 +377,7 @@
 }
 
 .variant-view__base-title {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   font-weight: var(--weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -385,7 +385,7 @@
 }
 
 .variant-view__base-offset {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   font-family: var(--font-mono);
   color: var(--accent-variant);
   background: var(--accent-variant-15);
@@ -454,13 +454,13 @@
 }
 
 .variant-view__base-index {
-  font-size: 0.55rem;
+  font-size: var(--text-55);
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
 
 .variant-view__info {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--text-muted);
   font-family: var(--font-mono);
 
@@ -719,7 +719,7 @@
 
 .timeline-view__action-btn {
   padding: var(--space-1) var(--space-2);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   font-weight: var(--weight-medium);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
@@ -761,7 +761,7 @@
 .timeline-view__new-layer-input {
   width: 100px;
   padding: var(--space-1) var(--space-2);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
@@ -837,7 +837,7 @@
 }
 
 .timeline-view__layer-name {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -943,7 +943,7 @@
 /* Thumbnail styles */
 .timeline-view__toggle-btn {
   padding: var(--space-1) var(--space-2-5);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   font-weight: var(--weight-medium);
   display: flex;
   align-items: center;

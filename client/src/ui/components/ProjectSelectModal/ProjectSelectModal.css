@@ -32,7 +32,7 @@
   border: 1px solid var(--accent-danger-30);
   border-radius: var(--radius-md);
   color: var(--accent-danger);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
 }
 
 .project-select-modal__list {
@@ -54,7 +54,7 @@
   transition: all var(--transition-fast);
   text-align: left;
   color: var(--text-primary);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
 }
 
 .project-select-modal__item:hover:not(:disabled) {
@@ -68,7 +68,7 @@
 }
 
 .project-select-modal__icon {
-  font-size: 1.2rem;
+  font-size: var(--text-120);
 }
 
 .project-select-modal__name {
@@ -77,7 +77,7 @@
 }
 
 .project-select-modal__badge--current {
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   font-weight: var(--weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -98,7 +98,7 @@
   border: 2px dashed var(--border-secondary);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
   font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -116,7 +116,7 @@
 }
 
 .project-select-modal__plus-icon {
-  font-size: 1.2rem;
+  font-size: var(--text-120);
   font-weight: var(--weight-normal);
 }
 
@@ -133,7 +133,7 @@
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.9rem;
+  font-size: var(--text-90);
   transition: border-color var(--transition-fast);
 }
 
@@ -155,7 +155,7 @@
 .project-select-modal__form-actions button {
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
-  font-size: 0.85rem;
+  font-size: var(--text-85);
   font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--transition-fast);

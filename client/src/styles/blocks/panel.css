@@ -29,10 +29,10 @@
 }
 
 .panel__header {
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border-primary);
-  font-weight: 600;
-  font-size: 0.875rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
@@ -53,11 +53,11 @@
 
 .panel__header--compact {
   padding: var(--space-1-5) var(--space-2-5);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
 }
 
 .panel__body {
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .panel__body--stack {

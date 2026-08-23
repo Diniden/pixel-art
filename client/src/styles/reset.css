@@ -30,7 +30,7 @@ body {
   font-family: var(--font-sans);
   background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -67,7 +67,7 @@ input[type="number"] {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
-  padding: 6px 10px;
+  padding: var(--space-1-5) var(--space-2-5);
   color: var(--text-primary);
   transition: border-color var(--transition-fast);
 }
@@ -83,7 +83,7 @@ input[type="range"] {
   appearance: none;
   background: var(--bg-tertiary);
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
 }
 
@@ -106,7 +106,7 @@ button {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   color: var(--text-primary);
   cursor: pointer;
   transition: all var(--transition-fast);

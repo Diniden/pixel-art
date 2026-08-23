@@ -38,6 +38,6 @@
   background: var(--accent-info-30);
   border: 1px solid var(--accent-info-50);
   border-radius: var(--radius-sm);
-  font-size: 0.7rem;
+  font-size: var(--text-70);
   color: var(--text-primary);
 }

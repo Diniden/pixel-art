@@ -26,6 +26,8 @@
  */
 
 /** A minimal structural stand-in for `ImageData`. */
+import { BLACK_08, WHITE_05 } from "../../theme/canvasTokens";
+
 export interface PixelBuffer {
   data: Uint8ClampedArray;
   width: number;
@@ -74,14 +76,14 @@ const DARK_THEME: BackgroundTheme = {
   base: { r: 26, g: 26, b: 37 }, // #1a1a25
   color1: { r: 42, g: 42, b: 58 }, // #2a2a3a
   color2: { r: 34, g: 34, b: 48 }, // #222230
-  gridStroke: "rgba(255, 255, 255, 0.05)",
+  gridStroke: WHITE_05,
 };
 
 const LIGHT_THEME: BackgroundTheme = {
   base: { r: 200, g: 200, b: 200 }, // #c8c8c8
   color1: { r: 204, g: 204, b: 204 }, // #cccccc
   color2: { r: 238, g: 238, b: 238 }, // #eeeeee
-  gridStroke: "rgba(0, 0, 0, 0.08)",
+  gridStroke: BLACK_08,
 };
 
 /**

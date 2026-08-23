@@ -13,6 +13,11 @@
     "  scale-unlimited/declaration-strict-value, keyframes-name-pattern,",
     "  color-hex-length, no-duplicate-selectors, declaration-block-no-duplicate-properties",
     "",
+    "RATCHET (central-theming sweep, 2026-08-23): font-size, font-weight and",
+    "  line-height joined the strict-value list once the measured font-size",
+    "  ramp landed in tokens.css. Negative-controlled: a probe with literal",
+    "  values for all three exits 2; the full tree exits 0.",
+    "",
     "WARN, with a recorded budget of 66 findings (task 38 report):",
     "  selector-max-type (29), no-descending-specificity (29),",
     "  selector-max-compound-selectors (7), selector-max-class (1).",
@@ -52,6 +57,9 @@
         "box-shadow",
         "border-radius",
         "font-family",
+        "font-size",
+        "font-weight",
+        "line-height",
         "transition-duration"
       ],
       {

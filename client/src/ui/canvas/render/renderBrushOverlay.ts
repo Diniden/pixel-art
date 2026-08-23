@@ -26,6 +26,8 @@
  */
 
 /** A minimal structural stand-in for `ImageData`. */
+import { ACCENT_PRIMARY_55 } from "../../theme/canvasTokens";
+
 export interface PixelBuffer {
   data: Uint8ClampedArray;
   width: number;
@@ -46,7 +48,7 @@ export interface BrushCell {
  */
 export const BRUSH_OVERLAY_STYLE = {
   fill: { r: 0, g: 217, b: 255, a: 0.22 },
-  stroke: "rgba(0, 217, 255, 0.55)",
+  stroke: ACCENT_PRIMARY_55,
   lineWidth: 1,
 } as const;
 

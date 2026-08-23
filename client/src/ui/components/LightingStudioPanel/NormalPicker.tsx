@@ -1,5 +1,15 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { Normal } from "../../../types";
+import {
+  ACCENT_PRIMARY,
+  NORMAL_SPHERE_EDGE,
+  NORMAL_SPHERE_GRID,
+  NORMAL_SPHERE_HI,
+  NORMAL_SPHERE_LO,
+  NORMAL_SPHERE_MID,
+  STATUS_WARN,
+  WHITE,
+} from "../../theme/canvasTokens";
 import "./NormalPicker.css";
 
 /**
@@ -103,9 +113,9 @@ export function NormalPicker({
       centerY,
       sphereRadius,
     );
-    gradient.addColorStop(0, "#4a5568");
-    gradient.addColorStop(0.7, "#2d3748");
-    gradient.addColorStop(1, "#1a202c");
+    gradient.addColorStop(0, NORMAL_SPHERE_HI);
+    gradient.addColorStop(0.7, NORMAL_SPHERE_MID);
+    gradient.addColorStop(1, NORMAL_SPHERE_LO);
 
     ctx.beginPath();
     ctx.arc(centerX, centerY, sphereRadius, 0, Math.PI * 2);
@@ -113,12 +123,12 @@ export function NormalPicker({
     ctx.fill();
 
     // Draw sphere border
-    ctx.strokeStyle = "#718096";
+    ctx.strokeStyle = NORMAL_SPHERE_EDGE;
     ctx.lineWidth = 2;
     ctx.stroke();
 
     // Draw cross-hairs (equator lines)
-    ctx.strokeStyle = "rgba(113, 128, 150, 0.4)";
+    ctx.strokeStyle = NORMAL_SPHERE_GRID;
     ctx.lineWidth = 1;
 
     // Horizontal line
@@ -150,16 +160,16 @@ export function NormalPicker({
     const lineEndY =
       indicatorY + spherePos.y * lineLength * (1 - normalizedZ * 0.5);
     ctx.lineTo(lineEndX, lineEndY);
-    ctx.strokeStyle = isLightDirection ? "#f59e0b" : "#00d9ff";
+    ctx.strokeStyle = isLightDirection ? STATUS_WARN : ACCENT_PRIMARY;
     ctx.lineWidth = 3;
     ctx.stroke();
 
     // Draw circle at indicator position
     ctx.beginPath();
     ctx.arc(indicatorX, indicatorY, 8, 0, Math.PI * 2);
-    ctx.fillStyle = isLightDirection ? "#f59e0b" : "#00d9ff";
+    ctx.fillStyle = isLightDirection ? STATUS_WARN : ACCENT_PRIMARY;
     ctx.fill();
-    ctx.strokeStyle = "#fff";
+    ctx.strokeStyle = WHITE;
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -168,7 +178,7 @@ export function NormalPicker({
     if (innerRadius > 0.5) {
       ctx.beginPath();
       ctx.arc(indicatorX, indicatorY, innerRadius, 0, Math.PI * 2);
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = WHITE;
       ctx.fill();
     }
   }, [normal, isLightDirection, sphereRadius, sphereSize]);

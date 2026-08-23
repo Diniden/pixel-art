@@ -333,4 +333,44 @@
   --z-modal-nested: 700; /* a confirm dialog opened FROM a modal      */
   --z-tooltip: 800; /* always above everything it explains       */
   --z-toast: 900; /* reserved — no toasts today                */
+
+  /* ------------------------------------------------------------------ *
+   * Central-theming sweep (2026-08-23).
+   * ------------------------------------------------------------------ */
+
+  /* The two grays FrameReferencePanel's gradient buttons used as literals —
+     they continue the bg ramp's +10-per-channel progression past
+     --bg-active (#3a3a4a). */
+  --bg-raised: #4a4a5a;
+  --bg-raised-light: #5a5a6a;
+
+  /* Measured font-size ramp — the exact literals the codebase used,
+     tokenised WITHOUT collapsing so this change is invisible. Mapping them
+     onto the t-shirt scale above is the owner decision HANDOFF.md records
+     as pending ("the font-size mapping"); collapse there, not here.
+     Suffix encodes the value: rem hundredths (--text-70 = 0.7rem) or
+     pixels (--text-px-13 = 13px). */
+  --text-55: 0.55rem;
+  --text-60: 0.6rem;
+  --text-65: 0.65rem;
+  --text-70: 0.7rem;
+  --text-78: 0.78rem;
+  --text-80: 0.8rem;
+  --text-81: 0.8125rem; /* exactly 13px at the 16px root */
+  --text-85: 0.85rem;
+  --text-90: 0.9rem;
+  --text-95: 0.95rem;
+  --text-110: 1.1rem;
+  --text-120: 1.2rem;
+  --text-200: 2rem;
+  --text-240: 2.4rem;
+  --text-px-6: 6px; /* CanvasInfo micro-labels                       */
+  --text-px-8: 8px;
+  --text-px-9: 9px;
+  --text-px-11: 11px;
+  --text-px-13: 13px;
+  --text-px-15: 15px;
+  --text-px-32: 32px; /* emoji/glyph icons in empty states, not text  */
+  --text-px-48: 48px;
+  --text-px-64: 64px;
 }

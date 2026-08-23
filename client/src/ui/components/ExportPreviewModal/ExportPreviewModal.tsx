@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
+  CHECKER_DARK_A,
+  CHECKER_DARK_B,
+  ORIGIN_CROSS_RED,
+  OVERLAY_60,
+} from "../../theme/canvasTokens";
+import {
   parsePixelProject,
   createObjectInstance,
   loadTextures,
@@ -263,7 +269,7 @@ function ObjectPreviewRow({
     for (let y = 0; y < ch; y += checkSize) {
       for (let x = 0; x < cw; x += checkSize) {
         const light = ((x / checkSize + y / checkSize) | 0) % 2 === 0;
-        ctx.fillStyle = light ? "#2a2a3a" : "#222230";
+        ctx.fillStyle = light ? CHECKER_DARK_A : CHECKER_DARK_B;
         ctx.fillRect(x, y, checkSize, checkSize);
       }
     }
@@ -291,9 +297,9 @@ function ObjectPreviewRow({
       const lineWidth = 2;
 
       ctx.save();
-      ctx.strokeStyle = "#ff3232";
+      ctx.strokeStyle = ORIGIN_CROSS_RED;
       ctx.lineWidth = lineWidth;
-      ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+      ctx.shadowColor = OVERLAY_60;
       ctx.shadowBlur = 2;
 
       // Horizontal line
