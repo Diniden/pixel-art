@@ -18,6 +18,8 @@ import {
   flipGridHorizontal,
   flipGridVertical,
   getChannelValue,
+  getNormalAxisValue,
+  isNormalAxis,
   rgbToHsl,
 } from "@/utils/normalCompute";
 import type { Layer, PixelData } from "@/types";
@@ -215,6 +217,122 @@ describe("computeHeightMap", () => {
       max: 255,
     });
     expect(px[0][0].height).toBe(7);
+  });
+});
+
+/* ══ computeHeightMap — the NORMAL-AXIS channels ══════════════════════════ */
+
+describe("computeHeightMap from the normal map (NX/NY/NZ)", () => {
+  it("getNormalAxisValue: NX/NY are MAGNITUDES, NZ is raw", () => {
+    const n = { x: -100, y: 60, z: 180 };
+    expect(getNormalAxisValue(n, "NX")).toBe(100);
+    expect(getNormalAxisValue(n, "NY")).toBe(60);
+    expect(getNormalAxisValue(n, "NZ")).toBe(180);
+  });
+
+  it("isNormalAxis separates the two channel families", () => {
+    expect(isNormalAxis("NZ")).toBe(true);
+    expect(isNormalAxis("R")).toBe(false);
+    expect(isNormalAxis("L")).toBe(false);
+  });
+
+  it("NZ: the most screen-facing normal maps to max, the flattest to min", () => {
+    const px = grid(3, 1);
+    px[0][0] = { color: RED, normal: { x: 127, y: 0, z: 0 }, height: 0 };
+    px[0][1] = { color: RED, normal: { x: 90, y: 0, z: 128 }, height: 0 };
+    px[0][2] = { color: RED, normal: { x: 0, y: 0, z: 255 }, height: 0 };
+    const out = computeHeightMap(layerFrom(px), 3, 1, {
+      channel: "NZ",
+      min: 10,
+      max: 200,
+    });
+    expect(out).toEqual([
+      { x: 0, y: 0, height: 10 },
+      { x: 1, y: 0, height: 105 }, // 10 + (128/255)·190 ≈ 105.4 → 105
+      { x: 2, y: 0, height: 200 },
+    ]);
+  });
+
+  it("NX treats left- and right-leaning normals as equally tall", () => {
+    const px = grid(3, 1);
+    px[0][0] = { color: RED, normal: { x: -100, y: 0, z: 50 }, height: 0 };
+    px[0][1] = { color: RED, normal: { x: 100, y: 0, z: 50 }, height: 0 };
+    px[0][2] = { color: RED, normal: { x: 0, y: 0, z: 255 }, height: 0 };
+    const out = computeHeightMap(layerFrom(px), 3, 1, {
+      channel: "NX",
+      min: 0,
+      max: 255,
+    });
+    // |−100| and |100| are the same magnitude → both land on max.
+    expect(out[0].height).toBe(255);
+    expect(out[1].height).toBe(255);
+    expect(out[2].height).toBe(0);
+  });
+
+  it("only pixels WITH a normal participate — others keep their height", () => {
+    const px = grid(3, 1);
+    px[0][0] = { color: RED, normal: 0, height: 0 }; // coloured, no normal
+    px[0][1] = { color: RED, normal: { x: 0, y: 0, z: 200 }, height: 0 };
+    const out = computeHeightMap(layerFrom(px), 3, 1, {
+      channel: "NZ",
+      min: 50,
+      max: 200,
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].x).toBe(1);
+  });
+
+  it("returns NOTHING when the layer has no normals at all", () => {
+    const px = grid(2, 2);
+    px[0][0] = { color: RED, normal: 0, height: 0 };
+    const out = computeHeightMap(layerFrom(px), 2, 2, {
+      channel: "NZ",
+      min: 0,
+      max: 255,
+    });
+    expect(out).toEqual([]);
+  });
+
+  it("shares the pinned quirks: flat field → params.min, non-zero floored at 1", () => {
+    const px = grid(2, 1);
+    px[0][0] = { color: RED, normal: { x: 0, y: 0, z: 200 }, height: 0 };
+    px[0][1] = { color: BLUE, normal: { x: 0, y: 0, z: 200 }, height: 0 };
+    const flat = computeHeightMap(layerFrom(px), 2, 1, {
+      channel: "NZ",
+      min: 40,
+      max: 200,
+    });
+    expect(flat.map((c) => c.height)).toEqual([40, 40]);
+
+    px[0][1] = { color: BLUE, normal: { x: 0, y: 0, z: 255 }, height: 0 };
+    const floored = computeHeightMap(layerFrom(px), 2, 1, {
+      channel: "NZ",
+      min: 0.6,
+      max: 255,
+    });
+    // 0.6 rounds to 1 — and stays 1 under the floor rule.
+    expect(floored[0].height).toBe(1);
+    expect(floored[1].height).toBe(255);
+  });
+
+  it("the colour channels are UNTOUCHED by the presence of normals", () => {
+    const px = grid(2, 1);
+    px[0][0] = {
+      color: { r: 0, g: 0, b: 0, a: 255 },
+      normal: { x: 0, y: 0, z: 255 },
+      height: 0,
+    };
+    px[0][1] = { color: RED, normal: { x: 0, y: 0, z: 10 }, height: 0 };
+    const out = computeHeightMap(layerFrom(px), 2, 1, {
+      channel: "R",
+      min: 10,
+      max: 200,
+    });
+    // Identical to the plain colour-channel result — normals play no part.
+    expect(out).toEqual([
+      { x: 0, y: 0, height: 10 },
+      { x: 1, y: 0, height: 200 },
+    ]);
   });
 });
 
