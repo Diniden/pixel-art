@@ -30,7 +30,9 @@ import {
   AiConfigPopover,
   type AiHealthStatus,
 } from "../AiConfigPopover/AiConfigPopover";
+import { Dropdown } from "../../primitives/Dropdown/Dropdown";
 import { Icon } from "../../primitives/Icon/Icon";
+import { THEMES, type ThemeId } from "../../theme/themes";
 import {
   Diamond,
   History,
@@ -42,6 +44,9 @@ import "./Header.css";
 
 /** Save-state indicator. Mirrors `SaveStatus` without importing the store. */
 export type HeaderSaveStatus = "idle" | "saving" | "saved" | "error";
+
+/** The theme registry, shaped for the Dropdown primitive. */
+const THEME_OPTIONS = THEMES.map((t) => ({ value: t.id, label: t.label }));
 
 export interface HeaderProps {
   /** From SessionStore via HeaderContainer (task 14). Header is its sole reader. */
@@ -62,6 +67,10 @@ export interface HeaderProps {
   serverDefaultUrl: string | null;
   /** Commits a new AI service URL and re-polls health. */
   onSaveAiServiceUrl: (url: string) => void;
+
+  /** Active UI theme — the dropdown beside the AI button switches it. */
+  theme: ThemeId;
+  onThemeChange: (theme: ThemeId) => void;
 
   /** Runs the export. Resolves with the path and kebab name on success. */
   onExport: () => Promise<{ path: string; kebabName: string }>;
@@ -88,6 +97,8 @@ export function Header({
   aiHealthDetail,
   serverDefaultUrl,
   onSaveAiServiceUrl,
+  theme,
+  onThemeChange,
   onExport,
   projectModal,
   backupsModal,
@@ -298,6 +309,14 @@ export function Header({
             setShowAiConfig(false);
           }}
         />
+        <div className="header__theme" title="UI theme">
+          <Dropdown
+            options={THEME_OPTIONS}
+            value={theme}
+            onChange={onThemeChange}
+            label="UI theme"
+          />
+        </div>
         <button
           className="header__backups-btn"
           onClick={() => setShowBackupsModal(true)}
