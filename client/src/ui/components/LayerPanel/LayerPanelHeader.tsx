@@ -40,9 +40,9 @@ import {
   Eye,
   EyeOff,
   ClipboardCopy,
+  Hexagon,
   Square,
   SquareDashed,
-  Wand2,
   Plus,
   X,
   ChevronUp,
@@ -213,7 +213,15 @@ export function LayerPanelHeader({
               : "No variants exist yet"
           }
         >
-          <Icon icon={Wand2} size={12} />
+          <span className="layer-panel__variant-add-icon">
+            <Icon icon={Hexagon} size={12} />
+            <Icon
+              icon={Plus}
+              size={6}
+              strokeWidth={3}
+              className="layer-panel__variant-add-plus"
+            />
+          </span>
         </button>
         <button
           className="layer-panel__header-btn"

@@ -36,6 +36,20 @@
   color: var(--white);
 }
 
+.layer-panel__variant-add-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.layer-panel__variant-add-plus {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
 .layer-panel__focus-mode {
   display: flex;
   gap: var(--space-1);
