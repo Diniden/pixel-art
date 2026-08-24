@@ -123,6 +123,17 @@ export const LightingStudioToolsContainer = observer(
     };
 
     const handleHeightMapConfirm = (params: HeightMapParams) => {
+      // ⚠️ Short-circuits — must NOT fall through to the single-frame path,
+      // same rule as the edge-interpolate handler above.
+      if (params.applyToAllFrames) {
+        pixels.computeHeightMapForAllFrames({
+          channel: params.channel,
+          min: params.min,
+          max: params.max,
+        });
+        return;
+      }
+
       const target = resolveTarget();
       if (!target) return;
       const { layer, gridWidth, gridHeight } = target;
