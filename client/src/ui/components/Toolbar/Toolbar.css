@@ -82,8 +82,8 @@
   font-size: var(--text-px-8);
   font-weight: var(--weight-semibold);
   font-family: var(--font-mono);
-  color: var(--text-muted);
-  background: var(--overlay-40);
+  color: var(--hotkey-fg);
+  background: var(--hotkey-bg);
   padding: var(--space-px) var(--space-1);
   border-radius: var(--radius-xs);
   line-height: var(--leading-none);
@@ -153,8 +153,8 @@
 }
 
 .toolbar__tool-btn--active .toolbar__tool-hotkey {
-  color: var(--white-80);
-  background: var(--overlay-30);
+  color: var(--hotkey-active-fg);
+  background: var(--hotkey-active-bg);
 }
 
 .toolbar__tool-btn.toolbar__tool-btn--light-grid {
