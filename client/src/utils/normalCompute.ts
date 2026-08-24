@@ -53,8 +53,24 @@ import type { Layer, Normal, Pixel, PixelData } from "../types";
 
 /* ══ THE HEIGHT MAP ALGORITHM ═════════════════════════════════════════════ */
 
-/** The six channels a height map can be derived from. */
-export type HeightChannel = "R" | "G" | "B" | "H" | "S" | "L";
+/** The six COLOUR channels a height map can be derived from. */
+export type ColorChannel = "R" | "G" | "B" | "H" | "S" | "L";
+
+/**
+ * The three NORMAL-MAP axes a height map can be derived from. `NX`/`NY` read
+ * the axis MAGNITUDE (`|x|`, `|y|` of the signed byte), `NZ` reads `z` raw —
+ * it is already an unsigned "toward the screen" magnitude, so the more
+ * screen-facing a normal is, the higher the suggested height.
+ */
+export type NormalAxis = "NX" | "NY" | "NZ";
+
+/** Everything the height-map dialog can derive a height from. */
+export type HeightChannel = ColorChannel | NormalAxis;
+
+/** Narrow a {@link HeightChannel} to the normal-axis members. */
+export function isNormalAxis(channel: HeightChannel): channel is NormalAxis {
+  return channel === "NX" || channel === "NY" || channel === "NZ";
+}
 
 /** The height-map dialog's parameters. */
 export interface HeightMapParams {
@@ -125,7 +141,7 @@ export function rgbToHsl(
  *
  * Ported verbatim from `LightingStudioTools.tsx:65-79`.
  */
-export function getChannelValue(pixel: Pixel, channel: HeightChannel): number {
+export function getChannelValue(pixel: Pixel, channel: ColorChannel): number {
   switch (channel) {
     case "R":
       return pixel.r;
@@ -143,7 +159,27 @@ export function getChannelValue(pixel: Pixel, channel: HeightChannel): number {
 }
 
 /**
- * Derive a height map from a layer's colours.
+ * Read one axis off a normal, as a 0-255 "how far along this axis" value.
+ *
+ * `x` and `y` are signed bytes, so their MAGNITUDE is taken — a normal
+ * pointing hard left and one pointing hard right are equally "along x". `z`
+ * is stored unsigned and always screen-facing, so it is returned raw: 255 is
+ * a normal pointing straight out of the screen.
+ */
+export function getNormalAxisValue(normal: Normal, axis: NormalAxis): number {
+  switch (axis) {
+    case "NX":
+      return Math.abs(normal.x);
+    case "NY":
+      return Math.abs(normal.y);
+    case "NZ":
+      return normal.z;
+  }
+}
+
+/**
+ * Derive a height map from a layer's colours — or, for the `N*` channels,
+ * from its normal map.
  *
  * Two passes, exactly as the component did them: collect every COLOURED
  * pixel's channel value to find the data's own min/max, then linearly map
@@ -156,7 +192,9 @@ export function getChannelValue(pixel: Pixel, channel: HeightChannel): number {
  *
  * ⚠️ Three transcribed quirks, all observable:
  *  1. only pixels with `color !== 0` participate, so transparent cells keep
- *     whatever height they had;
+ *     whatever height they had — and for the normal-axis channels, only
+ *     pixels with `normal !== 0`, so cells without normal data likewise keep
+ *     their height;
  *  2. a zero range (every coloured pixel identical in that channel) maps
  *     everything to `params.min`;
  *  3. the result is clamped to 0-255 and then RAISED to 1 if it is non-zero,
@@ -171,22 +209,33 @@ export function computeHeightMap(
   height: number,
   params: HeightMapParams,
 ): HeightWrite[] {
-  // Pass 1: collect the channel values of every coloured pixel.
+  // Pass 1: collect the channel value of every pixel that HAS the source
+  // datum — a colour for the R/G/B/H/S/L channels, a normal for NX/NY/NZ.
   const channelValues: number[] = [];
-  const pixelPositions: { x: number; y: number; pixel: Pixel }[] = [];
+  const pixelPositions: { x: number; y: number; value: number }[] = [];
 
   for (let y = 0; y < height; y++) {
     const row = layer.pixels[y];
     if (!row) continue;
     for (let x = 0; x < width; x++) {
       const pixelData: PixelData | undefined = row[x];
-      if (
-        pixelData &&
+      if (!pixelData) continue;
+
+      let value: number | undefined;
+      if (isNormalAxis(params.channel)) {
+        if (pixelData.normal !== 0 && typeof pixelData.normal === "object") {
+          value = getNormalAxisValue(pixelData.normal, params.channel);
+        }
+      } else if (
         pixelData.color !== 0 &&
         typeof pixelData.color === "object"
       ) {
-        channelValues.push(getChannelValue(pixelData.color, params.channel));
-        pixelPositions.push({ x, y, pixel: pixelData.color });
+        value = getChannelValue(pixelData.color, params.channel);
+      }
+
+      if (value !== undefined) {
+        channelValues.push(value);
+        pixelPositions.push({ x, y, value });
       }
     }
   }
@@ -205,9 +254,7 @@ export function computeHeightMap(
   const actualMax = Math.max(...channelValues);
   const range = actualMax - actualMin;
 
-  return pixelPositions.map(({ x, y, pixel }) => {
-    const channelValue = getChannelValue(pixel, params.channel);
-
+  return pixelPositions.map(({ x, y, value: channelValue }) => {
     let normalized: number;
     if (range === 0) {
       normalized = params.min;

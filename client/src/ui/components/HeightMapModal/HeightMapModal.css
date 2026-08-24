@@ -177,6 +177,22 @@
   margin-top: var(--space-1);
 }
 
+.height-map-modal__channel-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.height-map-modal__channel-group + .height-map-modal__channel-group {
+  margin-top: var(--space-2);
+}
+
+.height-map-modal__channel-group-label {
+  flex: 0 0 3.5em;
+  font-size: var(--text-80);
+  color: var(--text-secondary);
+}
+
 .height-map-modal__channel-buttons {
   display: flex;
   gap: var(--space-2);
