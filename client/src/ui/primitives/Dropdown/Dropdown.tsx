@@ -36,6 +36,13 @@ export interface DropdownProps<T extends string> {
   /** Accessible name for the trigger/listbox. */
   label?: string;
   disabled?: boolean;
+  /**
+   * Fixed trigger content shown INSTEAD of the selected option's label
+   * (menu-style trigger, e.g. "Theme"). The selection stays visible via
+   * `dropdown__item--selected` in the open menu. Omit for the default
+   * select-like trigger that echoes the selection.
+   */
+  triggerLabel?: ReactNode;
   /** Extra class on the trigger (e.g. a state modifier). */
   triggerClassName?: string;
   className?: string;
@@ -47,6 +54,7 @@ export function Dropdown<T extends string>({
   onChange,
   label,
   disabled = false,
+  triggerLabel,
   triggerClassName,
   className,
 }: DropdownProps<T>) {
@@ -163,7 +171,9 @@ export function Dropdown<T extends string>({
         onClick={() => (isOpen ? close(false) : open())}
         onKeyDown={handleTriggerKeyDown}
       >
-        <span className="dropdown__value">{selected?.label ?? value}</span>
+        <span className="dropdown__value">
+          {triggerLabel ?? selected?.label ?? value}
+        </span>
         <span className="dropdown__arrow" aria-hidden="true">
           {isOpen ? "▴" : "▾"}
         </span>

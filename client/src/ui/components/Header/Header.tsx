@@ -315,6 +315,7 @@ export function Header({
             value={theme}
             onChange={onThemeChange}
             label="UI theme"
+            triggerLabel="Theme"
           />
         </div>
         <button
