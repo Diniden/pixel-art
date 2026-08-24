@@ -194,10 +194,11 @@
   justify-content: flex-end;
 }
 
-/* Theme dropdown beside the AI button. The min-width fits the longest
-   theme label so the trigger does not resize when the theme changes. */
+/* Theme dropdown beside the AI button. The trigger shows the fixed word
+   "Theme" (triggerLabel), so it needs no reserved width. */
 .header__theme {
-  min-width: 150px;
+  display: flex;
+  align-items: center;
 }
 
 .header__backups-btn {
