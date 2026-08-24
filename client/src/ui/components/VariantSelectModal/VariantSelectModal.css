@@ -37,6 +37,7 @@
 }
 
 .variant-select-modal__header {
+  background: var(--section-header-bg);
   display: flex;
   align-items: center;
   gap: var(--space-3);

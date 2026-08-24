@@ -36,6 +36,7 @@
 }
 
 .object-select-modal__header {
+  background: var(--section-header-bg);
   display: flex;
   flex-wrap: wrap;
   align-items: center;

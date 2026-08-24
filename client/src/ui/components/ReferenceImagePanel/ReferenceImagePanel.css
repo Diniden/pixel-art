@@ -21,6 +21,7 @@
 /* elements, DOM order */
 
 .reference-image-panel__header {
+  background: var(--section-header-bg);
   display: flex;
   justify-content: space-between;
   align-items: center;

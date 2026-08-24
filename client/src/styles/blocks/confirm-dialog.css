@@ -87,6 +87,7 @@
 /* ── Structured elements (used by the danger skin; available to any) ───── */
 
 .confirm-dialog__header {
+  background: var(--section-header-bg);
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-primary);
 }
