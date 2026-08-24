@@ -74,7 +74,14 @@ import { useStores } from "../stores/context";
 
 export const LayerPanelContainer = observer(function LayerPanelContainer() {
   const store = useStores();
-  const { domain, layers: layerStore, variants, timelineUI, session } = store;
+  const {
+    domain,
+    layers: layerStore,
+    variants,
+    timelineUI,
+    session,
+    ui,
+  } = store;
 
   const [newLayerName, setNewLayerName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -315,6 +322,8 @@ export const LayerPanelContainer = observer(function LayerPanelContainer() {
       }
       onOpenCopyFrom={() => setShowCopyFromModal(true)}
       onOpenAddVariant={() => setShowAddVariantModal(true)}
+      layerFocusMode={ui.viewport.layerFocusMode}
+      onLayerFocusModeChange={(mode) => ui.viewport.setLayerFocusMode(mode)}
       onSelect={(id) => timelineUI.selectLayer(id)}
       onToggleVisibility={(id) => layerStore.toggleLayerVisibility(id)}
       onStartRename={handleStartRename}

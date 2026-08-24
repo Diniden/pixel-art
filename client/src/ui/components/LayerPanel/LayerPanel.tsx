@@ -43,6 +43,7 @@ import { LayerPanelHeader } from "./LayerPanelHeader";
 import { LayerList } from "./LayerList";
 import type { LayerRowModel } from "./LayerRow";
 import type { LayerScope, MoveDirection } from "./layerScope";
+import type { LayerFocusMode } from "./layerFocusMode";
 import "./LayerPanel.css";
 
 export interface LayerPanelProps {
@@ -69,6 +70,10 @@ export interface LayerPanelProps {
   onToggleAllVisibility: (visible: boolean) => void;
   onOpenCopyFrom: () => void;
   onOpenAddVariant: () => void;
+
+  /** How non-focused layers render while a variant layer is selected. */
+  layerFocusMode: LayerFocusMode;
+  onLayerFocusModeChange: (mode: LayerFocusMode) => void;
 
   onSelect: (layerId: string) => void;
   onToggleVisibility: (layerId: string) => void;
@@ -128,6 +133,8 @@ export function LayerPanel({
   onToggleAllVisibility,
   onOpenCopyFrom,
   onOpenAddVariant,
+  layerFocusMode,
+  onLayerFocusModeChange,
   onSelect,
   onToggleVisibility,
   onStartRename,
@@ -166,6 +173,8 @@ export function LayerPanel({
         onOpenCopyFrom={onOpenCopyFrom}
         onOpenAddVariant={onOpenAddVariant}
         onAddLayer={onAddLayer}
+        layerFocusMode={layerFocusMode}
+        onLayerFocusModeChange={onLayerFocusModeChange}
       />
 
       <LayerList

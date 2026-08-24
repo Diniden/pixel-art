@@ -36,9 +36,12 @@ import { Icon } from "../../primitives/Icon/Icon";
 import {
   ArrowDownToLine,
   ArrowUpToLine,
+  Blend,
   Eye,
   EyeOff,
   ClipboardCopy,
+  Square,
+  SquareDashed,
   Wand2,
   Plus,
   X,
@@ -46,6 +49,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { LayerScope, MoveDirection } from "./layerScope";
+import type { LayerFocusMode } from "./layerFocusMode";
 import "./LayerPanel.css";
 
 export interface LayerPanelHeaderProps {
@@ -82,6 +86,10 @@ export interface LayerPanelHeaderProps {
   onOpenCopyFrom: () => void;
   onOpenAddVariant: () => void;
   onAddLayer: () => void;
+
+  /** How non-focused layers render while a variant layer is selected. */
+  layerFocusMode: LayerFocusMode;
+  onLayerFocusModeChange: (mode: LayerFocusMode) => void;
 }
 
 export function LayerPanelHeader({
@@ -100,7 +108,31 @@ export function LayerPanelHeader({
   onOpenCopyFrom,
   onOpenAddVariant,
   onAddLayer,
+  layerFocusMode,
+  onLayerFocusModeChange,
 }: LayerPanelHeaderProps) {
+  const focusModes: {
+    mode: LayerFocusMode;
+    icon: typeof Square;
+    title: string;
+  }[] = [
+    {
+      mode: "normal",
+      icon: Square,
+      title: "Unfocused layers: normal (full opacity)",
+    },
+    {
+      mode: "transparent",
+      icon: Blend,
+      title: "Unfocused layers: semi-transparent",
+    },
+    {
+      mode: "onion",
+      icon: SquareDashed,
+      title: "Unfocused layers: onion-skin outline",
+    },
+  ];
+
   return (
     <div className="panel__header panel__header--stacked">
       <div className="panel__title">Layers</div>
@@ -203,6 +235,24 @@ export function LayerPanelHeader({
         >
           <Icon icon={X} size={12} />
         </button>
+      </div>
+      <div
+        className="layer-panel__focus-mode"
+        role="group"
+        aria-label="Unfocused layer display"
+      >
+        {focusModes.map(({ mode, icon, title }) => (
+          <button
+            key={mode}
+            className={`layer-panel__focus-btn ${
+              layerFocusMode === mode ? "layer-panel__focus-btn--active" : ""
+            }`}
+            onClick={() => onLayerFocusModeChange(mode)}
+            title={title}
+          >
+            <Icon icon={icon} size={12} />
+          </button>
+        ))}
       </div>
     </div>
   );

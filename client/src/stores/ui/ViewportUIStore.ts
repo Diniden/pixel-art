@@ -54,6 +54,14 @@ export class ViewportUIStore {
   canvasInfoHidden: boolean | undefined = undefined;
   objectLibraryViewMode: "normal" | "small-rows" | "grid" = "normal";
   timelineThumbnailMode = false;
+  /**
+   * How the NON-focused layers render on the canvas while a variant layer is
+   * selected: `"normal"` (full opacity), `"transparent"` (the historical
+   * 0.5/0.7 dim), or `"onion"` (semi-transparent outline — only cells with an
+   * empty 4-adjacent neighbour, in their actual colour). Session-only: not
+   * part of the persisted `uiState` wire format.
+   */
+  layerFocusMode: "normal" | "transparent" | "onion" = "transparent";
   /** Bumped on every layer click (even re-selection) so clicks are detectable. */
   layerSelectionCounter: number | undefined = undefined;
 
@@ -77,6 +85,7 @@ export class ViewportUIStore {
       canvasInfoHidden: observable,
       objectLibraryViewMode: observable,
       timelineThumbnailMode: observable,
+      layerFocusMode: observable,
       layerSelectionCounter: observable,
       panels: observableRef,
 
@@ -87,6 +96,7 @@ export class ViewportUIStore {
       setCanvasInfoHidden: action,
       setObjectLibraryViewMode: action,
       setTimelineThumbnailMode: action,
+      setLayerFocusMode: action,
       bumpLayerSelectionCounter: action,
       setPanel: action,
       toggleFrameReferencePanelVisible: action,
@@ -122,6 +132,10 @@ export class ViewportUIStore {
 
   setTimelineThumbnailMode(enabled: boolean): void {
     this.timelineThumbnailMode = enabled;
+  }
+
+  setLayerFocusMode(mode: "normal" | "transparent" | "onion"): void {
+    this.layerFocusMode = mode;
   }
 
   bumpLayerSelectionCounter(): void {
