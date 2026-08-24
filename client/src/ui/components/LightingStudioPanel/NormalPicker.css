@@ -9,6 +9,7 @@
 }
 
 .normal-picker__header {
+  background: var(--section-header-bg);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);

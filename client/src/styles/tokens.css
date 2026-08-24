@@ -251,6 +251,10 @@
   --panel-header-pad: var(--space-3) var(--space-4);
   --panel-body-pad: var(--space-3);
 
+  /* Section title-header background. Transparent in the dark themes;
+     the shared light block tints it so titled sections read as bands. */
+  --section-header-bg: transparent;
+
   /* Typography. */
   --text-2xs: 0.625rem;
   --text-xs: 0.75rem;
@@ -523,6 +527,7 @@
    canvas well under a light UI is the norm for pixel editors. */
 :root[data-theme="light-spacious"],
 :root[data-theme="light-cozy"] {
+  --section-header-bg: rgba(20, 20, 40, 0.07);
   --shadow-sm: 0 2px 4px rgba(20, 20, 40, 0.12);
   --shadow-md: 0 4px 12px rgba(20, 20, 40, 0.14);
   --shadow-lg: 0 8px 32px rgba(20, 20, 40, 0.16);

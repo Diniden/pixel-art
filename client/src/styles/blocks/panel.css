@@ -29,6 +29,7 @@
 }
 
 .panel__header {
+  background: var(--section-header-bg);
   padding: var(--panel-header-pad);
   border-bottom: 1px solid var(--border-primary);
   font-weight: var(--weight-semibold);

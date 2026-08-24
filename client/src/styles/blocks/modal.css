@@ -62,6 +62,7 @@
 }
 
 .modal__header {
+  background: var(--section-header-bg);
   display: flex;
   align-items: center;
   justify-content: space-between;
