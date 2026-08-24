@@ -65,6 +65,8 @@ const meta = {
     onToggleAllVisibility: fn(),
     onOpenCopyFrom: fn(),
     onOpenAddVariant: fn(),
+    layerFocusMode: "transparent",
+    onLayerFocusModeChange: fn(),
     onSelect: fn(),
     onToggleVisibility: fn(),
     onStartRename: fn(),

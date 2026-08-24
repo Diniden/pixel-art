@@ -54,6 +54,8 @@ const meta = {
     onOpenCopyFrom: fn(),
     onOpenAddVariant: fn(),
     onAddLayer: fn(),
+    layerFocusMode: "transparent",
+    onLayerFocusModeChange: fn(),
   },
 } satisfies Meta<typeof LayerPanelHeader>;
 
@@ -118,4 +120,12 @@ export const SingleLayer: Story = {
 /** Edge: the top layer — cannot move or squash up. */
 export const TopLayerSelected: Story = {
   args: { canMoveUp: false, canSquashUp: false },
+};
+
+/**
+ * The onion-skin focus mode selected: the third toggle carries `--active`.
+ * The toggle row is presentation only — what it changes lives on the canvas.
+ */
+export const OnionFocusMode: Story = {
+  args: { layerFocusMode: "onion" },
 };

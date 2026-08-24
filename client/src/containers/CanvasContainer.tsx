@@ -227,6 +227,39 @@ function getPixelColor(cell: unknown): Pixel | null {
   return pd.color;
 }
 
+/**
+ * Onion-skin support for the layer focus mode. A cell is EMPTY when it holds
+ * no colour (or alpha 0); a painted cell is an OUTLINE cell when at least one
+ * of its 4-adjacent neighbours is empty. Out-of-bounds neighbours count as
+ * empty, so a silhouette touching the grid border keeps its edge.
+ */
+function isEmptyCell(
+  pixels: PixelData[][],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): boolean {
+  if (x < 0 || x >= width || y < 0 || y >= height) return true;
+  const pixel = getPixelColor(pixels[y]?.[x]);
+  return !pixel || pixel.a === 0;
+}
+
+function isOutlineCell(
+  pixels: PixelData[][],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): boolean {
+  return (
+    isEmptyCell(pixels, x - 1, y, width, height) ||
+    isEmptyCell(pixels, x + 1, y, width, height) ||
+    isEmptyCell(pixels, x, y - 1, width, height) ||
+    isEmptyCell(pixels, x, y + 1, width, height)
+  );
+}
+
 /** Tools whose gesture is arbitrated here rather than by `toolHandlers`. */
 function isGestureTool(tool: string): boolean {
   return (
@@ -327,6 +360,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   const zoom = viewport.zoom;
   const panOffset = viewport.panOffset;
   const lightGridMode = viewport.lightGridMode ?? false;
+  const layerFocusMode = viewport.layerFocusMode;
 
   const selection = app.selectionUI.selection;
 
@@ -701,11 +735,25 @@ export const CanvasContainer = observer(function CanvasContainer({
                       worldY >= viewMinY &&
                       worldY < viewMaxY;
                     if (inView) {
-                      // Non-edited variant layers are dimmed so the edited one
-                      // reads clearly.
-                      const alpha = isCurrentLayer
-                        ? pixel.a / 255
-                        : (pixel.a / 255) * 0.7;
+                      // Non-edited variant layers follow the focus-mode
+                      // setting; the edited layer always reads at full alpha.
+                      if (
+                        !isCurrentLayer &&
+                        layerFocusMode === "onion" &&
+                        !isOutlineCell(
+                          vl.pixels,
+                          x,
+                          y,
+                          variant.gridSize.width,
+                          variant.gridSize.height,
+                        )
+                      ) {
+                        continue;
+                      }
+                      const alpha =
+                        isCurrentLayer || layerFocusMode === "normal"
+                          ? pixel.a / 255
+                          : (pixel.a / 255) * 0.7;
                       ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${alpha})`;
                       ctx.fillRect(drawX, drawY, zoom, zoom);
                     }
@@ -715,7 +763,9 @@ export const CanvasContainer = observer(function CanvasContainer({
             }
           }
         } else {
-          // A regular layer, dimmed while a variant is being edited.
+          // A regular layer while a variant is being edited, rendered per the
+          // focus-mode setting (normal / transparent dim / onion outline).
+          const alphaMul = layerFocusMode === "normal" ? 1 : 0.5;
           for (let y = 0; y < objHeight; y++) {
             const row = l.pixels[y];
             if (!row) continue;
@@ -723,7 +773,13 @@ export const CanvasContainer = observer(function CanvasContainer({
             for (let x = 0; x < objWidth; x++) {
               const pixel = getPixelColor(row[x]);
               if (pixel && pixel.a > 0) {
-                ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${(pixel.a / 255) * 0.5})`;
+                if (
+                  layerFocusMode === "onion" &&
+                  !isOutlineCell(l.pixels, x, y, objWidth, objHeight)
+                ) {
+                  continue;
+                }
+                ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${(pixel.a / 255) * alphaMul})`;
                 ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
               }
             }
@@ -980,6 +1036,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     isEditingVariantResolved,
     variantData,
     variantOffset,
+    layerFocusMode,
     viewMinX,
     viewMinY,
     viewMaxX,
