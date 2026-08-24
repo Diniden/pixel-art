@@ -9,8 +9,14 @@
  * Task 12 added the full scale: the colour ramps (variant, danger, info,
  * status, alpha ramps), spacing, typography, radii, shadows, transitions and
  * the layered z-index scale. Alpha ramps are explicit literals, not
- * color-mix() — simpler to grep and lint, and there is no theming today
- * (OPEN-QUESTIONS Q8).
+ * color-mix() — simpler to grep and lint.
+ *
+ * THEMING (2026-08-24, supersedes "no theming today" / Q8): bare `:root`
+ * IS the default theme, "Dark and Spacious". Each additional theme is a
+ * `:root[data-theme="<id>"]` block at the bottom of this file overriding a
+ * SUBSET of tokens; `ui/theme/themes.ts` is the registry and switch, and a
+ * dropdown in the Header drives it. `themes.test.ts` asserts every
+ * override targets a token that exists in `:root`.
  */
 
 :root {
@@ -373,4 +379,63 @@
   --text-px-32: 32px; /* emoji/glyph icons in empty states, not text  */
   --text-px-48: 48px;
   --text-px-64: 64px;
+}
+
+/* ==================================================================== *
+ * Theme: "Dark and Cozy" (`data-theme="dark-cozy"`).
+ *
+ * Chrome desaturated to NEUTRAL GREY — the blue/violet cast of the default
+ * bg/border/text ramps is removed while every accent, status and channel
+ * colour is deliberately NOT overridden, so highlights stay pops of colour
+ * on grey. Spacing tightens to ~75% of the default scale and radii sharpen
+ * to near-square; --radius-pill stays pill-shaped because toggles and pills
+ * stop reading as such below half their box height.
+ * ==================================================================== */
+
+:root[data-theme="dark-cozy"] {
+  /* Neutral-grey bg ramp (same lightness steps, zero saturation). */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #131313;
+  --bg-tertiary: #1b1b1b;
+  --bg-elevated: #232323;
+  --bg-hover: #2b2b2b;
+  --bg-active: #3a3a3a;
+  --bg-raised: #4a4a4a;
+  --bg-raised-light: #5a5a5a;
+
+  --border-primary: #2e2e2e;
+  --border-secondary: #232323;
+  --border-accent: #4f4f4f;
+
+  --text-primary: #e8e8e8;
+  --text-secondary: #a6a6a6;
+  --text-tertiary: #828282;
+  --text-muted: #626262;
+
+  /* The warmer modal gradient collapses to flat grey stops. The danger
+     stop keeps its red tint — that is a highlight, not chrome. */
+  --modal-gradient-a: #1c1c1c;
+  --modal-gradient-b: #161616;
+  --canvas-checker-b: #242424;
+
+  /* Cozy spacing — ~75% of the default scale, floored at 1px. */
+  --space-0-5: 1px;
+  --space-1: 3px;
+  --space-1-5: 4px;
+  --space-2: 6px;
+  --space-2-5: 7px;
+  --space-3: 9px;
+  --space-4: 12px;
+  --space-5: 15px;
+  --space-6: 18px;
+  --space-8: 24px;
+  --space-10: 30px;
+  --space-12: 36px;
+
+  /* Much sharper corners. */
+  --radius-xs: 1px;
+  --radius-sm: 1px;
+  --radius-base: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
 }

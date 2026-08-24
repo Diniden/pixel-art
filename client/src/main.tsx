@@ -11,6 +11,11 @@ import { createRoot } from "react-dom/client";
 import { AppContainer } from "./containers/AppContainer";
 import { ApplicationStore } from "./stores/ApplicationStore";
 import { StoreProvider } from "./stores/context";
+import { initTheme } from "./ui/theme/themes";
+
+// Apply the stored theme preference (localStorage, a DEVICE preference —
+// never part of the project's frozen uiState) before the first paint.
+initTheme();
 
 // The ONE ApplicationStore of the app, constructed here and passed in — never
 // a module-level singleton (task 14). Tests and Storybook build their own.

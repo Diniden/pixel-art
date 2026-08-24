@@ -77,6 +77,11 @@ import { BrowseBackupsModalContainer } from "./BrowseBackupsModalContainer";
 import { ExportPreviewModalContainer } from "./ExportPreviewModalContainer";
 import { useSessionStore, useStores } from "../stores/context";
 import { aiApi, exportApi } from "../api";
+import {
+  applyTheme,
+  loadStoredTheme,
+  type ThemeId,
+} from "../ui/theme/themes";
 
 export const HeaderContainer = observer(function HeaderContainer() {
   const app = useStores();
@@ -96,6 +101,15 @@ export const HeaderContainer = observer(function HeaderContainer() {
   // the URL survive a reload and what stops the next `syncPhaseA` from
   // overwriting it.
   const setAiServiceUrl = (url: string) => app.setAiServiceUrl(url);
+
+  // Device preference, not project state: main.tsx applied the stored theme
+  // before first paint; this state only drives the dropdown. It must never
+  // join the frozen `uiState` wire format (UIStore R3).
+  const [theme, setTheme] = useState<ThemeId>(loadStoredTheme);
+  const handleThemeChange = useCallback((next: ThemeId) => {
+    applyTheme(next);
+    setTheme(next);
+  }, []);
 
   const [aiHealthStatus, setAiHealthStatus] =
     useState<AiHealthStatus>("unknown");
@@ -167,6 +181,8 @@ export const HeaderContainer = observer(function HeaderContainer() {
         // Give the write time to round-trip before re-checking health.
         setTimeout(pollAiHealth, 500);
       }}
+      theme={theme}
+      onThemeChange={handleThemeChange}
       onExport={() => exportApi.run(projectName)}
       projectModal={(props) => <ProjectSelectModalContainer {...props} />}
       backupsModal={(props) => <BrowseBackupsModalContainer {...props} />}
