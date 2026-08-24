@@ -30,6 +30,7 @@ interface HeightMapModalProps {
     channel: ChannelType;
     min: number;
     max: number;
+    applyToAllFrames: boolean;
   }) => void;
 }
 
@@ -45,6 +46,7 @@ export function HeightMapModal({
   const [channel, setChannel] = useState<ChannelType>("L");
   const [min, setMin] = useState(0);
   const [max, setMax] = useState(255);
+  const [applyToAllFrames, setApplyToAllFrames] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Determine target layer and dimensions
@@ -98,7 +100,7 @@ export function HeightMapModal({
   if (!isOpen) return null;
 
   const handleConfirm = () => {
-    onConfirm({ channel, min, max });
+    onConfirm({ channel, min, max, applyToAllFrames });
     onClose();
   };
 
@@ -232,6 +234,22 @@ export function HeightMapModal({
         </div>
 
         <div className="height-map-modal__actions">
+          <label
+            className="height-map-modal__checkbox-label"
+            title={
+              editingVariant
+                ? "Apply the same channel and range to every frame of this variant"
+                : "Apply the same channel and range to every frame that contains this layer"
+            }
+          >
+            <input
+              type="checkbox"
+              checked={applyToAllFrames}
+              onChange={(e) => setApplyToAllFrames(e.target.checked)}
+              className="height-map-modal__checkbox"
+            />
+            <span className="height-map-modal__checkbox-text">All frames</span>
+          </label>
           <button
             className="height-map-modal__btn height-map-modal__btn--neutral"
             onClick={onClose}

@@ -56,6 +56,8 @@ export interface HeightMapParams {
   channel: ChannelType;
   min: number;
   max: number;
+  /** Apply to every frame of the layer (or variant), not just the current one. */
+  applyToAllFrames: boolean;
 }
 
 interface LightingStudioToolsProps {

@@ -24,6 +24,7 @@ interface HeightMapModalContainerProps {
     channel: ChannelType;
     min: number;
     max: number;
+    applyToAllFrames: boolean;
   }) => void;
 }
 

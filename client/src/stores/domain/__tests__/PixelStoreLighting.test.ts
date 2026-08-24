@@ -473,3 +473,173 @@ describe("PixelStore.computeNormalsForAllFrames — a flow", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+/* ══ computeHeightMapForAllFrames ═════════════════════════════════════════ */
+
+/**
+ * Two frames sharing layer id "layer-1", with DIFFERENT red ranges — frame 1
+ * spans r 0..255, frame 2 spans r 100..200 — so per-frame normalisation is
+ * distinguishable from a cross-frame one: under per-frame, frame 2's r=100
+ * lands on `params.min` exactly as frame 1's r=0 does.
+ */
+function twoFrameProject(): Project {
+  const project = mkProject(2, 1);
+  const obj = project.objects[0];
+
+  const px1 = obj.frames[0].layers[0].pixels;
+  px1[0][0] = { color: { r: 0, g: 0, b: 0, a: 255 }, normal: 0, height: 0 };
+  px1[0][1] = { color: RED, normal: 0, height: 0 };
+
+  const layer2 = {
+    id: "layer-1",
+    name: "Layer 1",
+    visible: true,
+    opacity: 1,
+    pixels: mkGrid(2, 1),
+  } as unknown as Layer;
+  layer2.pixels[0][0] = {
+    color: { r: 100, g: 0, b: 0, a: 255 },
+    normal: 0,
+    height: 0,
+  };
+  layer2.pixels[0][1] = {
+    color: { r: 200, g: 0, b: 0, a: 255 },
+    normal: 0,
+    height: 0,
+  };
+  obj.frames.push({
+    id: "frame-2",
+    name: "Frame 2",
+    layers: [layer2],
+  } as (typeof obj.frames)[number]);
+
+  return project;
+}
+
+describe("PixelStore.computeHeightMapForAllFrames", () => {
+  const frame = (rig: Rig, i: number) =>
+    rig.domain.objects[0].frames[i].layers[0];
+
+  it("writes heights on EVERY frame that has the layer, each against its OWN range", () => {
+    const rig = makeRig(twoFrameProject());
+    rig.pixels.computeHeightMapForAllFrames({
+      channel: "R",
+      min: 10,
+      max: 200,
+    });
+    // Frame 1: r 0 → min, r 255 → max.
+    expect(frame(rig, 0).pixels[0][0].height).toBe(10);
+    expect(frame(rig, 0).pixels[0][1].height).toBe(200);
+    // Frame 2: ITS darkest (r=100) also → min — per-frame normalisation,
+    // not a shared range.
+    expect(frame(rig, 1).pixels[0][0].height).toBe(10);
+    expect(frame(rig, 1).pixels[0][1].height).toBe(200);
+  });
+
+  it("derives from the NORMAL MAP when given an N* channel", () => {
+    const project = twoFrameProject();
+    const px = project.objects[0].frames[0].layers[0].pixels;
+    px[0][0] = { color: RED, normal: { x: 127, y: 0, z: 0 }, height: 0 };
+    px[0][1] = { color: RED, normal: { x: 0, y: 0, z: 255 }, height: 0 };
+    const rig = makeRig(project);
+    rig.pixels.computeHeightMapForAllFrames({
+      channel: "NZ",
+      min: 10,
+      max: 200,
+    });
+    expect(frame(rig, 0).pixels[0][0].height).toBe(10);
+    expect(frame(rig, 0).pixels[0][1].height).toBe(200);
+    // Frame 2 has colours but NO normals — untouched under an N* channel.
+    expect(frame(rig, 1).pixels[0][0].height).toBe(0);
+    expect(frame(rig, 1).pixels[0][1].height).toBe(0);
+  });
+
+  it("records exactly ONE history entry, and undo restores EVERY frame", () => {
+    const rig = makeRig(twoFrameProject());
+    const before = rig.history.entries.length;
+    rig.pixels.computeHeightMapForAllFrames({
+      channel: "R",
+      min: 10,
+      max: 200,
+    });
+    expect(rig.history.entries).toHaveLength(before + 1);
+
+    runInAction(() => rig.history.undo());
+    expect(frame(rig, 0).pixels[0][1].height).toBe(0);
+    expect(frame(rig, 1).pixels[0][1].height).toBe(0);
+    // …and the colours survive, as with every inverse-patch undo.
+    expect(frame(rig, 0).pixels[0][1].color).toEqual(RED);
+  });
+
+  it("skips frames that do not contain the layer", () => {
+    const project = twoFrameProject();
+    const strangerLayer = {
+      id: "layer-OTHER",
+      name: "Other",
+      visible: true,
+      opacity: 1,
+      pixels: mkGrid(2, 1),
+    } as unknown as Layer;
+    strangerLayer.pixels[0][0] = { color: RED, normal: 0, height: 0 };
+    const obj = project.objects[0];
+    obj.frames.push({
+      id: "frame-3",
+      name: "Frame 3",
+      layers: [strangerLayer],
+    } as (typeof obj.frames)[number]);
+
+    const rig = makeRig(project);
+    rig.pixels.computeHeightMapForAllFrames({
+      channel: "R",
+      min: 10,
+      max: 200,
+    });
+    expect(rig.domain.objects[0].frames[2].layers[0].pixels[0][0].height).toBe(
+      0,
+    );
+  });
+
+  it("PRESERVES colour and normals while replacing heights", () => {
+    const project = twoFrameProject();
+    const n: Normal = { x: 1, y: 2, z: 3 };
+    project.objects[0].frames[0].layers[0].pixels[0][1] = {
+      color: RED,
+      normal: n,
+      height: 0,
+    };
+    const rig = makeRig(project);
+    rig.pixels.computeHeightMapForAllFrames({
+      channel: "R",
+      min: 10,
+      max: 200,
+    });
+    expect(frame(rig, 0).pixels[0][1].color).toEqual(RED);
+    expect(frame(rig, 0).pixels[0][1].normal).toEqual(n);
+    expect(frame(rig, 0).pixels[0][1].height).toBe(200);
+  });
+
+  it("does nothing when the target cannot be resolved", () => {
+    const rig = makeRig();
+    runInAction(() => {
+      rig.domain.objects = [];
+    });
+    expect(() =>
+      rig.pixels.computeHeightMapForAllFrames({
+        channel: "R",
+        min: 0,
+        max: 255,
+      }),
+    ).not.toThrow();
+    expect(rig.history.entries).toHaveLength(0);
+  });
+
+  it("a sweep with nothing to write records NO history entry", () => {
+    const rig = makeRig(); // 4×4, entirely empty
+    rig.pixels.computeHeightMapForAllFrames({
+      channel: "R",
+      min: 0,
+      max: 255,
+    });
+    expect(rig.history.entries).toHaveLength(0);
+  });
+});

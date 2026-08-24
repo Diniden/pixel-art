@@ -222,8 +222,32 @@
   border-color: var(--accent-primary);
 }
 
+.height-map-modal__checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2-5);
+  cursor: pointer;
+  user-select: none;
+  /* Pushes the Cancel/Apply pair to the right edge of the actions row. */
+  margin-right: auto;
+}
+
+.height-map-modal__checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--accent-primary);
+}
+
+.height-map-modal__checkbox-text {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-90);
+}
+
 .height-map-modal__actions {
   display: flex;
+  align-items: center;
   gap: var(--space-2-5);
   justify-content: flex-end;
   padding: var(--space-4) var(--space-5);

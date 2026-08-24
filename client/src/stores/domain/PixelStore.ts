@@ -64,9 +64,11 @@
 import { flow, makeObservable, observable, runInAction } from "mobx";
 import type { Color, Layer, Normal, PixelData, Project } from "../../types";
 import {
+  computeHeightMap,
   flipGridHorizontal,
   flipGridVertical,
 } from "../../utils/normalCompute";
+import type { HeightMapParams } from "../../utils/normalCompute";
 import { computeEdgeInterpolatedNormals } from "../../utils/edgeInterpolate";
 import { createPixelCommand } from "../history/commands";
 import type {
@@ -1529,18 +1531,26 @@ export class PixelStore {
       );
     };
 
+    return this.sweepFrameTargets(target).map(commitFrame);
+  }
+
+  /**
+   * Enumerate one `PixelTarget` per frame an all-frames lighting sweep will
+   * touch. Extracted verbatim from {@link planNormalCompute} so the
+   * height-map sweep resolves EXACTLY the same frame set the normals sweep
+   * always has.
+   */
+  private sweepFrameTargets(target: PixelTarget): PixelTarget[] {
     // ── the variant branch: every FRAME of the selected variant ───────────
     if (target.variant) {
       const { variantGroupId, variantId } = target.variant;
       const group = this.domain.variants.find((vg) => vg.id === variantGroupId);
       const variant = group?.variants.find((v) => v.id === variantId);
       if (!variant) return [];
-      return variant.frames.map((_frame, frameIndex) =>
-        commitFrame({
-          ...target,
-          variant: { variantGroupId, variantId, frameIndex },
-        }),
-      );
+      return variant.frames.map((_frame, frameIndex) => ({
+        ...target,
+        variant: { variantGroupId, variantId, frameIndex },
+      }));
     }
 
     // ── the regular branch: every frame of the object that HAS this layer ──
@@ -1552,7 +1562,68 @@ export class PixelStore {
     if (!object) return [];
     return object.frames
       .filter((f) => f.layers.some((l) => l.id === target.layerId))
-      .map((f) => commitFrame({ ...target, frameId: f.id }));
+      .map((f) => ({ ...target, frameId: f.id }));
+  }
+
+  /**
+   * Generate a height map for EVERY frame of the active layer (or every
+   * frame of the active variant), collapsed into ONE undo entry.
+   *
+   * The height-map twin of {@link computeNormalsForAllFrames}, with two
+   * deliberate differences:
+   *
+   *  - It is a plain synchronous action, not a flow. `computeHeightMap` is
+   *    two linear passes per frame — there is no gaussian RBF to release the
+   *    main thread for, so the yield machinery (and the progress observable)
+   *    would be ceremony.
+   *  - Each frame normalises against ITS OWN channel range, exactly what
+   *    stepping through the frames and pressing Apply on each would produce.
+   *
+   * Frames with no source data (no coloured pixels — or, for the `N*`
+   * channels, no normals) return an empty write list and are left untouched,
+   * the same "nothing to write" rule the single-frame path applies.
+   */
+  computeHeightMapForAllFrames(params: HeightMapParams): void {
+    const resolved = this.resolveTarget();
+    if (!resolved) return;
+    const { target, width, height } = resolved;
+
+    const frameTargets = this.sweepFrameTargets(target);
+    if (frameTargets.length === 0) return;
+
+    this.history.beginTransaction("Generate height map");
+    try {
+      for (const frameTarget of frameTargets) {
+        // Re-resolve from the LIVE tree — the previous frame's commit
+        // replaced part of it (same rule as the normals sweep's closures).
+        const layer = this.findLayer(frameTarget);
+        if (!layer) continue;
+
+        const writes = computeHeightMap(layer, width, height, params);
+        if (writes.length === 0) continue;
+
+        this.commitCells(
+          frameTarget,
+          layer,
+          "Generate height map",
+          collectLightingPatches(
+            layer,
+            width,
+            height,
+            writes,
+            (before, w) => ({ ...before, height: w.height }),
+          ),
+          true,
+        );
+      }
+    } finally {
+      this.history.endTransaction();
+      // Re-sync after the collapse — see the note in
+      // `computeNormalsForAllFrames`: inside a transaction `history.record`
+      // buffers, so the Phase B mirror must be republished once the entry
+      // actually exists.
+      this.mirror.syncHistory();
+    }
   }
 
   /**
