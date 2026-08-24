@@ -407,8 +407,13 @@
  *                              pill-shaped: toggles stop reading as pills
  *                              below half their box height)
  *
- * Accents, status, and channel colours are NEVER overridden by any theme —
- * highlights stay pops of colour on chrome (pinned by themes.test.ts).
+ * DARK themes never override accents — highlights stay the brand pops.
+ * LIGHT themes re-tune the blue/purple accent family and the muted grey:
+ * the dark-theme values were measured at 1.5-3.7:1 against the light
+ * grounds (WCAG failures), so the light block substitutes same-hue,
+ * darker versions that clear 4.5:1 on the panel ground. Both facts are
+ * pinned by themes.test.ts: an accent guard on the dark themes, and
+ * computed WCAG ratios on the light ones.
  * ==================================================================== */
 
 /* ── Cozy metrics — shared by dark-cozy and light-cozy ─────────────── */
@@ -489,7 +494,7 @@
   --text-primary: #16161f;
   --text-secondary: #45455a;
   --text-tertiary: #60607a;
-  --text-muted: #84849c;
+  --text-muted: #64647e; /* 4.96:1 on ground, 4.54:1 on inputs (was 3.16) */
 
   --modal-gradient-a: #ffffff;
   --modal-gradient-b: #eef0fa;
@@ -513,7 +518,7 @@
   --text-primary: #161616;
   --text-secondary: #474747;
   --text-tertiary: #626262;
-  --text-muted: #868686;
+  --text-muted: #666666; /* 4.90:1 on ground, 4.47:1 on inputs (was 3.11) */
 
   --modal-gradient-a: #ffffff;
   --modal-gradient-b: #f0f0f0;
@@ -528,6 +533,25 @@
 :root[data-theme="light-spacious"],
 :root[data-theme="light-cozy"] {
   --section-header-bg: rgba(20, 20, 40, 0.07);
+
+  /* Blue/purple accents, re-tuned for light ground (measured 2026-08-24).
+     The dark-theme values fail WCAG against the light panels — cyan
+     #00d9ff is 1.47:1, variant #8b5cf6 is 3.67:1, info #60a5fa is 2.20:1.
+     Same hue, darker: every value below clears 4.4:1 on --bg-secondary
+     (ratios in the comment; pinned computationally by themes.test.ts).
+     The alpha RAMPS (--accent-*-NN) stay bright — they are translucent
+     fills/rings, not text, and still read as tint over light ground. */
+  --accent-primary: #006e8a; /* 5.06:1 (was 1.47)          */
+  --accent-hover: #005c73; /* 6.55:1 — hover DARKENS here  */
+  --accent-secondary: #c40083; /* 4.95:1 (was 3.12)        */
+  --accent-tertiary: #6620c9; /* 6.96:1 (was 4.97)         */
+  --accent-variant: #6d3fd6; /* 5.46:1 (was 3.67)          */
+  --accent-variant-light: #7c3aed; /* 4.94:1 (was 2.36)    */
+  --accent-variant-deep: #5b21b6; /* 7.78:1 — stays darkest */
+  --accent-info-light: #2563eb; /* 4.48:1 (was 2.20)       */
+  /* The accent ground is dark now, so its foreground flips to white
+     (5.84:1 on #006e8a; black managed only 3.60:1). */
+  --text-on-accent: #fff;
   --shadow-sm: 0 2px 4px rgba(20, 20, 40, 0.12);
   --shadow-md: 0 4px 12px rgba(20, 20, 40, 0.14);
   --shadow-lg: 0 8px 32px rgba(20, 20, 40, 0.16);
