@@ -1,7 +1,7 @@
 .frame-timeline {
   display: flex;
   flex-direction: column;
-  padding: var(--space-2);
+  padding: var(--layout-pad-bottom);
   overflow: visible;
   min-height: 0;
   width: 100%;

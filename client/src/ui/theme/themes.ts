@@ -24,6 +24,8 @@
 export const THEMES = [
   { id: "dark-spacious", label: "Dark and Spacious" },
   { id: "dark-cozy", label: "Dark and Cozy" },
+  { id: "light-spacious", label: "Light and Spacious" },
+  { id: "light-cozy", label: "Light and Cozy" },
 ] as const;
 
 export type ThemeId = (typeof THEMES)[number]["id"];
