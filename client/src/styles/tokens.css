@@ -255,6 +255,14 @@
      the shared light block tints it so titled sections read as bands. */
   --section-header-bg: transparent;
 
+  /* Toolbar hotkey badge (the number chip on each tool). Defaults
+     reproduce the measured dark-theme look; the light block flips the
+     numbers light because the chip stays dark over light buttons. */
+  --hotkey-fg: var(--text-muted);
+  --hotkey-bg: var(--overlay-40);
+  --hotkey-active-fg: var(--white-80);
+  --hotkey-active-bg: var(--overlay-30);
+
   /* Typography. */
   --text-2xs: 0.625rem;
   --text-xs: 0.75rem;
@@ -552,6 +560,14 @@
   /* The accent ground is dark now, so its foreground flips to white
      (5.84:1 on #006e8a; black managed only 3.60:1). */
   --text-on-accent: #fff;
+
+  /* Hotkey numbers go LIGHT: the chip is dark over light buttons, so the
+     dark-theme muted-grey numbers vanished into it. A slightly stronger
+     chip keeps white readable (~4.8:1 over the blended ground). */
+  --hotkey-fg: var(--white-95);
+  --hotkey-bg: rgba(20, 20, 40, 0.55);
+  --hotkey-active-fg: var(--white);
+  --hotkey-active-bg: rgba(20, 20, 40, 0.55);
   --shadow-sm: 0 2px 4px rgba(20, 20, 40, 0.12);
   --shadow-md: 0 4px 12px rgba(20, 20, 40, 0.14);
   --shadow-lg: 0 8px 32px rgba(20, 20, 40, 0.16);
