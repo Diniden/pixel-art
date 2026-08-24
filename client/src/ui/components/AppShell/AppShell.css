@@ -96,10 +96,10 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--space-3);
+  padding: var(--layout-pad);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--layout-gap);
 }
 
 /* Canvas Area */

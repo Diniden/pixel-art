@@ -240,6 +240,17 @@
   --space-10: 40px;
   --space-12: 48px;
 
+  /* Structural layout spacing — the chrome of MAJOR sections (side-panel
+     padding, the gap between stacked panels, panel header/body padding,
+     the bottom timeline's padding), split out from the --space scale so a
+     theme can retune section chrome without touching intra-control gaps.
+     Defaults reproduce the measured values exactly. */
+  --layout-pad: var(--space-3); /* side-panel inner padding        */
+  --layout-gap: var(--space-3); /* gap between stacked side panels */
+  --layout-pad-bottom: var(--space-2); /* bottom timeline padding  */
+  --panel-header-pad: var(--space-3) var(--space-4);
+  --panel-body-pad: var(--space-3);
+
   /* Typography. */
   --text-2xs: 0.625rem;
   --text-xs: 0.75rem;
@@ -382,18 +393,55 @@
 }
 
 /* ==================================================================== *
- * Theme: "Dark and Cozy" (`data-theme="dark-cozy"`).
+ * Themes. Four themes = two palettes x two metric sets:
  *
- * Chrome desaturated to NEUTRAL GREY — the blue/violet cast of the default
- * bg/border/text ramps is removed while every accent, status and channel
- * colour is deliberately NOT overridden, so highlights stay pops of colour
- * on grey. Spacing tightens to ~75% of the default scale and radii sharpen
- * to near-square; --radius-pill stays pill-shaped because toggles and pills
- * stop reading as such below half their box height.
+ *   palette "spacious cast"  — the default blue/violet-tinted chrome
+ *   palette "cozy grey"      — same lightness steps, zero saturation
+ *   metrics "spacious"       — the default --space/--radius/--layout scale
+ *   metrics "cozy"           — spacing ~75%, section chrome HALVED, radii
+ *                              sharpened to 1-3px (--radius-pill stays
+ *                              pill-shaped: toggles stop reading as pills
+ *                              below half their box height)
+ *
+ * Accents, status, and channel colours are NEVER overridden by any theme —
+ * highlights stay pops of colour on chrome (pinned by themes.test.ts).
  * ==================================================================== */
 
+/* ── Cozy metrics — shared by dark-cozy and light-cozy ─────────────── */
+:root[data-theme="dark-cozy"],
+:root[data-theme="light-cozy"] {
+  /* Spacing — ~75% of the default scale, floored at 1px. */
+  --space-0-5: 1px;
+  --space-1: 3px;
+  --space-1-5: 4px;
+  --space-2: 6px;
+  --space-2-5: 7px;
+  --space-3: 9px;
+  --space-4: 12px;
+  --space-5: 15px;
+  --space-6: 18px;
+  --space-8: 24px;
+  --space-10: 30px;
+  --space-12: 36px;
+
+  /* Section chrome — HALF the default theme's values (12px→6px, 8px→4px):
+     side-panel padding, panel gap, panel header/body, bottom timeline. */
+  --layout-pad: 6px;
+  --layout-gap: 6px;
+  --layout-pad-bottom: 4px;
+  --panel-header-pad: 6px 8px;
+  --panel-body-pad: 6px;
+
+  /* Much sharper corners. */
+  --radius-xs: 1px;
+  --radius-sm: 1px;
+  --radius-base: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+}
+
+/* ── "Dark and Cozy" palette — neutral-grey dark chrome ────────────── */
 :root[data-theme="dark-cozy"] {
-  /* Neutral-grey bg ramp (same lightness steps, zero saturation). */
   --bg-primary: #0a0a0a;
   --bg-secondary: #131313;
   --bg-tertiary: #1b1b1b;
@@ -417,25 +465,71 @@
   --modal-gradient-a: #1c1c1c;
   --modal-gradient-b: #161616;
   --canvas-checker-b: #242424;
+}
 
-  /* Cozy spacing — ~75% of the default scale, floored at 1px. */
-  --space-0-5: 1px;
-  --space-1: 3px;
-  --space-1-5: 4px;
-  --space-2: 6px;
-  --space-2-5: 7px;
-  --space-3: 9px;
-  --space-4: 12px;
-  --space-5: 15px;
-  --space-6: 18px;
-  --space-8: 24px;
-  --space-10: 30px;
-  --space-12: 36px;
+/* ── "Light and Spacious" palette — the default cast, inverted ─────── */
+:root[data-theme="light-spacious"] {
+  --bg-primary: #f6f6fb;
+  --bg-secondary: #eeeef6;
+  --bg-tertiary: #e4e4ef;
+  --bg-elevated: #dadae8;
+  --bg-hover: #cfcfe0;
+  --bg-active: #c0c0d4;
+  --bg-raised: #b0b0c6;
+  --bg-raised-light: #a0a0b8;
 
-  /* Much sharper corners. */
-  --radius-xs: 1px;
-  --radius-sm: 1px;
-  --radius-base: 2px;
-  --radius-md: 2px;
-  --radius-lg: 3px;
+  --border-primary: #c4c4d6;
+  --border-secondary: #d4d4e2;
+  --border-accent: #9a9ab8;
+
+  --text-primary: #16161f;
+  --text-secondary: #45455a;
+  --text-tertiary: #60607a;
+  --text-muted: #84849c;
+
+  --modal-gradient-a: #ffffff;
+  --modal-gradient-b: #eef0fa;
+}
+
+/* ── "Light and Cozy" palette — neutral-grey light chrome ──────────── */
+:root[data-theme="light-cozy"] {
+  --bg-primary: #f5f5f5;
+  --bg-secondary: #ededed;
+  --bg-tertiary: #e3e3e3;
+  --bg-elevated: #d9d9d9;
+  --bg-hover: #cecece;
+  --bg-active: #bfbfbf;
+  --bg-raised: #afafaf;
+  --bg-raised-light: #9f9f9f;
+
+  --border-primary: #c6c6c6;
+  --border-secondary: #d5d5d5;
+  --border-accent: #9c9c9c;
+
+  --text-primary: #161616;
+  --text-secondary: #474747;
+  --text-tertiary: #626262;
+  --text-muted: #868686;
+
+  --modal-gradient-a: #ffffff;
+  --modal-gradient-b: #f0f0f0;
+}
+
+/* ── Shared light chrome — both light themes ───────────────────────────
+   Shadows soften (the dark-theme alphas read as smears on light ground),
+   the swatch border lightens, and the danger modal stop goes pastel. The
+   dark overlay ramp stays — modal backdrops dim a light UI the same way.
+   Canvas-painted chrome (canvasTokens) deliberately stays dark: a dark
+   canvas well under a light UI is the norm for pixel editors. */
+:root[data-theme="light-spacious"],
+:root[data-theme="light-cozy"] {
+  --shadow-sm: 0 2px 4px rgba(20, 20, 40, 0.12);
+  --shadow-md: 0 4px 12px rgba(20, 20, 40, 0.14);
+  --shadow-lg: 0 8px 32px rgba(20, 20, 40, 0.16);
+  --shadow-xl: 0 12px 48px rgba(20, 20, 40, 0.2);
+  --shadow-modal: 0 20px 50px rgba(20, 20, 40, 0.22);
+  --shadow-modal-glow:
+    0 20px 60px rgba(20, 20, 40, 0.22), 0 0 40px rgba(0, 217, 255, 0.1);
+  --swatch-border: #b4b4b4;
+  --modal-gradient-danger-a: #f8e4e8;
 }

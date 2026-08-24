@@ -29,7 +29,7 @@
 }
 
 .panel__header {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--panel-header-pad);
   border-bottom: 1px solid var(--border-primary);
   font-weight: var(--weight-semibold);
   font-size: var(--text-sm);
@@ -57,7 +57,7 @@
 }
 
 .panel__body {
-  padding: var(--space-3);
+  padding: var(--panel-body-pad);
 }
 
 .panel__body--stack {
