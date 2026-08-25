@@ -39,6 +39,7 @@ import { describe, expect, it } from "vitest";
 import { runInAction } from "mobx";
 
 import { UIStore } from "@/stores/ui/UIStore";
+import { LayoutUIStore } from "@/stores/ui/LayoutUIStore";
 import { SelectionMirror } from "@/stores/SelectionMirror";
 import { SessionStore } from "@/stores/session/SessionStore";
 import {
@@ -53,7 +54,15 @@ import type { CompactUIState, Project } from "@/types";
 function hydratedStore(project: Project): UIStore {
   const session = new SessionStore();
   const selection = new SelectionMirror();
-  const ui = new UIStore({ session, selection });
+  // ⚠️ The device class is PINNED to "desktop" rather than measured. jsdom's
+  // `matchMedia` is absent/stubbed, so `detectDeviceClass()` would answer
+  // from the environment and a fixture keyed `desktop` would round-trip
+  // through a different key on a machine that classified differently.
+  const ui = new UIStore({
+    session,
+    selection,
+    layout: new LayoutUIStore("desktop"),
+  });
   runInAction(() => {
     selection.adopt({
       selectedObjectId: project.uiState.selectedObjectId,
@@ -154,6 +163,14 @@ function fullyPopulatedProject(): Project {
     lightingPreviewPanelPosition: { topPercent: 50, leftPercent: 60 },
     lightingPreviewPanelMinimized: true,
     aiServiceUrl: "http://ai.local:9000",
+    railLayouts: {
+      desktop: {
+        left: { slot: "rightInner", scale: "large" },
+        right: { slot: "leftOuter", scale: "compact" },
+        bottom: { edge: "top", scale: "huge" },
+      },
+    },
+    theme: "light-cozy",
   });
   return project;
 }
@@ -199,7 +216,12 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
       (m) => m[1],
     );
 
-    expect(declared).toHaveLength(44);
+    // 44 from the REFRESH freeze + the 2 owner-approved additions
+    // (`railLayouts`, `theme`, 2026-08-25). Both are CONDITIONALLY emitted —
+    // see the `railLayouts`/`theme` cases below, which pin that an untouched
+    // project's key set is unchanged. That property, not this count, is what
+    // protects the owner's 151 snapshots.
+    expect(declared).toHaveLength(46);
 
     // A FULLY-POPULATED project, because 11 of the 44 keys are
     // conditionally present by design: the legacy `...project.uiState`
@@ -266,6 +288,87 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     expect("originColor" in built).toBe(true);
     expect(built.originColor).toBeUndefined();
     expect("originColor" in legacyUIState(project)).toBe(true);
+  });
+
+  it("⭐ railLayouts and theme are ABSENT until the user changes them", () => {
+    // THE PROPERTY THAT PROTECTS THE CORPUS. The two keys added on
+    // 2026-08-25 extend the wire format, and this is what keeps that
+    // extension free: an untouched project emits neither, so its key set —
+    // and therefore its digest — is exactly what it was before.
+    const project = createDefaultProject();
+    expect("railLayouts" in project.uiState).toBe(false);
+    expect("theme" in project.uiState).toBe(false);
+
+    const built = hydratedStore(project).toPersistedUIState();
+    expect("railLayouts" in built).toBe(false);
+    expect("theme" in built).toBe(false);
+    // The legacy serializer agrees, key-for-key — no drift was introduced.
+    expect(Object.keys(built).sort()).toEqual(
+      Object.keys(legacyUIState(project)).sort(),
+    );
+  });
+
+  it("emits railLayouts once a rail actually moves, keyed by device class", () => {
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const layout = new LayoutUIStore("tablet");
+    const ui = new UIStore({ session, selection, layout });
+
+    runInAction(() => layout.stepRail("left", 1));
+    const built = ui.toPersistedUIState();
+
+    expect("railLayouts" in built).toBe(true);
+    // One step crosses the canvas — `leftInner` is skipped because sitting
+    // there would look identical. See `nextVisibleSlot` in `railLayout.ts`.
+    expect(built.railLayouts?.tablet.left.slot).toBe("rightInner");
+    // Only THIS device's entry is written — no other class is invented.
+    expect(Object.keys(built.railLayouts!)).toEqual(["tablet"]);
+  });
+
+  it("preserves ANOTHER device's layout when this device saves", () => {
+    // The whole point of keying by device class: a desktop session must not
+    // drop the layout an iPad saved into the same project.
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const layout = new LayoutUIStore("desktop");
+    const ui = new UIStore({ session, selection, layout });
+
+    runInAction(() => {
+      layout.hydrate({
+        railLayouts: {
+          tablet: {
+            left: { slot: "rightOuter", scale: "huge" },
+            right: { slot: "leftOuter", scale: "compact" },
+            bottom: { edge: "top", scale: "large" },
+          },
+        },
+      });
+      layout.scaleRail("bottom", 1);
+    });
+
+    const built = ui.toPersistedUIState();
+    expect(Object.keys(built.railLayouts!).sort()).toEqual([
+      "desktop",
+      "tablet",
+    ]);
+    expect(built.railLayouts?.tablet.left.slot).toBe("rightOuter");
+    expect(built.railLayouts?.tablet.bottom.scale).toBe("large");
+  });
+
+  it("emits theme once set, and hydrates it back", () => {
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const layout = new LayoutUIStore("desktop");
+    const ui = new UIStore({ session, selection, layout });
+
+    runInAction(() => layout.setTheme("light-spacious"));
+    expect(ui.toPersistedUIState().theme).toBe("light-spacious");
+
+    // A project with no theme hydrates back to null — it must NOT inherit
+    // the previous project's theme when the user switches projects.
+    runInAction(() => layout.hydrate({}));
+    expect(layout.theme).toBeNull();
+    expect("theme" in ui.toPersistedUIState()).toBe(false);
   });
 
   it("round-trips a fully-populated uiState with zero differences", () => {

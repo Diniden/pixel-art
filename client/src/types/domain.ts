@@ -191,6 +191,38 @@ export interface UIState {
 
   // AI frame interpolation service URL (remote machine)
   aiServiceUrl?: string;
+
+  // ── Shell chrome: rail layout + theme ──────────────────────────────────
+  //
+  // Both are OPTIONAL and, crucially, ABSENT until the user actually changes
+  // something. A project that has never touched the Layout menu or the theme
+  // dropdown serializes exactly the key set it always did — see
+  // `UIStore.toPersistedUIState()`'s conditional half, and R3.
+  //
+  // `railLayouts` is keyed by DEVICE CLASS (`desktop` / `tablet` / `phone`)
+  // so one project carries one arrangement per kind of screen: a laptop and
+  // an iPad opening the same file each get the layout that suits them. The
+  // theme is deliberately NOT keyed that way — one theme per project, on
+  // every device (owner decision).
+  railLayouts?: { [deviceClass: string]: PersistedRailLayout };
+  theme?: string;
+}
+
+/**
+ * One device class's rail arrangement, as persisted.
+ *
+ * A structural mirror of `ui/layout/railLayout.ts`'s `RailLayout`, declared
+ * here in WIDE types (`string`, not the union) on purpose: this is the wire
+ * format, and a file on disk may legitimately carry a value this build does
+ * not know — a layout authored by a newer version, or a hand-edited file.
+ * The narrowing happens once, on hydrate, where an unknown value falls back
+ * to the default instead of poisoning the store with an impossible union
+ * member. `types/` must never assume the data matches the current build.
+ */
+export interface PersistedRailLayout {
+  left: { slot: string; scale: string };
+  right: { slot: string; scale: string };
+  bottom: { edge: string; scale: string };
 }
 
 export type Tool =

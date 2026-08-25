@@ -24,6 +24,28 @@
  * is written out by hand below and counted by
  * `persistedUIState.test.ts`.
  *
+ * ── ⚠️ THE FORMAT WAS EXTENDED — `railLayouts` + `theme` (2026-08-25) ─────
+ *
+ * The paragraph below says there is "no deliberate wire-format change
+ * anywhere in this plan". That was true of the REFRESH plan and remains the
+ * standard for it. **Two keys have since been added by owner request**, and
+ * the rule that made them safe is the one to preserve:
+ *
+ *     an added key MUST be conditionally emitted — absent until the user
+ *     changes the setting it carries.
+ *
+ * `railLayouts` (the rail arrangement, keyed by device class) and `theme`
+ * both obey it: a project that has never opened the Layout menu or the theme
+ * dropdown serializes the same 33/44 keys it always did, so all 151 corpus
+ * digests are byte-unchanged. A future field that is emitted unconditionally
+ * would rewrite every one of the owner's projects on its next save.
+ *
+ * `theme` also moved OUT of `localStorage`, where `themes.ts` had documented
+ * it as a device preference that must never join `uiState`. That comment
+ * described the decision in force at the time; the owner has since reversed
+ * it (one theme per project, on every device). `localStorage` now only seeds
+ * a project that has no theme yet.
+ *
  * ── `aiServiceUrl` STAYS — OWNER DECISION (2026-08-16), SETTLED ────────────
  *
  * An earlier draft proposed removing `uiState.aiServiceUrl` as the plan's one
@@ -89,6 +111,7 @@ import type { CompactUIState, Color } from "../../types";
 import { LightingUIStore } from "./LightingUIStore";
 import { ToolUIStore } from "./ToolUIStore";
 import { ViewportUIStore } from "./ViewportUIStore";
+import { LayoutUIStore } from "./LayoutUIStore";
 import type { SessionStore } from "../session/SessionStore";
 import type { ReferenceUIStore } from "./ReferenceUIStore";
 
@@ -191,11 +214,26 @@ export interface UIStoreDeps {
    * location for the field and the accessor above delegates to it.
    */
   reference?: ReferenceUIStore;
+  /**
+   * The rail-layout / theme store. Optional only so a test can inject a
+   * fixed device class instead of measuring the (jsdom) window; the app
+   * lets `UIStore` construct it.
+   */
+  layout?: LayoutUIStore;
 }
 
 export class UIStore {
   readonly tool: ToolUIStore;
   readonly viewport: ViewportUIStore;
+  /**
+   * The rail arrangement and the project theme (see `LayoutUIStore`).
+   *
+   * Always constructed — unlike `lighting` / `reference`, there is no
+   * pre-existing suite that supplies its own, so there is no fallback field
+   * and exactly one storage location from the start. Both of its fields are
+   * CONDITIONALLY persisted, so an untouched project's key set is unchanged.
+   */
+  readonly layout: LayoutUIStore;
   private readonly session: SessionStore;
   private readonly selection: UISelectionSource;
 
@@ -265,6 +303,7 @@ export class UIStore {
     this.viewport = deps.viewport ?? new ViewportUIStore();
     this.lightingUI = deps.lighting ?? null;
     this.referenceUI = deps.reference ?? null;
+    this.layout = deps.layout ?? new LayoutUIStore();
 
     makeObservable(this, {
       lighting: observableRef,
@@ -286,7 +325,7 @@ export class UIStore {
   }
 
   /**
-   * A structural projection of all 43 persisted fields. Deliberately built
+   * A structural projection of all 46 persisted fields. Deliberately built
    * from `toPersistedUIState()` itself, so a field added to the builder can
    * never be forgotten here — the two cannot drift apart.
    */
@@ -297,7 +336,7 @@ export class UIStore {
   /* ══════════════════════════════════════════════════════════════════════
    *  toPersistedUIState() — THE EXPLICIT FIELD-BY-FIELD BUILDER (R3)
    *
-   *  All 43 persisted fields, enumerated by hand, in the same order the
+   *  All 46 persisted fields, enumerated by hand, in the same order the
    *  `CompactUIState` interface declares them. NO SPREAD. Adding a field
    *  to `CompactUIState` without adding a line here is caught by
    *  `persistedUIState.test.ts`, which compares this builder's key set
@@ -441,6 +480,23 @@ export class UIStore {
       "aiServiceUrl",
       this.session.aiServiceUrl ?? undefined,
     );
+    // ── The rail layout and the theme (conditional, like the 13 above) ────
+    //
+    // ⚠️ THESE TWO ADD KEYS TO THE WIRE FORMAT, and that is a deliberate,
+    // owner-approved format EXTENSION — the first since R3 froze it. Both
+    // are safe for the 151 real snapshots for one reason, and it must not be
+    // weakened: **neither key is emitted until the user changes something.**
+    // `railLayouts` is `{}` and `theme` is `null` on an untouched project, so
+    // `toPersistedRailLayouts()` and the theme line both yield `undefined`
+    // and `assign` writes nothing. The corpus digests are unchanged BECAUSE
+    // of that, not by luck — making either unconditional would add two keys
+    // to every project the moment it is next saved.
+    /* 45 */ assign(
+      persisted,
+      "railLayouts",
+      this.layout.toPersistedRailLayouts(),
+    );
+    /* 46 */ assign(persisted, "theme", this.layout.theme ?? undefined);
 
     // See the TYPE-vs-REALITY note above: `borderRadius` is declared required
     // but is genuinely absent from most real projects.
@@ -455,6 +511,7 @@ export class UIStore {
   hydrate(ui: import("../../types").UIState): void {
     this.tool.hydrate(ui);
     this.viewport.hydrate(ui);
+    this.layout.hydrate(ui);
     // Task 29: routes through the accessor into `ReferenceUIStore` when one is
     // injected, so a loaded project hydrates the single owner.
     this.traceNudgeAmount = ui.traceNudgeAmount ?? 10;

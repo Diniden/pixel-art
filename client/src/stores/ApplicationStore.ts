@@ -35,6 +35,11 @@ import {
   AutoSaveController,
   type AutoSaveControllerOptions,
 } from "./session/AutoSaveController";
+import {
+  SyncController,
+  type SyncControllerOptions,
+} from "./session/SyncController";
+import { SyncClient, type ProjectSavedEvent } from "../api";
 import { DomainStore, type ProjectHost } from "./domain/DomainStore";
 import { DomainMutator, type DomainMirror } from "./domain/DomainMutator";
 import { UIStore } from "./ui/UIStore";
@@ -102,6 +107,15 @@ export interface ApplicationStoreOptions {
   api?: unknown;
   /** Tests set `false` so no save reaction is ever wired (task 16). */
   autoSaveEnabled?: boolean;
+  /**
+   * Cross-instance sync: reload this tab when ANOTHER tab saves.
+   *
+   * Defaults to `false` — a websocket is a side effect no test or Storybook
+   * story should acquire implicitly. `main.tsx` opts the real app in.
+   */
+  syncEnabled?: boolean;
+  /** Sync reload override for tests. */
+  sync?: SyncControllerOptions;
   /**
    * Tests shrink this to exercise history eviction (task 17). Applied to the
    * shared `editorHistory` instance — tests that set it must restore
@@ -188,6 +202,14 @@ export class ApplicationStore {
   readonly history: HistoryStore;
   /** `null` when `autoSaveEnabled: false` (the test default). */
   readonly autoSave: AutoSaveController | null;
+  /**
+   * Cross-instance sync (`null` unless `syncEnabled: true`).
+   *
+   * `syncController` decides what a peer's save does; `syncClient` owns the
+   * socket. Split so the decision is testable without a websocket.
+   */
+  readonly syncController: SyncController | null;
+  private readonly syncClient: SyncClient | null;
 
   /* ── task 23 ───────────────────────────────────────────────────────────── */
   /** Behaviour modules over `DomainStore`'s tree (see `DomainMutator`). */
@@ -745,6 +767,20 @@ export class ApplicationStore {
           this.ui,
         )
       : null;
+
+    // Cross-instance sync. Opt-in: constructing a websocket is a side effect
+    // that must never be acquired implicitly by a test or a Storybook story.
+    this.syncController = options.syncEnabled
+      ? new SyncController(this.domain, this.session, options.sync)
+      : null;
+    this.syncClient =
+      options.syncEnabled && this.syncController
+        ? new SyncClient({
+            onProjectSaved: (event: ProjectSavedEvent) =>
+              this.syncController?.handleProjectSaved(event),
+          })
+        : null;
+    this.syncClient?.connect();
   }
 
   /* ── task 38: the NATIVE project host ──────────────────────────────────── */
@@ -909,6 +945,10 @@ export class ApplicationStore {
       normalBrushShape: l.normalBrushShape,
       /* SessionStore */
       aiServiceUrl: this.session.aiServiceUrl ?? undefined,
+      /* LayoutUIStore — shell chrome. Both stay `undefined` until the user
+         changes them, which is what keeps them out of the wire format. */
+      railLayouts: this.ui.layout.toPersistedRailLayouts(),
+      theme: this.ui.layout.theme ?? undefined,
     };
   }
 
@@ -1602,6 +1642,7 @@ export class ApplicationStore {
 
   dispose(): void {
     this.autoSave?.dispose();
+    this.syncClient?.dispose();
     this.ui.dispose();
     this.referenceUI.dispose();
     // Task 38: hand the shared history singleton's snapshot slot back to

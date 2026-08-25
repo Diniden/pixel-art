@@ -1,5 +1,6 @@
 import type {
   BitDepth,
+  PersistedRailLayout,
   SelectionBehavior,
   SelectionMode,
   ShapeMode,
@@ -134,6 +135,12 @@ export interface CompactUIState {
 
   // AI frame interpolation service URL (remote machine)
   aiServiceUrl?: string;
+
+  // Shell chrome. Both are CONDITIONALLY present: absent until the user
+  // changes something, so an untouched project's key set is unchanged (R3).
+  // `railLayouts` is keyed by device class; `theme` is one per project.
+  railLayouts?: { [deviceClass: string]: PersistedRailLayout };
+  theme?: string;
 }
 
 export interface CompactProject {

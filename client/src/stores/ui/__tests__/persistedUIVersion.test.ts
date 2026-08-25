@@ -106,6 +106,14 @@ const PERSISTED_EDITS: [name: string, edit: (ui: UIStore) => void][] = [
       ui.traceNudgeAmount = 50;
     },
   ],
+  // The two 2026-08-25 additions. ⚠️ These matter more than most entries in
+  // this list: `AutoSaveController` observes ONLY `persistedUIVersion`, so a
+  // field that does not bump it is written to the store, shown on screen, and
+  // NEVER SAVED — the exact silent-data-loss shape W29d found and fixed. A
+  // rail the user moved that reverts on reload would look like a UI bug, not
+  // a persistence one.
+  ["railLayouts", (ui) => ui.layout.stepRail("left", 1)],
+  ["theme", (ui) => ui.layout.setTheme("light-cozy")],
   [
     "lighting block",
     (ui) => {
@@ -139,7 +147,8 @@ describe("persistedUIVersion — every persisted field bumps it", () => {
     // lighting block (9 fields moving together) = 31 entries, covering all 43
     // persisted fields. The 3 selection ids and `variantFrameIndices` are
     // owned by `SelectionMirror` until `TimelineUIStore` lands.
-    expect(PERSISTED_EDITS).toHaveLength(31);
+    // +2 (2026-08-25): `railLayouts` and `theme`.
+    expect(PERSISTED_EDITS).toHaveLength(33);
   });
 });
 
