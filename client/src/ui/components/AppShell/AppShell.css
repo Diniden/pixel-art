@@ -98,8 +98,21 @@
   z-index: var(--z-shell);
 }
 
-.app__panel-scroll {
+/* THE VIEWPORT — takes the rail's flex space, and never scrolls.
+
+   ⚠️ `min-height: 0` is required, not decorative. A flex item's default
+   `min-height: auto` refuses to shrink below its content, so without this
+   the viewport grows to its contents' full height and the SCROLLER inside it
+   is handed an unbounded box — there is then nothing to scroll against and
+   the rail simply overflows the rail. */
+.app__panel-viewport {
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* THE SCROLLER — the transform target, sized against the viewport. */
+.app__panel-scroll {
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--layout-pad);
@@ -225,7 +238,22 @@
   min-width: calc(var(--rail-base-width) * var(--rail-scale, 1));
 }
 
-/* (2) + (3) The visual scale, and the counter-size that keeps it in bounds. */
+/* (2) + (3) The visual scale, and the counter-size that keeps it in bounds.
+
+   ⚠️ THE SCROLLER IS SIZED AGAINST THE VIEWPORT, WHICH IS WHY THE VIEWPORT
+   HAS TO EXIST. Both percentages resolve against `.app__panel-viewport`, a
+   box with a DEFINITE height (it is a `flex: 1` child of the rail with
+   `min-height: 0`). Putting `flex: 1`, `overflow-y: auto` and this
+   counter-sized `height` on one element instead — as this file did until the
+   viewport was split out — resolves `height: 100% / factor` against an
+   indefinite height, so the scroll viewport is the wrong size and the rail's
+   scrollbar either never appears or stops short of the content. Measured: a
+   scaled rail could not be scrolled to its last control.
+
+   Sized BEFORE the transform and then scaled by the same factor, the
+   scroller lands at exactly the viewport's box: `100% / f * f == 100%`. So
+   the scrollable area is the rail's real height at every step, and the
+   scrollbar tracks the scaled content correctly. */
 .app__side-panel .app__panel-scroll {
   width: calc(100% / var(--rail-scale, 1));
   height: calc(100% / var(--rail-scale, 1));

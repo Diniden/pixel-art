@@ -168,7 +168,16 @@ export function AppShell({
             `app__side-panel--scale-${layout[rail].scale}`,
           )}
         >
-          <div className="app__panel-scroll">{content[rail]}</div>
+          {/* ⚠️ TWO elements, and the split is load-bearing (see the CSS).
+              The VIEWPORT takes the rail's flex space and does not scroll;
+              the SCROLLER inside it is what the transform scales. Merging
+              them back into one element puts `flex: 1`, `overflow: auto` and
+              a counter-sized `height` on the same box, and the scroll
+              viewport then resolves against an indefinite height — which is
+              what broke scrolling in a scaled rail. */}
+          <div className="app__panel-viewport">
+            <div className="app__panel-scroll">{content[rail]}</div>
+          </div>
           {railOverlays?.[rail]}
         </aside>
       ));
@@ -184,7 +193,7 @@ export function AppShell({
       {/* ⚠️ The scaled contents live in their OWN wrapper, so the transform
           does not also apply to the layout-mode scrim below — a scaled scrim
           would no longer cover the rail it is dimming. The side rails get
-          this for free: their scrim is a sibling of `app__panel-scroll`. */}
+          this for free: their scrim is a sibling of the panel viewport. */}
       <div className="app__bottom-scale">{bottomPanel}</div>
       {railOverlays?.bottom}
     </footer>

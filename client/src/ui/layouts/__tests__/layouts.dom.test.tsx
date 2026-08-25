@@ -329,6 +329,35 @@ describe("AppShell — the rails are placed by the layout, not by their names", 
     );
   });
 
+  it("⭐ separates the scroll VIEWPORT from the scaled SCROLLER", () => {
+    // The structure the scaled rails' scrolling depends on, and the one a
+    // tidying refactor is most likely to undo by merging the two divs.
+    //
+    // The viewport takes the rail's flex space and does not scroll; the
+    // scroller inside it is the transform target and is counter-sized
+    // against the viewport's DEFINITE height. Collapsed into one element,
+    // `flex: 1` + `overflow-y: auto` + a percentage height resolve against
+    // an indefinite height and the rail cannot be scrolled to its last
+    // control — measured in the browser before the split.
+    const { container } = render(
+      <AppShell {...base} layout={scaleRail(DEFAULT_RAIL_LAYOUT, "left", 1)} />,
+    );
+
+    for (const rail of ["left", "right"]) {
+      const viewport = container.querySelector(
+        `.app__side-panel--${rail} > .app__panel-viewport`,
+      );
+      expect(viewport).not.toBeNull();
+      // The scroller is a CHILD of the viewport, never a sibling.
+      expect(viewport!.querySelector(".app__panel-scroll")).not.toBeNull();
+      expect(
+        container.querySelector(
+          `.app__side-panel--${rail} > .app__panel-scroll`,
+        ),
+      ).toBeNull();
+    }
+  });
+
   it("renders one overlay per rail, INSIDE the rail it controls", () => {
     const { container } = render(
       <AppShell
