@@ -272,6 +272,17 @@
   --rail-scale-large: 1.25;
   --rail-scale-huge: 1.5;
 
+  /* ⚠️ The BOTTOM rail's compact step goes further down than the side rails'
+     (owner, 2026-08-25). It is a per-rail override rather than a change to
+     `--rail-scale-compact`, because the two cases are not the same problem:
+     a side rail's compact step also narrows its column, so 0.8 is already as
+     small as its controls can usefully get. The timeline is the full width of
+     the screen and is the thing most often shrunk to get it out of the way,
+     so its smallest step wants to be genuinely small. Only the FIRST step is
+     overridden — the other three stay shared, so the two kinds of rail still
+     agree about what "regular" and "huge" mean. */
+  --rail-scale-bottom-compact: 0.55;
+
   /* The base geometry a scale factor multiplies. The historical values. */
   --rail-base-width: 320px;
   --rail-base-max-height: 50vh;

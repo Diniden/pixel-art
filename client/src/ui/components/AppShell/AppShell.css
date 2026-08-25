@@ -212,9 +212,17 @@
    story, and any untouched project — takes the identity transform and is
    pixel-identical to the historical rendering. */
 
-.app__side-panel--scale-compact,
-.app__bottom--scale-compact {
+.app__side-panel--scale-compact {
   --rail-scale: var(--rail-scale-compact);
+}
+
+/* ⚠️ The bottom rail's SMALLEST step is smaller than a side rail's, and only
+   that step differs — the other three factors stay shared. A side rail's
+   compact step also narrows its column, so it is already as small as its
+   controls can usefully be; the timeline spans the screen and is the rail
+   most often shrunk to get it out of the way. See the token's own note. */
+.app__bottom--scale-compact {
+  --rail-scale: var(--rail-scale-bottom-compact);
 }
 
 .app__side-panel--scale-regular,
