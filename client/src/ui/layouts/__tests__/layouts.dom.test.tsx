@@ -280,6 +280,35 @@ describe("AppShell — the rails are placed by the layout, not by their names", 
     );
   });
 
+  it("⭐ scaling is a TRANSFORM on the contents, not a width change", () => {
+    // The distinction the owner asked for: a step must zoom what is INSIDE
+    // the rail, so the type and the hit targets actually change size. A
+    // width-only step would leave them exactly as small as they were.
+    //
+    // jsdom applies no stylesheet, so the class is all the DOM can show —
+    // the assertion that the class MEANS a transform lives in the CSS and is
+    // verified in the running app. What is pinned here is the structural
+    // half a stylesheet cannot fix if it is wrong: the transform target must
+    // be the scroll container (which holds the rail's contents) and NOT the
+    // rail itself, because the rail also hosts the layout-mode scrim — and a
+    // scaled scrim would stop covering the rail it is dimming.
+    const layout = scaleRail(DEFAULT_RAIL_LAYOUT, "left", 1);
+    const { container } = render(<AppShell {...base} layout={layout} />);
+
+    const rail = container.querySelector(".app__side-panel--left")!;
+    // The factor is carried on the rail, where the scrim is a SIBLING of the
+    // scaled container rather than a descendant of it.
+    expect(rail.className).toContain("app__side-panel--scale-large");
+    expect(rail.querySelector(".app__panel-scroll")).not.toBeNull();
+
+    // The bottom rail needs an explicit wrapper for the same reason: its
+    // scrim is a direct child of the footer.
+    const { container: flipped } = render(<AppShell {...base} />);
+    const scaled = flipped.querySelector(".app__bottom .app__bottom-scale");
+    expect(scaled).not.toBeNull();
+    expect(scaled!.textContent).toContain("timeline");
+  });
+
   it("⭐ the bottom rail flips ABOVE the main row, not just restyled", () => {
     const layout = flipBottomEdge(DEFAULT_RAIL_LAYOUT);
     const { container } = render(<AppShell {...base} layout={layout} />);

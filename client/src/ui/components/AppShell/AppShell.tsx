@@ -51,10 +51,12 @@
  * needs no special case here: one side's array simply has two entries and the
  * other's has none.
  *
- * A rail's WIDTH comes from a single custom property per rail
- * (`--rail-width-left` / `--rail-width-right` / `--rail-height-bottom`) set
- * from the scale step, so the four size settings need no per-combination
- * class. `AppShell.css` holds the mapping.
+ * A rail's SIZE is a zoom, not a width: the scale step becomes a
+ * `transform: scale()` on that rail's scroll container, so the controls
+ * inside actually grow rather than merely reflowing into more space. The
+ * rail's footprint is derived from the same factor so the scaled contents
+ * stay inside their own column. `AppShell.css` holds all of that — the
+ * shell's only job here is to put the step on the element as a class.
  *
  * ── Focus mode is STILL expressed by ABSENCE, not by a flag ───────────────
  *
@@ -148,7 +150,7 @@ export function AppShell({
   const renderSide = (side: "left" | "right") =>
     railsOnSide(layout, side)
       // A rail with no content is focus mode: render nothing, not an empty
-      // 320px column.
+      // column.
       .filter((rail) => content[rail] != null)
       .map((rail) => (
         <aside
@@ -179,7 +181,11 @@ export function AppShell({
         `app__bottom--scale-${layout.bottom.scale}`,
       )}
     >
-      {bottomPanel}
+      {/* ⚠️ The scaled contents live in their OWN wrapper, so the transform
+          does not also apply to the layout-mode scrim below — a scaled scrim
+          would no longer cover the rail it is dimming. The side rails get
+          this for free: their scrim is a sibling of `app__panel-scroll`. */}
+      <div className="app__bottom-scale">{bottomPanel}</div>
       {railOverlays?.bottom}
     </footer>
   ) : null;

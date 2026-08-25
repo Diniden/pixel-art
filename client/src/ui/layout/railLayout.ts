@@ -15,7 +15,8 @@
  *
  *   - **placement** — which side, and in what order relative to the other
  *     side rail;
- *   - **scale** — one of four size steps.
+ *   - **scale** — one of four zoom steps, applied to the rail's contents as
+ *     a CSS transform (not as a width; see `RAIL_SCALES`).
  *
  * ── The five slots ────────────────────────────────────────────────────────
  *
@@ -72,9 +73,17 @@ export function slotSide(slot: SideSlot): "left" | "right" {
 export type BottomEdge = "bottom" | "top";
 
 /**
- * The four size steps, smallest to largest. `"regular"` is the historical
- * 320px side rail — every project that has never touched the layout renders
- * byte-identically to how it always has.
+ * The four zoom steps, smallest to largest.
+ *
+ * ⚠️ A step SCALES THE RAIL'S CONTENTS — `transform: scale()` on the scroll
+ * container, so every control, label and icon inside grows together. It is
+ * deliberately not a width change: giving a rail more room only lets the same
+ * small type reflow into the space, leaving it exactly as hard to read.
+ * `AppShell.css` carries the transform and the footprint maths that keeps a
+ * scaled rail inside its own column.
+ *
+ * `"regular"` is the identity transform, so every project that has never
+ * touched the layout renders byte-identically to how it always has.
  */
 export const RAIL_SCALES = ["compact", "regular", "large", "huge"] as const;
 export type RailScale = (typeof RAIL_SCALES)[number];
@@ -86,7 +95,7 @@ export interface RailLayout {
   bottom: { edge: BottomEdge; scale: RailScale };
 }
 
-/** The historical arrangement: rails where they have always been, at 320px. */
+/** The historical arrangement: rails where they have always been, unscaled. */
 export const DEFAULT_RAIL_LAYOUT: RailLayout = {
   left: { slot: "leftOuter", scale: "regular" },
   right: { slot: "rightOuter", scale: "regular" },

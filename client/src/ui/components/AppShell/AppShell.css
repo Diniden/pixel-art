@@ -85,9 +85,14 @@
   position: relative;
   background: var(--bg-secondary);
   border-color: var(--border-primary);
-  transition:
-    width var(--transition-normal),
-    min-width var(--transition-normal);
+  /* ⚠️ The width transition also animates `--rail-scale`'s effect on the
+     footprint, while the CONTENTS re-scale instantly — so during the
+     animation the rail is briefly the wrong size for what is inside it, and
+     the layout-mode scrim (which is sized to the rail) lags with it. Both
+     halves of a scale step have to land together, so the footprint is not
+     animated. Measured: with the transition in place the rail reported the
+     PREVIOUS step's width for the whole animation. */
+  transition: none;
   display: flex;
   flex-direction: column;
   z-index: var(--z-shell);
@@ -126,9 +131,9 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* Superseded by the `--scale-*` modifiers, and kept as the fallback for a
-     shell rendered without a layout (every story, and the historical value). */
-  max-height: var(--rail-h-regular);
+  /* The cap follows the factor, so a scaled-up timeline is allowed the extra
+     room it needs instead of being cropped at the historical 50vh. */
+  max-height: calc(var(--rail-base-max-height) * var(--rail-scale, 1));
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -165,48 +170,94 @@
   border-left: 1px solid var(--border-primary);
 }
 
-/* Width comes from ONE variable per rail, set by the scale modifier. Four
-   steps × two rails would otherwise be eight width rules. `regular` is the
-   historical 320px, so an untouched project is pixel-identical. */
-.app__side-panel--scale-compact {
-  --rail-width: var(--rail-w-compact);
-}
+/* ══════════════════════════════════════════════════════════════════════════
+   RAIL SCALING — A TRANSFORM, NOT A WIDTH (2026-08-25)
+   ══════════════════════════════════════════════════════════════════════════
 
-.app__side-panel--scale-regular {
-  --rail-width: var(--rail-w-regular);
-}
+   A scale step zooms the rail's CONTENTS: `transform: scale()` on the scroll
+   container, so every control, label and icon inside grows together. Widening
+   the rail instead would only let the same small type reflow into more space,
+   which is not what "scale the rail" means.
 
-.app__side-panel--scale-large {
-  --rail-width: var(--rail-w-large);
-}
+   ⚠️ TRANSFORMS DO NOT AFFECT LAYOUT, and that is the whole difficulty here.
+   A scaled-up rail paints outside its own column — over the canvas — unless
+   its FOOTPRINT is made to follow the factor. Three rules cooperate, and
+   removing any one of them breaks the other two:
 
-.app__side-panel--scale-huge {
-  --rail-width: var(--rail-w-huge);
-}
+     1. the rail's `width` is the base multiplied by the factor, so the column
+        reserves exactly the space the scaled contents occupy;
+     2. the scroll container is `transform-origin: top left`, so the scaled
+        box grows right-and-down from the rail's own corner rather than
+        outward from its centre (which would clip symmetrically at both edges);
+     3. the container is counter-sized to `100% / factor` BEFORE the transform,
+        so after scaling it lands back at exactly 100% of the rail. Without
+        this the contents are laid out at the rail's full width and THEN
+        magnified, so a scaled rail would show a horizontal scrollbar and clip
+        its right edge at every step above 1.
 
-.app__side-panel--open {
-  width: var(--rail-width, var(--rail-w-regular));
-  min-width: var(--rail-width, var(--rail-w-regular));
-}
+   `--rail-scale` defaults to 1, so a shell rendered with no layout — every
+   story, and any untouched project — takes the identity transform and is
+   pixel-identical to the historical rendering. */
 
-/* The bottom rail's height follows the same one-variable pattern. The
-   historical rule was `max-height: 50vh` with the content sizing the
-   element, so the scale steps drive max-height and NOT height — a short
-   timeline must still be short. */
+.app__side-panel--scale-compact,
 .app__bottom--scale-compact {
-  max-height: var(--rail-h-compact);
+  --rail-scale: var(--rail-scale-compact);
 }
 
+.app__side-panel--scale-regular,
 .app__bottom--scale-regular {
-  max-height: var(--rail-h-regular);
+  --rail-scale: var(--rail-scale-regular);
 }
 
+.app__side-panel--scale-large,
 .app__bottom--scale-large {
-  max-height: var(--rail-h-large);
+  --rail-scale: var(--rail-scale-large);
 }
 
+.app__side-panel--scale-huge,
 .app__bottom--scale-huge {
-  max-height: var(--rail-h-huge);
+  --rail-scale: var(--rail-scale-huge);
+}
+
+/* (1) The footprint follows the factor. */
+.app__side-panel--open {
+  width: calc(var(--rail-base-width) * var(--rail-scale, 1));
+  min-width: calc(var(--rail-base-width) * var(--rail-scale, 1));
+}
+
+/* (2) + (3) The visual scale, and the counter-size that keeps it in bounds. */
+.app__side-panel .app__panel-scroll {
+  width: calc(100% / var(--rail-scale, 1));
+  height: calc(100% / var(--rail-scale, 1));
+  transform: scale(var(--rail-scale, 1));
+  transform-origin: top left;
+}
+
+/* The bottom rail scales the same way, but its geometry is the MIRROR IMAGE
+   of a side rail's, and the difference is easy to get wrong.
+
+   A side rail has an explicit width and a content-driven height, so
+   multiplying the width by the factor is enough. The bottom rail is the
+   other way round: its width is the viewport and its HEIGHT comes from its
+   contents. Because a transform contributes nothing to layout, the footer
+   keeps the height its UNSCALED contents asked for — measured before this
+   rule: 327px of scaled timeline inside a 263px footer, which clipped the
+   timeline and left the layout-mode scrim too short to cover its own rail.
+
+   ⚠️ `zoom` is used HERE and `transform` on the side rails, and that is a
+   deliberate split rather than an inconsistency. `zoom` is the one scaling
+   primitive that DOES affect layout: the footer's height is recomputed from
+   the zoomed contents, so the rail grows to fit and the scrim stays exactly
+   as tall as the rail. That is precisely the feedback the bottom rail needs
+   and the side rails must not have — a side rail's width is fixed by its
+   slot, so letting its contents push that width around would shove the
+   canvas about on every scale step.
+
+   `zoom` is supported across current Chrome, Safari and Firefox (128+), and
+   the fallback when it is not is simply an unscaled rail — never a broken
+   layout. */
+.app__bottom-scale {
+  zoom: var(--rail-scale, 1);
 }
 
 /* Flipped to the top, the rail's divider moves to its bottom edge. */
@@ -223,12 +274,14 @@
    edge it is actually on — keying off identity would send it back to the one
    it started at. */
 @media (max-width: 1024px) {
-  /* The narrow-screen cap REPLACES the scale steps rather than competing
-     with them: below 1024px there is not room for a 560px rail whatever the
-     project asked for, so the four settings collapse to one width. */
+  /* ⚠️ The narrow-screen cap shrinks the BASE, never the factor. Setting a
+     flat `width` here would fight the transform rather than cap it: the
+     contents would still be scaled by `--rail-scale` while the column was
+     pinned to a fixed width, so a scaled-up rail would clip its right edge.
+     Re-pointing the base keeps the two in step — the rail is narrower, and
+     the user's chosen scale still means what it says. */
   .app__side-panel--open {
-    width: 280px;
-    min-width: 280px;
+    --rail-base-width: 280px;
   }
 }
 
