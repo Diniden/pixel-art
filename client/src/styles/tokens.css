@@ -251,6 +251,20 @@
   --panel-header-pad: var(--space-3) var(--space-4);
   --panel-body-pad: var(--space-3);
 
+  /* Rail size steps (Layout menu, 2026-08-25). Four settings per rail; the
+     shell reads ONE variable per rail (--rail-width-left / -right /
+     --rail-height-bottom) which AppShell's --rail-scale-* modifiers point at
+     one of these. `regular` is the historical 320px / 50vh, so a project
+     that has never opened the Layout menu renders exactly as it always did. */
+  --rail-w-compact: 220px;
+  --rail-w-regular: 320px;
+  --rail-w-large: 440px;
+  --rail-w-huge: 560px;
+  --rail-h-compact: 25vh;
+  --rail-h-regular: 50vh;
+  --rail-h-large: 65vh;
+  --rail-h-huge: 80vh;
+
   /* Section title-header background. Transparent in the dark themes;
      the shared light block tints it so titled sections read as bands. */
   --section-header-bg: transparent;

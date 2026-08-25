@@ -1,0 +1,110 @@
+/* block: rail-overlay (Layout menu, 2026-08-25).
+
+   The scrim fills its RAIL, not the viewport: it is `position: absolute`
+   inside a rail that is already `position: relative`, so it tracks the rail
+   through every slot change and scale step with no measurement. See the
+   component header.
+
+   z-index sits at --z-chrome ("shell affordances"), one step above
+   --z-shell, so it covers the rail's own contents — which is the point —
+   while staying below dropdowns, floating panels and modals. */
+
+.rail-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-chrome);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  background: var(--overlay-70);
+  backdrop-filter: blur(2px);
+  animation: rail-overlay-fade-in var(--transition-fast) ease;
+}
+
+@keyframes rail-overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.rail-overlay__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  /* A narrow rail must not force the panel to overflow its scrim. */
+  max-width: 100%;
+}
+
+/* The bottom rail is short and wide: its controls read better in one row. */
+.rail-overlay--horizontal .rail-overlay__panel {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.rail-overlay__label {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.rail-overlay__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rail-overlay__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 36px;
+  height: 36px;
+  padding: 0 var(--space-2);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.rail-overlay__btn--wide {
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+/* `:disabled` FIRST — stylelint's no-descending-specificity wants the lower
+   specificity selector ahead of `:hover:not(:disabled)`. */
+.rail-overlay__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.rail-overlay__btn:hover:not(:disabled) {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.rail-overlay__scale {
+  min-width: 40px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}

@@ -81,6 +81,7 @@
 
 /* Side Panels */
 .app__side-panel {
+  /* Also the containing block for this rail's layout-mode overlay. */
   position: relative;
   background: var(--bg-secondary);
   border-color: var(--border-primary);
@@ -115,41 +116,117 @@
 /* Bottom Panel */
 .app__bottom {
   flex: 0 0 auto;
+  /* ⚠️ The containing block for this rail's layout-mode overlay, which is
+     `position: absolute; inset: 0`. Without it the scrim would resolve
+     against the viewport and cover the whole app. */
+  position: relative;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-primary);
   z-index: var(--z-shell);
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: 50vh;
+  /* Superseded by the `--scale-*` modifiers, and kept as the fallback for a
+     shell rendered without a layout (every story, and the historical value). */
+  max-height: var(--rail-h-regular);
   overflow-y: auto;
   overflow-x: hidden;
 }
 
 /* modifiers */
 
-.app__side-panel--left {
+/* The two IDENTITY modifiers. They carry no visual rule of their own — a
+   rail's appearance follows its PLACEMENT (`--at-*`, below) — and exist so
+   that "the Objects & Layers rail" stays addressable wherever it has been
+   moved to. `layouts.dom.test.tsx` resolves both rails by these names, so
+   they are live selectors and not decoration; declaring them here is what
+   keeps `check-classes.mjs --missing` honest about that. */
+.app__side-panel--left,
+.app__side-panel--right {
+  /* Intentionally empty: identity only. See the note above. */
+  position: relative;
+}
+
+/* ⚠️ PLACEMENT IS `--at-*`, IDENTITY IS `--left` / `--right` (2026-08-25).
+
+   `app__side-panel--left` names the rail that CARRIES Objects + Layers, and
+   it keeps that class wherever the user moves it — anything keyed to "the
+   left panel" therefore keeps meaning the same rail. Which SIDE a rail is
+   drawn on is `--at-left` / `--at-right`, and that is what the border must
+   follow: a rail sitting on the right needs its border on its left edge,
+   whichever rail it is. Styling the divider off the identity class instead
+   would leave a stray border down the middle of the canvas the moment a rail
+   moved. */
+.app__side-panel--at-left {
   border-right: 1px solid var(--border-primary);
 }
 
-.app__side-panel--left.app__side-panel--open {
-  width: 320px;
-  min-width: 320px;
-}
-
-.app__side-panel--right {
+.app__side-panel--at-right {
   border-left: 1px solid var(--border-primary);
 }
 
-.app__side-panel--right.app__side-panel--open {
-  width: 320px;
-  min-width: 320px;
+/* Width comes from ONE variable per rail, set by the scale modifier. Four
+   steps × two rails would otherwise be eight width rules. `regular` is the
+   historical 320px, so an untouched project is pixel-identical. */
+.app__side-panel--scale-compact {
+  --rail-width: var(--rail-w-compact);
 }
 
-/* Responsive Design */
+.app__side-panel--scale-regular {
+  --rail-width: var(--rail-w-regular);
+}
+
+.app__side-panel--scale-large {
+  --rail-width: var(--rail-w-large);
+}
+
+.app__side-panel--scale-huge {
+  --rail-width: var(--rail-w-huge);
+}
+
+.app__side-panel--open {
+  width: var(--rail-width, var(--rail-w-regular));
+  min-width: var(--rail-width, var(--rail-w-regular));
+}
+
+/* The bottom rail's height follows the same one-variable pattern. The
+   historical rule was `max-height: 50vh` with the content sizing the
+   element, so the scale steps drive max-height and NOT height — a short
+   timeline must still be short. */
+.app__bottom--scale-compact {
+  max-height: var(--rail-h-compact);
+}
+
+.app__bottom--scale-regular {
+  max-height: var(--rail-h-regular);
+}
+
+.app__bottom--scale-large {
+  max-height: var(--rail-h-large);
+}
+
+.app__bottom--scale-huge {
+  max-height: var(--rail-h-huge);
+}
+
+/* Flipped to the top, the rail's divider moves to its bottom edge. */
+.app__bottom--at-top {
+  border-top: none;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+/* Responsive Design.
+
+   ⚠️ Every rule below keys off PLACEMENT (`--at-left` / `--at-right`), never
+   identity (`--left` / `--right`). At these widths the rails are pinned to a
+   screen edge, and a rail the user moved to the other side must pin to the
+   edge it is actually on — keying off identity would send it back to the one
+   it started at. */
 @media (max-width: 1024px) {
-  .app__side-panel--left.app__side-panel--open,
-  .app__side-panel--right.app__side-panel--open {
+  /* The narrow-screen cap REPLACES the scale steps rather than competing
+     with them: below 1024px there is not room for a 560px rail whatever the
+     project asked for, so the four settings collapse to one width. */
+  .app__side-panel--open {
     width: 280px;
     min-width: 280px;
   }
@@ -167,23 +244,17 @@
     transition: transform var(--transition-normal);
   }
 
-  .app__side-panel--left {
+  .app__side-panel--at-left {
     left: 0;
     border-right: 1px solid var(--border-primary);
   }
 
-  .app__side-panel--left.app__side-panel--open {
-    width: 320px;
-    transform: translateX(0);
-  }
-
-  .app__side-panel--right {
+  .app__side-panel--at-right {
     right: 0;
     border-left: 1px solid var(--border-primary);
   }
 
-  .app__side-panel--right.app__side-panel--open {
-    width: 320px;
+  .app__side-panel--open {
     transform: translateX(0);
   }
 

@@ -45,6 +45,7 @@
  */
 import type { ReactNode, RefObject } from "react";
 import { AppShell } from "../../components/AppShell/AppShell";
+import type { AppShellProps } from "../../components/AppShell/AppShell";
 
 export interface LightingStudioLayoutProps {
   header: ReactNode;
@@ -58,6 +59,14 @@ export interface LightingStudioLayoutProps {
   /** The floating lit-composite thumbnail. See the header note — story-only. */
   previewPanel?: ReactNode;
 
+  /**
+   * Rail placement + sizes, and the layout-mode scrims. Both are passed
+   * straight through to `AppShell`, which owns the arrangement — the layout
+   * neither reads nor branches on them. Omitted, the shell renders the
+   * historical arrangement.
+   */
+  layout?: AppShellProps["layout"];
+  railOverlays?: AppShellProps["railOverlays"];
   /** `App.tsx:229` — hides the left sidebar AND the bottom timeline. */
   focusMode: boolean;
   canvasAreaRef?: RefObject<HTMLElement | null>;
@@ -73,11 +82,15 @@ export function LightingStudioLayout({
   timeline,
   canvas,
   previewPanel,
+  layout,
+  railOverlays,
   focusMode,
   canvasAreaRef,
 }: LightingStudioLayoutProps) {
   return (
     <AppShell
+      layout={layout}
+      railOverlays={railOverlays}
       header={header}
       toolbar={toolbar}
       canvasAreaRef={canvasAreaRef}

@@ -20,15 +20,49 @@
  * ══════════════════════════════════════════════════════════════════════════
  *
  * W24's `CanvasSurface`, W25's `LightingSurface` and W26's `ZoomControls` each
- * import ONLY React types and their own CSS. This file matches that bar
- * exactly: one `import type` from React, one CSS import, nothing else. No
- * store, no API, no MobX, no `useContext`, no hook of any kind — not even for
- * types.
+ * import ONLY React types and their own CSS. This file matches that bar: React
+ * types, its own CSS, and two SIBLING `ui/` modules — `railLayout` (pure data
+ * and pure functions) and `classNames`. No store, no API, no MobX, no
+ * `useContext`, no hook of any kind — not even for types.
  *
  * That is what makes "the layout stories need no provider" a STRUCTURAL
  * guarantee rather than an assertion someone has to re-check. There is no
  * import through which a store could arrive, so there is no code path by which
  * a story could need one.
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  🏁 THE RAILS ARE PLACED BY DATA, NOT BY THEIR NAMES (2026-08-25)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * `leftPanel` and `rightPanel` are named for the CONTENT they carry — Objects
+ * + Layers, and the tool/studio controls — not for where they end up. The
+ * `layout` prop decides placement, and after the user has re-arranged things
+ * the `leftPanel` may legitimately render as the right-most column. Reading
+ * the prop names as positions is the one mistake to avoid in this file.
+ *
+ * The shell renders the horizontal track in SCREEN order:
+ *
+ *      [rails on the left]  CANVAS  [rails on the right]
+ *
+ * `railsOnSide()` returns each half already sorted by slot index, so the JSX
+ * below has no ordering logic of its own and no way to disagree with the
+ * model. Both rails on one side is a legal, reachable arrangement — that is
+ * exactly what "click the left rail's right-arrow once" produces — and it
+ * needs no special case here: one side's array simply has two entries and the
+ * other's has none.
+ *
+ * A rail's WIDTH comes from a single custom property per rail
+ * (`--rail-width-left` / `--rail-width-right` / `--rail-height-bottom`) set
+ * from the scale step, so the four size settings need no per-combination
+ * class. `AppShell.css` holds the mapping.
+ *
+ * ── Focus mode is STILL expressed by ABSENCE, not by a flag ───────────────
+ *
+ * `leftPanel` and `bottomPanel` are optional. Focus mode is the caller passing
+ * neither. `AppShell` therefore has no `focusMode` prop and no idea the concept
+ * exists. A rail that is not rendered gets no overlay either, which is why
+ * layout mode simply shows fewer controls in focus mode rather than needing to
+ * know about it.
  *
  * ══════════════════════════════════════════════════════════════════════════
  *  ⚠️ `canvas-area` IS A RUNTIME DOM HOOK — BOTH CLASSES ARE REQUIRED
@@ -47,15 +81,17 @@
  * transcribed from `App.tsx:232-292` character-for-character on the class
  * attributes, including the `--open` modifier that is applied unconditionally
  * (the legacy markup hard-coded it; a collapsed-sidebar state was never wired).
- *
- * ── Focus mode is expressed by ABSENCE, not by a flag ──────────────────────
- *
- * `leftPanel` and `bottomPanel` are optional. Focus mode is the caller passing
- * neither. `AppShell` therefore has no `focusMode` prop and no idea the concept
- * exists — which is why it needs no branch to test and no story of its own for
- * the state. The layouts own the flag; the shell owns the markup.
+ * The 2026-08-25 layout work ADDED modifiers (`--slot-*`, `--scale-*`) and
+ * renamed nothing.
  */
 import type { ReactNode, RefObject } from "react";
+import {
+  DEFAULT_RAIL_LAYOUT,
+  railsOnSide,
+  type RailLayout,
+  type SideRailName,
+} from "../../layout/railLayout";
+import { classNames } from "../../classNames";
 import "./AppShell.css";
 
 export interface AppShellProps {
@@ -68,6 +104,18 @@ export interface AppShellProps {
   bottomPanel?: ReactNode;
   /** The centre region: canvas + its floating panels + info strip. */
   children: ReactNode;
+  /**
+   * Where each rail sits and how big it is. Omitted, the shell renders the
+   * historical arrangement — which is what every story and every project
+   * that has never opened the Layout menu gets.
+   */
+  layout?: RailLayout;
+  /**
+   * The layout-mode scrim for one rail, by rail NAME (not by position).
+   * Rendered inside that rail so it tracks the rail automatically. Absent
+   * entries render nothing, which is how layout mode stays off.
+   */
+  railOverlays?: Partial<Record<"left" | "right" | "bottom", ReactNode>>;
   /**
    * Ref for the canvas area — `FloatingPanel` needs it as its drag bounds.
    *
@@ -87,19 +135,66 @@ export function AppShell({
   rightPanel,
   bottomPanel,
   children,
+  layout = DEFAULT_RAIL_LAYOUT,
+  railOverlays,
   canvasAreaRef,
 }: AppShellProps) {
+  /** The content each rail NAME carries. A missing entry is focus mode. */
+  const content: Record<SideRailName, ReactNode> = {
+    left: leftPanel,
+    right: rightPanel,
+  };
+
+  const renderSide = (side: "left" | "right") =>
+    railsOnSide(layout, side)
+      // A rail with no content is focus mode: render nothing, not an empty
+      // 320px column.
+      .filter((rail) => content[rail] != null)
+      .map((rail) => (
+        <aside
+          key={rail}
+          className={classNames(
+            "app__side-panel",
+            // ⚠️ Identity, not position: this modifier names WHICH rail
+            // this is, so a selector or a test written against the
+            // Objects-and-Layers rail keeps matching it wherever the user
+            // has moved it to. Placement is the separate `--at-*` modifier
+            // below, and that is what carries the borders and the pinning.
+            `app__side-panel--${rail}`,
+            "app__side-panel--open",
+            `app__side-panel--at-${side}`,
+            `app__side-panel--scale-${layout[rail].scale}`,
+          )}
+        >
+          <div className="app__panel-scroll">{content[rail]}</div>
+          {railOverlays?.[rail]}
+        </aside>
+      ));
+
+  const bottom = bottomPanel ? (
+    <footer
+      className={classNames(
+        "app__bottom",
+        `app__bottom--at-${layout.bottom.edge}`,
+        `app__bottom--scale-${layout.bottom.scale}`,
+      )}
+    >
+      {bottomPanel}
+      {railOverlays?.bottom}
+    </footer>
+  ) : null;
+
   return (
     <div className="app">
       {header}
 
+      {/* The bottom rail flipped to the top sits directly under the header
+          and above the main row — the same element, a different position in
+          the flex column. */}
+      {layout.bottom.edge === "top" ? bottom : null}
+
       <div className="app__main">
-        {/* Left Panel - Objects & Layers. Absent in focus mode. */}
-        {leftPanel ? (
-          <aside className="app__side-panel app__side-panel--left app__side-panel--open">
-            <div className="app__panel-scroll">{leftPanel}</div>
-          </aside>
-        ) : null}
+        {renderSide("left")}
 
         {/* Center - Canvas & Toolbar. ⚠️ `canvas-area` is a query hook. */}
         <main ref={canvasAreaRef} className="app__canvas-area canvas-area">
@@ -107,16 +202,10 @@ export function AppShell({
           {children}
         </main>
 
-        {/* Right Panel - always present, in both studios. */}
-        <aside className="app__side-panel app__side-panel--right app__side-panel--open">
-          <div className="app__panel-scroll">{rightPanel}</div>
-        </aside>
+        {renderSide("right")}
       </div>
 
-      {/* Bottom Panel - Frame Timeline. Absent in focus mode. */}
-      {bottomPanel ? (
-        <footer className="app__bottom">{bottomPanel}</footer>
-      ) : null}
+      {layout.bottom.edge === "bottom" ? bottom : null}
     </div>
   );
 }

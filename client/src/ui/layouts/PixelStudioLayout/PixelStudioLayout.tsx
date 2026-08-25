@@ -50,6 +50,7 @@
  */
 import type { ReactNode, RefObject } from "react";
 import { AppShell } from "../../components/AppShell/AppShell";
+import type { AppShellProps } from "../../components/AppShell/AppShell";
 
 export interface PixelStudioLayoutProps {
   header: ReactNode;
@@ -65,6 +66,14 @@ export interface PixelStudioLayoutProps {
   frameReferencePanel?: ReactNode;
   referenceImagePanel?: ReactNode;
 
+  /**
+   * Rail placement + sizes, and the layout-mode scrims. Both are passed
+   * straight through to `AppShell`, which owns the arrangement — the layout
+   * neither reads nor branches on them. Omitted, the shell renders the
+   * historical arrangement.
+   */
+  layout?: AppShellProps["layout"];
+  railOverlays?: AppShellProps["railOverlays"];
   /** `App.tsx:229` — hides the left sidebar AND the bottom timeline. */
   focusMode: boolean;
   /**
@@ -99,12 +108,16 @@ export function PixelStudioLayout({
   layerColors,
   frameReferencePanel,
   referenceImagePanel,
+  layout,
+  railOverlays,
   focusMode,
   frameReferencePanelVisible,
   canvasAreaRef,
 }: PixelStudioLayoutProps) {
   return (
     <AppShell
+      layout={layout}
+      railOverlays={railOverlays}
       header={header}
       toolbar={toolbar}
       canvasAreaRef={canvasAreaRef}

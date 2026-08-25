@@ -33,6 +33,13 @@ import * as pixelStories from "../PixelStudioLayout/PixelStudioLayout.stories";
 import * as lightingStories from "../LightingStudioLayout/LightingStudioLayout.stories";
 import * as loadingStories from "../LoadingLayout/LoadingLayout.stories";
 import * as shellStories from "../../components/AppShell/AppShell.stories";
+import { AppShell } from "../../components/AppShell/AppShell";
+import {
+  DEFAULT_RAIL_LAYOUT,
+  flipBottomEdge,
+  scaleRail,
+  stepRail,
+} from "../../layout/railLayout";
 
 const pixel = composeStories(pixelStories);
 const lighting = composeStories(lightingStories);
@@ -190,6 +197,148 @@ describe("AppShell — GATE 2: renders with NO store provider", () => {
     const { container: noBottom } = render(<shell.NoBottomPanel />);
     expect(noBottom.querySelector(".app__side-panel--left")).not.toBeNull();
     expect(noBottom.querySelector(".app__bottom")).toBeNull();
+  });
+});
+
+/**
+ * The rail arrangement, rendered (2026-08-25).
+ *
+ * `railLayout.test.ts` pins the MODEL — which slot a click lands on. What is
+ * asserted here is the half a unit test cannot see: that the shell actually
+ * draws the rails in the order the model computed, on the side the model
+ * chose, with the canvas still between them.
+ */
+describe("AppShell — the rails are placed by the layout, not by their names", () => {
+  /** Every rail in DOM order, identified by its identity modifier. */
+  function railOrder(container: HTMLElement): string[] {
+    return [...container.querySelectorAll(".app__side-panel, .app__canvas-area")]
+      .map((el) =>
+        el.classList.contains("app__canvas-area")
+          ? "canvas"
+          : el.classList.contains("app__side-panel--left")
+            ? "left"
+            : "right",
+      );
+  }
+
+  const base = {
+    header: <div />,
+    toolbar: <div />,
+    leftPanel: <div>objects</div>,
+    rightPanel: <div>tools</div>,
+    bottomPanel: <div>timeline</div>,
+    children: <div>canvas</div>,
+  };
+
+  it("defaults to the historical arrangement when given no layout", () => {
+    const { container } = render(<AppShell {...base} />);
+    expect(railOrder(container)).toEqual(["left", "canvas", "right"]);
+    // And the historical width — an untouched project is unchanged.
+    expect(
+      container.querySelector(".app__side-panel--left")?.className,
+    ).toContain("app__side-panel--scale-regular");
+  });
+
+  it("⭐ one step right puts BOTH rails on the right, canvas on the left", () => {
+    const layout = stepRail(DEFAULT_RAIL_LAYOUT, "left", 1);
+    const { container } = render(<AppShell {...base} layout={layout} />);
+
+    // The canvas comes FIRST — it is no longer between the two rails, it is
+    // beside them, which is exactly what the owner asked for.
+    expect(railOrder(container)).toEqual(["canvas", "left", "right"]);
+    // Both rails now draw their divider on their LEFT edge.
+    const left = container.querySelector(".app__side-panel--left")!;
+    expect(left.className).toContain("app__side-panel--at-right");
+  });
+
+  it("⭐ a second step makes the left rail the right-MOST column", () => {
+    const layout = stepRail(
+      stepRail(DEFAULT_RAIL_LAYOUT, "left", 1),
+      "left",
+      1,
+    );
+    const { container } = render(<AppShell {...base} layout={layout} />);
+    expect(railOrder(container)).toEqual(["canvas", "right", "left"]);
+  });
+
+  it("applies each rail's scale independently", () => {
+    const layout = scaleRail(
+      scaleRail(DEFAULT_RAIL_LAYOUT, "left", 1),
+      "bottom",
+      -1,
+    );
+    const { container } = render(<AppShell {...base} layout={layout} />);
+
+    expect(
+      container.querySelector(".app__side-panel--left")?.className,
+    ).toContain("app__side-panel--scale-large");
+    expect(
+      container.querySelector(".app__side-panel--right")?.className,
+    ).toContain("app__side-panel--scale-regular");
+    expect(container.querySelector(".app__bottom")?.className).toContain(
+      "app__bottom--scale-compact",
+    );
+  });
+
+  it("⭐ the bottom rail flips ABOVE the main row, not just restyled", () => {
+    const layout = flipBottomEdge(DEFAULT_RAIL_LAYOUT);
+    const { container } = render(<AppShell {...base} layout={layout} />);
+
+    const app = container.querySelector(".app")!;
+    const children = [...app.children];
+    const bottomIndex = children.findIndex((el) =>
+      el.classList.contains("app__bottom"),
+    );
+    const mainIndex = children.findIndex((el) =>
+      el.classList.contains("app__main"),
+    );
+    // DOM ORDER is what actually moves it — a border swap alone would leave
+    // the timeline below the canvas while claiming to be at the top.
+    expect(bottomIndex).toBeLessThan(mainIndex);
+    expect(container.querySelector(".app__bottom")?.className).toContain(
+      "app__bottom--at-top",
+    );
+  });
+
+  it("renders one overlay per rail, INSIDE the rail it controls", () => {
+    const { container } = render(
+      <AppShell
+        {...base}
+        railOverlays={{
+          left: <div data-testid="ov-left" />,
+          right: <div data-testid="ov-right" />,
+          bottom: <div data-testid="ov-bottom" />,
+        }}
+      />,
+    );
+
+    // Inside, not siblings — this is what makes a scrim follow its rail
+    // through a move or a resize with no measurement.
+    expect(
+      container.querySelector(".app__side-panel--left [data-testid=ov-left]"),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".app__side-panel--right [data-testid=ov-right]"),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".app__bottom [data-testid=ov-bottom]"),
+    ).not.toBeNull();
+  });
+
+  it("gives a HIDDEN rail no overlay — focus mode needs no special case", () => {
+    const { container } = render(
+      <AppShell
+        {...base}
+        leftPanel={undefined}
+        bottomPanel={undefined}
+        railOverlays={{
+          left: <div data-testid="ov-left" />,
+          bottom: <div data-testid="ov-bottom" />,
+        }}
+      />,
+    );
+    expect(container.querySelector("[data-testid=ov-left]")).toBeNull();
+    expect(container.querySelector("[data-testid=ov-bottom]")).toBeNull();
   });
 });
 
