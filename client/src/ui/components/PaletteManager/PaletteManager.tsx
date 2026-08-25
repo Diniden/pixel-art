@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Color, Palette } from "../../../types";
 import { Icon } from "../../primitives/Icon/Icon";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
@@ -21,7 +21,13 @@ import "./PaletteManager.css";
  */
 interface PaletteManagerProps {
   palettes: Palette[];
-  onAddPalette: (name: string) => void;
+  /**
+   * Creates the palette and returns its id, so the "+" button can open the new
+   * row's name for editing straight away. Implementations that cannot supply
+   * an id may return `void` — the component then falls back to picking up the
+   * palette that appeared in `palettes` (see `handleAddPalette`).
+   */
+  onAddPalette: (name: string) => string | void;
   onDeletePalette: (id: string) => void;
   onRenamePalette: (id: string, name: string) => void;
   onAddColorToPalette: (paletteId: string, color: Color) => void;
@@ -42,26 +48,64 @@ export function PaletteManager({
   selectedColor,
   onSelectColor,
 }: PaletteManagerProps) {
-  const [newPaletteName, setNewPaletteName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleAddPalette = () => {
-    const name = newPaletteName.trim() || `Palette ${palettes.length + 1}`;
-    onAddPalette(name);
-    setNewPaletteName("");
-  };
+  /**
+   * Ids present before the last "+" press. `onAddPalette` is allowed to return
+   * `void` (Storybook's `fn()` does), so when it does we diff the next
+   * `palettes` list against this set to find the row we just created.
+   */
+  const pendingAddRef = useRef<Set<string> | null>(null);
 
-  const handleStartRename = (id: string, name: string) => {
+  const handleStartRename = useCallback((id: string, name: string) => {
     setEditingId(id);
     setEditingName(name);
+    setExpandedId(id);
+  }, []);
+
+  const handleAddPalette = () => {
+    const name = `Palette ${palettes.length + 1}`;
+    pendingAddRef.current = new Set(palettes.map((p) => p.id));
+    const id = onAddPalette(name);
+    if (typeof id === "string") {
+      pendingAddRef.current = null;
+      handleStartRename(id, name);
+    }
   };
+
+  // Fallback path for an `onAddPalette` that returned no id: the new palette
+  // arrives on the next render, so open whichever row is newly present.
+  useEffect(() => {
+    const before = pendingAddRef.current;
+    if (!before) return;
+    const added = palettes.find((p) => !before.has(p.id));
+    if (!added) return;
+    pendingAddRef.current = null;
+    handleStartRename(added.id, added.name);
+  }, [palettes, handleStartRename]);
+
+  // Focus, select and scroll the name field into view whenever editing starts.
+  useEffect(() => {
+    if (!editingId) return;
+    const input = nameInputRef.current;
+    if (!input) return;
+    input.focus();
+    input.select();
+    input.scrollIntoView({ block: "nearest" });
+  }, [editingId]);
 
   const handleFinishRename = (id: string) => {
     if (editingName.trim()) {
       onRenamePalette(id, editingName.trim());
     }
+    setEditingId(null);
+    setEditingName("");
+  };
+
+  const handleCancelRename = () => {
     setEditingId(null);
     setEditingName("");
   };
@@ -87,16 +131,6 @@ export function PaletteManager({
         </button>
       </div>
       <div className="panel__body">
-        <div className="palette-manager__new-form">
-          <input
-            type="text"
-            placeholder="New palette name..."
-            value={newPaletteName}
-            onChange={(e) => setNewPaletteName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAddPalette()}
-          />
-        </div>
-
         <div className="palette-manager__list">
           {palettes.map((palette) => (
             <div
@@ -119,16 +153,18 @@ export function PaletteManager({
                 </span>
                 {editingId === palette.id ? (
                   <input
+                    ref={nameInputRef}
                     type="text"
                     className="palette-manager__name-input"
                     value={editingName}
                     onChange={(e) => setEditingName(e.target.value)}
                     onBlur={() => handleFinishRename(palette.id)}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && handleFinishRename(palette.id)
-                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleFinishRename(palette.id);
+                      else if (e.key === "Escape") handleCancelRename();
+                    }}
                     onClick={(e) => e.stopPropagation()}
-                    autoFocus
+                    onDoubleClick={(e) => e.stopPropagation()}
                   />
                 ) : (
                   <span

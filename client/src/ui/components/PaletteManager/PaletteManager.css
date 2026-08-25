@@ -19,15 +19,6 @@
   color: var(--white);
 }
 
-.palette-manager__new-form {
-  margin-bottom: var(--space-3);
-}
-
-.palette-manager__new-form input {
-  width: 100%;
-  font-size: var(--text-sm);
-}
-
 .palette-manager__list {
   display: flex;
   flex-direction: column;

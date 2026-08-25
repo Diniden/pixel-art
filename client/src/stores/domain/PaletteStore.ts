@@ -39,14 +39,23 @@ export class PaletteStore {
     this.mutator = deps.mutator;
   }
 
-  /** Non-undoable, like all five (see the header). */
-  addPalette(name: string): void {
+  /**
+   * Non-undoable, like all five (see the header).
+   *
+   * Returns the new palette's id. `PaletteManager` creates a palette from the
+   * "+" button and immediately opens its name for editing, so it needs to know
+   * which row to focus — widening `void` to `string` is the least-coupled way
+   * to say that. All existing callers ignore the return value.
+   */
+  addPalette(name: string): string {
+    const id = generateId();
     this.mutator.commit("Add palette", false, () => {
       this.domain.palettes = [
         ...this.domain.palettes,
-        { id: generateId(), name, colors: [DEFAULT_COLOR] },
+        { id, name, colors: [DEFAULT_COLOR] },
       ];
     });
+    return id;
   }
 
   deletePalette(id: string): void {
