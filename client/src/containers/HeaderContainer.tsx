@@ -79,6 +79,7 @@ import { useSessionStore, useStores } from "../stores/context";
 import { aiApi, exportApi } from "../api";
 import {
   applyTheme,
+  DEFAULT_THEME,
   loadStoredTheme,
   type ThemeId,
 } from "../ui/theme/themes";
@@ -102,14 +103,42 @@ export const HeaderContainer = observer(function HeaderContainer() {
   // overwriting it.
   const setAiServiceUrl = (url: string) => app.setAiServiceUrl(url);
 
-  // Device preference, not project state: main.tsx applied the stored theme
-  // before first paint; this state only drives the dropdown. It must never
-  // join the frozen `uiState` wire format (UIStore R3).
-  const [theme, setTheme] = useState<ThemeId>(loadStoredTheme);
-  const handleThemeChange = useCallback((next: ThemeId) => {
-    applyTheme(next);
-    setTheme(next);
-  }, []);
+  // ══════════════════════════════════════════════════════════════════════
+  //  THEME IS PROJECT STATE NOW (owner decision, 2026-08-25)
+  // ══════════════════════════════════════════════════════════════════════
+  //
+  // It used to be a device preference held in `localStorage` and deliberately
+  // kept out of `uiState`. The owner reversed that: one theme per project,
+  // applied on every device that opens it.
+  //
+  // `localStorage` survives as a SEED, not as a second source of truth. A
+  // project that has never had a theme saved (`layout.theme === null`) shows
+  // whatever this device last used, so nobody's existing preference is lost
+  // the first time they open a file. The moment the user picks a theme it is
+  // written to the project and the project wins from then on.
+  //
+  // ⚠️ `applyTheme` is what actually paints — it flips `<html data-theme>`.
+  // It runs in an EFFECT keyed on the resolved theme rather than only in the
+  // change handler, because the theme also changes when a PROJECT LOADS, and
+  // no click is involved in that path. Applying it only on click would leave
+  // the DOM showing the previous project's theme.
+  const layoutStore = app.ui.layout;
+  const deviceTheme = useState(loadStoredTheme)[0];
+  const theme: ThemeId = layoutStore.theme ?? deviceTheme ?? DEFAULT_THEME;
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  const handleThemeChange = useCallback(
+    (next: ThemeId) => {
+      // Writes BOTH: the project (the source of truth) and the device seed,
+      // so a brand-new project opens in the theme this machine was last using.
+      layoutStore.setTheme(next);
+      applyTheme(next);
+    },
+    [layoutStore],
+  );
 
   const [aiHealthStatus, setAiHealthStatus] =
     useState<AiHealthStatus>("unknown");
@@ -183,6 +212,8 @@ export const HeaderContainer = observer(function HeaderContainer() {
       }}
       theme={theme}
       onThemeChange={handleThemeChange}
+      layoutMode={layoutStore.layoutMode}
+      onToggleLayoutMode={() => layoutStore.toggleLayoutMode()}
       onExport={() => exportApi.run(projectName)}
       projectModal={(props) => <ProjectSelectModalContainer {...props} />}
       backupsModal={(props) => <BrowseBackupsModalContainer {...props} />}

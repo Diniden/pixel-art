@@ -39,6 +39,7 @@ import {
   FolderOpen,
   ExternalLink,
   PenLine,
+  LayoutDashboard as LayoutIcon,
 } from "lucide-react";
 import "./Header.css";
 
@@ -68,9 +69,23 @@ export interface HeaderProps {
   /** Commits a new AI service URL and re-polls health. */
   onSaveAiServiceUrl: (url: string) => void;
 
-  /** Active UI theme — the dropdown beside the AI button switches it. */
+  /**
+   * Active UI theme — the dropdown beside the AI button switches it.
+   *
+   * ⚠️ As of 2026-08-25 this is PROJECT state, not a device preference: it
+   * is persisted in `uiState.theme` and follows the project onto every
+   * machine that opens it. The prop shape is unchanged; only its owner moved.
+   */
   theme: ThemeId;
   onThemeChange: (theme: ThemeId) => void;
+
+  /**
+   * Layout mode — the scrim over each rail with its move/resize controls.
+   * The button is a toggle and reads as pressed while the mode is on, so it
+   * is obvious how to get back out of it.
+   */
+  layoutMode: boolean;
+  onToggleLayoutMode: () => void;
 
   /** Runs the export. Resolves with the path and kebab name on success. */
   onExport: () => Promise<{ path: string; kebabName: string }>;
@@ -99,6 +114,8 @@ export function Header({
   onSaveAiServiceUrl,
   theme,
   onThemeChange,
+  layoutMode,
+  onToggleLayoutMode,
   onExport,
   projectModal,
   backupsModal,
@@ -318,6 +335,23 @@ export function Header({
             triggerLabel="Theme"
           />
         </div>
+        <button
+          className={`header__layout-btn ${
+            layoutMode ? "header__layout-btn--active" : ""
+          }`}
+          onClick={onToggleLayoutMode}
+          aria-pressed={layoutMode}
+          title={
+            layoutMode
+              ? "Done arranging panels"
+              : "Move and resize the side and bottom panels"
+          }
+        >
+          <span className="header__layout-icon">
+            <Icon icon={LayoutIcon} size={14} />
+          </span>
+          {layoutMode ? "Done" : "Layout"}
+        </button>
         <button
           className="header__backups-btn"
           onClick={() => setShowBackupsModal(true)}

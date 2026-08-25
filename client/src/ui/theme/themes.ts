@@ -8,9 +8,21 @@
  * subset of tokens. Switching = flipping `data-theme` on <html>; because
  * the whole UI reads tokens, nothing else has to know.
  *
- * The preference is a DEVICE preference, stored in localStorage. It must
- * NEVER move into the project's `uiState` — that wire format's key set is
- * frozen (UIStore R3) and the owner's real backups depend on it.
+ * ⚠️ **THE THEME MOVED INTO THE PROJECT (owner decision, 2026-08-25).**
+ * This file used to say the preference must NEVER join `uiState`. That was
+ * the decision in force at the time; the owner has since reversed it. The
+ * theme is now `uiState.theme` — one per project, on every device — owned by
+ * `LayoutUIStore` and persisted by `UIStore.toPersistedUIState()`.
+ *
+ * The wire format's key set is still protected, and the rule that made the
+ * addition safe holds: `theme` is emitted ONLY once the user has picked one,
+ * so an untouched project's key set — and its corpus digest — is unchanged.
+ *
+ * `localStorage` still exists here, and its role is now narrow and precise:
+ * it is a SEED for a project that has no theme saved yet, and it keeps
+ * working as the pre-first-paint value in `main.tsx`. It is NOT a second
+ * source of truth — `HeaderContainer` resolves the project's theme first and
+ * falls back to this only when the project has none.
  *
  * Scope note: colours painted into <canvas> come from `canvasTokens.ts`,
  * which mirrors the DEFAULT theme's values. Canvas chrome (checkerboard,
@@ -32,7 +44,7 @@ export type ThemeId = (typeof THEMES)[number]["id"];
 
 export const DEFAULT_THEME: ThemeId = "dark-spacious";
 
-/** localStorage key. Device preference — deliberately not project state. */
+/** localStorage key. The device SEED — see the header; the project wins. */
 export const THEME_STORAGE_KEY = "pixel-art.theme";
 
 export function isThemeId(value: unknown): value is ThemeId {

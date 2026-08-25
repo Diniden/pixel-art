@@ -226,6 +226,42 @@
   font-size: var(--text-base);
 }
 
+/* Layout mode toggle (2026-08-25). Skinned as `header__backups-btn`, plus an
+   ACTIVE state the other header buttons have no need for: layout mode dims
+   the whole editor behind three scrims, so the control that got you there
+   must read as pressed and offer the way out. */
+.header__layout-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.header__layout-btn:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.header__layout-btn--active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
+.header__layout-icon {
+  display: flex;
+  align-items: center;
+}
+
 .header__switch-btn {
   display: flex;
   align-items: center;

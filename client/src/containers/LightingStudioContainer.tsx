@@ -42,13 +42,16 @@ import { LightingStudioPanelContainer } from "./LightingStudioPanelContainer";
 import { FrameTimelineContainer } from "./FrameTimelineContainer";
 import { LightingCanvasContainer } from "./LightingCanvasContainer";
 import { useStores } from "../stores/context";
+import { useRailLayout } from "./hooks/useRailLayout";
 
 export const LightingStudioContainer = observer(
   function LightingStudioContainer() {
     const { ui } = useStores();
+    const railLayout = useRailLayout();
 
     return (
       <LightingStudioLayout
+        {...railLayout}
         focusMode={ui.viewport.focusMode}
         header={<HeaderContainer />}
         toolbar={<ToolbarContainer />}

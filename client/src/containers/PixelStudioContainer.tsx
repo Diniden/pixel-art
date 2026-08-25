@@ -67,10 +67,12 @@ import { LayerColorsContainer } from "./LayerColorsContainer";
 import { FrameReferencePanelContainer } from "./FrameReferencePanelContainer";
 import { ReferenceImagePanelContainer } from "./ReferenceImagePanelContainer";
 import { useStores } from "../stores/context";
+import { useRailLayout } from "./hooks/useRailLayout";
 import type { ReferenceImageData } from "../types/referenceImage";
 
 export const PixelStudioContainer = observer(function PixelStudioContainer() {
   const app = useStores();
+  const railLayout = useRailLayout();
   const { ui, domain, referenceUI } = app;
   const { viewport, tool } = ui;
 
@@ -138,6 +140,7 @@ export const PixelStudioContainer = observer(function PixelStudioContainer() {
 
   return (
     <PixelStudioLayout
+      {...railLayout}
       focusMode={viewport.focusMode}
       // `!== false` — the panel is visible when the key is absent
       // (`App.tsx:261`). The default is resolved here so the layout takes a
