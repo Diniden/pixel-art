@@ -241,9 +241,8 @@ export const LightingCanvasContainer = observer(
     const {
       viewZoom,
       viewPanOffset,
-      beginPinch,
-      updatePinch,
-      endPinch,
+      // `beginPinch` / `updatePinch` / `endPinch` are bound by the hook
+      // itself now; only the suppression flag is read here.
       isPinching,
     } = useCanvasViewport({
       containerRef,
@@ -572,12 +571,13 @@ export const LightingCanvasContainer = observer(
 
     const handleTouchStart = useCallback(
       (e: React.TouchEvent<HTMLCanvasElement>) => {
-        if (e.touches.length === 2) {
-          e.preventDefault();
-          beginPinch(e.touches);
-          return;
-        }
-        endPinch();
+        // ⚠️ Two-finger gestures belong to the native, non-passive listener
+        // on the viewport inside `useCanvasViewport` — same reasoning as
+        // `CanvasContainer`: React's touch handlers are passive (so
+        // `preventDefault` cannot claim the gesture from Safari) and are
+        // bound to the transformed `<canvas>` (so they miss fingers placed
+        // around a zoomed-out sprite). Bail out so a pinch never also paints.
+        if (e.touches.length >= 2) return;
 
         const touch = e.touches[0];
         if (!touch) return;
@@ -591,17 +591,13 @@ export const LightingCanvasContainer = observer(
         // change, not a refactor, so both behaviours are preserved verbatim.
         beginStroke(coords, false);
       },
-      [beginPinch, endPinch, getPixelCoordsFromClient, beginStroke],
+      [getPixelCoordsFromClient, beginStroke],
     );
 
     const handleTouchMove = useCallback(
       (e: React.TouchEvent<HTMLCanvasElement>) => {
-        if (e.touches.length === 2 && isPinching()) {
-          e.preventDefault();
-          updatePinch(e.touches);
-          return;
-        }
-        if (e.touches.length < 2) endPinch();
+        // Two fingers: the native viewport listener owns zoom and pan.
+        if (e.touches.length >= 2 || isPinching()) return;
 
         if (!isPaintingRef.current) return;
         const touch = e.touches[0];
@@ -613,18 +609,16 @@ export const LightingCanvasContainer = observer(
       },
       [
         isPinching,
-        updatePinch,
-        endPinch,
         isPaintingRef,
         getPixelCoordsFromClient,
         continueStroke,
       ],
     );
 
+    // The hook's own listener ends the gesture; this only closes the stroke.
     const handleTouchEnd = useCallback(() => {
-      endPinch();
       endStroke();
-    }, [endPinch, endStroke]);
+    }, [endStroke]);
 
     /* ── keyboard (concern d) ────────────────────────────────────────────── */
     //

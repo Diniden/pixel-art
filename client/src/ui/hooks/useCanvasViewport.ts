@@ -394,9 +394,33 @@ export function useCanvasViewport({
       );
       const zoomRatio = newViewZoom / start.viewZoom;
       // Don't clamp during pinch — clamping fights the anchor and causes jitter/drift
-      const newPan = {
+      const zoomedPan = {
         x: anchor.x * (1 - zoomRatio) + start.pan.x * zoomRatio,
         y: anchor.y * (1 - zoomRatio) + start.pan.y * zoomRatio,
+      };
+
+      // ── TWO-FINGER PAN (2026-08-25) ────────────────────────────────────
+      //
+      // ⚠️ The zoom math above does NOT pan. It re-anchors: it keeps the
+      // point under the pinch centre stationary while the scale changes. If
+      // both fingers slide across the screen at a constant separation,
+      // `dist` never changes, `zoomRatio` is 1, and the expression collapses
+      // to `start.pan` — the content does not move at all. That is why the
+      // canvas had pinch-zoom but no two-finger panning, and why the old
+      // comment claiming "view zoom + pan" was only half true.
+      //
+      // The translation is the movement of the pinch CENTRE since the last
+      // event, applied on top. Zoom and pan therefore compose in one
+      // gesture, which is what an iPad user expects: pinching and dragging
+      // at the same time both scales and moves.
+      //
+      // It is measured against `start.center` (the previous event's centre,
+      // rewritten at the end of every update) rather than the gesture's
+      // original centre, so the pan is incremental and cannot accumulate
+      // drift against the anchor lock.
+      const newPan = {
+        x: zoomedPan.x + (center.x - start.center.x),
+        y: zoomedPan.y + (center.y - start.center.y),
       };
       setViewZoom(newViewZoom);
       viewPanRef.current = newPan;
@@ -418,6 +442,85 @@ export function useCanvasViewport({
   }, []);
 
   const isPinching = useCallback(() => pinchStartRef.current !== null, []);
+
+  /* ── the native two-finger listener ────────────────────────────────────── */
+
+  /**
+   * ⚠️ TWO-FINGER GESTURES ARE BOUND NATIVELY, ON THE CONTAINER, AND BOTH
+   * halves of that sentence are load-bearing on iPad.
+   *
+   * **Why native, not React's `onTouchStart`.** React attaches touch handlers
+   * PASSIVELY, so `e.preventDefault()` inside a synthetic touch handler is a
+   * no-op in Safari. Without a real `preventDefault`, iOS keeps the gesture
+   * for its own page zoom and rubber-band scroll, and the canvas either never
+   * sees the move events or fights the browser for them. `{ passive: false }`
+   * is the only way to claim the gesture, exactly as the wheel listener above
+   * already does for ctrl+wheel.
+   *
+   * **Why the container, not the `<canvas>`.** The canvas lives INSIDE the
+   * pan/zoom transform. Zoomed out, it is a small rectangle in a large
+   * viewport, so two fingers placed in the empty space around the sprite land
+   * on the container and never reach the canvas — the gesture is silently
+   * dropped at precisely the zoom level where the user most wants to zoom back
+   * in. The container is the stable, untransformed box the gesture is already
+   * measured against (`getTouchCenter` uses its rect), so binding here makes
+   * the hit area the whole viewport at every zoom level.
+   *
+   * `touch-action: none` in the CSS stops the browser claiming the gesture
+   * before the listener runs; this listener stops it claiming it afterwards.
+   * Both are needed — neither alone is sufficient on iOS.
+   *
+   * Single-touch is deliberately NOT handled here: it stays with the
+   * caller's React handlers, which own drawing. This listener only ever acts
+   * when a second finger is down, so it cannot interfere with a stroke.
+   */
+  const gestureStateRef = useRef({ beginPinch, updatePinch, endPinch });
+  /* eslint-disable react-hooks/refs */
+  gestureStateRef.current = { beginPinch, updatePinch, endPinch };
+  /* eslint-enable react-hooks/refs */
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // The native `TouchList` is structurally what the gesture math needs; the
+    // hook's helpers are typed against React's `TouchList`, which differs only
+    // in nominal type. This cast is the whole of the difference.
+    const asReactTouches = (t: TouchList) => t as unknown as React.TouchList;
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      // Claim the gesture from Safari. Only possible because this listener is
+      // non-passive — see the note above.
+      e.preventDefault();
+      gestureStateRef.current.beginPinch(asReactTouches(e.touches));
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      gestureStateRef.current.updatePinch(asReactTouches(e.touches));
+    };
+
+    const onEnd = (e: TouchEvent) => {
+      // Lifting one finger of two ends the gesture rather than degrading it
+      // into a one-finger drag, which would otherwise start drawing with the
+      // finger that is still down.
+      if (e.touches.length < 2) gestureStateRef.current.endPinch();
+    };
+
+    container.addEventListener("touchstart", onStart, { passive: false });
+    container.addEventListener("touchmove", onMove, { passive: false });
+    container.addEventListener("touchend", onEnd);
+    container.addEventListener("touchcancel", onEnd);
+    return () => {
+      container.removeEventListener("touchstart", onStart);
+      container.removeEventListener("touchmove", onMove);
+      container.removeEventListener("touchend", onEnd);
+      container.removeEventListener("touchcancel", onEnd);
+    };
+  }, [containerRef]);
+
 
   return {
     viewZoom,

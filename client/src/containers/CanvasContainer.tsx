@@ -569,9 +569,10 @@ export const CanvasContainer = observer(function CanvasContainer({
     viewPanRef,
     scheduleCommitPan,
     clampPanToViewport,
-    beginPinch,
-    updatePinch,
-    endPinch,
+    // ⚠️ `beginPinch` / `updatePinch` / `endPinch` are deliberately NOT taken
+    // here any more: the hook binds them itself, natively and non-passively,
+    // on the viewport. `isPinching` is still read, to suppress drawing while
+    // a two-finger gesture is in flight.
     isPinching,
   } = useCanvasViewport({
     containerRef,
@@ -2006,14 +2007,24 @@ export const CanvasContainer = observer(function CanvasContainer({
 
   /* ── touch ─────────────────────────────────────────────────────────────── */
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      beginPinch(e.touches);
+    // ⚠️ TWO-FINGER GESTURES ARE NOT HANDLED HERE ANY MORE (2026-08-25).
+    //
+    // They are owned by a native, non-passive listener on the canvas
+    // VIEWPORT inside `useCanvasViewport` — React's synthetic touch handlers
+    // are passive, so the `e.preventDefault()` that used to sit here could
+    // not actually stop Safari claiming the gesture for its own page zoom,
+    // and these handlers are bound to the `<canvas>`, which is inside the
+    // pan/zoom transform and therefore misses fingers placed in the empty
+    // space around a zoomed-out sprite. See that hook's header.
+    //
+    // What remains here is the single-touch half: drawing and the move tool.
+    // Bailing out on a second finger is still required, so a pinch does not
+    // also lay down a stroke with whichever finger landed first.
+    if (e.touches.length >= 2) {
       setIsPanning(false);
       setLastPanPoint(null);
       return;
     }
-    endPinch();
 
     const touch = e.touches[0];
     const coords = getPixelCoords(touch.clientX, touch.clientY);
@@ -2037,14 +2048,9 @@ export const CanvasContainer = observer(function CanvasContainer({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    // Two fingers = view zoom + pan, against a locked anchor so it does not
-    // jitter.
-    if (e.touches.length === 2 && isPinching()) {
-      e.preventDefault();
-      updatePinch(e.touches);
-      return;
-    }
-    if (e.touches.length < 2) endPinch();
+    // Two fingers: the native viewport listener owns zoom AND pan. Bail out
+    // so a pinch never also draws — see `handleTouchStart`.
+    if (e.touches.length >= 2 || isPinching()) return;
 
     if (isPanning && lastPanPoint && e.touches.length >= 1) {
       const touch = e.touches[0];
@@ -2089,9 +2095,8 @@ export const CanvasContainer = observer(function CanvasContainer({
     pointer.continueStroke(touch.clientX, touch.clientY, "touch");
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
+  const handleTouchEnd = () => {
     lastStrokePixelRef.current = null;
-    if (e.touches.length < 2) endPinch();
 
     if (isPanning) {
       setIsPanning(false);
