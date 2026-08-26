@@ -31,7 +31,8 @@ export const PixelStudioToolsContainer = observer(
     onReferenceImageChange,
     hasReferenceImage,
   }: PixelStudioToolsContainerProps) {
-    const { domain, ui, pixels } = useStores();
+    const app = useStores();
+    const { domain, ui, pixels } = app;
 
     if (!domain.hasProject) return null;
 
@@ -41,6 +42,16 @@ export const PixelStudioToolsContainer = observer(
         hasReferenceImage={hasReferenceImage}
         selectedTool={ui.tool.selectedTool}
         onSelectTool={(tool) => ui.tool.setTool(tool)}
+        alternateTool={ui.tool.alternateTool}
+        onSelectAlternateTool={(tool) => ui.tool.setAlternateTool(tool)}
+        onSwapTools={() => ui.tool.swapTools()}
+        // ⚠️ `app.undo()`, NOT `history.undo()` — the history mirror has a
+        // single writer and calling the store directly leaves it describing
+        // the pre-undo stack. See `ApplicationStore.undo`'s header.
+        onUndo={() => app.undo()}
+        onRedo={() => app.redo()}
+        canUndo={app.history.canUndo}
+        canRedo={app.history.canRedo}
         onFlipHorizontal={() => pixels.flipHorizontal()}
         onFlipVertical={() => pixels.flipVertical()}
         referenceImageModal={(modalProps) => (

@@ -58,6 +58,7 @@
 import { useEffect } from "react";
 import { observer } from "mobx-react-lite";
 import { useStores } from "../stores/context";
+import { usePencilDoubleTap } from "../ui/hooks/usePencilDoubleTap";
 
 /** True when the keystroke belongs to a text field, not to the app. */
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -120,6 +121,17 @@ export const GlobalHotkeys = observer(function GlobalHotkeys() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [hasColorAdjustment, studioMode, tool, viewport, lightingUI]);
+
+  /**
+   * The Apple Pencil double-tap, forwarded by the companion app.
+   *
+   * ⚠️ It lives beside the keyboard shortcuts because it IS one: a global
+   * input gesture with no owning component. WebKit exposes no such event to
+   * JavaScript — see `usePencilDoubleTap`'s header — so this fires only
+   * inside `ios-companion`, and the toolbar's swap button remains the route
+   * everywhere else.
+   */
+  usePencilDoubleTap(() => tool.swapTools());
 
   return null;
 });

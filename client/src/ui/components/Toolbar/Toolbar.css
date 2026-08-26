@@ -157,6 +157,42 @@
   background: var(--hotkey-active-bg);
 }
 
+/* The SECOND tool slot — what an Apple Pencil double-tap swaps to.
+
+   ⚠️ Deliberately NOT skinned like `--active`. Two buttons that both look
+   selected leaves the user unable to tell which one is actually painting,
+   which is the failure mode this whole affordance exists to avoid. The
+   alternate is marked with an outline and a corner tick instead: clearly
+   flagged, clearly not the active tool.
+
+   The corner tick is a ::after rather than an extra element so the tool
+   button's markup stays the same for every tool. */
+.toolbar__tool-btn.toolbar__tool-btn--alternate {
+  box-shadow: var(--ring-alternate-inset);
+}
+
+.toolbar__tool-btn--alternate::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-secondary);
+}
+
+/* The swap control sits with undo/redo rather than among the tools: it acts
+   ON the selection instead of being one of the things selectable. */
+.toolbar__tool-btn--swap .toolbar__tool-icon {
+  color: var(--accent-secondary);
+}
+
+.toolbar__tool-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .toolbar__tool-btn.toolbar__tool-btn--light-grid {
   background: var(--tool-lightgrid);
   box-shadow: var(--glow-lightgrid);

@@ -336,6 +336,9 @@
   --shadow-variant: 0 6px 20px rgba(139, 92, 246, 0.4);
   --shadow-danger: 0 8px 32px rgba(255, 51, 102, 0.2);
   --ring-accent: 0 0 0 2px rgba(0, 217, 255, 0.2);
+  /* The second tool slot's outline (Apple Pencil double-tap target). INSET,
+     so it reads as a marked button rather than a focus ring around one. */
+  --ring-alternate-inset: inset 0 0 0 2px var(--accent-secondary);
 
   /* Composite glow/ring shadows. Every one-off box-shadow keeps its exact
      measured geometry, with the colour drawn from the ramps above — the

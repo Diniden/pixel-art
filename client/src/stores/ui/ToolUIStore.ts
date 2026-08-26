@@ -121,7 +121,10 @@ export class ToolUIStore {
       previousTool: observableRef,
       colorAdjustment: observableRef,
 
+      alternateTool: observable,
       setTool: action,
+      swapTools: action,
+      setAlternateTool: action,
       revertToPreviousTool: action,
       setColor: action,
       setBrushSize: action,
@@ -159,6 +162,63 @@ export class ToolUIStore {
       this.previousTool = null;
     }
     this.selectedTool = tool;
+  }
+
+  /* ── the two tool SLOTS (iPad / Apple Pencil, 2026-08-25) ──────────────
+   *
+   * ⚠️ `selectedTool` REMAINS THE ONE SOURCE OF TRUTH for what is drawing,
+   * and that is the whole design. The alternate slot is a single extra
+   * field beside it, not a second selection the rest of the app has to know
+   * about: every existing reader — the canvas, the tool handlers, the wire
+   * format — keeps reading `selectedTool` and is unaffected by this feature.
+   * Modelling the pair as `slots: [Tool, Tool]` + an index would have forced
+   * every one of those readers through a new accessor for no gain.
+   *
+   * `alternateTool` is SESSION-ONLY, deliberately. `selectedTool` is one of
+   * the 44 persisted `uiState` keys and the alternate is not: adding it would
+   * extend the wire format for a preference that is meaningful only while a
+   * Pencil is in the user's hand. It defaults to the eraser, which is the
+   * pairing a double-tap is nearly always used for.
+   */
+
+  /**
+   * The tool a Pencil double-tap swaps TO. Session-only — see the note above.
+   */
+  alternateTool: Tool = "eraser";
+
+  /**
+   * Swap the active and alternate tools.
+   *
+   * ⚠️ Routed through `setTool`, not a bare assignment, so the eyedropper
+   * bookkeeping above still runs. Swapping INTO the eyedropper must remember
+   * the outgoing tool exactly as picking it from the toolbar does, or
+   * `revertToPreviousTool` strands the user in the eyedropper.
+   */
+  swapTools(): void {
+    const outgoing = this.selectedTool;
+    const incoming = this.alternateTool;
+    if (incoming === outgoing) return;
+    this.setTool(incoming);
+    this.alternateTool = outgoing;
+  }
+
+  /**
+   * Set the alternate slot directly — the toolbar's slot-B affordance.
+   *
+   * Selecting the tool that is already ACTIVE would leave both slots holding
+   * the same tool, making the swap a no-op the user cannot see. The two are
+   * exchanged instead, which is the only interpretation that keeps both slots
+   * meaningful.
+   */
+  setAlternateTool(tool: Tool): void {
+    // Assigning the ACTIVE tool to the alternate slot would leave both slots
+    // identical and the swap silently inert. Exchanging them instead keeps
+    // both meaningful and matches what the gesture implies.
+    if (tool === this.selectedTool) {
+      this.swapTools();
+      return;
+    }
+    this.alternateTool = tool;
   }
 
   /** No-op unless the eyedropper is active — verbatim from the legacy action. */
