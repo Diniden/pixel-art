@@ -35,14 +35,14 @@
 .canvas-view-controls__btn {
   display: flex;
   align-items: center;
-  gap: var(--space-1-5);
-  padding: var(--space-2) var(--space-3);
+  /* Icon-only: square padding rather than the wider pill the percentage
+     label used to need. */
+  justify-content: center;
+  padding: var(--space-2);
   background: var(--bg-elevated);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
   cursor: pointer;
   box-shadow: var(--shadow-md);
   transition: all var(--transition-fast);
@@ -57,9 +57,4 @@
 .canvas-view-controls__icon {
   display: flex;
   align-items: center;
-}
-
-.canvas-view-controls__value {
-  min-width: 3.5ch;
-  text-align: right;
 }

@@ -134,6 +134,16 @@ export function SaveStatusDot({
   const tone = toneOf(status);
   const heading = headingOf(status, suspended);
 
+  // Only the busy tone pulses. A steady dot that suddenly animates is how the
+  // eye is drawn to a change in progress; animating the resting state would
+  // make the header restless for no reason.
+  //
+  // ⚠️ The predicate is computed HERE rather than inline in `classNames()`
+  // below. `check-classes.mjs` treats every string literal inside that call
+  // as a class name, so an inline `tone === "busy"` is reported as a missing
+  // `.busy` class — a false positive that would sit in the audit forever.
+  const pulses = tone === "busy";
+
   return (
     <div className="save-status-dot" ref={rootRef}>
       <button
@@ -141,10 +151,7 @@ export function SaveStatusDot({
         className={classNames(
           "save-status-dot__dot",
           `save-status-dot__dot--${tone}`,
-          // Only the busy state pulses. A steady green that suddenly animates
-          // is how the eye is drawn to "something is happening"; animating
-          // the resting state would make the header restless for no reason.
-          tone === "busy" && "save-status-dot__dot--pulsing",
+          pulses && "save-status-dot__dot--pulsing",
         )}
         onClick={() => setIsOpen((v) => !v)}
         aria-expanded={isOpen}

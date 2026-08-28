@@ -31,18 +31,11 @@ import { Icon } from "../../primitives/Icon/Icon";
 import "./CanvasViewControls.css";
 
 export interface CanvasViewControlsProps {
-  /** The live view scale, shown as a percentage. */
-  viewZoom: number;
   /** Recentre the workspace and return the view to 100%. */
   onResetView: () => void;
 }
 
-export function CanvasViewControls({
-  viewZoom,
-  onResetView,
-}: CanvasViewControlsProps) {
-  const percent = Math.round(viewZoom * 100);
-
+export function CanvasViewControls({ onResetView }: CanvasViewControlsProps) {
   return (
     <div className="canvas-view-controls">
       <button
@@ -52,13 +45,12 @@ export function CanvasViewControls({
         title="Center the workspace and return to 100%"
         aria-label="Center the workspace and return to 100% zoom"
       >
+        {/* Icon only: the button is an action, not a readout. A live
+            percentage over the canvas is one more thing to read, and the
+            title/aria-label already say what pressing it does. */}
         <span className="canvas-view-controls__icon">
           <Icon icon={Locate} size={14} />
         </span>
-        {/* The live percentage doubles as the button's label: it says what
-            the view is at AND what pressing it will change. A separate
-            readout would be one more thing floating over the canvas. */}
-        <span className="canvas-view-controls__value">{percent}%</span>
       </button>
     </div>
   );

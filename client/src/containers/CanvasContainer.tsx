@@ -2191,7 +2191,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       viewControls={
-        <CanvasViewControls viewZoom={viewZoom} onResetView={handleResetView} />
+        <CanvasViewControls onResetView={handleResetView} />
       }
     />
   );
