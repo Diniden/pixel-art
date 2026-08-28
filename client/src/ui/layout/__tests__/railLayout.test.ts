@@ -17,8 +17,11 @@ import {
   flipBottomEdge,
   railsOnSide,
   scaleRail,
+  setToolbarEdge,
   slotSide,
   stepRail,
+  TOOLBAR_EDGES,
+  isToolbarVertical,
   type RailLayout,
 } from "../railLayout";
 
@@ -161,6 +164,51 @@ describe("scaleRail — four settings, clamped", () => {
     expect(layout.bottom.scale).toBe("large");
     expect(layout.right.scale).toBe("compact");
     expect(layout.left.scale).toBe("regular");
+  });
+});
+
+describe("the canvas toolbar — four edges, no ordering", () => {
+  it("defaults to the top, where the toolbar has always been", () => {
+    expect(DEFAULT_RAIL_LAYOUT.toolbar.edge).toBe("top");
+    expect(DEFAULT_RAIL_LAYOUT.toolbar.scale).toBe("regular");
+  });
+
+  it("⭐ locks directly to any of the four edges", () => {
+    // Unlike the side rails there is no track to step along: each arrow
+    // names its destination, so every edge is one click away from any other.
+    let layout = DEFAULT_RAIL_LAYOUT;
+    for (const edge of TOOLBAR_EDGES) {
+      layout = setToolbarEdge(layout, edge);
+      expect(layout.toolbar.edge).toBe(edge);
+    }
+    // ...and back to the start in ONE move, not three.
+    expect(setToolbarEdge(layout, "top").toolbar.edge).toBe("top");
+  });
+
+  it("is a no-op when it already holds that edge", () => {
+    const layout = setToolbarEdge(DEFAULT_RAIL_LAYOUT, "left");
+    expect(setToolbarEdge(layout, "left")).toBe(layout);
+  });
+
+  it("does not disturb the three panel rails", () => {
+    const moved = setToolbarEdge(DEFAULT_RAIL_LAYOUT, "right");
+    expect(moved.left).toEqual(DEFAULT_RAIL_LAYOUT.left);
+    expect(moved.right).toEqual(DEFAULT_RAIL_LAYOUT.right);
+    expect(moved.bottom).toEqual(DEFAULT_RAIL_LAYOUT.bottom);
+  });
+
+  it("keeps its own scale across an edge change", () => {
+    const scaled = scaleRail(DEFAULT_RAIL_LAYOUT, "toolbar", 1);
+    expect(setToolbarEdge(scaled, "bottom").toolbar.scale).toBe("large");
+  });
+
+  it("⭐ left and right are VERTICAL; top and bottom are not", () => {
+    // The distinction drives a re-flow of the toolbar itself, not just its
+    // position — see `Toolbar.css`.
+    expect(isToolbarVertical("left")).toBe(true);
+    expect(isToolbarVertical("right")).toBe(true);
+    expect(isToolbarVertical("top")).toBe(false);
+    expect(isToolbarVertical("bottom")).toBe(false);
   });
 });
 

@@ -102,6 +102,60 @@ describe("LayoutUIStore — narrowing untrusted persisted values", () => {
     expect(store.layout.left.slot).not.toBe(store.layout.right.slot);
   });
 
+  it("⭐ a layout saved BEFORE the toolbar existed still loads", () => {
+    // Every `railLayouts` record written before 2026-08-28 has no `toolbar`
+    // block at all. It must come back with the toolbar where it has always
+    // been, not fail to narrow and lose the three panel rails with it.
+    const store = new LayoutUIStore("desktop");
+    runInAction(() =>
+      store.hydrate({
+        railLayouts: {
+          desktop: {
+            left: { slot: "rightInner", scale: "large" },
+            right: { slot: "rightOuter", scale: "compact" },
+            bottom: { edge: "top", scale: "huge" },
+          },
+        },
+      }),
+    );
+
+    // The pre-existing arrangement survives untouched...
+    expect(store.layout.left.slot).toBe("rightInner");
+    expect(store.layout.bottom.edge).toBe("top");
+    // ...and the new rail defaults rather than breaking.
+    expect(store.layout.toolbar.edge).toBe("top");
+    expect(store.layout.toolbar.scale).toBe("regular");
+  });
+
+  it("round-trips a toolbar edge through persistence", () => {
+    const store = new LayoutUIStore("tablet");
+    runInAction(() => store.setToolbarEdge("right"));
+
+    const persisted = store.toPersistedRailLayouts()!;
+    expect(persisted.tablet.toolbar?.edge).toBe("right");
+
+    const reloaded = new LayoutUIStore("tablet");
+    runInAction(() => reloaded.hydrate({ railLayouts: persisted }));
+    expect(reloaded.layout.toolbar.edge).toBe("right");
+  });
+
+  it("falls back on an unknown toolbar edge", () => {
+    const store = new LayoutUIStore("desktop");
+    runInAction(() =>
+      store.hydrate({
+        railLayouts: {
+          desktop: {
+            left: { slot: "leftOuter", scale: "regular" },
+            right: { slot: "rightOuter", scale: "regular" },
+            bottom: { edge: "bottom", scale: "regular" },
+            toolbar: { edge: "diagonal", scale: "regular" },
+          },
+        },
+      }),
+    );
+    expect(store.layout.toolbar.edge).toBe("top");
+  });
+
   it("survives a record missing whole rails", () => {
     const store = new LayoutUIStore("desktop");
     runInAction(() => store.hydrate({ railLayouts: { desktop: {} as never } }));

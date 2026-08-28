@@ -47,13 +47,16 @@ import {
   canStepRail,
   flipBottomEdge,
   scaleRail,
+  setToolbarEdge,
   stepRail,
+  TOOLBAR_EDGES,
   type BottomEdge,
   type RailLayout,
   type RailName,
   type RailScale,
   type SideRailName,
   type SideSlot,
+  type ToolbarEdge,
 } from "../../ui/layout/railLayout";
 import {
   detectDeviceClass,
@@ -83,6 +86,13 @@ function narrowLayout(persisted: PersistedRailLayout | undefined): RailLayout {
       : fallback;
   const edge = (value: string, fallback: BottomEdge): BottomEdge =>
     value === "top" || value === "bottom" ? (value as BottomEdge) : fallback;
+  const toolbarEdge = (
+    value: string | undefined,
+    fallback: ToolbarEdge,
+  ): ToolbarEdge =>
+    (TOOLBAR_EDGES as readonly string[]).includes(value ?? "")
+      ? (value as ToolbarEdge)
+      : fallback;
 
   const d = DEFAULT_RAIL_LAYOUT;
   const narrowed: RailLayout = {
@@ -97,6 +107,13 @@ function narrowLayout(persisted: PersistedRailLayout | undefined): RailLayout {
     bottom: {
       edge: edge(persisted.bottom?.edge, d.bottom.edge),
       scale: scale(persisted.bottom?.scale, d.bottom.scale),
+    },
+    // ⚠️ `toolbar` is absent from every layout saved before 2026-08-28, so
+    // the whole block defaults rather than just its fields — an older
+    // project must come back with the toolbar where it has always been.
+    toolbar: {
+      edge: toolbarEdge(persisted.toolbar?.edge, d.toolbar.edge),
+      scale: scale(persisted.toolbar?.scale ?? "", d.toolbar.scale),
     },
   };
 
@@ -118,6 +135,7 @@ function widenLayout(layout: RailLayout): PersistedRailLayout {
     left: { slot: layout.left.slot, scale: layout.left.scale },
     right: { slot: layout.right.slot, scale: layout.right.scale },
     bottom: { edge: layout.bottom.edge, scale: layout.bottom.scale },
+    toolbar: { edge: layout.toolbar.edge, scale: layout.toolbar.scale },
   };
 }
 
@@ -157,6 +175,7 @@ export class LayoutUIStore {
       toggleLayoutMode: action,
       stepRail: action,
       flipBottomEdge: action,
+      setToolbarEdge: action,
       scaleRail: action,
       resetLayout: action,
       hydrate: action,
@@ -206,6 +225,11 @@ export class LayoutUIStore {
   /** Flip the bottom rail between the bottom and the top of the shell. */
   flipBottomEdge(): void {
     this.write(flipBottomEdge(this.layout));
+  }
+
+  /** Lock the canvas toolbar to one of the four edges of the workspace. */
+  setToolbarEdge(edge: ToolbarEdge): void {
+    this.write(setToolbarEdge(this.layout, edge));
   }
 
   /** Step a rail's size one notch. A no-op at the ends of the scale. */

@@ -47,8 +47,17 @@
  * MobX, no DOM.
  */
 
-/** The three rails, named for what they carry — never for where they sit. */
-export type RailName = "left" | "right" | "bottom";
+/**
+ * The four rails, named for what they CARRY — never for where they sit.
+ *
+ * ⚠️ `toolbar` is not like the other three, and the difference is why it has
+ * its own type below rather than joining `SideRailName`. The three panel
+ * rails live in `app__main` and take space away from the canvas. The toolbar
+ * lives INSIDE the canvas area and docks to one of its four edges — it is a
+ * frame around the workspace, not a column beside it. It therefore has no
+ * slot and no ordering relative to the panel rails; it only has an edge.
+ */
+export type RailName = "left" | "right" | "bottom" | "toolbar";
 
 /** The two side rails, which are the only ones that can be re-ordered. */
 export type SideRailName = "left" | "right";
@@ -73,6 +82,31 @@ export function slotSide(slot: SideSlot): "left" | "right" {
 export type BottomEdge = "bottom" | "top";
 
 /**
+ * Which edge of the canvas area the toolbar is locked to.
+ *
+ * All four are reachable, which is why its overlay shows four arrows rather
+ * than the side rails' two: there is no "order" to step through, so each
+ * arrow simply picks an edge directly.
+ *
+ * ⚠️ `left` / `right` turn the toolbar into a VERTICAL column, which changes
+ * its own layout (`Toolbar.css`), not just its position. A control bar that
+ * merely rotated would have unreadable labels.
+ */
+export type ToolbarEdge = "top" | "bottom" | "left" | "right";
+
+export const TOOLBAR_EDGES: readonly ToolbarEdge[] = [
+  "top",
+  "bottom",
+  "left",
+  "right",
+] as const;
+
+/** Whether an edge makes the toolbar a vertical column. */
+export function isToolbarVertical(edge: ToolbarEdge): boolean {
+  return edge === "left" || edge === "right";
+}
+
+/**
  * The four zoom steps, smallest to largest.
  *
  * ⚠️ A step SCALES THE RAIL'S CONTENTS — `transform: scale()` on the scroll
@@ -93,6 +127,8 @@ export interface RailLayout {
   left: { slot: SideSlot; scale: RailScale };
   right: { slot: SideSlot; scale: RailScale };
   bottom: { edge: BottomEdge; scale: RailScale };
+  /** The canvas toolbar. Docks to an edge of the workspace; has no slot. */
+  toolbar: { edge: ToolbarEdge; scale: RailScale };
 }
 
 /** The historical arrangement: rails where they have always been, unscaled. */
@@ -100,6 +136,8 @@ export const DEFAULT_RAIL_LAYOUT: RailLayout = {
   left: { slot: "leftOuter", scale: "regular" },
   right: { slot: "rightOuter", scale: "regular" },
   bottom: { edge: "bottom", scale: "regular" },
+  // `top` is where the toolbar has always been.
+  toolbar: { edge: "top", scale: "regular" },
 };
 
 /**
@@ -188,6 +226,15 @@ export function canStepRail(
   direction: -1 | 1,
 ): boolean {
   return nextVisibleSlot(layout, rail, direction) !== null;
+}
+
+/** Lock the toolbar to one of the four edges of the workspace. */
+export function setToolbarEdge(
+  layout: RailLayout,
+  edge: ToolbarEdge,
+): RailLayout {
+  if (layout.toolbar.edge === edge) return layout;
+  return { ...layout, toolbar: { ...layout.toolbar, edge } };
 }
 
 /** Flip the bottom rail between the bottom and top edge of the shell. */

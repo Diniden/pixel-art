@@ -231,6 +231,12 @@ export interface PersistedRailLayout {
   left: { slot: string; scale: string };
   right: { slot: string; scale: string };
   bottom: { edge: string; scale: string };
+  /**
+   * The canvas toolbar's edge (2026-08-28). OPTIONAL, because every layout
+   * saved before that date has no such block — an older project must load
+   * with the toolbar where it has always been rather than failing to narrow.
+   */
+  toolbar?: { edge: string; scale: string };
 }
 
 export type Tool =
