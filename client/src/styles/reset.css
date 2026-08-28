@@ -35,6 +35,48 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   TOUCH DEVICES: NO TEXT SELECTION (2026-08-28)
+   ══════════════════════════════════════════════════════════════════════════
+
+   On an iPad, a press-and-hold anywhere in the editor starts iOS's text
+   selection — blue highlight, drag handles, and the copy/look-up callout —
+   over UI that has no text worth selecting. It fires on the very gestures the
+   editor uses most: holding a tool button to assign the second slot, dragging
+   a layer, resting a finger on the canvas before a stroke.
+
+   ⚠️ Scoped to `pointer: coarse`, NOT applied globally. On a desktop,
+   selecting text is legitimate and expected — a user copying a project name
+   or an error message out of the UI must still be able to. This turns off a
+   touch behaviour, it does not impose a desktop one.
+
+   ⚠️ `-webkit-touch-callout` is a SEPARATE property and both are needed.
+   `user-select: none` stops the highlight; the callout bubble is governed on
+   its own and survives without this line. Safari needs the `-webkit-` prefix
+   for `user-select` too.
+
+   ⚠️ REAL TEXT ENTRY IS EXEMPTED BELOW, and the exemption is not optional:
+   the project-name field is an `<input>`, and an unselectable input cannot be
+   corrected — no caret placement, no double-tap-to-select-a-word. Blanket
+   `user-select: none` would make renaming a project a delete-and-retype job. */
+@media (pointer: coarse) {
+  html {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* The exemption. `auto`, not `text`: a `contenteditable` region resolves
+     its own selection behaviour, which `text` would override. */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    -webkit-user-select: auto;
+    user-select: auto;
+    -webkit-touch-callout: default;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
