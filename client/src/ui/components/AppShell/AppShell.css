@@ -167,26 +167,8 @@
   position: relative;
 }
 
-/* The toolbar scales like the other rails — `zoom`, not `transform`, for the
-   same reason the bottom rail uses it: `zoom` feeds back into layout, so the
-   dock grows to fit its zoomed contents and the layout-mode scrim (sized to
-   the dock) stays exactly as big as what it is dimming. A transform would
-   leave a scaled toolbar overflowing a dock that never resized. */
-.app__toolbar-dock--scale-compact {
-  zoom: var(--rail-scale-compact);
-}
-
-.app__toolbar-dock--scale-regular {
-  zoom: var(--rail-scale-regular);
-}
-
-.app__toolbar-dock--scale-large {
-  zoom: var(--rail-scale-large);
-}
-
-.app__toolbar-dock--scale-huge {
-  zoom: var(--rail-scale-huge);
-}
+/* ⚠️ The toolbar has NO scale rules. It does not resize — see the note at
+   its render site in `AppShell.tsx`. The other three rails do. */
 
 /* Top is the historical arrangement and needs no override — the canvas area
    is already a column with the toolbar first. */

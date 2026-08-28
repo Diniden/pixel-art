@@ -52,12 +52,14 @@ const meta = {
   },
   args: {
     label: "Objects & Layers",
-    onScaleUp: () => {},
-    onScaleDown: () => {},
-    canScaleUp: true,
-    canScaleDown: true,
-    scaleStep: 2,
-    scaleCount: 4,
+    scale: {
+      onScaleUp: () => {},
+      onScaleDown: () => {},
+      canScaleUp: true,
+      canScaleDown: true,
+      step: 2,
+      count: 4,
+    },
     move: {
       kind: "arrows",
       onMoveLeft: () => {},
@@ -87,8 +89,14 @@ export const SideRail: Story = {
  */
 export const AtTheEndOfTheTrack: Story = {
   args: {
-    scaleStep: 1,
-    canScaleDown: false,
+    scale: {
+      onScaleUp: () => {},
+      onScaleDown: () => {},
+      canScaleUp: true,
+      canScaleDown: false,
+      step: 1,
+      count: 4,
+    },
     move: {
       kind: "arrows",
       onMoveLeft: () => {},
@@ -106,7 +114,16 @@ export const AtTheEndOfTheTrack: Story = {
 
 /** The largest step: the grow button is spent. */
 export const LargestSize: Story = {
-  args: { scaleStep: 4, canScaleUp: false },
+  args: {
+    scale: {
+      onScaleUp: () => {},
+      onScaleDown: () => {},
+      canScaleUp: false,
+      canScaleDown: true,
+      step: 4,
+      count: 4,
+    },
+  },
   render: (args) => (
     <RailFrame width={480}>
       <RailLayoutOverlay {...args} />
@@ -140,6 +157,41 @@ export const BottomRailAtTop: Story = {
   },
   render: (args) => (
     <RailFrame width={720} height={180}>
+      <RailLayoutOverlay {...args} />
+    </RailFrame>
+  ),
+};
+
+/**
+ * ⭐ The canvas TOOLBAR: four edge arrows in a straight line, no resize pair,
+ * and no label. It locks to an edge rather than stepping through an order, it
+ * is sized by its own controls so a scale step would apply to nothing, and
+ * its rail is 36px tall — which is why the arrows are a row and not a cross.
+ */
+export const ToolbarEdges: Story = {
+  args: {
+    label: "Toolbar",
+    compact: true,
+    scale: undefined,
+    move: { kind: "edges", edge: "top", onSetEdge: () => {} },
+  },
+  render: (args) => (
+    <RailFrame width={900} height={36}>
+      <RailLayoutOverlay {...args} />
+    </RailFrame>
+  ),
+};
+
+/** Docked vertically: the same row, in a narrow rail, wrapping to fit. */
+export const ToolbarEdgesVertical: Story = {
+  args: {
+    label: "Toolbar",
+    compact: true,
+    scale: undefined,
+    move: { kind: "edges", edge: "left", onSetEdge: () => {} },
+  },
+  render: (args) => (
+    <RailFrame width={64} height={480}>
       <RailLayoutOverlay {...args} />
     </RailFrame>
   ),

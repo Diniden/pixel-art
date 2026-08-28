@@ -53,6 +53,27 @@
   gap: var(--space-4);
 }
 
+/* The compact skin — for a rail with almost no room (the toolbar, 36px tall
+   docked horizontally). The panel's padding and gaps are what push the
+   controls past a short rail's edges, so they shrink rather than the buttons
+   getting smaller than a usable target. */
+.rail-overlay--compact {
+  padding: 0;
+}
+
+/* ⚠️ MEASURED: with `--space-1-5` padding the panel came to 40px inside a
+   36px rail — a 4px overflow on every horizontal dock. The panel is stripped
+   to nothing but its buttons here (no padding, no border, no background of
+   its own) so its height IS the button height, and the scrim behind it
+   supplies the dimming. */
+.rail-overlay--compact .rail-overlay__panel {
+  padding: 0;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
 .rail-overlay__label {
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -83,20 +104,28 @@
   transition: background var(--transition-fast);
 }
 
-/* The canvas toolbar's four-way edge picker. A 3×3 grid with the centre
-   empty, so each arrow sits where the edge it selects actually is — the
-   control reads as a small diagram of the workspace. */
-.rail-overlay__compass {
-  display: grid;
-  grid-template-columns: repeat(3, auto);
-  grid-template-rows: repeat(3, auto);
+/* The canvas toolbar's four edge arrows — a STRAIGHT LINE.
+
+   ⚠️ Not a 3×3 compass cross. The cross reads nicely in the abstract but
+   needs three rows of height, and the toolbar's rail is 36px tall docked
+   horizontally: it did not fit the space the control has to live in. In a row
+   the four buttons take one row's height on every edge.
+
+   `flex-wrap` lets them fall onto a second line when the toolbar is docked
+   vertically and the rail is narrow, rather than overflowing it. */
+.rail-overlay__edges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-1);
-  place-items: center;
 }
 
-.rail-overlay__compass-btn {
-  min-width: 32px;
-  height: 32px;
+/* Sized to fit the rail, not to the default 36px control: four of these plus
+   their gaps must sit inside a 36px-tall toolbar with the panel's padding. */
+.rail-overlay__edge-btn {
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
 }
 
 .rail-overlay__btn--wide {

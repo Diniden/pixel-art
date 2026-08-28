@@ -383,14 +383,15 @@ describe("AppShell — the rails are placed by the layout, not by their names", 
     }
   });
 
-  it("carries the toolbar's scale on the dock, not the toolbar", () => {
-    // `zoom` on the dock makes it grow WITH its contents, which is what keeps
-    // the layout-mode scrim the same size as the thing it dims.
+  it("⭐ does NOT scale the toolbar — it is sized by its own controls", () => {
+    // Owner decision, 2026-08-28. `toolbar.scale` survives in the type and
+    // the persisted record so an older layout round-trips unchanged, but
+    // nothing reads it and the dock carries no scale modifier.
     const layout = scaleRail(DEFAULT_RAIL_LAYOUT, "toolbar", 1);
     const { container } = render(<AppShell {...base} layout={layout} />);
-    expect(
-      container.querySelector(".app__toolbar-dock")?.className,
-    ).toContain("app__toolbar-dock--scale-large");
+    expect(container.querySelector(".app__toolbar-dock")?.className).toBe(
+      "app__toolbar-dock",
+    );
   });
 
   it("⭐ puts the toolbar's scrim INSIDE the dock, so it tracks the edge", () => {

@@ -231,12 +231,12 @@ export function AppShell({
           {/* The toolbar and its layout-mode scrim travel together: the
               scrim is `inset: 0` against this wrapper, so it tracks the
               toolbar to whichever edge it is on with no measurement. */}
-          <div
-            className={classNames(
-              "app__toolbar-dock",
-              `app__toolbar-dock--scale-${layout.toolbar.scale}`,
-            )}
-          >
+          {/* ⚠️ NO scale modifier. The toolbar does not resize (owner,
+              2026-08-28): it is sized by its own controls, so a scale step
+              would be a setting with nothing to apply it to. `toolbar.scale`
+              survives in the type and the persisted record so an older
+              layout round-trips unchanged, but nothing reads it. */}
+          <div className="app__toolbar-dock">
             {toolbar}
             {railOverlays?.toolbar}
           </div>

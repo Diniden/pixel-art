@@ -51,7 +51,7 @@ export function useRailLayout(): RailLayoutProps {
   const railOverlays = useMemo(() => {
     if (!layoutMode) return undefined;
 
-    const scaleStep = (rail: "left" | "right" | "bottom" | "toolbar") =>
+    const scaleStep = (rail: "left" | "right" | "bottom") =>
       RAIL_SCALES.indexOf(layout[rail].scale) + 1;
 
     return {
@@ -65,12 +65,14 @@ export function useRailLayout(): RailLayoutProps {
             canMoveLeft: store.canStepRail("left", -1),
             canMoveRight: store.canStepRail("left", 1),
           }}
-          onScaleUp={() => store.scaleRail("left", 1)}
-          onScaleDown={() => store.scaleRail("left", -1)}
-          canScaleUp={store.canScaleRail("left", 1)}
-          canScaleDown={store.canScaleRail("left", -1)}
-          scaleStep={scaleStep("left")}
-          scaleCount={RAIL_SCALES.length}
+          scale={{
+            onScaleUp: () => store.scaleRail("left", 1),
+            onScaleDown: () => store.scaleRail("left", -1),
+            canScaleUp: store.canScaleRail("left", 1),
+            canScaleDown: store.canScaleRail("left", -1),
+            step: scaleStep("left"),
+            count: RAIL_SCALES.length,
+          }}
         />
       ),
       right: (
@@ -83,12 +85,14 @@ export function useRailLayout(): RailLayoutProps {
             canMoveLeft: store.canStepRail("right", -1),
             canMoveRight: store.canStepRail("right", 1),
           }}
-          onScaleUp={() => store.scaleRail("right", 1)}
-          onScaleDown={() => store.scaleRail("right", -1)}
-          canScaleUp={store.canScaleRail("right", 1)}
-          canScaleDown={store.canScaleRail("right", -1)}
-          scaleStep={scaleStep("right")}
-          scaleCount={RAIL_SCALES.length}
+          scale={{
+            onScaleUp: () => store.scaleRail("right", 1),
+            onScaleDown: () => store.scaleRail("right", -1),
+            canScaleUp: store.canScaleRail("right", 1),
+            canScaleDown: store.canScaleRail("right", -1),
+            step: scaleStep("right"),
+            count: RAIL_SCALES.length,
+          }}
         />
       ),
       // ⚠️ The toolbar gets a four-way COMPASS, not the side rails' stepper:
@@ -102,12 +106,11 @@ export function useRailLayout(): RailLayoutProps {
             edge: layout.toolbar.edge,
             onSetEdge: (edge) => store.setToolbarEdge(edge),
           }}
-          onScaleUp={() => store.scaleRail("toolbar", 1)}
-          onScaleDown={() => store.scaleRail("toolbar", -1)}
-          canScaleUp={store.canScaleRail("toolbar", 1)}
-          canScaleDown={store.canScaleRail("toolbar", -1)}
-          scaleStep={scaleStep("toolbar")}
-          scaleCount={RAIL_SCALES.length}
+          // ⚠️ NO `scale` — the toolbar is sized by its own controls, so a
+          // scale step would be a setting with nothing to apply it to
+          // (owner, 2026-08-28). `compact` drops the label too: the rail is
+          // 36px tall docked horizontally and has no room for one.
+          compact
         />
       ),
       bottom: (
@@ -119,12 +122,14 @@ export function useRailLayout(): RailLayoutProps {
             onFlip: () => store.flipBottomEdge(),
             edge: layout.bottom.edge,
           }}
-          onScaleUp={() => store.scaleRail("bottom", 1)}
-          onScaleDown={() => store.scaleRail("bottom", -1)}
-          canScaleUp={store.canScaleRail("bottom", 1)}
-          canScaleDown={store.canScaleRail("bottom", -1)}
-          scaleStep={scaleStep("bottom")}
-          scaleCount={RAIL_SCALES.length}
+          scale={{
+            onScaleUp: () => store.scaleRail("bottom", 1),
+            onScaleDown: () => store.scaleRail("bottom", -1),
+            canScaleUp: store.canScaleRail("bottom", 1),
+            canScaleDown: store.canScaleRail("bottom", -1),
+            step: scaleStep("bottom"),
+            count: RAIL_SCALES.length,
+          }}
         />
       ),
     };
