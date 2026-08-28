@@ -39,6 +39,28 @@ export class ViewportUIStore {
   zoom: number = DEFAULT_UI_STATE.zoom;
   /** `observableRef`: the offset is replaced wholesale on every pan tick. */
   panOffset: { x: number; y: number } = DEFAULT_UI_STATE.panOffset;
+  /**
+   * The VIEW transform's scale — the pinch/wheel zoom, distinct from `zoom`.
+   *
+   * ⚠️ TWO ZOOMS, AND CONFUSING THEM IS THE HAZARD HERE. `zoom` above is the
+   * PIXEL SCALE: how many screen pixels one sprite pixel occupies (2–50),
+   * and it changes what is drawn. `viewZoom` is a CSS `scale()` on the
+   * already-rendered canvas (0.25–4) — a magnifying glass over the same
+   * bitmap. They multiply, they have different ranges, and they are set by
+   * different gestures.
+   *
+   * It lived in a `useState` inside `useCanvasViewport` until 2026-08-28,
+   * which meant it reset to 1 on every reload and could not follow the
+   * project between devices — while `panOffset`, its other half, persisted.
+   * Half a view state surviving a reload is worse than none: the canvas came
+   * back panned to a position that only made sense at the old zoom.
+   *
+   * ⚠️ Tri-state, like `lightGridMode`: `undefined` means "absent from the
+   * project file", so a project that has never been zoomed adds no key. See
+   * the conditional half of `UIStore.toPersistedUIState()`. Readers use
+   * `viewZoom ?? 1`.
+   */
+  viewZoom: number | undefined = undefined;
   focusMode = false;
   /**
    * ⚠️ Tri-state deliberately: `undefined` means "absent from the project
@@ -80,6 +102,7 @@ export class ViewportUIStore {
     makeObservable(this, {
       zoom: observable,
       panOffset: observableRef,
+      viewZoom: observable,
       focusMode: observable,
       lightGridMode: observable,
       canvasInfoHidden: observable,
@@ -91,6 +114,8 @@ export class ViewportUIStore {
 
       setZoom: action,
       setPanOffset: action,
+      setViewZoom: action,
+      resetView: action,
       toggleFocusMode: action,
       toggleLightGridMode: action,
       setCanvasInfoHidden: action,
@@ -111,6 +136,25 @@ export class ViewportUIStore {
 
   setPanOffset(offset: { x: number; y: number }): void {
     this.panOffset = offset;
+  }
+
+  /** Clamped to the view-transform range the gesture engine enforces. */
+  setViewZoom(zoom: number): void {
+    this.viewZoom = Math.max(0.25, Math.min(4, zoom));
+  }
+
+  /**
+   * Return the workspace to 100% view zoom, centred.
+   *
+   * ⚠️ It resets the VIEW only. `zoom` — the pixel scale the user chose for
+   * this sprite — is deliberately untouched (owner decision): the button
+   * undoes a pan/pinch that got lost, it does not discard a deliberate
+   * setting. The centring itself needs the viewport's measured size, so the
+   * pan is computed by the caller and passed in; a store may not read the DOM.
+   */
+  resetView(centeredPan: { x: number; y: number }): void {
+    this.viewZoom = 1;
+    this.panOffset = centeredPan;
   }
 
   toggleFocusMode(): void {
@@ -167,6 +211,7 @@ export class ViewportUIStore {
   hydrate(ui: {
     zoom?: number;
     panOffset?: { x: number; y: number };
+    viewZoom?: number;
     focusMode?: boolean;
     lightGridMode?: boolean;
     canvasInfoHidden?: boolean;
@@ -183,6 +228,8 @@ export class ViewportUIStore {
   }): void {
     if (ui.zoom !== undefined) this.zoom = ui.zoom;
     if (ui.panOffset !== undefined) this.panOffset = ui.panOffset;
+    // Assigned unconditionally: absent must stay absent (see the field note).
+    this.viewZoom = ui.viewZoom;
     if (ui.focusMode !== undefined) this.focusMode = ui.focusMode;
     // Assigned unconditionally: absent must stay absent (see the field note).
     this.lightGridMode = ui.lightGridMode;

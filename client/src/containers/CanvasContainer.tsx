@@ -172,6 +172,7 @@ import {
   WHITE_08,
 } from "../ui/theme/canvasTokens";
 import { useStores } from "../stores/context";
+import { CanvasViewControls } from "../ui/components/CanvasViewControls/CanvasViewControls";
 import { strokeControl } from "../stores/history/editorHistory";
 import type { Color, Point, SelectionBox, Pixel, PixelData } from "../types";
 import type { Layer } from "../types";
@@ -566,6 +567,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     viewZoom,
     viewPanOffset,
     setViewPanOffset,
+    setViewZoom,
     viewPanRef,
     scheduleCommitPan,
     clampPanToViewport,
@@ -580,6 +582,10 @@ export const CanvasContainer = observer(function CanvasContainer({
     canvasHeight,
     panOffset,
     onCommitPan: (pan) => viewport.setPanOffset(pan),
+    // The view scale is PROJECT state as of 2026-08-28, so it follows the
+    // project across devices exactly as `panOffset` always has.
+    viewZoom: viewport.viewZoom,
+    onCommitViewZoom: (z) => viewport.setViewZoom(z),
     resyncKey: `${app.timelineUI.selectedObjectId ?? ""}|${
       app.timelineUI.selectedFrameId ?? ""
     }|${app.ui.lightingUI?.studioMode ?? ""}`,
@@ -2127,6 +2133,36 @@ export const CanvasContainer = observer(function CanvasContainer({
     return "crosshair";
   })();
 
+  /**
+   * Recentre the workspace at 100% view zoom.
+   *
+   * ⚠️ The centring MUST be measured, not assumed. The canvas area's size
+   * changes with focus mode, the rail layout and every rail scale step, so a
+   * hard-coded offset would put the sprite in the middle of yesterday's
+   * viewport. `containerRef` is the untransformed viewport box, which is the
+   * only correct thing to centre against.
+   *
+   * The pan is computed HERE rather than in the store because it needs the
+   * DOM, and a store may not read it. `resetView` takes the result.
+   *
+   * ⚠️ `zoom` (the pixel scale) is deliberately NOT reset — see
+   * `CanvasViewControls`' header. This button rescues a lost VIEW; it does
+   * not discard the scale the user picked for this sprite.
+   */
+  const handleResetView = useCallback(() => {
+    const container = containerRef.current;
+    // At view zoom 1 the content is exactly `canvasWidth × canvasHeight`.
+    const centered = container
+      ? {
+          x: Math.round((container.clientWidth - canvasWidth) / 2),
+          y: Math.round((container.clientHeight - canvasHeight) / 2),
+        }
+      : { x: 0, y: 0 };
+    setViewZoom(1);
+    setViewPanOffset(centered);
+    viewport.resetView(centered);
+  }, [containerRef, canvasWidth, canvasHeight, setViewZoom, setViewPanOffset, viewport]);
+
   return (
     <CanvasSurface
       canvasRef={canvasRef}
@@ -2154,6 +2190,9 @@ export const CanvasContainer = observer(function CanvasContainer({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      viewControls={
+        <CanvasViewControls viewZoom={viewZoom} onResetView={handleResetView} />
+      }
     />
   );
 });

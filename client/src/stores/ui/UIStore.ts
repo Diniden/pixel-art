@@ -325,7 +325,7 @@ export class UIStore {
   }
 
   /**
-   * A structural projection of all 46 persisted fields. Deliberately built
+   * A structural projection of all 47 persisted fields. Deliberately built
    * from `toPersistedUIState()` itself, so a field added to the builder can
    * never be forgotten here — the two cannot drift apart.
    */
@@ -336,7 +336,7 @@ export class UIStore {
   /* ══════════════════════════════════════════════════════════════════════
    *  toPersistedUIState() — THE EXPLICIT FIELD-BY-FIELD BUILDER (R3)
    *
-   *  All 46 persisted fields, enumerated by hand, in the same order the
+   *  All 47 persisted fields, enumerated by hand, in the same order the
    *  `CompactUIState` interface declares them. NO SPREAD. Adding a field
    *  to `CompactUIState` without adding a line here is caught by
    *  `persistedUIState.test.ts`, which compares this builder's key set
@@ -497,6 +497,9 @@ export class UIStore {
       this.layout.toPersistedRailLayouts(),
     );
     /* 46 */ assign(persisted, "theme", this.layout.theme ?? undefined);
+    // Conditional for the same reason as the two above: a project that has
+    // never been pinch/wheel-zoomed must not gain the key.
+    /* 47 */ assign(persisted, "viewZoom", viewport.viewZoom);
 
     // See the TYPE-vs-REALITY note above: `borderRadius` is declared required
     // but is genuinely absent from most real projects.

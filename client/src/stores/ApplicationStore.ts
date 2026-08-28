@@ -918,6 +918,7 @@ export class ApplicationStore {
       /* ViewportUIStore */
       zoom: v.zoom,
       panOffset: v.panOffset,
+      viewZoom: v.viewZoom,
       focusMode: v.focusMode,
       lightGridMode: v.lightGridMode,
       canvasInfoHidden: v.canvasInfoHidden,

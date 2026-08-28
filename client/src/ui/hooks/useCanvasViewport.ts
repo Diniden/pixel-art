@@ -85,6 +85,16 @@ export interface UseCanvasViewportOptions {
    */
   onCommitPan?: (pan: ViewPoint) => void;
   /**
+   * The caller's persisted view scale, and the sink for changes to it.
+   *
+   * ⚠️ Supplying these makes the STORE the source of truth for `viewZoom`,
+   * which is what lets the view follow the project across devices. Omitting
+   * them keeps the pre-2026-08-28 behaviour — local state that resets to 1 on
+   * reload — which is what `LightingCanvas` and the stories still want.
+   */
+  viewZoom?: number;
+  onCommitViewZoom?: (zoom: number) => void;
+  /**
    * Bump to force local pan back to `panOffset` — Canvas re-synced whenever the
    * selected object, frame, or studio mode changed. Changing this value cancels
    * any pending commit, exactly as the legacy effect did.
@@ -129,9 +139,16 @@ export function useCanvasViewport({
   canvasHeight,
   panOffset,
   onCommitPan,
+  viewZoom: externalViewZoom,
+  onCommitViewZoom,
   resyncKey,
 }: UseCanvasViewportOptions): CanvasViewport {
-  const [viewZoom, setViewZoom] = useState(1);
+  // Local state remains the live value DURING a gesture — a pinch writes here
+  // every frame, and routing that through the store would re-render the tree
+  // on every touch move. The store is the source of truth ACROSS sessions;
+  // this is the working copy, committed outward like `panOffset` already is.
+  const [localViewZoom, setViewZoom] = useState(externalViewZoom ?? 1);
+  const viewZoom = localViewZoom;
   const [viewPanOffset, setViewPanOffsetState] = useState<ViewPoint>(panOffset);
   const viewPanRef = useRef<ViewPoint>(viewPanOffset);
 
@@ -168,11 +185,30 @@ export function useCanvasViewport({
     setViewPanOffsetState(pan);
   }, []);
 
+  const commitViewZoomRef = useRef(onCommitViewZoom);
+  // eslint-disable-next-line react-hooks/refs
+  commitViewZoomRef.current = onCommitViewZoom;
+
+  /** The live zoom, readable inside the debounce without a stale closure. */
+  const viewZoomRef = useRef(localViewZoom);
+  // eslint-disable-next-line react-hooks/refs
+  viewZoomRef.current = localViewZoom;
+
+  /**
+   * Commit pan AND view zoom outward on one trailing debounce.
+   *
+   * ⚠️ The two MUST be committed together. A pan offset only makes sense at
+   * the zoom it was measured against, so persisting one without the other
+   * brings the canvas back positioned for a scale it is no longer at — which
+   * is exactly the bug that existed while `viewZoom` was local-only and
+   * `panOffset` persisted.
+   */
   const scheduleCommitPan = useCallback(() => {
-    if (!commitPanRef.current) return;
+    if (!commitPanRef.current && !commitViewZoomRef.current) return;
     if (panCommitTimeoutRef.current) clearTimeout(panCommitTimeoutRef.current);
     panCommitTimeoutRef.current = setTimeout(() => {
       commitPanRef.current?.(viewPanRef.current);
+      commitViewZoomRef.current?.(viewZoomRef.current);
     }, PAN_COMMIT_MS);
   }, []);
 
@@ -189,6 +225,12 @@ export function useCanvasViewport({
     // visibly jumps to the old offset and back when the object/frame changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setViewPanOffsetState(panOffset);
+    // The zoom re-syncs WITH the pan, for the reason given on
+    // `scheduleCommitPan`: adopting one without the other leaves the canvas
+    // positioned for a scale it is not at.
+    if (externalViewZoom !== undefined) {
+      setViewZoom(externalViewZoom);
+    }
     if (panCommitTimeoutRef.current) {
       clearTimeout(panCommitTimeoutRef.current);
       panCommitTimeoutRef.current = null;

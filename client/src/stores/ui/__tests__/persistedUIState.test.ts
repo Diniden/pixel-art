@@ -171,6 +171,7 @@ function fullyPopulatedProject(): Project {
       },
     },
     theme: "light-cozy",
+    viewZoom: 2.5,
   });
   return project;
 }
@@ -221,7 +222,9 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     // see the `railLayouts`/`theme` cases below, which pin that an untouched
     // project's key set is unchanged. That property, not this count, is what
     // protects the owner's 151 snapshots.
-    expect(declared).toHaveLength(46);
+    // +1 (2026-08-28): `viewZoom`, the canvas view-transform scale, which
+    // now persists so the view follows the project across devices.
+    expect(declared).toHaveLength(47);
 
     // A FULLY-POPULATED project, because 11 of the 44 keys are
     // conditionally present by design: the legacy `...project.uiState`
@@ -288,6 +291,33 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     expect("originColor" in built).toBe(true);
     expect(built.originColor).toBeUndefined();
     expect("originColor" in legacyUIState(project)).toBe(true);
+  });
+
+  it("⭐ viewZoom is ABSENT until the user actually zooms the view", () => {
+    // Same corpus-protecting property as `railLayouts`/`theme`: an untouched
+    // project's key set — and therefore its digest — is unchanged.
+    const project = createDefaultProject();
+    expect("viewZoom" in project.uiState).toBe(false);
+    const built = hydratedStore(project).toPersistedUIState();
+    expect("viewZoom" in built).toBe(false);
+  });
+
+  it("emits viewZoom once set, and round-trips it", () => {
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const ui = new UIStore({
+      session,
+      selection,
+      layout: new LayoutUIStore("desktop"),
+    });
+    runInAction(() => ui.viewport.setViewZoom(2.5));
+    expect(ui.toPersistedUIState().viewZoom).toBe(2.5);
+
+    // A project without one hydrates back to absent — it must not inherit
+    // the previous project's view scale.
+    runInAction(() => ui.viewport.hydrate({}));
+    expect(ui.viewport.viewZoom).toBeUndefined();
+    expect("viewZoom" in ui.toPersistedUIState()).toBe(false);
   });
 
   it("⭐ railLayouts and theme are ABSENT until the user changes them", () => {

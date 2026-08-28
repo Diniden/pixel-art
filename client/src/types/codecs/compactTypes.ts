@@ -141,6 +141,8 @@ export interface CompactUIState {
   // `railLayouts` is keyed by device class; `theme` is one per project.
   railLayouts?: { [deviceClass: string]: PersistedRailLayout };
   theme?: string;
+  /** Canvas view-transform scale. Conditional: absent until the user zooms. */
+  viewZoom?: number;
 }
 
 export interface CompactProject {

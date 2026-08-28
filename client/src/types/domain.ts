@@ -206,6 +206,14 @@ export interface UIState {
   // every device (owner decision).
   railLayouts?: { [deviceClass: string]: PersistedRailLayout };
   theme?: string;
+
+  /**
+   * The canvas VIEW transform's scale (pinch/wheel), distinct from `zoom`
+   * which is the pixel scale. Persisted so the view follows the project
+   * across devices — `panOffset`, its other half, always has been.
+   * Conditionally emitted: absent until the user zooms.
+   */
+  viewZoom?: number;
 }
 
 /**

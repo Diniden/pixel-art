@@ -112,6 +112,7 @@ const PERSISTED_EDITS: [name: string, edit: (ui: UIStore) => void][] = [
   // NEVER SAVED — the exact silent-data-loss shape W29d found and fixed. A
   // rail the user moved that reverts on reload would look like a UI bug, not
   // a persistence one.
+  ["viewZoom", (ui) => ui.viewport.setViewZoom(2)],
   ["railLayouts", (ui) => ui.layout.stepRail("left", 1)],
   ["theme", (ui) => ui.layout.setTheme("light-cozy")],
   [
@@ -148,7 +149,8 @@ describe("persistedUIVersion — every persisted field bumps it", () => {
     // persisted fields. The 3 selection ids and `variantFrameIndices` are
     // owned by `SelectionMirror` until `TimelineUIStore` lands.
     // +2 (2026-08-25): `railLayouts` and `theme`.
-    expect(PERSISTED_EDITS).toHaveLength(33);
+    // +1 (2026-08-28): `viewZoom`.
+    expect(PERSISTED_EDITS).toHaveLength(34);
   });
 });
 
