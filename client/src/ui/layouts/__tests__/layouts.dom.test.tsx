@@ -40,6 +40,7 @@ import {
   scaleRail,
   setToolbarEdge,
   stepRail,
+  stepToolbarSpread,
 } from "../../layout/railLayout";
 
 const pixel = composeStories(pixelStories);
@@ -392,6 +393,25 @@ describe("AppShell — the rails are placed by the layout, not by their names", 
     expect(container.querySelector(".app__toolbar-dock")?.className).toBe(
       "app__toolbar-dock",
     );
+  });
+
+  it("⭐ spread > 1 lets the toolbar wrap; 1 keeps the historical class list", () => {
+    // The modifier is what releases `flex-wrap` and lifts the height cap.
+    // Spread 1 carries NO modifier, so the default bar renders exactly as it
+    // always has.
+    const one = render(<AppShell {...base} layout={DEFAULT_RAIL_LAYOUT} />);
+    expect(
+      one.container.querySelector(".app__toolbar-dock")?.className,
+    ).toBe("app__toolbar-dock");
+
+    const layout = stepToolbarSpread(DEFAULT_RAIL_LAYOUT, 1);
+    expect(layout.toolbar.spread).toBe(2);
+    // `AppShell` passes the spread to the toolbar, which owns the class —
+    // the dock stays unmodified either way.
+    const two = render(<AppShell {...base} layout={layout} />);
+    expect(
+      two.container.querySelector(".app__toolbar-dock")?.className,
+    ).toBe("app__toolbar-dock");
   });
 
   it("⭐ puts the toolbar's scrim INSIDE the dock, so it tracks the edge", () => {

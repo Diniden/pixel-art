@@ -68,11 +68,28 @@
    supplies the dimming. */
 .rail-overlay--compact .rail-overlay__panel {
   padding: 0;
-  gap: var(--space-1);
   background: none;
   border: none;
   box-shadow: none;
+  /* ⚠️ The compact panel's rows run ACROSS, not down. It gained a second row
+     (the spread stepper beside the four edge arrows) and the panel is a
+     column by default — stacking them would need ~56px inside a 36px rail.
+     Laid out in a line both groups sit on one row, and `wrap` lets them fall
+     onto a second only when the rail is too narrow for both. */
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  /* Wider than the intra-group gap, so the edge arrows and the spread
+     stepper read as two controls rather than one run of six buttons. */
+  gap: var(--space-3);
 }
+
+/* ⚠️ No divider between the two control groups. A `--compact .__row + .__row`
+   rule separated them nicely but needs three compounds, which this project's
+   stylelint config caps at two (`selector-max-compound-selectors`). The gap
+   between the groups is what distinguishes them instead — worth less than
+   carrying three lint warnings for decoration. */
 
 .rail-overlay__label {
   color: var(--text-primary);

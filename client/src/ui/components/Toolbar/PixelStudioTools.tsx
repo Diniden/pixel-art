@@ -40,6 +40,8 @@ import {
 } from "lucide-react";
 import { classNames } from "../../classNames";
 import { useLongPress } from "../../hooks/useLongPress";
+import { EyedropperModeMenu } from "./EyedropperModeMenu";
+import type { EyedropperMode } from "../../../types";
 
 interface PixelStudioToolsProps {
   onReferenceImageChange?: (data: ReferenceImageData | null) => void;
@@ -56,6 +58,17 @@ interface PixelStudioToolsProps {
   alternateTool: Tool;
   onSelectAlternateTool: (tool: Tool) => void;
   onSwapTools: () => void;
+  /**
+   * The eyedropper's post-sample behaviour, and its setter.
+   *
+   * Long-press or double-click the eyedropper to open the chooser — see
+   * `ToolButton`'s `secondaryAction` note for why those two gestures and not
+   * the slot-B ones.
+   */
+  eyedropperMode: EyedropperMode;
+  onSelectEyedropperMode: (mode: EyedropperMode) => void;
+  /** Which edge the toolbar is docked to, so the menu opens inward. */
+  edge?: "top" | "bottom" | "left" | "right";
   /** Undo/redo — the toolbar is the ONLY way to reach these without a keyboard. */
   onUndo: () => void;
   onRedo: () => void;
@@ -119,14 +132,33 @@ function ToolButton({
   isAlternate,
   onSelect,
   onSelectAlternate,
+  secondaryAction,
+  secondaryHint,
+  children,
 }: {
   tool: { id: Tool; icon: LucideIcon; label: string; hotkey: string };
   isActive: boolean;
   isAlternate: boolean;
   onSelect: () => void;
   onSelectAlternate: () => void;
+  /**
+   * Overrides what long-press / right-click / double-click do on THIS tool.
+   *
+   * ⚠️ When supplied, the tool LOSES its slot-B assignment gesture, and that
+   * is the owner's call (2026-08-28): slot B is reachable another way —
+   * swap to the alternate, then re-assign it with a Pencil double-tap — so
+   * the gesture is free for a tool that has a better use for it. Only the
+   * eyedropper passes this today.
+   */
+  secondaryAction?: () => void;
+  /** Tooltip tail describing `secondaryAction`. */
+  secondaryHint?: string;
+  /** The anchored menu, when this tool has one open. */
+  children?: ReactNode;
 }) {
-  const longPress = useLongPress(onSelectAlternate);
+  // The long press drives whichever action this button owns: the mode menu
+  // where one is supplied, the slot-B assignment everywhere else.
+  const longPress = useLongPress(secondaryAction ?? onSelectAlternate);
 
   return (
     <button
@@ -140,29 +172,49 @@ function ToolButton({
       )}
       onClick={() => {
         // ⚠️ A completed long press is followed by a click. Without this
-        // guard the button would assign the alternate slot AND then select
+        // guard the button would run the secondary action AND then select
         // itself, so the gesture would appear to do the wrong thing.
         if (longPress.didLongPress()) return;
         onSelect();
       }}
+      // Double-click is the second route to the secondary action, and the
+      // one a mouse user reaches for. It is wired ONLY where there is a
+      // secondary action: on every other tool a double-click is just two
+      // selections of the same tool, which is harmlessly idempotent.
+      //
+      // ⚠️ `onClick` still fires (twice) before this does — that is why the
+      // action must be safe to reach with the tool already selected. Opening
+      // a menu is; assigning slot B would not be, which is the other reason
+      // double-click is not wired to the slot-B path.
+      onDoubleClick={
+        secondaryAction
+          ? (e) => {
+              e.preventDefault();
+              secondaryAction();
+            }
+          : undefined
+      }
       // Right-click is the POINTER route to the same action — on a desktop
       // there is no Pencil to double-tap and no reason to hold the mouse
       // down for half a second. The two are complementary, not alternatives.
       onContextMenu={(e) => {
         e.preventDefault();
-        onSelectAlternate();
+        (secondaryAction ?? onSelectAlternate)();
       }}
       {...longPress.handlers}
       title={
-        isAlternate
-          ? `${tool.label} (${tool.hotkey}) — second slot`
-          : `${tool.label} (${tool.hotkey}) — long-press or right-click for the second slot`
+        secondaryHint
+          ? `${tool.label} (${tool.hotkey}) — ${secondaryHint}`
+          : isAlternate
+            ? `${tool.label} (${tool.hotkey}) — second slot`
+            : `${tool.label} (${tool.hotkey}) — long-press or right-click for the second slot`
       }
     >
       <span className="toolbar__tool-icon">
         <Icon icon={tool.icon} />
       </span>
       <span className="toolbar__tool-hotkey">{tool.hotkey}</span>
+      {children}
     </button>
   );
 }
@@ -175,6 +227,9 @@ export function PixelStudioTools({
   alternateTool,
   onSelectAlternateTool,
   onSwapTools,
+  eyedropperMode,
+  onSelectEyedropperMode,
+  edge = "top",
   onUndo,
   onRedo,
   canUndo,
@@ -184,6 +239,9 @@ export function PixelStudioTools({
   referenceImageModal,
 }: PixelStudioToolsProps) {
   const [isRefModalOpen, setIsRefModalOpen] = useState(false);
+  // Genuine local view state, like `isRefModalOpen`: which tool's anchored
+  // menu is open is not a store value and nothing outside this bar reads it.
+  const [isEyedropperMenuOpen, setIsEyedropperMenuOpen] = useState(false);
 
   // The alternate slot may hold a tool that has no entry here only if the
   // list and the `Tool` union drift; falling back to the id keeps the button
@@ -204,18 +262,47 @@ export function PixelStudioTools({
     <>
       <div className="toolbar__section">
         <div className="toolbar__group">
-          {tools.map((tool) => (
-            <ToolButton
-              key={tool.id}
-              tool={tool}
-              isActive={selectedTool === tool.id}
-              isAlternate={
-                alternateTool === tool.id && selectedTool !== tool.id
-              }
-              onSelect={() => onSelectTool(tool.id)}
-              onSelectAlternate={() => onSelectAlternateTool(tool.id)}
-            />
-          ))}
+          {tools.map((tool) => {
+            const isEyedropper = tool.id === "eyedropper";
+            return (
+              <ToolButton
+                key={tool.id}
+                tool={tool}
+                isActive={selectedTool === tool.id}
+                isAlternate={
+                  alternateTool === tool.id && selectedTool !== tool.id
+                }
+                onSelect={() => onSelectTool(tool.id)}
+                onSelectAlternate={() => onSelectAlternateTool(tool.id)}
+                // Only the eyedropper claims the secondary gesture — see
+                // `ToolButton`'s `secondaryAction` note.
+                secondaryAction={
+                  isEyedropper
+                    ? () => setIsEyedropperMenuOpen((open) => !open)
+                    : undefined
+                }
+                secondaryHint={
+                  isEyedropper
+                    ? eyedropperMode === "stay"
+                      ? "stays active after sampling; long-press or double-click to change"
+                      : "returns to the previous tool after sampling; long-press or double-click to change"
+                    : undefined
+                }
+              >
+                {isEyedropper && isEyedropperMenuOpen ? (
+                  <EyedropperModeMenu
+                    mode={eyedropperMode}
+                    edge={edge}
+                    onSelectMode={(mode) => {
+                      onSelectEyedropperMode(mode);
+                      setIsEyedropperMenuOpen(false);
+                    }}
+                    onClose={() => setIsEyedropperMenuOpen(false)}
+                  />
+                ) : null}
+              </ToolButton>
+            );
+          })}
         </div>
 
         <div className="toolbar__divider" />

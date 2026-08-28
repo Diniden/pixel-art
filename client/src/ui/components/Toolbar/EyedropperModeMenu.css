@@ -1,0 +1,134 @@
+/* block: eyedropper-mode-menu (2026-08-28).
+
+   The mode chooser that opens from the eyedropper tool button on a long press
+   or a double click.
+
+   ⚠️ POSITIONED AGAINST `.toolbar__tool-btn`, which is already
+   `position: relative` (Toolbar.css:199 — it is what the hotkey badge hangs
+   off). The menu is rendered INSIDE that button, so no portal and no
+   measurement are involved: the four `--edge` modifiers below flip it so a
+   toolbar docked to any side opens the menu into the workspace rather than
+   off-screen.
+
+   `--z-dropdown` is the token for exactly this role ("select menus anchored
+   to a control"). It outranks the toolbar's own `--z-shell` so the menu is
+   not clipped behind neighbouring tools. */
+
+.eyedropper-mode-menu {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  min-width: 190px;
+  padding: var(--space-1-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  /* ⚠️ The DIFFERENT background is the point of this element (owner's
+     request). The menu overlaps the tool row it belongs to, and in the
+     toolbar's own surface colour it reads as a second row of tools rather
+     than as a transient choice. Elevated + a ring says "layer on top". */
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  /* The button that owns this menu is 28px square and centres its icon; the
+     menu's own rows are left-aligned text. */
+  text-align: left;
+  cursor: default;
+}
+
+/* ── Where it opens, per docked edge ──────────────────────────────────────
+   A horizontal toolbar drops the menu below (or above, when docked to the
+   bottom); a vertical one pushes it out to the side. In every case the menu
+   is pinned to the near corner so it grows into the workspace. */
+
+.eyedropper-mode-menu--top {
+  top: calc(100% + var(--space-2));
+  left: 0;
+}
+
+.eyedropper-mode-menu--bottom {
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+}
+
+.eyedropper-mode-menu--left {
+  left: calc(100% + var(--space-2));
+  top: 0;
+}
+
+.eyedropper-mode-menu--right {
+  right: calc(100% + var(--space-2));
+  top: 0;
+}
+
+.eyedropper-mode-menu__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-1) var(--space-2) var(--space-1-5);
+  font-size: var(--text-70);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.eyedropper-mode-menu__title-icon {
+  display: flex;
+  align-items: center;
+}
+
+.eyedropper-mode-menu__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1-5);
+  width: 100%;
+  padding: var(--space-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.eyedropper-mode-menu__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.eyedropper-mode-menu__item--selected {
+  color: var(--text-primary);
+}
+
+/* Fixed-width gutter so both rows' text starts at the same x, ticked or not —
+   otherwise selecting a mode shifts the labels sideways. */
+.eyedropper-mode-menu__check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+  height: 14px;
+  margin-top: 1px;
+  color: var(--accent-primary);
+}
+
+.eyedropper-mode-menu__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  min-width: 0;
+}
+
+.eyedropper-mode-menu__label {
+  font-size: var(--text-85);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+}
+
+.eyedropper-mode-menu__detail {
+  font-size: var(--text-70);
+  color: var(--text-tertiary);
+  line-height: var(--leading-snug);
+}

@@ -174,6 +174,13 @@ export const ToolbarEdges: Story = {
     compact: true,
     scale: undefined,
     move: { kind: "edges", edge: "top", onSetEdge: () => {} },
+    spread: {
+      onMore: () => {},
+      onFewer: () => {},
+      canMore: true,
+      canFewer: false,
+      lines: 1,
+    },
   },
   render: (args) => (
     <RailFrame width={900} height={36}>
@@ -189,6 +196,13 @@ export const ToolbarEdgesVertical: Story = {
     compact: true,
     scale: undefined,
     move: { kind: "edges", edge: "left", onSetEdge: () => {} },
+    spread: {
+      onMore: () => {},
+      onFewer: () => {},
+      canMore: true,
+      canFewer: true,
+      lines: 2,
+    },
   },
   render: (args) => (
     <RailFrame width={64} height={480}>

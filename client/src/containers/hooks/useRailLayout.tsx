@@ -108,8 +108,17 @@ export function useRailLayout(): RailLayoutProps {
           }}
           // ⚠️ NO `scale` — the toolbar is sized by its own controls, so a
           // scale step would be a setting with nothing to apply it to
-          // (owner, 2026-08-28). `compact` drops the label too: the rail is
-          // 36px tall docked horizontally and has no room for one.
+          // (owner, 2026-08-28). It gets `spread` INSTEAD: more lines is what
+          // actually helps when the tools run past the edge of a one-row bar.
+          spread={{
+            onMore: () => store.stepToolbarSpread(1),
+            onFewer: () => store.stepToolbarSpread(-1),
+            canMore: store.canStepToolbarSpread(1),
+            canFewer: store.canStepToolbarSpread(-1),
+            lines: layout.toolbar.spread,
+          }}
+          // `compact` drops the label: the rail is 36px tall docked
+          // horizontally and has no room for one.
           compact
         />
       ),

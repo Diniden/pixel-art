@@ -9,10 +9,18 @@
    They are deleted, not renamed. */
 
 .toolbar {
+  /* One line's height — the unit the spread cap is expressed in, so the two
+     numbers cannot drift apart. Redefined for the vertical dock, where a
+     "line" is a column's width instead. */
+  --toolbar-line: 36px;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 36px;
+  /* ⚠️ `min-height`, not `height`. The fixed 36px is what made a second row
+     impossible: extra lines had nowhere to go and were simply clipped. As a
+     MINIMUM the bar still looks identical on one line (36px) and can grow to
+     whatever the allowed number of rows actually needs. */
+  min-height: 36px;
   padding: var(--space-1) var(--space-2);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-primary);
@@ -22,6 +30,48 @@
   box-sizing: border-box;
   overflow-x: auto;
   overflow-y: hidden;
+  /* ⚠️ TOUCH SCROLLING IS THE POINT OF THESE TWO. `overflow-x: auto` alone
+     gives a desktop scrollbar but no momentum on iOS, and on a one-row
+     toolbar the tools regularly run past the edge — which is exactly the case
+     the user cannot otherwise reach. `-webkit-overflow-scrolling` restores
+     momentum; `overscroll-behavior: contain` stops a swipe that hits the end
+     of the toolbar from continuing into the page behind it. */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* The bar is a scroll surface, so the browser must not claim horizontal
+     drags for its own panning. `pan-y` keeps vertical page gestures working
+     while the toolbar owns the horizontal axis. */
+  touch-action: pan-y;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SPREAD — how many lines the toolbar may use (2026-08-28)
+   ══════════════════════════════════════════════════════════════════════════
+
+   ⚠️ A MAXIMUM, not a fixed count. `flex-wrap: wrap` lets the controls take
+   as many lines as they need; `max-height` caps how many are visible, and the
+   overflow scrolls. With few enough tools to fit on one line the bar stays
+   one line — the setting buys headroom, it does not pad empty space.
+
+   The cap is expressed in `--toolbar-line`, one line's height, so the two
+   numbers cannot drift apart: 3 rows is exactly 3 × a row, plus the padding
+   that is on the bar either way. */
+
+.toolbar--spread-2,
+.toolbar--spread-3 {
+  flex-wrap: wrap;
+  /* Rows are laid out from the top rather than being spread down the box,
+     so a partly-filled second row sits under the first. */
+  align-content: flex-start;
+  overflow-y: auto;
+}
+
+.toolbar--spread-2 {
+  max-height: calc(var(--toolbar-line) * 2);
+}
+
+.toolbar--spread-3 {
+  max-height: calc(var(--toolbar-line) * 3);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -56,6 +106,27 @@
   overflow-x: hidden;
   overflow-y: auto;
   border-bottom: none;
+  /* Docked vertically the scroll axis flips, so the touch-action does too. */
+  touch-action: pan-x;
+  /* ⚠️ Docked vertically, "spread" means COLUMNS, not rows — the toolbar
+     wraps along its cross axis, which is now horizontal. A "line" is
+     therefore a column's WIDTH, wider than 36px because a column must fit a
+     control plus the bar's horizontal padding. */
+  --toolbar-line: 44px;
+}
+
+.toolbar--vertical.toolbar--spread-2,
+.toolbar--vertical.toolbar--spread-3 {
+  overflow-x: auto;
+  max-height: none;
+}
+
+.toolbar--vertical.toolbar--spread-2 {
+  max-width: calc(var(--toolbar-line) * 2);
+}
+
+.toolbar--vertical.toolbar--spread-3 {
+  max-width: calc(var(--toolbar-line) * 3);
 }
 
 .toolbar--left {
@@ -83,6 +154,17 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* ⚠️ SECTIONS AND GROUPS MUST NOT SHRINK. A flex item shrinks by default, so
+   a crowded toolbar squeezed its sections until the controls were cramped
+   and their labels clipped — instead of overflowing into the scroll the bar
+   already had. `flex-shrink: 0` makes the overflow real, which is what makes
+   it reachable by swiping. This is the other half of the iPad fix: the
+   scrolling is only useful once there is something to scroll TO. */
+.toolbar__section,
+.toolbar__group {
+  flex-shrink: 0;
 }
 
 .toolbar__group {
@@ -182,6 +264,17 @@
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-primary);
+}
+
+/* ⚠️ AFTER the base rule — the same equal-specificity ordering as the
+   `__section` / `__group` / `__divider` pairs above and below.
+
+   The studio switcher is its own flex row INSIDE a section, so the
+   `--vertical .toolbar__section` rule does not reach it: turning the section
+   stacked the switcher as a unit while its two buttons stayed side by side,
+   and the pair then overflowed the narrow column. It has to turn too. */
+.toolbar--vertical .toolbar__studio-mode-toggle {
+  flex-direction: column;
 }
 
 .toolbar__studio-mode-btn {

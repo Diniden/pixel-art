@@ -58,6 +58,14 @@ interface ToolbarProps {
    * caller that does not know about docking is unaffected.
    */
   edge?: "top" | "bottom" | "left" | "right";
+  /**
+   * How many lines the toolbar may spread its controls over — rows when it is
+   * docked horizontally, columns when vertical.
+   *
+   * ⚠️ A MAXIMUM, not a fixed count: with few enough tools to fit on one line
+   * the bar stays on one. Anything past the cap scrolls.
+   */
+  spread?: 1 | 2 | 3;
 }
 
 export function Toolbar({
@@ -72,6 +80,7 @@ export function Toolbar({
   pixelStudioTools,
   lightingStudioTools,
   edge = "top",
+  spread = 1,
 }: ToolbarProps) {
   const isVertical = edge === "left" || edge === "right";
   return (
@@ -80,6 +89,9 @@ export function Toolbar({
         "toolbar",
         `toolbar--${edge}`,
         isVertical && "toolbar--vertical",
+        // 1 is the historical single line and carries no modifier, so the
+        // default bar's class list is exactly what it always was.
+        spread > 1 && `toolbar--spread-${spread}`,
       )}
     >
       {/* Focus Mode Toggle */}

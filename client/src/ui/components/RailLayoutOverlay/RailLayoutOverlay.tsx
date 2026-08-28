@@ -42,6 +42,8 @@ import {
   ArrowDown,
   Minus,
   Plus,
+  Expand,
+  Shrink,
 } from "lucide-react";
 import { Icon } from "../../primitives/Icon/Icon";
 import { classNames } from "../../classNames";
@@ -118,6 +120,22 @@ export interface RailLayoutOverlayProps {
     step: number;
     count: number;
   };
+  /**
+   * The spread stepper — how many lines the rail may use. Only the canvas
+   * toolbar has one; omit it everywhere else.
+   *
+   * ⚠️ NOT the same control as `scale`, and the toolbar has this INSTEAD of
+   * that. Scale changes how big the controls are; spread changes how many
+   * lines they occupy, which is what actually helps when the tools run past
+   * the edge of a one-row bar on an iPad.
+   */
+  spread?: {
+    onMore: () => void;
+    onFewer: () => void;
+    canMore: boolean;
+    canFewer: boolean;
+    lines: number;
+  };
   /** Lays the controls out in a row rather than a column (the bottom rail). */
   horizontal?: boolean;
   /**
@@ -132,6 +150,7 @@ export function RailLayoutOverlay({
   label,
   move,
   scale,
+  spread,
   horizontal = false,
   compact = false,
 }: RailLayoutOverlayProps) {
@@ -221,6 +240,34 @@ export function RailLayoutOverlay({
             </button>
           )}
         </div>
+
+        {spread ? (
+          <div className="rail-overlay__row">
+            <button
+              type="button"
+              className="rail-overlay__btn rail-overlay__edge-btn"
+              onClick={spread.onFewer}
+              disabled={!spread.canFewer}
+              aria-label={`Use fewer rows for ${label}`}
+              title={`Fewer rows — ${label} takes less space`}
+            >
+              <Icon icon={Shrink} size={14} />
+            </button>
+            <span className="rail-overlay__scale" aria-live="polite">
+              {spread.lines}
+            </span>
+            <button
+              type="button"
+              className="rail-overlay__btn rail-overlay__edge-btn"
+              onClick={spread.onMore}
+              disabled={!spread.canMore}
+              aria-label={`Spread ${label} over more rows`}
+              title={`More rows — spread ${label}'s tools out`}
+            >
+              <Icon icon={Expand} size={14} />
+            </button>
+          </div>
+        ) : null}
 
         {scale ? (
           <div className="rail-overlay__row">
