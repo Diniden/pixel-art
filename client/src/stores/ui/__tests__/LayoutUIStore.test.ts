@@ -125,6 +125,39 @@ describe("LayoutUIStore — narrowing untrusted persisted values", () => {
     // ...and the new rail defaults rather than breaking.
     expect(store.layout.toolbar.edge).toBe("top");
     expect(store.layout.toolbar.scale).toBe("regular");
+    // `spread` arrived later still, and defaults the same way.
+    expect(store.layout.toolbar.spread).toBe(1);
+  });
+
+  it("⭐ falls back on a spread count this build does not support", () => {
+    // A hand-edited or newer file could carry any number; 40 rows has no
+    // sane rendering, so an unsupported value must return to one line.
+    const store = new LayoutUIStore("desktop");
+    runInAction(() =>
+      store.hydrate({
+        railLayouts: {
+          desktop: {
+            left: { slot: "leftOuter", scale: "regular" },
+            right: { slot: "rightOuter", scale: "regular" },
+            bottom: { edge: "bottom", scale: "regular" },
+            toolbar: { edge: "top", scale: "regular", spread: 40 },
+          },
+        },
+      }),
+    );
+    expect(store.layout.toolbar.spread).toBe(1);
+  });
+
+  it("round-trips a spread through persistence", () => {
+    const store = new LayoutUIStore("tablet");
+    runInAction(() => store.stepToolbarSpread(1));
+
+    const persisted = store.toPersistedRailLayouts()!;
+    expect(persisted.tablet.toolbar?.spread).toBe(2);
+
+    const reloaded = new LayoutUIStore("tablet");
+    runInAction(() => reloaded.hydrate({ railLayouts: persisted }));
+    expect(reloaded.layout.toolbar.spread).toBe(2);
   });
 
   it("round-trips a toolbar edge through persistence", () => {

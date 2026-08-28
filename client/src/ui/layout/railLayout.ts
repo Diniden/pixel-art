@@ -94,6 +94,24 @@ export type BottomEdge = "bottom" | "top";
  */
 export type ToolbarEdge = "top" | "bottom" | "left" | "right";
 
+/**
+ * How many rows (docked horizontally) or columns (docked vertically) the
+ * toolbar may spread its controls across.
+ *
+ * ⚠️ This is a MAXIMUM, not a fixed count. The toolbar wraps into as many
+ * lines as its controls actually need, up to this number — asking for 3 with
+ * few enough tools to fit on 1 leaves it on 1 rather than padding out empty
+ * space.
+ *
+ * It exists because a single line is a hard constraint on an iPad: the tools
+ * regularly exceed the width and the overflow has to be scrolled to. Spending
+ * a second row buys back that reach at the cost of canvas height, and which
+ * trade is right depends on the device — which is why it is a per-device
+ * layout setting rather than a constant.
+ */
+export const TOOLBAR_SPREADS = [1, 2, 3] as const;
+export type ToolbarSpread = (typeof TOOLBAR_SPREADS)[number];
+
 export const TOOLBAR_EDGES: readonly ToolbarEdge[] = [
   "top",
   "bottom",
@@ -127,8 +145,15 @@ export interface RailLayout {
   left: { slot: SideSlot; scale: RailScale };
   right: { slot: SideSlot; scale: RailScale };
   bottom: { edge: BottomEdge; scale: RailScale };
-  /** The canvas toolbar. Docks to an edge of the workspace; has no slot. */
-  toolbar: { edge: ToolbarEdge; scale: RailScale };
+  /**
+   * The canvas toolbar. Docks to an edge of the workspace; has no slot.
+   *
+   * ⚠️ `scale` is DEAD but retained. The toolbar does not resize (owner,
+   * 2026-08-28) and nothing reads this, but dropping it from the type would
+   * drop it from the persisted record and stop a layout written before that
+   * date round-tripping unchanged.
+   */
+  toolbar: { edge: ToolbarEdge; scale: RailScale; spread: ToolbarSpread };
 }
 
 /** The historical arrangement: rails where they have always been, unscaled. */
@@ -136,8 +161,8 @@ export const DEFAULT_RAIL_LAYOUT: RailLayout = {
   left: { slot: "leftOuter", scale: "regular" },
   right: { slot: "rightOuter", scale: "regular" },
   bottom: { edge: "bottom", scale: "regular" },
-  // `top` is where the toolbar has always been.
-  toolbar: { edge: "top", scale: "regular" },
+  // `top` is where the toolbar has always been, on a single line.
+  toolbar: { edge: "top", scale: "regular", spread: 1 },
 };
 
 /**
@@ -235,6 +260,32 @@ export function setToolbarEdge(
 ): RailLayout {
   if (layout.toolbar.edge === edge) return layout;
   return { ...layout, toolbar: { ...layout.toolbar, edge } };
+}
+
+/**
+ * Step the toolbar's spread by one line, clamped at both ends.
+ *
+ * Clamped rather than wrapping, like every other stepper here: a control that
+ * silently jumps from 3 back to 1 reads as a glitch.
+ */
+export function stepToolbarSpread(
+  layout: RailLayout,
+  direction: -1 | 1,
+): RailLayout {
+  const to = TOOLBAR_SPREADS.indexOf(layout.toolbar.spread) + direction;
+  if (to < 0 || to >= TOOLBAR_SPREADS.length) return layout;
+  return {
+    ...layout,
+    toolbar: { ...layout.toolbar, spread: TOOLBAR_SPREADS[to] },
+  };
+}
+
+export function canStepToolbarSpread(
+  layout: RailLayout,
+  direction: -1 | 1,
+): boolean {
+  const to = TOOLBAR_SPREADS.indexOf(layout.toolbar.spread) + direction;
+  return to >= 0 && to < TOOLBAR_SPREADS.length;
 }
 
 /** Flip the bottom rail between the bottom and top edge of the shell. */

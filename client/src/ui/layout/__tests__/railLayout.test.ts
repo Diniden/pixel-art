@@ -18,6 +18,8 @@ import {
   railsOnSide,
   scaleRail,
   setToolbarEdge,
+  stepToolbarSpread,
+  canStepToolbarSpread,
   slotSide,
   stepRail,
   TOOLBAR_EDGES,
@@ -209,6 +211,38 @@ describe("the canvas toolbar — four edges, no ordering", () => {
     expect(isToolbarVertical("right")).toBe(true);
     expect(isToolbarVertical("top")).toBe(false);
     expect(isToolbarVertical("bottom")).toBe(false);
+  });
+});
+
+describe("toolbar spread — more rows when the tools do not fit", () => {
+  it("defaults to a single line, as the toolbar has always been", () => {
+    expect(DEFAULT_RAIL_LAYOUT.toolbar.spread).toBe(1);
+  });
+
+  it("⭐ steps up and down, clamped at both ends", () => {
+    let layout = DEFAULT_RAIL_LAYOUT;
+    expect(canStepToolbarSpread(layout, -1)).toBe(false);
+    expect(stepToolbarSpread(layout, -1)).toBe(layout);
+
+    layout = stepToolbarSpread(layout, 1);
+    expect(layout.toolbar.spread).toBe(2);
+    layout = stepToolbarSpread(layout, 1);
+    expect(layout.toolbar.spread).toBe(3);
+
+    expect(canStepToolbarSpread(layout, 1)).toBe(false);
+    expect(stepToolbarSpread(layout, 1)).toBe(layout);
+  });
+
+  it("is independent of the edge — spread survives a re-dock", () => {
+    const spread = stepToolbarSpread(DEFAULT_RAIL_LAYOUT, 1);
+    expect(setToolbarEdge(spread, "left").toolbar.spread).toBe(2);
+  });
+
+  it("does not disturb the three panel rails", () => {
+    const spread = stepToolbarSpread(DEFAULT_RAIL_LAYOUT, 1);
+    expect(spread.left).toEqual(DEFAULT_RAIL_LAYOUT.left);
+    expect(spread.right).toEqual(DEFAULT_RAIL_LAYOUT.right);
+    expect(spread.bottom).toEqual(DEFAULT_RAIL_LAYOUT.bottom);
   });
 });
 

@@ -49,7 +49,10 @@ import {
   scaleRail,
   setToolbarEdge,
   stepRail,
+  stepToolbarSpread,
+  canStepToolbarSpread,
   TOOLBAR_EDGES,
+  TOOLBAR_SPREADS,
   type BottomEdge,
   type RailLayout,
   type RailName,
@@ -57,6 +60,7 @@ import {
   type SideRailName,
   type SideSlot,
   type ToolbarEdge,
+  type ToolbarSpread,
 } from "../../ui/layout/railLayout";
 import {
   detectDeviceClass,
@@ -86,6 +90,16 @@ function narrowLayout(persisted: PersistedRailLayout | undefined): RailLayout {
       : fallback;
   const edge = (value: string, fallback: BottomEdge): BottomEdge =>
     value === "top" || value === "bottom" ? (value as BottomEdge) : fallback;
+  // ⚠️ Absent in every layout saved before 2026-08-28, and a file may carry
+  // any number at all — a count outside the supported set must fall back to
+  // one line rather than producing a toolbar with, say, 40 rows.
+  const spread = (
+    value: number | undefined,
+    fallback: ToolbarSpread,
+  ): ToolbarSpread =>
+    (TOOLBAR_SPREADS as readonly number[]).includes(value ?? 0)
+      ? (value as ToolbarSpread)
+      : fallback;
   const toolbarEdge = (
     value: string | undefined,
     fallback: ToolbarEdge,
@@ -114,6 +128,7 @@ function narrowLayout(persisted: PersistedRailLayout | undefined): RailLayout {
     toolbar: {
       edge: toolbarEdge(persisted.toolbar?.edge, d.toolbar.edge),
       scale: scale(persisted.toolbar?.scale ?? "", d.toolbar.scale),
+      spread: spread(persisted.toolbar?.spread, d.toolbar.spread),
     },
   };
 
@@ -135,7 +150,11 @@ function widenLayout(layout: RailLayout): PersistedRailLayout {
     left: { slot: layout.left.slot, scale: layout.left.scale },
     right: { slot: layout.right.slot, scale: layout.right.scale },
     bottom: { edge: layout.bottom.edge, scale: layout.bottom.scale },
-    toolbar: { edge: layout.toolbar.edge, scale: layout.toolbar.scale },
+    toolbar: {
+      edge: layout.toolbar.edge,
+      scale: layout.toolbar.scale,
+      spread: layout.toolbar.spread,
+    },
   };
 }
 
@@ -176,6 +195,7 @@ export class LayoutUIStore {
       stepRail: action,
       flipBottomEdge: action,
       setToolbarEdge: action,
+      stepToolbarSpread: action,
       scaleRail: action,
       resetLayout: action,
       hydrate: action,
@@ -230,6 +250,16 @@ export class LayoutUIStore {
   /** Lock the canvas toolbar to one of the four edges of the workspace. */
   setToolbarEdge(edge: ToolbarEdge): void {
     this.write(setToolbarEdge(this.layout, edge));
+  }
+
+  /** Give the toolbar one more / one fewer line to spread its tools over. */
+  stepToolbarSpread(direction: -1 | 1): void {
+    if (!canStepToolbarSpread(this.layout, direction)) return;
+    this.write(stepToolbarSpread(this.layout, direction));
+  }
+
+  canStepToolbarSpread(direction: -1 | 1): boolean {
+    return canStepToolbarSpread(this.layout, direction);
   }
 
   /** Step a rail's size one notch. A no-op at the ends of the scale. */

@@ -214,6 +214,11 @@ export interface UIState {
    * Conditionally emitted: absent until the user zooms.
    */
   viewZoom?: number;
+  /**
+   * The eyedropper's post-sample behaviour. Conditionally emitted: absent
+   * until the user picks a mode, so an untouched project gains no key.
+   */
+  eyedropperMode?: EyedropperMode;
 }
 
 /**
@@ -236,7 +241,7 @@ export interface PersistedRailLayout {
    * saved before that date has no such block — an older project must load
    * with the toolbar where it has always been rather than failing to narrow.
    */
-  toolbar?: { edge: string; scale: string };
+  toolbar?: { edge: string; scale: string; spread?: number };
 }
 
 export type Tool =
@@ -265,6 +270,16 @@ export interface SelectionBox {
   width: number;
   height: number;
 }
+
+/**
+ * What the eyedropper does once it has sampled a colour.
+ *
+ * `"revert"` is the historical behaviour and stays the default: sample, then
+ * jump back to the tool you came from, which is what you want when you dip
+ * into the eyedropper mid-stroke. `"stay"` keeps the eyedropper active, which
+ * is what you want when picking several colours in a row.
+ */
+export type EyedropperMode = "revert" | "stay";
 
 export type SelectionMode = "rect" | "flood" | "lasso" | "color";
 export type SelectionBehavior = "movePixels" | "moveSelection" | "editMask";
