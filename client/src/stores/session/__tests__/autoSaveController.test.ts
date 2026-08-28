@@ -143,6 +143,54 @@ describe("the load-state gate — no save unless loadState === 'loaded'", () => 
 
 /* ── debounce & coalescing ───────────────────────────────────────────────── */
 
+describe("the `pending` status — what turns the header's dot ORANGE", () => {
+  it("⭐ goes pending on the FIRST edit, before the debounce elapses", () => {
+    // The dot must turn orange the moment there are unsaved changes, not
+    // when the request finally leaves — the whole point is to warn the user
+    // BEFORE they close the tab.
+    rig = makeRig();
+    rig.openGate();
+    expect(rig.session.saveStatus).toBe("idle");
+
+    rig.edit();
+    expect(rig.session.saveStatus).toBe("pending");
+    expect(rig.save).not.toHaveBeenCalled();
+  });
+
+  it("stays pending through the debounce and the in-flight save", async () => {
+    rig = makeRig();
+    rig.openGate();
+    rig.edit();
+    vi.advanceTimersByTime(499);
+    expect(rig.session.saveStatus).toBe("pending");
+  });
+
+  it("⭐ reaches `saved` once the write completes — orange then green", async () => {
+    rig = makeRig();
+    rig.openGate();
+    rig.edit();
+    expect(rig.session.saveStatus).toBe("pending"); // orange
+    vi.advanceTimersByTime(500);
+    // Still not on disk while the transport is in flight, so still orange
+    // to the user — `saving` and `pending` share the busy tone.
+    expect(rig.session.saveStatus).toBe("saving");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(rig.save).toHaveBeenCalledTimes(1);
+    expect(rig.session.saveStatus).toBe("saved"); // green
+  });
+
+  it("does NOT go pending when the gate is shut", () => {
+    // A suspended save or a failed load must not show orange forever: there
+    // is nothing scheduled, so there is nothing to warn about.
+    rig = makeRig();
+    rig.openGate();
+    rig.session.setSaveSuspended(true);
+    rig.edit();
+    expect(rig.session.saveStatus).toBe("idle");
+  });
+});
+
 describe("debounce", () => {
   it("10 edits inside the window → exactly one save", () => {
     rig = makeRig();

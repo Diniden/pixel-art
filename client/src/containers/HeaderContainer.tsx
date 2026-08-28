@@ -198,6 +198,8 @@ export const HeaderContainer = observer(function HeaderContainer() {
   return (
     <Header
       saveStatus={session.saveStatus}
+      saveErrorDetail={session.lastSaveError?.message ?? null}
+      saveSuspended={session.saveSuspended}
       aiServiceUrl={aiServiceUrl}
       projectName={projectName}
       projectList={projectList}

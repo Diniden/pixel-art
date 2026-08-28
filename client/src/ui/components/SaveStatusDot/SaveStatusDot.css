@@ -1,0 +1,99 @@
+/* block: save-status-dot (2026-08-28).
+
+   Replaces the header's "Saving… / Saved / Save failed" text pill. The dot is
+   ALWAYS present and only changes colour, so the header no longer reflows
+   every time a save starts and finishes. */
+
+.save-status-dot {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* The dot is the whole control — a real <button>, so it is tabbable and
+   announces itself. It is deliberately larger than the 8px indicator it
+   replaces: it is now a tap target, and 8px is unhittable with a finger.
+   The visible dot is drawn by ::after; the button itself is the hit area. */
+.save-status-dot__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.save-status-dot__dot::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--save-dot-color);
+  /* The glow has to follow the STATE colour, so it comes from the same
+     per-state variable rather than a fixed token — one `--glow-*` token
+     could only ever match one of the three states. */
+  box-shadow: var(--save-dot-glow);
+  transition: background var(--transition-fast);
+}
+
+.save-status-dot__dot:hover::after {
+  transform: scale(1.15);
+}
+
+/* The three states. `--ok` covers both `idle` and `saved`: see the component
+   header — the user is asking "is my work safe", and both answer yes. */
+.save-status-dot__dot--ok {
+  --save-dot-color: var(--accent-success);
+  --save-dot-glow: var(--glow-success-6);
+}
+
+.save-status-dot__dot--busy {
+  --save-dot-color: var(--accent-warning);
+  --save-dot-glow: var(--glow-warning-6);
+}
+
+.save-status-dot__dot--error {
+  --save-dot-color: var(--accent-danger);
+  --save-dot-glow: var(--glow-danger-6);
+}
+
+/* Only the busy state animates — a resting header must be still. */
+.save-status-dot__dot--pulsing::after {
+  animation: app-pulse 1s ease-in-out infinite;
+}
+
+/* The detail panel. Opened by CLICK, never hover: a hover tooltip is
+   unreachable on the iPad this editor also runs on. */
+.save-status-dot__popover {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-popover);
+  width: max-content;
+  max-width: 280px;
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  text-align: left;
+}
+
+.save-status-dot__heading {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-1-5);
+}
+
+.save-status-dot__body {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}

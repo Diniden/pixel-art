@@ -210,6 +210,11 @@ export class AutoSaveController {
 
   /** Trailing-edge debounce: every change RESETS the 500 ms window. */
   private scheduleDebounced(): void {
+    // ⚠️ The status goes `pending` the MOMENT an edit is seen, not when the
+    // request leaves. The header's dot turns orange here and stays orange
+    // through the debounce and the in-flight save, so "orange" always means
+    // exactly one thing: your work is not on disk yet.
+    runInAction(() => this.session.setSaveStatus("pending"));
     this.clearPendingDebounce();
     this.debounceHandle = this.clock.setTimeout(() => {
       this.debounceHandle = null;

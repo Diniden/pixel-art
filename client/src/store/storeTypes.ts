@@ -17,7 +17,19 @@ import type {
   PixelData,
 } from "../types";
 
-export type SaveStatus = "idle" | "saving" | "saved" | "error";
+/**
+ * ⚠️ `"pending"` was added 2026-08-28 and is the state the header's status
+ * dot shows in ORANGE: there are unsaved changes — either waiting out the
+ * debounce or already in flight. It exists because `"idle"` conflated "all
+ * saved" with "changes not written yet", which is precisely the distinction
+ * the user needs to see before closing a tab.
+ */
+export type SaveStatus =
+  | "idle"
+  | "pending"
+  | "saving"
+  | "saved"
+  | "error";
 
 /**
  * Bridge-era undo count cap (task 17). History is owned by `HistoryStore`,

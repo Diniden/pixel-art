@@ -31,6 +31,7 @@ import {
   type AiHealthStatus,
 } from "../AiConfigPopover/AiConfigPopover";
 import { Dropdown } from "../../primitives/Dropdown/Dropdown";
+import { SaveStatusDot } from "../SaveStatusDot/SaveStatusDot";
 import { Icon } from "../../primitives/Icon/Icon";
 import { THEMES, type ThemeId } from "../../theme/themes";
 import {
@@ -44,7 +45,12 @@ import {
 import "./Header.css";
 
 /** Save-state indicator. Mirrors `SaveStatus` without importing the store. */
-export type HeaderSaveStatus = "idle" | "saving" | "saved" | "error";
+export type HeaderSaveStatus =
+  | "idle"
+  | "pending"
+  | "saving"
+  | "saved"
+  | "error";
 
 /** The theme registry, shaped for the Dropdown primitive. */
 const THEME_OPTIONS = THEMES.map((t) => ({ value: t.id, label: t.label }));
@@ -52,6 +58,10 @@ const THEME_OPTIONS = THEMES.map((t) => ({ value: t.id, label: t.label }));
 export interface HeaderProps {
   /** From SessionStore via HeaderContainer (task 14). Header is its sole reader. */
   saveStatus: HeaderSaveStatus;
+  /** Failure detail for the status dot's popover, when there is one. */
+  saveErrorDetail?: string | null;
+  /** Saving paused for a rename / switch / delete — explains a still dot. */
+  saveSuspended?: boolean;
   /** From SessionStore via HeaderContainer (task 14) — the single read source. */
   aiServiceUrl: string | null;
   /** Current project name, shown and renamed inline. */
@@ -104,6 +114,8 @@ export interface HeaderProps {
 
 export function Header({
   saveStatus,
+  saveErrorDetail,
+  saveSuspended,
   aiServiceUrl,
   projectName,
   projectList,
@@ -228,32 +240,6 @@ export function Header({
     }
   };
 
-  const getStatusText = () => {
-    switch (saveStatus) {
-      case "saving":
-        return "Saving...";
-      case "saved":
-        return "Saved";
-      case "error":
-        return "Save failed";
-      default:
-        return "";
-    }
-  };
-
-  const getStatusClass = () => {
-    switch (saveStatus) {
-      case "saving":
-        return "header__save-status--saving";
-      case "saved":
-        return "header__save-status--saved";
-      case "error":
-        return "header__save-status--error";
-      default:
-        return "";
-    }
-  };
-
   return (
     <header className="header">
       <div className="header__left">
@@ -296,14 +282,16 @@ export function Header({
               </span>
             </button>
           )}
+          {/* ⚠️ Beside the TITLE, inside the project group — the dot is
+              about this project, and grouping it with the name says so.
+              It is always rendered: a control that vanishes when idle is one
+              the user cannot consult to confirm their work is safe. */}
+          <SaveStatusDot
+            status={saveStatus}
+            errorDetail={saveErrorDetail}
+            suspended={saveSuspended}
+          />
         </div>
-
-        {saveStatus !== "idle" && (
-          <div className={`header__save-status ${getStatusClass()}`}>
-            <span className="header__status-dot"></span>
-            {getStatusText()}
-          </div>
-        )}
       </div>
 
       <div className="header__right">

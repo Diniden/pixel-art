@@ -96,7 +96,10 @@ export interface StoreHarness {
   getMaxHistory(): number;
 
   /** Read-only peek at the save-status lifecycle field. */
-  getSaveStatus(): "idle" | "saving" | "saved" | "error";
+  // `"pending"` added 2026-08-28: an edit is scheduled/in-flight but not on
+  // disk. The frozen assertions never observe it — they read this after a
+  // save settles — but the type must admit it or the harness cannot compile.
+  getSaveStatus(): "idle" | "pending" | "saving" | "saved" | "error";
   /** Read-only peek at the active project NAME (not shape — a single string). */
   getProjectName(): string;
 }
