@@ -83,6 +83,22 @@
   transition: background var(--transition-fast);
 }
 
+/* The canvas toolbar's four-way edge picker. A 3×3 grid with the centre
+   empty, so each arrow sits where the edge it selects actually is — the
+   control reads as a small diagram of the workspace. */
+.rail-overlay__compass {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  grid-template-rows: repeat(3, auto);
+  gap: var(--space-1);
+  place-items: center;
+}
+
+.rail-overlay__compass-btn {
+  min-width: 32px;
+  height: 32px;
+}
+
 .rail-overlay__btn--wide {
   padding: 0 var(--space-3);
   font-size: var(--text-sm);

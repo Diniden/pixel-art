@@ -20,10 +20,12 @@
  * ── The control set differs by rail, and the props express that ───────────
  *
  * Side rails get two arrows (move one slot left / right). The bottom rail
- * gets one flip button (top ⇄ bottom edge). BOTH get the scale pair. Rather
- * than a `variant` string with runtime branching, the mover control is passed
- * as `move` — either an arrow pair or a flip — so an impossible combination
- * (a bottom rail with left/right arrows) cannot be constructed.
+ * gets one flip button (top ⇄ bottom edge). The canvas toolbar gets a
+ * four-way compass, because it locks to an edge rather than stepping through
+ * an order. ALL THREE get the scale pair. Rather than a `variant` string with
+ * runtime branching, the mover control is passed as `move` — an arrow pair, a
+ * flip, or an edge picker — so an impossible combination (a bottom rail with
+ * left/right arrows) cannot be constructed.
  *
  * `ui/` boundary: React, lucide icons, `classNames`, and this component's own
  * CSS. No store, no MobX, no API.
@@ -39,6 +41,18 @@ import {
 import { Icon } from "../../primitives/Icon/Icon";
 import { classNames } from "../../classNames";
 import "./RailLayoutOverlay.css";
+
+/**
+ * The compass cross, as data. Laid out on a 3×3 grid so each arrow sits where
+ * the edge it selects actually is — the control reads as a diagram of the
+ * workspace rather than as four buttons in a row.
+ */
+const EDGE_BUTTONS = [
+  { edge: "top", icon: ArrowUp, gridArea: "1 / 2" },
+  { edge: "left", icon: ArrowLeft, gridArea: "2 / 1" },
+  { edge: "right", icon: ArrowRight, gridArea: "2 / 3" },
+  { edge: "bottom", icon: ArrowDown, gridArea: "3 / 2" },
+] as const;
 
 /** The two arrows a SIDE rail shows. */
 export interface RailMoveArrows {
@@ -57,10 +71,25 @@ export interface RailMoveFlip {
   edge: "top" | "bottom";
 }
 
+/**
+ * The four-way edge picker the CANVAS TOOLBAR shows.
+ *
+ * ⚠️ Four DIRECT choices, not a two-arrow stepper like the side rails. The
+ * side rails step through an ordered track, so "left" and "right" mean
+ * "one place along". The toolbar has no order — it is simply locked to one of
+ * four edges — so each arrow names its destination and the arrow for the edge
+ * you are already on is disabled rather than being a no-op.
+ */
+export interface RailMoveEdges {
+  kind: "edges";
+  edge: "top" | "bottom" | "left" | "right";
+  onSetEdge: (edge: "top" | "bottom" | "left" | "right") => void;
+}
+
 export interface RailLayoutOverlayProps {
   /** Human name of the rail, shown above the controls. */
   label: string;
-  move: RailMoveArrows | RailMoveFlip;
+  move: RailMoveArrows | RailMoveFlip | RailMoveEdges;
   onScaleUp: () => void;
   onScaleDown: () => void;
   canScaleUp: boolean;
@@ -98,7 +127,27 @@ export function RailLayoutOverlay({
         <span className="rail-overlay__label">{label}</span>
 
         <div className="rail-overlay__row">
-          {move.kind === "arrows" ? (
+          {move.kind === "edges" ? (
+            /* Four DIRECT choices in a compass cross, so the control's shape
+               matches what it does. The arrow for the current edge is
+               disabled — pressing it would be a no-op the user cannot see. */
+            <div className="rail-overlay__compass">
+              {EDGE_BUTTONS.map(({ edge, icon, gridArea }) => (
+                <button
+                  key={edge}
+                  type="button"
+                  className="rail-overlay__btn rail-overlay__compass-btn"
+                  style={{ gridArea }}
+                  onClick={() => move.onSetEdge(edge)}
+                  disabled={move.edge === edge}
+                  aria-label={`Lock ${label} to the ${edge}`}
+                  title={`Lock ${label} to the ${edge}`}
+                >
+                  <Icon icon={icon} size={16} />
+                </button>
+              ))}
+            </div>
+          ) : move.kind === "arrows" ? (
             <>
               <button
                 type="button"

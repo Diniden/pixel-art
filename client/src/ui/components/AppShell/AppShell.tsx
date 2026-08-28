@@ -117,7 +117,9 @@ export interface AppShellProps {
    * Rendered inside that rail so it tracks the rail automatically. Absent
    * entries render nothing, which is how layout mode stays off.
    */
-  railOverlays?: Partial<Record<"left" | "right" | "bottom", ReactNode>>;
+  railOverlays?: Partial<
+    Record<"left" | "right" | "bottom" | "toolbar", ReactNode>
+  >;
   /**
    * Ref for the canvas area — `FloatingPanel` needs it as its drag bounds.
    *
@@ -211,10 +213,46 @@ export function AppShell({
       <div className="app__main">
         {renderSide("left")}
 
-        {/* Center - Canvas & Toolbar. ⚠️ `canvas-area` is a query hook. */}
-        <main ref={canvasAreaRef} className="app__canvas-area canvas-area">
-          {toolbar}
-          {children}
+        {/* Center - Canvas & Toolbar. ⚠️ `canvas-area` is a query hook.
+
+            The toolbar docks to any of the four edges. `--toolbar-<edge>`
+            sets the flex direction and the order, so which side it lands on
+            is CSS rather than four branches of JSX — and the canvas keeps
+            exactly one DOM position, which matters because eight
+            `querySelector('.canvas-area')` sites resolve it by name. */}
+        <main
+          ref={canvasAreaRef}
+          className={classNames(
+            "app__canvas-area",
+            "canvas-area",
+            `app__canvas-area--toolbar-${layout.toolbar.edge}`,
+          )}
+        >
+          {/* The toolbar and its layout-mode scrim travel together: the
+              scrim is `inset: 0` against this wrapper, so it tracks the
+              toolbar to whichever edge it is on with no measurement. */}
+          <div
+            className={classNames(
+              "app__toolbar-dock",
+              `app__toolbar-dock--scale-${layout.toolbar.scale}`,
+            )}
+          >
+            {toolbar}
+            {railOverlays?.toolbar}
+          </div>
+          {/* ⚠️ The canvas content STAYS A COLUMN whatever edge the toolbar
+              takes, and this wrapper is what guarantees it.
+
+              Its children (`canvas`, `canvas-info`, `layer-colors`) were
+              written as full-width rows stacked vertically. Docking the
+              toolbar left/right turns the canvas AREA into a row, and
+              without this wrapper those three become the row's siblings and
+              compete horizontally — measured: `canvas-info` and
+              `layer-colors` are `flex: 0 0 auto`, so they each took the full
+              1280px and squeezed the canvas to ZERO width. The wrapper keeps
+              them in their own column and lets only the dock share the
+              canvas area's axis. */}
+          <div className="app__canvas-stack">{children}</div>
         </main>
 
         {renderSide("right")}

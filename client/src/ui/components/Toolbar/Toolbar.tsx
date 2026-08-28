@@ -30,6 +30,7 @@
  * the purity boundary transitively.
  */
 import type { ReactNode } from "react";
+import { classNames } from "../../classNames";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { Icon } from "../../primitives/Icon/Icon";
 import { Maximize2, Sun, Moon, Film, Palette, Lightbulb } from "lucide-react";
@@ -49,6 +50,14 @@ interface ToolbarProps {
   pixelStudioTools: ReactNode;
   /** `LightingStudioToolsContainer` element, injected by the container. */
   lightingStudioTools: ReactNode;
+  /**
+   * Which edge of the workspace the toolbar is docked to (layout mode).
+   *
+   * ⚠️ `left`/`right` are a RE-FLOW into a vertical column, not a rotation —
+   * see `Toolbar.css`. Defaults to `top`, the historical arrangement, so a
+   * caller that does not know about docking is unaffected.
+   */
+  edge?: "top" | "bottom" | "left" | "right";
 }
 
 export function Toolbar({
@@ -62,9 +71,17 @@ export function Toolbar({
   onToggleFrameReferencePanelVisible,
   pixelStudioTools,
   lightingStudioTools,
+  edge = "top",
 }: ToolbarProps) {
+  const isVertical = edge === "left" || edge === "right";
   return (
-    <div className="toolbar">
+    <div
+      className={classNames(
+        "toolbar",
+        `toolbar--${edge}`,
+        isVertical && "toolbar--vertical",
+      )}
+    >
       {/* Focus Mode Toggle */}
       <div className="toolbar__section toolbar__section--focus-mode">
         <div className="toolbar__group">

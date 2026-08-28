@@ -131,6 +131,82 @@
   position: relative;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   THE TOOLBAR DOCK — the toolbar locks to any of the four edges (2026-08-28)
+   ══════════════════════════════════════════════════════════════════════════
+
+   The dock is a wrapper around the toolbar AND its layout-mode scrim, so the
+   two travel together: the scrim is `inset: 0` against this box and therefore
+   tracks the toolbar to whichever edge it moves to, with no measurement.
+
+   ⚠️ The EDGE IS EXPRESSED AS FLEX DIRECTION + ORDER, not as four blocks of
+   JSX. The canvas keeps exactly one position in the DOM whatever the toolbar
+   does, which is load-bearing: eight `document.querySelector('.canvas-area')`
+   sites resolve the viewport by name, and reordering the markup per edge
+   would make that resolution depend on a layout setting. */
+
+.app__toolbar-dock {
+  position: relative;
+  display: flex;
+  /* Never absorb the canvas's space — the toolbar is sized by its content. */
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The canvas content, always a column — see the note at its render site.
+   `min-*: 0` on both axes so it can actually shrink inside the flex parent
+   rather than being pinned to its content's size. */
+.app__canvas-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* The toolbar scales like the other rails — `zoom`, not `transform`, for the
+   same reason the bottom rail uses it: `zoom` feeds back into layout, so the
+   dock grows to fit its zoomed contents and the layout-mode scrim (sized to
+   the dock) stays exactly as big as what it is dimming. A transform would
+   leave a scaled toolbar overflowing a dock that never resized. */
+.app__toolbar-dock--scale-compact {
+  zoom: var(--rail-scale-compact);
+}
+
+.app__toolbar-dock--scale-regular {
+  zoom: var(--rail-scale-regular);
+}
+
+.app__toolbar-dock--scale-large {
+  zoom: var(--rail-scale-large);
+}
+
+.app__toolbar-dock--scale-huge {
+  zoom: var(--rail-scale-huge);
+}
+
+/* Top is the historical arrangement and needs no override — the canvas area
+   is already a column with the toolbar first. */
+.app__canvas-area--toolbar-bottom {
+  flex-direction: column-reverse;
+}
+
+/* ⚠️ Left/right turn the canvas area into a ROW, which makes the toolbar a
+   vertical column. That is a change to the toolbar's own layout, not just its
+   position: see `Toolbar.css`'s `--vertical` rules, which re-flow it from a
+   horizontal bar into a stack. A bar that merely rotated would have
+   unreadable labels and would not fit the viewport's height. */
+.app__canvas-area--toolbar-left {
+  flex-direction: row;
+}
+
+.app__canvas-area--toolbar-right {
+  flex-direction: row-reverse;
+}
+
 /* Bottom Panel */
 .app__bottom {
   flex: 0 0 auto;

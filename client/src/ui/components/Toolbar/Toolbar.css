@@ -24,6 +24,48 @@
   overflow-y: hidden;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   DOCKING TO THE OTHER THREE EDGES (2026-08-28)
+   ══════════════════════════════════════════════════════════════════════════
+
+   The rules above are the historical TOP dock and are left exactly as they
+   were, so the default arrangement is untouched. The modifiers below are
+   applied by `AppShell` from the layout's `toolbar.edge`.
+
+   ⚠️ The border moves with the toolbar. A bar docked to the bottom needs its
+   divider on TOP; left/right need a vertical divider. Leaving `border-bottom`
+   in place would draw a line across the middle of the workspace. */
+
+.toolbar--bottom {
+  border-bottom: none;
+  border-top: 1px solid var(--border-primary);
+}
+
+/* ⚠️ VERTICAL IS A RE-FLOW, NOT A ROTATION. The bar becomes a column: the
+   fixed 36px height is released and becomes a width, the axis flips, and the
+   overflow swaps axes so a tall stack scrolls vertically. A `rotate()` would
+   have been fewer lines and would have produced sideways text and a control
+   strip that did not fit the viewport. */
+.toolbar--vertical {
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  width: auto;
+  min-width: 44px;
+  padding: var(--space-2) var(--space-1);
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-bottom: none;
+}
+
+.toolbar--left {
+  border-right: 1px solid var(--border-primary);
+}
+
+.toolbar--right {
+  border-left: 1px solid var(--border-primary);
+}
+
 /* elements, DOM order */
 
 /*
@@ -49,6 +91,15 @@
   padding: var(--space-0-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
+}
+
+/* ⚠️ AFTER `.toolbar__section` and `.toolbar__group` on purpose — the same
+   equal-specificity ordering rule as the divider below. The toolbar's own
+   groups must turn with it: each is a row of controls, and stacked they need
+   the same treatment as the bar. */
+.toolbar--vertical .toolbar__section,
+.toolbar--vertical .toolbar__group {
+  flex-direction: column;
 }
 
 .toolbar__tool-btn {
@@ -99,6 +150,15 @@
   height: 20px;
   background: var(--border-primary);
   margin: 0 var(--space-1);
+}
+
+/* ⚠️ AFTER the base rule on purpose. Both selectors are (0,2,0) — equal
+   specificity — so source order decides, and placing this before the base
+   would let the horizontal 1×20px divider win in vertical mode. A divider
+   that separated columns must now separate rows. */
+.toolbar--vertical .toolbar__divider {
+  width: 100%;
+  height: 1px;
 }
 
 .toolbar__clear-reference-btn {

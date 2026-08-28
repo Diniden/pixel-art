@@ -64,6 +64,9 @@ export const ToolbarContainer = observer(function ToolbarContainer({
         />
       }
       lightingStudioTools={<LightingStudioToolsContainer />}
+      // Which edge the user locked it to. `AppShell` positions the dock; the
+      // toolbar re-flows itself (vertical is a re-flow, not a rotation).
+      edge={ui.layout.layout.toolbar.edge}
     />
   );
 });

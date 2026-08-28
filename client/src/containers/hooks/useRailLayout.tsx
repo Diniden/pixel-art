@@ -29,7 +29,9 @@ import { useStores } from "../../stores/context";
 
 export interface RailLayoutProps {
   layout: RailLayout;
-  railOverlays?: Partial<Record<"left" | "right" | "bottom", ReactNode>>;
+  railOverlays?: Partial<
+    Record<"left" | "right" | "bottom" | "toolbar", ReactNode>
+  >;
 }
 
 /** The user-facing name of each rail — what the overlay is labelled with. */
@@ -37,6 +39,7 @@ const RAIL_LABELS = {
   left: "Objects & Layers",
   right: "Tools",
   bottom: "Timeline",
+  toolbar: "Toolbar",
 } as const;
 
 export function useRailLayout(): RailLayoutProps {
@@ -48,7 +51,7 @@ export function useRailLayout(): RailLayoutProps {
   const railOverlays = useMemo(() => {
     if (!layoutMode) return undefined;
 
-    const scaleStep = (rail: "left" | "right" | "bottom") =>
+    const scaleStep = (rail: "left" | "right" | "bottom" | "toolbar") =>
       RAIL_SCALES.indexOf(layout[rail].scale) + 1;
 
     return {
@@ -85,6 +88,25 @@ export function useRailLayout(): RailLayoutProps {
           canScaleUp={store.canScaleRail("right", 1)}
           canScaleDown={store.canScaleRail("right", -1)}
           scaleStep={scaleStep("right")}
+          scaleCount={RAIL_SCALES.length}
+        />
+      ),
+      // ⚠️ The toolbar gets a four-way COMPASS, not the side rails' stepper:
+      // it locks to an edge rather than stepping through an ordered track,
+      // so each arrow names its destination directly.
+      toolbar: (
+        <RailLayoutOverlay
+          label={RAIL_LABELS.toolbar}
+          move={{
+            kind: "edges",
+            edge: layout.toolbar.edge,
+            onSetEdge: (edge) => store.setToolbarEdge(edge),
+          }}
+          onScaleUp={() => store.scaleRail("toolbar", 1)}
+          onScaleDown={() => store.scaleRail("toolbar", -1)}
+          canScaleUp={store.canScaleRail("toolbar", 1)}
+          canScaleDown={store.canScaleRail("toolbar", -1)}
+          scaleStep={scaleStep("toolbar")}
           scaleCount={RAIL_SCALES.length}
         />
       ),

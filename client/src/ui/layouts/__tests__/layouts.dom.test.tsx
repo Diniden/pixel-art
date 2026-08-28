@@ -38,6 +38,7 @@ import {
   DEFAULT_RAIL_LAYOUT,
   flipBottomEdge,
   scaleRail,
+  setToolbarEdge,
   stepRail,
 } from "../../layout/railLayout";
 
@@ -356,6 +357,53 @@ describe("AppShell — the rails are placed by the layout, not by their names", 
         ),
       ).toBeNull();
     }
+  });
+
+  it("⭐ docks the toolbar to each of the four edges", () => {
+    // The canvas keeps ONE position in the DOM whatever the toolbar does —
+    // eight `querySelector('.canvas-area')` sites resolve it by name, so the
+    // edge is expressed as flex direction, never as reordered markup.
+    for (const edge of ["top", "bottom", "left", "right"] as const) {
+      const layout = setToolbarEdge(DEFAULT_RAIL_LAYOUT, edge);
+      const { container } = render(<AppShell {...base} layout={layout} />);
+
+      const area = container.querySelector(".app__canvas-area")!;
+      expect(area.className).toContain(`app__canvas-area--toolbar-${edge}`);
+
+      // The dock wraps the toolbar and sits inside the canvas area.
+      const dock = area.querySelector(".app__toolbar-dock")!;
+      expect(dock).not.toBeNull();
+      // The dock wraps the injected toolbar element itself.
+      expect(dock.firstElementChild).not.toBeNull();
+      // ⭐ The canvas keeps ONE DOM position across all four edges: it is
+      // always the dock's next sibling, whatever direction the flex runs.
+      // Only the CSS moves it, which is what keeps `.canvas-area` resolvable.
+      expect(dock.parentElement).toBe(area);
+      expect(area.children[0]).toBe(dock);
+    }
+  });
+
+  it("carries the toolbar's scale on the dock, not the toolbar", () => {
+    // `zoom` on the dock makes it grow WITH its contents, which is what keeps
+    // the layout-mode scrim the same size as the thing it dims.
+    const layout = scaleRail(DEFAULT_RAIL_LAYOUT, "toolbar", 1);
+    const { container } = render(<AppShell {...base} layout={layout} />);
+    expect(
+      container.querySelector(".app__toolbar-dock")?.className,
+    ).toContain("app__toolbar-dock--scale-large");
+  });
+
+  it("⭐ puts the toolbar's scrim INSIDE the dock, so it tracks the edge", () => {
+    const { container } = render(
+      <AppShell
+        {...base}
+        layout={setToolbarEdge(DEFAULT_RAIL_LAYOUT, "left")}
+        railOverlays={{ toolbar: <div data-testid="ov-toolbar" /> }}
+      />,
+    );
+    expect(
+      container.querySelector(".app__toolbar-dock [data-testid=ov-toolbar]"),
+    ).not.toBeNull();
   });
 
   it("renders one overlay per rail, INSIDE the rail it controls", () => {
