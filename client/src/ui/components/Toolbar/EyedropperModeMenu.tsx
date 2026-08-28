@@ -7,10 +7,16 @@
  *
  * The toolbar docks to any of four edges and may spread over up to three
  * lines (`Toolbar.css`), and a menu positioned relative to the button would
- * have to know which. It does not: it is `position: absolute` inside the tool
- * button's own `position: relative` box and flips itself with the same
- * `--edge` modifier the toolbar already carries, so a bottom-docked toolbar
- * opens it upward instead of off-screen.
+ * have to know which. It does not: it is `position: absolute` inside
+ * `.toolbar__tool-anchor` — a wrapper holding the tool button and this menu
+ * as SIBLINGS — and flips itself with the same `--edge` modifier the toolbar
+ * already carries, so a bottom-docked toolbar opens it upward instead of
+ * off-screen.
+ *
+ * ⚠️ Sibling, not child, and that is not a style choice: a menu of `<button>`
+ * rows nested inside the tool `<button>` is invalid HTML, and browsers
+ * recover by hoisting the inner buttons OUT of the parent — which breaks the
+ * positioning and the clicks together.
  *
  * ── Why a distinct background (owner's request, and it is load-bearing) ────
  *
@@ -98,8 +104,10 @@ export function EyedropperModeMenu({
       )}
       role="menu"
       aria-label="Eyedropper mode"
-      // The menu sits inside the tool button. Without this, choosing a mode
-      // would bubble up to the button's own onClick and also select the tool.
+      // The menu is a SIBLING of the tool button now, not a child, so a click
+      // in here no longer bubbles through it. This stays as a guard for the
+      // toolbar's own delegated handlers above: a click that chooses a mode
+      // must never also read as a click on the tool row.
       onClick={(e) => e.stopPropagation()}
     >
       <div className="eyedropper-mode-menu__title">

@@ -179,7 +179,6 @@ export const ToolbarEdges: Story = {
       onFewer: () => {},
       canMore: true,
       canFewer: false,
-      lines: 1,
     },
   },
   render: (args) => (
@@ -201,7 +200,6 @@ export const ToolbarEdgesVertical: Story = {
       onFewer: () => {},
       canMore: true,
       canFewer: true,
-      lines: 2,
     },
   },
   render: (args) => (

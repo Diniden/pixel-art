@@ -2,10 +2,15 @@
  * `Toolbar` — docking and spread.
  *
  * ⚠️ WHAT THIS PINS: the class list is the whole mechanism. `--vertical`
- * re-flows the bar into a column, and `--spread-N` is what releases
- * `flex-wrap` and lifts the height cap. Spread 1 carries NO modifier, so the
- * default bar's markup is byte-for-byte what it always was — which is the
- * property that keeps this feature from changing anyone's existing layout.
+ * re-flows the bar into a column, and `--spread-N` sets `--toolbar-lines`,
+ * which EACH TOOL GROUP reads to cluster itself into N rows (or N columns
+ * when vertical). Spread applies per GROUP, not to the bar — an earlier
+ * version wrapped the whole toolbar and let one group be split across a line
+ * break, which is not what a group is for.
+ *
+ * Spread 1 carries NO modifier, so the default bar's markup is byte-for-byte
+ * what it always was — the property that keeps this from changing anyone's
+ * existing layout.
  */
 import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
@@ -65,6 +70,21 @@ describe("spread", () => {
     const cls = bar(container).className;
     expect(cls).toContain("toolbar--vertical");
     expect(cls).toContain("toolbar--spread-3");
+  });
+
+  it("⭐ the modifier sits on the BAR, and the groups are what cluster", () => {
+    // The bar carries the count; each `toolbar__group` reads it and wraps
+    // itself. The groups' own markup is unchanged by spread — a group must
+    // never be split across a line break, which is what wrapping the bar
+    // itself used to allow.
+    const { container } = render(<Toolbar {...base} spread={2} />);
+    expect(bar(container).className).toContain("toolbar--spread-2");
+
+    const groups = container.querySelectorAll(".toolbar__group");
+    expect(groups.length).toBeGreaterThan(0);
+    for (const g of groups) {
+      expect(g.className).not.toContain("spread");
+    }
   });
 });
 

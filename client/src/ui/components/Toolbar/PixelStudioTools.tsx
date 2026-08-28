@@ -153,14 +153,23 @@ function ToolButton({
   secondaryAction?: () => void;
   /** Tooltip tail describing `secondaryAction`. */
   secondaryHint?: string;
-  /** The anchored menu, when this tool has one open. */
+  /**
+   * The anchored menu, when this tool has one open.
+   *
+   * ⚠️ Rendered as a SIBLING of the `<button>`, inside a positioned wrapper —
+   * never as its child. A menu of `<button>` rows nested inside a `<button>`
+   * is invalid HTML, and browsers recover by hoisting the inner buttons OUT
+   * of the parent, which breaks both the menu's positioning and its clicks.
+   */
   children?: ReactNode;
 }) {
   // The long press drives whichever action this button owns: the mode menu
   // where one is supplied, the slot-B assignment everywhere else.
   const longPress = useLongPress(secondaryAction ?? onSelectAlternate);
 
-  return (
+  // No wrapper unless there is a menu to anchor: every other tool keeps the
+  // exact markup it had, so the toolbar's flex layout is untouched.
+  const button = (
     <button
       className={classNames(
         "toolbar__tool-btn",
@@ -214,8 +223,16 @@ function ToolButton({
         <Icon icon={tool.icon} />
       </span>
       <span className="toolbar__tool-hotkey">{tool.hotkey}</span>
-      {children}
     </button>
+  );
+
+  if (!children) return button;
+
+  return (
+    <span className="toolbar__tool-anchor">
+      {button}
+      {children}
+    </span>
   );
 }
 

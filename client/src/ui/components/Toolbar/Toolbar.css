@@ -9,10 +9,13 @@
    They are deleted, not renamed. */
 
 .toolbar {
-  /* One line's height — the unit the spread cap is expressed in, so the two
-     numbers cannot drift apart. Redefined for the vertical dock, where a
-     "line" is a column's width instead. */
-  --toolbar-line: 36px;
+  /* The units the spread caps are built from, so a cap and the things it
+     counts cannot drift apart. `--toolbar-btn` is `.toolbar__tool-btn`'s
+     height; `--toolbar-group-gap` is the group's own `gap`; and
+     `--toolbar-group-pad` is its padding on BOTH sides. See SPREAD below. */
+  --toolbar-btn: 28px;
+  --toolbar-group-gap: var(--space-0-5);
+  --toolbar-group-pad: calc(var(--space-0-5) * 2);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -45,57 +48,34 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   SPREAD — how many lines the toolbar may use (2026-08-28)
+   SPREAD — how many lines EACH TOOL GROUP uses (2026-08-28)
    ══════════════════════════════════════════════════════════════════════════
 
-   ⚠️ A MAXIMUM, not a fixed count. `flex-wrap: wrap` lets the controls take
-   as many lines as they need; `max-height` caps how many are visible, and the
-   overflow scrolls. With few enough tools to fit on one line the bar stays
-   one line — the setting buys headroom, it does not pad empty space.
+   ⚠️ SPREAD IS PER GROUP, NOT PER BAR. An earlier version wrapped the whole
+   toolbar, which let a group be split across a line break — half the pencil
+   tools on row 1, half on row 2 — and that is not what a "group" is for.
+   Each group now clusters into its own N lines, and the groups themselves
+   still sit side by side along the bar.
 
-   The cap is expressed in `--toolbar-line`, one line's height, so the two
-   numbers cannot drift apart: 3 rows is exactly 3 × a row, plus the padding
-   that is on the bar either way. */
+   Docked horizontally a group becomes N ROWS (N times taller, a fraction as
+   wide); docked vertically it becomes N COLUMNS. Either way spread adds
+   lines along the bar's CROSS axis — the axis that is not scarce — buying
+   back reach on the axis that is.
 
-.toolbar--spread-2,
-.toolbar--spread-3 {
-  flex-wrap: wrap;
-  /* Rows are laid out from the top rather than being spread down the box,
-     so a partly-filled second row sits under the first. */
-  align-content: flex-start;
-  overflow-y: auto;
-}
+   ⚠️ THE COUNT IS A CUSTOM PROPERTY, NOT A COMPOUND SELECTOR, and that is
+   deliberate. Writing `.toolbar--vertical.toolbar--spread-2 .toolbar__group`
+   needs three compounds, which this project's stylelint caps at two. Setting
+   `--toolbar-lines` on the bar and reading it from ONE group rule keeps every
+   selector at two compounds and collapses six rules into three. */
 
 .toolbar--spread-2 {
-  max-height: calc(var(--toolbar-line) * 2);
+  --toolbar-lines: 2;
 }
 
 .toolbar--spread-3 {
-  max-height: calc(var(--toolbar-line) * 3);
+  --toolbar-lines: 3;
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   DOCKING TO THE OTHER THREE EDGES (2026-08-28)
-   ══════════════════════════════════════════════════════════════════════════
-
-   The rules above are the historical TOP dock and are left exactly as they
-   were, so the default arrangement is untouched. The modifiers below are
-   applied by `AppShell` from the layout's `toolbar.edge`.
-
-   ⚠️ The border moves with the toolbar. A bar docked to the bottom needs its
-   divider on TOP; left/right need a vertical divider. Leaving `border-bottom`
-   in place would draw a line across the middle of the workspace. */
-
-.toolbar--bottom {
-  border-bottom: none;
-  border-top: 1px solid var(--border-primary);
-}
-
-/* ⚠️ VERTICAL IS A RE-FLOW, NOT A ROTATION. The bar becomes a column: the
-   fixed 36px height is released and becomes a width, the axis flips, and the
-   overflow swaps axes so a tall stack scrolls vertically. A `rotate()` would
-   have been fewer lines and would have produced sideways text and a control
-   strip that did not fit the viewport. */
 .toolbar--vertical {
   flex-direction: column;
   align-items: center;
@@ -108,11 +88,6 @@
   border-bottom: none;
   /* Docked vertically the scroll axis flips, so the touch-action does too. */
   touch-action: pan-x;
-  /* ⚠️ Docked vertically, "spread" means COLUMNS, not rows — the toolbar
-     wraps along its cross axis, which is now horizontal. A "line" is
-     therefore a column's WIDTH, wider than 36px because a column must fit a
-     control plus the bar's horizontal padding. */
-  --toolbar-line: 44px;
 }
 
 .toolbar--vertical.toolbar--spread-2,
@@ -167,12 +142,43 @@
   flex-shrink: 0;
 }
 
+/* The group also reads `--toolbar-lines` from the bar. `1` — the default —
+   caps it at one line's height, which is no constraint at all on a single
+   row, so an unspread toolbar renders exactly as it always has.
+
+   `--toolbar-btn` is one control's size, so a cap and the button it counts
+   cannot drift apart. The cross-axis max is what forces the wrap; the other
+   axis falls out of it and needs no rule. */
 .toolbar__group {
   display: flex;
   gap: var(--space-0-5);
   padding: var(--space-0-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
+  flex-wrap: wrap;
+  /* Lines pack from the start, so a partly-filled last line sits against the
+     first rather than being spread across the group. */
+  align-content: flex-start;
+  /* ⚠️ N lines is N buttons plus N-1 GAPS plus the padding — the gaps are
+     what an earlier version left out, and 2px short is enough to clip the
+     second row and hide it behind the group's own overflow. */
+  max-height: calc(
+    var(--toolbar-btn) * var(--toolbar-lines, 1) + var(--toolbar-group-gap) *
+      (var(--toolbar-lines, 1) - 1) + var(--toolbar-group-pad)
+  );
+}
+
+/* ⚠️ Vertical dock: the group's own flow turns too, so its lines are COLUMNS.
+   Without this the buttons would still run left-to-right and the "columns"
+   would be rows in a rail with no width for them. The cap swaps axes with
+   the flow. */
+.toolbar--vertical .toolbar__group {
+  flex-direction: column;
+  max-height: none;
+  max-width: calc(
+    var(--toolbar-btn) * var(--toolbar-lines, 1) + var(--toolbar-group-gap) *
+      (var(--toolbar-lines, 1) - 1) + var(--toolbar-group-pad)
+  );
 }
 
 /* ⚠️ AFTER `.toolbar__section` and `.toolbar__group` on purpose — the same
@@ -201,6 +207,23 @@
 
 .toolbar__tool-btn:hover {
   background: var(--bg-hover);
+}
+
+/* Wrapper around a tool button that owns an anchored menu (the eyedropper's
+   mode chooser today).
+
+   ⚠️ It exists because the menu CANNOT be a child of the button: a menu of
+   `<button>` rows nested inside a `<button>` is invalid HTML, and browsers
+   recover by hoisting the inner buttons out, which breaks the menu's
+   positioning and its clicks. The wrapper is the shared containing block for
+   the two siblings instead.
+
+   `display: flex` rather than the default inline, so the wrapper is exactly
+   the button's 28px box and the toolbar's own flex layout is unchanged for
+   the one tool that has it. */
+.toolbar__tool-anchor {
+  position: relative;
+  display: flex;
 }
 
 .toolbar__tool-icon {

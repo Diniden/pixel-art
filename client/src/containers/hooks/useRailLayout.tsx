@@ -115,7 +115,6 @@ export function useRailLayout(): RailLayoutProps {
             onFewer: () => store.stepToolbarSpread(-1),
             canMore: store.canStepToolbarSpread(1),
             canFewer: store.canStepToolbarSpread(-1),
-            lines: layout.toolbar.spread,
           }}
           // `compact` drops the label: the rail is 36px tall docked
           // horizontally and has no room for one.

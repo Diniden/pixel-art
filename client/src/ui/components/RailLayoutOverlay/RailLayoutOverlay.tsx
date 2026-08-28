@@ -134,7 +134,6 @@ export interface RailLayoutOverlayProps {
     onFewer: () => void;
     canMore: boolean;
     canFewer: boolean;
-    lines: number;
   };
   /** Lays the controls out in a row rather than a column (the bottom rail). */
   horizontal?: boolean;
@@ -192,6 +191,37 @@ export function RailLayoutOverlay({
                   <Icon icon={icon} size={16} />
                 </button>
               ))}
+
+              {/* ⚠️ The spread pair lives in the SAME row as the edge
+                  arrows, styled identically and with no readout between
+                  them. They are the same kind of control — "where does this
+                  rail go" and "how much room does it use" — and a number
+                  wedged between two icon buttons broke the run visually for
+                  a value the layout already shows. */}
+              {spread ? (
+                <>
+                  <button
+                    type="button"
+                    className="rail-overlay__btn rail-overlay__edge-btn"
+                    onClick={spread.onFewer}
+                    disabled={!spread.canFewer}
+                    aria-label={`Cluster ${label} into fewer lines`}
+                    title={`Fewer lines — each tool group takes less room`}
+                  >
+                    <Icon icon={Shrink} size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="rail-overlay__btn rail-overlay__edge-btn"
+                    onClick={spread.onMore}
+                    disabled={!spread.canMore}
+                    aria-label={`Spread ${label} over more lines`}
+                    title={`More lines — spread each tool group out`}
+                  >
+                    <Icon icon={Expand} size={16} />
+                  </button>
+                </>
+              ) : null}
             </div>
           ) : move.kind === "arrows" ? (
             <>
@@ -240,34 +270,6 @@ export function RailLayoutOverlay({
             </button>
           )}
         </div>
-
-        {spread ? (
-          <div className="rail-overlay__row">
-            <button
-              type="button"
-              className="rail-overlay__btn rail-overlay__edge-btn"
-              onClick={spread.onFewer}
-              disabled={!spread.canFewer}
-              aria-label={`Use fewer rows for ${label}`}
-              title={`Fewer rows — ${label} takes less space`}
-            >
-              <Icon icon={Shrink} size={14} />
-            </button>
-            <span className="rail-overlay__scale" aria-live="polite">
-              {spread.lines}
-            </span>
-            <button
-              type="button"
-              className="rail-overlay__btn rail-overlay__edge-btn"
-              onClick={spread.onMore}
-              disabled={!spread.canMore}
-              aria-label={`Spread ${label} over more rows`}
-              title={`More rows — spread ${label}'s tools out`}
-            >
-              <Icon icon={Expand} size={14} />
-            </button>
-          </div>
-        ) : null}
 
         {scale ? (
           <div className="rail-overlay__row">

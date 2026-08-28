@@ -3,12 +3,13 @@
    The mode chooser that opens from the eyedropper tool button on a long press
    or a double click.
 
-   ⚠️ POSITIONED AGAINST `.toolbar__tool-btn`, which is already
-   `position: relative` (Toolbar.css:199 — it is what the hotkey badge hangs
-   off). The menu is rendered INSIDE that button, so no portal and no
-   measurement are involved: the four `--edge` modifiers below flip it so a
-   toolbar docked to any side opens the menu into the workspace rather than
-   off-screen.
+   ⚠️ POSITIONED AGAINST `.toolbar__tool-anchor`, the wrapper that holds the
+   tool button and this menu as SIBLINGS. The menu is deliberately NOT a
+   child of the button: a menu of `<button>` rows inside a `<button>` is
+   invalid HTML and browsers hoist the inner buttons out of it, breaking both
+   the positioning and the clicks. No portal and no measurement are involved —
+   the four `--edge` modifiers below flip it so a toolbar docked to any side
+   opens the menu into the workspace rather than off-screen.
 
    `--z-dropdown` is the token for exactly this role ("select menus anchored
    to a control"). It outranks the toolbar's own `--z-shell` so the menu is
