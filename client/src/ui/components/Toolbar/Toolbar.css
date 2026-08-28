@@ -9,13 +9,10 @@
    They are deleted, not renamed. */
 
 .toolbar {
-  /* The units the spread caps are built from, so a cap and the things it
-     counts cannot drift apart. `--toolbar-btn` is `.toolbar__tool-btn`'s
-     height; `--toolbar-group-gap` is the group's own `gap`; and
-     `--toolbar-group-pad` is its padding on BOTH sides. See SPREAD below. */
-  --toolbar-btn: 28px;
-  --toolbar-group-gap: var(--space-0-5);
-  --toolbar-group-pad: calc(var(--space-0-5) * 2);
+  /* ⚠️ The `--toolbar-btn` / `-group-gap` / `-group-pad` trio is GONE. They
+     existed to compute a `max-height` big enough for N wrapped lines, and
+     that whole approach is replaced: the group is a grid with an explicit
+     row count, so nothing has to be measured against a button's size. */
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -139,54 +136,65 @@
    scrolling is only useful once there is something to scroll TO. */
 .toolbar__section,
 .toolbar__group {
+  /* Still applies to a grid: this is about the item's behaviour in the BAR's
+     flex layout, not about the group's own internal flow. */
   flex-shrink: 0;
 }
 
-/* The group also reads `--toolbar-lines` from the bar. `1` — the default —
-   caps it at one line's height, which is no constraint at all on a single
-   row, so an unspread toolbar renders exactly as it always has.
+/* The group reads `--toolbar-lines` from the bar. */
+/* ⚠️ A GRID, NOT WRAPPED FLEX, AND THAT IS THE WHOLE POINT.
 
-   `--toolbar-btn` is one control's size, so a cap and the button it counts
-   cannot drift apart. The cross-axis max is what forces the wrap; the other
-   axis falls out of it and needs no rule. */
+   Two earlier attempts used `flex-wrap` under a `max-height` cap. Wrapping is
+   REACTIVE: it only breaks a line when the content actually exceeds the
+   limit, so a group that already fitted on one row simply ignored the setting
+   and raising the spread appeared to do nothing at all.
+
+   `grid-template-rows` is PRESCRIPTIVE. It declares N rows and
+   `grid-auto-flow: column` fills them top-to-bottom before starting a new
+   column, so the group is divided into exactly N lines whether or not it
+   needed to be. Spread 2 on a 12-tool group gives 2 rows of 6 because it was
+   asked to, not because it ran out of room.
+
+   `--toolbar-lines` defaults to 1, which is a single row — identical to the
+   flex row this replaced, so an unspread toolbar is unchanged. */
 .toolbar__group {
-  display: flex;
+  display: grid;
+  grid-template-rows: repeat(var(--toolbar-lines, 1), auto);
+  grid-auto-flow: column;
+  /* Columns are only as wide as their content, so a group does not stretch
+     to fill space it has no buttons for. */
+  grid-auto-columns: min-content;
+  justify-items: center;
+  align-items: center;
   gap: var(--space-0-5);
   padding: var(--space-0-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
-  flex-wrap: wrap;
-  /* Lines pack from the start, so a partly-filled last line sits against the
-     first rather than being spread across the group. */
-  align-content: flex-start;
-  /* ⚠️ N lines is N buttons plus N-1 GAPS plus the padding — the gaps are
-     what an earlier version left out, and 2px short is enough to clip the
-     second row and hide it behind the group's own overflow. */
-  max-height: calc(
-    var(--toolbar-btn) * var(--toolbar-lines, 1) + var(--toolbar-group-gap) *
-      (var(--toolbar-lines, 1) - 1) + var(--toolbar-group-pad)
-  );
 }
 
 /* ⚠️ Vertical dock: the group's own flow turns too, so its lines are COLUMNS.
    Without this the buttons would still run left-to-right and the "columns"
    would be rows in a rail with no width for them. The cap swaps axes with
    the flow. */
+/* ⚠️ Vertical dock: the group's lines are COLUMNS, so the axes swap. N
+   columns, filled row-wise, which is the exact mirror of the horizontal
+   case. `grid-template-rows` must be reset to `none` or the two templates
+   fight and the group keeps its horizontal shape. */
 .toolbar--vertical .toolbar__group {
-  flex-direction: column;
-  max-height: none;
-  max-width: calc(
-    var(--toolbar-btn) * var(--toolbar-lines, 1) + var(--toolbar-group-gap) *
-      (var(--toolbar-lines, 1) - 1) + var(--toolbar-group-pad)
-  );
+  grid-template-rows: none;
+  grid-template-columns: repeat(var(--toolbar-lines, 1), auto);
+  grid-auto-flow: row;
+  grid-auto-rows: min-content;
 }
 
 /* ⚠️ AFTER `.toolbar__section` and `.toolbar__group` on purpose — the same
    equal-specificity ordering rule as the divider below. The toolbar's own
    groups must turn with it: each is a row of controls, and stacked they need
    the same treatment as the bar. */
-.toolbar--vertical .toolbar__section,
-.toolbar--vertical .toolbar__group {
+/* ⚠️ SECTIONS ONLY. `.toolbar__group` is a GRID and its flow is set by the
+   rule above — adding `flex-direction` here did nothing to it but silently
+   overrode that rule's own declarations when both matched. */
+.toolbar--vertical .toolbar__section {
   flex-direction: column;
 }
 
@@ -207,23 +215,6 @@
 
 .toolbar__tool-btn:hover {
   background: var(--bg-hover);
-}
-
-/* Wrapper around a tool button that owns an anchored menu (the eyedropper's
-   mode chooser today).
-
-   ⚠️ It exists because the menu CANNOT be a child of the button: a menu of
-   `<button>` rows nested inside a `<button>` is invalid HTML, and browsers
-   recover by hoisting the inner buttons out, which breaks the menu's
-   positioning and its clicks. The wrapper is the shared containing block for
-   the two siblings instead.
-
-   `display: flex` rather than the default inline, so the wrapper is exactly
-   the button's 28px box and the toolbar's own flex layout is unchanged for
-   the one tool that has it. */
-.toolbar__tool-anchor {
-  position: relative;
-  display: flex;
 }
 
 .toolbar__tool-icon {
