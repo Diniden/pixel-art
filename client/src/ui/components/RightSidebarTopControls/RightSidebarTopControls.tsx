@@ -19,15 +19,21 @@
  *  - `showTraceBrush` is true for the `reference-trace` tool **or** whenever
  *    `frameTraceActive` — a trace can be live while another tool is picked.
  *  - Every predicate is gated on `isPixelMode` (`studioMode !== "lighting"`),
- *    so the whole Tool Options panel disappears in the lighting studio while
- *    Zoom stays. That is why `ZoomControls` renders outside the guard.
+ *    so the whole Tool Options panel disappears in the lighting studio.
+ *
+ * ⚠️ **The Zoom stepper was REMOVED on 2026-08-28** (owner request). It used
+ * to render outside the `isPixelMode` guard so it survived into the lighting
+ * studio — that is why the note above once said "while Zoom stays". Zoom is
+ * now driven by gesture (pinch / ctrl+wheel), and `CanvasViewControls` in the
+ * canvas's bottom-left corner is the way back to 100% and centre. Do not
+ * reintroduce a stepper here without checking that it does not duplicate
+ * those.
  *
  * ── Purity ────────────────────────────────────────────────────────────────
  * Imports: its own four sibling components (and their types) plus this file's
  * stylesheet. No React import, no domain type of its own, no store, no MobX,
  * no API. `RightSidebarTopControlsContainer` supplies every value.
  */
-import { ZoomControls } from "./ZoomControls";
 import { BrushControls, type GaussianFillParams } from "./BrushControls";
 import { ShapeControls } from "./ShapeControls";
 import { SelectionControls, type SelectionSummary } from "./SelectionControls";
@@ -43,8 +49,6 @@ export interface RightSidebarTopControlsProps {
   /** `frameTraceActive` — forces the trace group on regardless of the tool. */
   frameTraceActive: boolean;
 
-  zoom: number;
-  onZoomChange: (zoom: number) => void;
 
   brushSize: number;
   onBrushSizeChange: (size: number) => void;
@@ -77,8 +81,6 @@ export function RightSidebarTopControls({
   isPixelMode,
   selectedTool,
   frameTraceActive,
-  zoom,
-  onZoomChange,
   brushSize,
   onBrushSizeChange,
   traceMax,
@@ -123,8 +125,6 @@ export function RightSidebarTopControls({
 
   return (
     <div className="right-sidebar-top-controls">
-      <ZoomControls zoom={zoom} onZoomChange={onZoomChange} />
-
       {showToolOptions && (
         <div className="panel right-sidebar-top-controls__panel">
           <div className="panel__header panel__header--compact">

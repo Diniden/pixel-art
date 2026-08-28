@@ -28,8 +28,6 @@ const meta = {
     isPixelMode: true,
     selectedTool: "pencil",
     frameTraceActive: false,
-    zoom: 8,
-    onZoomChange: fn(),
     brushSize: 4,
     onBrushSizeChange: fn(),
     traceMax: 16,
@@ -107,7 +105,6 @@ export const LightingStudio: Story = {
 export const GaussianFillAtWidest: Story = {
   args: {
     selectedTool: "gaussian-fill",
-    zoom: 3.5,
     gaussianFill: { smoothing: 5.0, radius: 128, radiusMax: 128 },
   },
 };

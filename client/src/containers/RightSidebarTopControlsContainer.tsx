@@ -13,7 +13,6 @@
  *
  * All 16 members are read here, from five MobX stores:
  *
- *   zoom                              → `ui.viewport`
  *   brushSize / shapeMode /           → `ui.tool`
  *     borderRadius / moveAllLayers /
  *     pencilBrushMax / selectionMode /
@@ -52,7 +51,7 @@ import { useStores } from "../stores/context";
 export const RightSidebarTopControlsContainer = observer(
   function RightSidebarTopControlsContainer() {
     const { ui, referenceUI, lightingUI, selectionUI } = useStores();
-    const { tool, viewport } = ui;
+    const { tool } = ui;
 
     const selection = selectionUI.selection;
     const selectionSummary: SelectionSummary | null = selection
@@ -74,8 +73,6 @@ export const RightSidebarTopControlsContainer = observer(
         isPixelMode={lightingUI.studioMode !== "lighting"}
         selectedTool={tool.selectedTool}
         frameTraceActive={referenceUI.frameTraceActive}
-        zoom={viewport.zoom}
-        onZoomChange={(zoom) => viewport.setZoom(zoom)}
         brushSize={tool.brushSize}
         onBrushSizeChange={(size) => tool.setBrushSize(size)}
         traceMax={tool.pencilBrushMax ?? 16}
