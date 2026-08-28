@@ -55,7 +55,13 @@
  * deriving them keeps that policy where the store data lives.
  */
 
-import type { CSSProperties, MouseEvent, RefObject, TouchEvent } from "react";
+import type {
+  CSSProperties,
+  MouseEvent,
+  ReactNode,
+  RefObject,
+  TouchEvent,
+} from "react";
 import "./CanvasSurface.css";
 
 export interface CanvasSurfaceProps {
@@ -113,6 +119,14 @@ export interface CanvasSurfaceProps {
   onTouchStart: (e: TouchEvent<HTMLCanvasElement>) => void;
   onTouchMove: (e: TouchEvent<HTMLCanvasElement>) => void;
   onTouchEnd: (e: TouchEvent<HTMLCanvasElement>) => void;
+  /**
+   * Floating controls over the viewport (the bottom-left column).
+   *
+   * ⚠️ Rendered as a SIBLING of `canvas__layout`, never inside it — that
+   * element carries the pan/zoom transform, and a control placed within it
+   * would be scaled and panned with the artwork. See `CanvasViewControls.css`.
+   */
+  viewControls?: ReactNode;
 }
 
 /** `pointer-events: none` is also in CSS; kept inline as `Canvas.tsx` had it. */
@@ -139,6 +153,7 @@ export function CanvasSurface({
   onTouchStart,
   onTouchMove,
   onTouchEnd,
+  viewControls,
 }: CanvasSurfaceProps) {
   return (
     <div className="canvas">
@@ -200,6 +215,7 @@ export function CanvasSurface({
             )}
           </div>
         </div>
+        {viewControls}
       </div>
     </div>
   );

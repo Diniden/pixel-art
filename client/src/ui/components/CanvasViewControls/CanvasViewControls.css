@@ -1,0 +1,65 @@
+/* block: canvas-view-controls (2026-08-28).
+
+   The floating control column in the BOTTOM-LEFT of the canvas viewport.
+
+   ⚠️ `position: absolute` against `.app__canvas-area`, which is already
+   `position: relative` — the same containing block the floating reference
+   panels use. It deliberately does NOT live inside `.canvas__layout`: that
+   element carries the pan/zoom transform, so a control placed there would be
+   scaled and panned along with the artwork and could itself be dragged
+   off-screen. A control whose whole job is to rescue a lost view must never
+   be reachable by the gesture that lost it.
+
+   `--z-overlay-control` is the token for exactly this role ("floating buttons
+   over a canvas"), one layer below the floating panels. */
+
+.canvas-view-controls {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  z-index: var(--z-overlay-control);
+  display: flex;
+  /* A column: this stack is expected to gain siblings. */
+  flex-direction: column;
+  gap: var(--space-2);
+  /* The column is only as wide as its buttons, so the canvas stays clickable
+     everywhere the controls are not. */
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.canvas-view-controls > * {
+  pointer-events: auto;
+}
+
+.canvas-view-controls__btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-fast);
+}
+
+.canvas-view-controls__btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.canvas-view-controls__icon {
+  display: flex;
+  align-items: center;
+}
+
+.canvas-view-controls__value {
+  min-width: 3.5ch;
+  text-align: right;
+}
