@@ -1,8 +1,9 @@
 # HANDOFF — Canvas rendering performance for large editing surfaces
 
-**Current position:** W6 DONE — **W7 (task 08, lighting studio follow-on) is the only wave left.** Owner's consolidated visual pass is now due.
+**Current position:** ✅ **COMPLETE** — all 7 waves DONE, full `bun run verify` exits 0.
+**⚠️ The owner's consolidated visual pass is the one thing outstanding. See the checklist at the bottom.**
 **Branch:** `feat/03-reflection-tool`
-**Last commit:** `3416555`
+**Last commit:** `cb76d89`
 
 Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 `feat/03-reflection-tool`, working tree clean.
@@ -17,7 +18,7 @@ Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 | W4 | 05 | **DONE** | 2026-08-30 | `82ae19a` `221b58f` | typecheck 0 · vitest **134 files / 2365 passed** · lint 0 · boundaries 0 · **10 visual checks owed, incl. R4** |
 | W5 | 06 | **DONE** | 2026-08-30 | `1025d6b` `ed7da83` | typecheck 0 · vitest **134 files / 2385 passed** · lint 0 · lint:css **no new errors (still exactly 2 pre-existing)** · boundaries 0 |
 | W6 | 07 | **DONE** | 2026-08-30 | `6553b96` `3416555` | typecheck 0 · vitest **135 files / 2417 passed** · lint 0 · boundaries 0 · **1-cell edit paints 1 cell (was 57,344)** |
-| W7 | 08 | TODO | | | |
+| W7 | 08 | **DONE** | 2026-08-30 | `14db1db` `cb76d89` | **full `bun run verify` exit 0** · vitest **135 files / 2424 passed** · lint 0 · lint:css still exactly 2 pre-existing · boundaries 0 · storybook 0 |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
@@ -191,6 +192,54 @@ chromedriver). Still owed, including **the Landscapes KB-not-MB memory measureme
 headline claim of this task, entirely unmeasured.** Static substitutes that did pass:
 `coords.test.ts` 21/21 unmodified; the R1 wheel-pan test drives a real `WheelEvent` and
 asserts the clamp against full content size; the D1 variant-edit sizing test.
+
+## W7 DONE — plan COMPLETE. Coordinator-verified.
+
+Commits `14db1db`, `cb76d89`. Exactly the 7 authorized files (776 insertions / 205 deletions).
+No wave 1–6 file reopened.
+
+```
+bun run verify   -> EXIT 0   (server typecheck + lint, prettier, tests, production build)
+typecheck        -> exit 0
+vitest run       -> Test Files  135 passed (135) · Tests  2424 passed (2424)   68.61s
+lint             -> 0 errors, 65 warnings          exit 0
+lint:css         -> exactly 2 errors, both the pre-existing OtherHand.css:267/:288
+lint:boundaries  -> OK — all 5 boundary rules hold  exit 0
+build-storybook  -> exit 0
+```
++7 tests, no pre-existing test regressed. Corpus: all 149 backup snapshots plus the 2
+standalone projects pass **unchanged**. No lockfile.
+
+**R7 CLOSED — coordinator-verified by grep:** no `viewCellsX * zoom` / `canvasWidth = … zoom`
+backing-store sizing survives in `LightingCanvasContainer`. Both engines now read the shared
+`ViewportUIStore.zoom` as a CSS scale factor and nothing else.
+**D12 verified across the WHOLE plan:** `git diff 5d76ce9..HEAD -- renderLightingPreview.ts`
+is **0 lines**. `image-rendering: pixelated` present on all three lighting canvases.
+
+### `handleResetView` — the trap here was the REVERSE of the pixel canvas's
+
+The task file predicted "the same broken assumption". It was subtler: the old comment claimed
+*"at view zoom 1 the content is exactly `canvasWidth x canvasHeight`"*, which was true **only
+because `canvasWidth` was itself pre-scaled** (`viewCellsX * zoom`) — the arithmetic was
+right and the words were wrong. A mechanical `canvasWidth -> cellWidth` rename would have
+**introduced** the 90%-offset bug rather than fixed it. Centring is against
+`contentWidth`/`contentHeight`, numerically identical to the old `canvasWidth`, so reset
+centres a sprite exactly where it did before.
+
+### Task 08 deviations (accepted)
+
+1. **`zoom` kept in both renderers' signatures.** Removing it would break ~15 golden-hash
+   tests in files outside Touches. A `zoom === 1` fast path was added behind the retained,
+   still-tested general upscale; byte-equivalence is proven by the untouched goldens (the
+   `zoom 1` golden exercises the new path, the zoom-4 hashes the old). All 182
+   `ui/canvas/render` tests pass unmodified.
+2. **`compositeOver` extracted and shared** between `renderNormalEdit` and
+   `renderLitComposite` — the source-over lerp was duplicated verbatim and their golden
+   suites test different zooms, so a divergence could have sat green indefinitely.
+3. **The brush OUTLINE moved to SVG too** (not named in the task's steps, but the same R3
+   silent failure: `strokeBrushOutlines` sizes each rect `zoom - 1`, so at 1:1 it strokes 0x0
+   rectangles and renders *nothing*). Reused task 03's `brushOutlineOverlay`; the FILL stays
+   raster per D6.
 
 ## W6 DONE — the payoff wave. Coordinator-verified.
 
@@ -564,3 +613,70 @@ still uncommitted, coordinate with the owner first.
 **Baseline for comparison** (measured 2026-08-30 at `5d76ce9`): `bunx vitest run` →
 123 files, 2128 tests, all passing, ~72s. `bun run --cwd client typecheck` → exit 0.
 No lockfile present, and none created by the baseline run.
+
+
+---
+
+# ⚠️ OUTSTANDING: the owner's consolidated visual pass
+
+**Everything below is owed and NONE of it has been performed.** No browser automation exists
+in this environment (no Playwright/Puppeteer/chromedriver; `bun run dev` is an interactive
+mprocs TUI), so all visual and in-browser perf verification was deferred here by the owner's
+explicit decision. **A green 2,424-test suite cannot rule any of these out** — every failure
+mode listed is *silent*.
+
+Run `bun run dev`, then:
+
+## Priority 1 — silent failure modes, most likely to be wrong
+
+1. **Hover marker outline is KNOWN MISSING (fill only).** Not a bug to hunt — a deliberate
+   deferral needing your decision. See the W4 section: wiring it needs a state write from
+   `handleTouchMove` that would reintroduce the measured 2026-08-28 "unable to slide and
+   draw" regression. Options: throttled state write, rAF-coalesced publish, or accept
+   fill-only.
+2. **The four overlays that moved canvas→SVG in W4** — grid, lasso, marching ants, origin
+   cross. Failure modes: the grid rendering as a flat grey wash; the others rendering
+   *nothing at all*. Check at default zoom **and** at zoom 50.
+3. **Origin cross must stay the same SCREEN size at every zoom**, with its circle. If it
+   grows with zoom, the counter-scale wrapper is wrong.
+4. **Checkerboard crispness at high zoom.** It is now a CSS `conic-gradient` on a 2px tile;
+   if `image-rendering: pixelated` is not taking effect it will be grey mush. Also confirm
+   phase parity in variant-edit with an ODD offset.
+5. **Lighting studio: normal edit / height edit / lit composite must not be blurry.** The
+   upscale is now the GPU's, not the backing store's.
+
+## Priority 2 — the owner's sign-off evidence
+
+6. **R4 — alpha compositing side-by-side.** Pick a sprite with semi-transparent pixels.
+   Screenshot before (`git stash` or check out `5d76ce9`) and after. Compositing moved from a
+   JS per-cell alpha multiply to browser CSS `opacity`, which differs for overlapping
+   semi-transparent cells *within* one layer. **You accepted this in principle, not
+   sight-unseen — this is the check that closes it.**
+7. **Landscapes (256x224) memory: KB, not MB.** The headline claim of the whole plan, and
+   still unmeasured in a browser. Read the devtools memory profiler at zoom 50. Before this
+   work that case asked for a 546 MB backing store *per canvas* and could not be allocated.
+8. **Landscapes drawing feels smooth.** In-process measurement says a 1-cell edit now paints
+   **1 cell instead of 57,344**; browser milliseconds are unmeasured.
+
+## Priority 3 — behavioural regressions
+
+9. Draw at several zooms — pixels land under the cursor (proves the coordinate mapping still
+   works through the new transform). Do this in **both** the pixel editor and the lighting
+   studio.
+10. Pan at high view zoom — the sprite can be dragged fully and does not lock.
+11. Reset view centres the sprite, in a **resized/split** viewport.
+12. Variant-edit at all three `layerFocusMode` values: `normal` undimmed; `transparent` with
+    regular layers at 0.5 and other variants at 0.7; **`onion` as outlines only, NOT solid
+    silhouettes**.
+13. Variant offsets — a non-zero offset draws in the right place, with correct object-bounds
+    dashes and variant rectangle.
+14. Move tool preview; undo/redo leaves no stale pixels.
+15. Split canvas — both panes, independent cameras, consistent pixel scale, swap and close.
+16. **Switch pixel ↔ lighting studio repeatedly** — this is the R7 closure check.
+17. Lighting preview thumbnail (200x200) unchanged (D12).
+
+## If something is wrong
+
+`git log --oneline 85bb3d7..HEAD` gives the wave-by-wave commits; each wave is independently
+revertible. The riskiest single commit is `3416555` (W6 incremental redraw) — reverting it
+falls back to full repaints, which is correct-but-slow, not broken.
