@@ -128,6 +128,27 @@ export interface PaintLayerOptions {
    * which cells are outline cells — only where they land.
    */
   onionOutline?: boolean;
+  /**
+   * INCREMENTAL REPAINT (plan 05 task 07): paint only these cells, in the
+   * layer's own grid space, instead of sweeping the whole grid.
+   *
+   * Omit for a full layer repaint — that is the default and the fallback for
+   * every path that cannot name what it changed (risk R6).
+   *
+   * ⚠️ The caller MUST have cleared these destinations first
+   * ({@link clearLayerCells}). A cell that became transparent produces no
+   * write here at all, so without the clear its old colour survives and
+   * erasing leaves ghosts.
+   *
+   * ⚠️ In onion mode the list must already be DILATED by one cell in each
+   * direction ({@link dilateCells}, D9) — `isOutlineCell` reads a cell's four
+   * neighbours, so a one-cell write changes its NEIGHBOURS' outline status
+   * too.
+   *
+   * Cells outside the grid are ignored; duplicates are harmless (painting a
+   * cell twice in one pass is idempotent).
+   */
+  cells?: readonly { x: number; y: number }[] | undefined;
 }
 
 /**
@@ -150,60 +171,195 @@ export function paintLayerCells(
   const moveDy = opts.moveDy ?? 0;
   const onion = opts.onionOutline === true;
 
+  /**
+   * ONE cell, read at grid `(x, y)` and written at the offset destination.
+   *
+   * ⚠️ Factored out of the sweep below for plan 05 task 07: the incremental
+   * path walks a LIST of cells instead of the whole grid and must apply
+   * byte-for-byte the same rules — the onion test on the unshifted cell, the
+   * move clip in grid space, the destination clip, the opaque fast path and
+   * the source-over blend. Two copies of this body is how the two paths would
+   * drift, and a drift here is a wrong pixel that only appears after an edit.
+   */
+  const paintOne = (x: number, y: number): void => {
+    const row = pixels[y];
+    if (!row) return;
+    if (x < 0 || y < 0 || x >= gridWidth || y >= gridHeight) return;
+
+    const color = getPixelColor(row[x]);
+    if (!color || color.a === 0) return;
+
+    // Outline test on the UNSHIFTED cell — see `onionOutline`.
+    if (onion && !isOutlineCell(pixels, x, y, gridWidth, gridHeight, getPixelColor)) {
+      return;
+    }
+
+    // The move preview clips in GRID space, before the offset.
+    const sx = x + moveDx;
+    const sy = y + moveDy;
+    if (sx < 0 || sy < 0 || sx >= gridWidth || sy >= gridHeight) return;
+
+    const px = sx + offsetX;
+    const py = sy + offsetY;
+    if (px < 0 || py < 0 || px >= width || py >= height) return;
+
+    const idx = (py * width + px) * 4;
+
+    if (color.a === 255) {
+      // The overwhelmingly common case: opaque. A straight write, no blend
+      // and no division.
+      data[idx] = color.r;
+      data[idx + 1] = color.g;
+      data[idx + 2] = color.b;
+      data[idx + 3] = 255;
+      return;
+    }
+
+    // Source-over into whatever is already there. Reached only when a
+    // caller paints two grids into one buffer; a single layer's cells never
+    // overlap, so `CanvasContainer` reaches this only for a cell landing on
+    // an untouched (transparent) pixel, where it reduces to a plain write.
+    const srcAlpha = color.a / 255;
+    const dstAlpha = data[idx + 3] / 255;
+    const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
+    if (outAlpha <= 0) return;
+    const inv = 1 / outAlpha;
+    const keep = dstAlpha * (1 - srcAlpha);
+    data[idx] = (color.r * srcAlpha + data[idx] * keep) * inv;
+    data[idx + 1] = (color.g * srcAlpha + data[idx + 1] * keep) * inv;
+    data[idx + 2] = (color.b * srcAlpha + data[idx + 2] * keep) * inv;
+    data[idx + 3] = outAlpha * 255;
+  };
+
+  // ── The incremental path: only the named cells (plan 05 task 07) ────────
+  //
+  // ⚠️ THIS IS THE WHOLE POINT OF THE PLAN. On the owner's `Landscapes`
+  // project (256x224) a one-cell pencil dot walks 1 cell here instead of
+  // 57,344.
+  //
+  // The caller is responsible for having CLEARED these destinations first —
+  // see `clearLayerCells`. A cell that became transparent produces no write
+  // at all above (`color.a === 0` returns early), so without the clear the
+  // old colour would simply remain: erasing would leave ghosts.
+  if (opts.cells) {
+    for (const cell of opts.cells) paintOne(cell.x, cell.y);
+    return buffer;
+  }
+
   const rows = Math.min(gridHeight, pixels.length);
   for (let y = 0; y < rows; y++) {
     const row = pixels[y];
     if (!row) continue;
     const cols = Math.min(gridWidth, row.length);
-
-    for (let x = 0; x < cols; x++) {
-      const color = getPixelColor(row[x]);
-      if (!color || color.a === 0) continue;
-
-      // Outline test on the UNSHIFTED cell — see `onionOutline`.
-      if (onion && !isOutlineCell(pixels, x, y, gridWidth, gridHeight, getPixelColor)) {
-        continue;
-      }
-
-      // The move preview clips in GRID space, before the offset.
-      const sx = x + moveDx;
-      const sy = y + moveDy;
-      if (sx < 0 || sy < 0 || sx >= gridWidth || sy >= gridHeight) continue;
-
-      const px = sx + offsetX;
-      const py = sy + offsetY;
-      if (px < 0 || py < 0 || px >= width || py >= height) continue;
-
-      const idx = (py * width + px) * 4;
-
-      if (color.a === 255) {
-        // The overwhelmingly common case: opaque. A straight write, no blend
-        // and no division.
-        data[idx] = color.r;
-        data[idx + 1] = color.g;
-        data[idx + 2] = color.b;
-        data[idx + 3] = 255;
-        continue;
-      }
-
-      // Source-over into whatever is already there. Reached only when a
-      // caller paints two grids into one buffer; a single layer's cells never
-      // overlap, so `CanvasContainer` reaches this only for a cell landing on
-      // an untouched (transparent) pixel, where it reduces to a plain write.
-      const srcAlpha = color.a / 255;
-      const dstAlpha = data[idx + 3] / 255;
-      const outAlpha = srcAlpha + dstAlpha * (1 - srcAlpha);
-      if (outAlpha <= 0) continue;
-      const inv = 1 / outAlpha;
-      const keep = dstAlpha * (1 - srcAlpha);
-      data[idx] = (color.r * srcAlpha + data[idx] * keep) * inv;
-      data[idx + 1] = (color.g * srcAlpha + data[idx + 1] * keep) * inv;
-      data[idx + 2] = (color.b * srcAlpha + data[idx + 2] * keep) * inv;
-      data[idx + 3] = outAlpha * 255;
-    }
+    for (let x = 0; x < cols; x++) paintOne(x, y);
   }
 
   return buffer;
+}
+
+/**
+ * Clear the destination pixels a {@link paintLayerCells} `cells` pass is
+ * about to write, applying the SAME offset and move transform.
+ *
+ * ⚠️ Required before every incremental repaint, and the reason is the one
+ * thing about incremental painting that is easy to get wrong: **a cell that
+ * became transparent must be CLEARED, not overpainted.** Under `source-over`
+ * a `fillRect` with a transparent colour does nothing, and `paintLayerCells`
+ * does not even reach the buffer for an empty cell — so the previous colour
+ * survives and erasing leaves ghosts. At 1:1 one `clearRect` per cell is a
+ * single device pixel.
+ *
+ * The cell is clipped exactly as `paintLayerCells` clips it, so a cell whose
+ * move preview pushes it off the grid, or whose offset pushes it off the
+ * surface, is skipped here too. Clearing more than will be painted would
+ * punch holes in a neighbouring layer's contribution to the same buffer.
+ */
+export function clearLayerCells(
+  ctx: {
+    clearRect(x: number, y: number, w: number, h: number): void;
+  },
+  opts: ClearLayerCellsOptions,
+): void {
+  const { cells, gridWidth, gridHeight, surfaceWidth, surfaceHeight } = opts;
+  const offsetX = opts.offsetX ?? 0;
+  const offsetY = opts.offsetY ?? 0;
+  const moveDx = opts.moveDx ?? 0;
+  const moveDy = opts.moveDy ?? 0;
+
+  for (const cell of cells) {
+    if (cell.x < 0 || cell.y < 0 || cell.x >= gridWidth || cell.y >= gridHeight) {
+      continue;
+    }
+    const sx = cell.x + moveDx;
+    const sy = cell.y + moveDy;
+    if (sx < 0 || sy < 0 || sx >= gridWidth || sy >= gridHeight) continue;
+
+    const px = sx + offsetX;
+    const py = sy + offsetY;
+    if (px < 0 || py < 0 || px >= surfaceWidth || py >= surfaceHeight) continue;
+
+    ctx.clearRect(px, py, 1, 1);
+  }
+}
+
+/** What {@link clearLayerCells} needs to place a cell on the surface. */
+export interface ClearLayerCellsOptions {
+  /** Cells in the layer's OWN grid space, as `paintLayerCells` receives them. */
+  cells: readonly { x: number; y: number }[];
+  /** Extent of that grid. */
+  gridWidth: number;
+  gridHeight: number;
+  /** Extent of the destination canvas, in cells (it is 1:1). */
+  surfaceWidth: number;
+  surfaceHeight: number;
+  offsetX?: number;
+  offsetY?: number;
+  moveDx?: number;
+  moveDy?: number;
+}
+
+/**
+ * Grow a cell list by one cell in each of the 4+4 directions — the D9
+ * dilation, and the reason it exists is not obvious.
+ *
+ * {@link isOutlineCell} reads a cell's FOUR NEIGHBOURS. So in onion mode
+ * editing ONE cell can change whether its neighbours render as outline: fill
+ * the hole in a ring and the four cells around it stop being outline cells,
+ * yet none of them appears in the dirty region. Repainting only the published
+ * cells would leave those four painted — stale outline pixels that survive
+ * until the next full repaint.
+ *
+ * Diagonals are included even though `isOutlineCell` never reads them: a
+ * diagonal neighbour of a changed cell is a 4-neighbour of a cell that IS
+ * dilated in, and including it costs 4 more cells per edit while removing a
+ * whole class of off-by-one reasoning. Correctness beats speed here.
+ *
+ * Out-of-grid results are NOT filtered — `paintLayerCells` and
+ * `clearLayerCells` both clip, and filtering here would need the grid size
+ * threaded through for nothing.
+ *
+ * Duplicates ARE removed: the dilation of a 20-cell stroke overlaps heavily
+ * (a straight run of N cells dilates to ~3N+6 rather than 9N), and unlike the
+ * accumulator's duplicates these multiply with the region size.
+ */
+export function dilateCells(
+  cells: readonly { x: number; y: number }[],
+): { x: number; y: number }[] {
+  const seen = new Set<string>();
+  const out: { x: number; y: number }[] = [];
+  for (const cell of cells) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = cell.x + dx;
+        const y = cell.y + dy;
+        const key = `${x},${y}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ x, y });
+      }
+    }
+  }
+  return out;
 }
 
 /**

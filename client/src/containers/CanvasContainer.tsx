@@ -175,6 +175,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
+import { reaction } from "mobx";
 import {
   ACCENT_PRIMARY_14,
   ACCENT_VARIANT,
@@ -216,7 +217,11 @@ import {
   FRAME_OVERLAY_MODE,
   FRAME_TRACE_MODE,
 } from "../ui/canvas/render/renderFrameOverlay";
-import { paintLayerCells } from "../ui/canvas/render/renderLayerView";
+import {
+  paintLayerCells,
+  clearLayerCells,
+  dilateCells,
+} from "../ui/canvas/render/renderLayerView";
 import {
   lassoOverlay,
   marchingAntsOverlay,
@@ -243,6 +248,7 @@ import { useCanvasGeometry } from "../ui/hooks/useCanvasGeometry";
 import { useCanvasKeyboard } from "../ui/hooks/useCanvasKeyboard";
 import { useCanvasPointer } from "../ui/hooks/useCanvasPointer";
 import { useCanvasRender } from "../ui/hooks/useCanvasRender";
+import type { DirtyScope } from "../ui/hooks/useCanvasRender";
 import { useDashTicker } from "../ui/hooks/useDashTicker";
 import { useCanvasViewport } from "../ui/hooks/useCanvasViewport";
 import { usePencilHover } from "../ui/hooks/usePencilHover";
@@ -1229,50 +1235,302 @@ export const CanvasContainer = observer(function CanvasContainer({
   }, [layerPlan]);
 
   /**
-   * Paint every layer into its own canvas.
+   * The CURRENT cell grid for a paint key, read imperatively from the live
+   * tree — or `null` when the key names nothing there.
+   *
+   * ⚠️ Exists because `layerPlan` can be one write stale at paint time; see
+   * the note at its call site in `renderLayers`. `null` is not an error: the
+   * Layer-mode plan and the variant plan build keys the object frame does not
+   * hold, and those fall back to the plan's own reference, which is correct
+   * for them because nothing writes to them out of band.
+   *
+   * ⚠️ Reads `layer.pixels` — an `observableRef` — WITHOUT observing it. This
+   * runs from an animation frame, never from a render, so no reaction is
+   * being tracked and no cell is ever proxied (R2).
+   */
+  const livePixelsFor = useCallback(
+    (key: string): PixelData[][] | null => {
+      const frameNow = app.currentFrame;
+      if (!frameNow) return null;
+
+      const sep = key.lastIndexOf("::");
+      if (sep === -1) {
+        return frameNow.layers.find((l) => l.id === key)?.pixels ?? null;
+      }
+
+      // A variant sub-layer: `parentLayerId::subLayerId`. Resolve the parent
+      // in the frame, then its selected variant's current frame, then the sub
+      // layer — the same walk `layerPlan` does, against the live tree.
+      const parent = frameNow.layers.find((l) => l.id === key.slice(0, sep));
+      if (!parent?.variantGroupId) return null;
+      const vg = app.domain.variants?.find((g) => g.id === parent.variantGroupId);
+      const variant = vg?.variants.find((v) => v.id === parent.selectedVariantId);
+      if (!variant || variant.frames.length === 0) return null;
+      const idx =
+        (app.timelineUI.variantFrameIndices?.[parent.variantGroupId] ?? 0) %
+        variant.frames.length;
+      const vFrame = variant.frames[idx];
+      return (
+        vFrame?.layers.find((vl) => vl.id === key.slice(sep + 2))?.pixels ?? null
+      );
+    },
+    [app],
+  );
+
+  /**
+   * Paint every layer into its own canvas — or, when `scope` names cells,
+   * ONLY those cells on ONLY the layers they belong to.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THIS IS THE PAYOFF OF PLAN 05: "only the pixels affected"
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * On the owner's `Landscapes` project (256x224, one layer) a one-cell
+   * pencil dot used to walk 57,344 cells. Under `scope.kind === "cells"` it
+   * walks the cells the store named, which for a dot is exactly one.
+   *
+   * ── The three things the incremental path must get right ───────────────
+   *
+   *  1. **The layer id must be matched, not assumed.** `pixelDirty.layerId`
+   *     is a `Layer.id`. For a REGULAR layer that is the paint key. For a
+   *     VARIANT sub-layer the paint key is `${parentLayer.id}::${subLayer.id}`
+   *     and the store publishes the SUB-layer's id (`PixelStore.resolveTarget`
+   *     returns `variantFrame.layers[0]` as its `layer`), so a plain map
+   *     lookup would miss every variant edit — silently, leaving the variant's
+   *     pixels stale until something forced a full repaint.
+   *     `dirtyCellsFor` resolves both forms.
+   *  2. **Clear before painting.** A cell that became transparent produces no
+   *     write in `paintLayerCells` at all, so overpainting leaves the old
+   *     colour — erasing would leave ghosts. `clearLayerCells` punches
+   *     exactly the destinations the paint is about to fill.
+   *  3. **Onion mode dilates (D9).** `isOutlineCell` reads four neighbours,
+   *     so a one-cell write changes its NEIGHBOURS' outline status too.
+   *     `dilateCells` grows the list before it is used, and the SAME grown
+   *     list is cleared, so a neighbour that stopped being an outline cell is
+   *     cleared and then not repainted.
+   *
+   * ── Why a bounding box, and why it is READ BACK ────────────────────────
+   *
+   * `createImageData(canvas.width, canvas.height)` for a one-cell edit would
+   * allocate the whole surface — reintroducing the very cost this removes. So
+   * the incremental path works on a buffer the size of the dirty cells'
+   * BOUNDING BOX: 1x1 for a pencil dot, the stroke's extent for a drag.
+   *
+   * That buffer is `getImageData`, not `createImageData`, and the difference
+   * is a correctness one rather than an optimisation — `putImageData`
+   * replaces the whole rectangle, so a blank box would erase every pixel
+   * inside it that was not dirty. See the note at the call.
    *
    * ⚠️ Reads `layer.pixels` IMPERATIVELY, from an animation frame — never
    * through `observer()`. `layer.pixels` is `observableRef` exactly so MobX
    * never walks a 300,249-cell tree (R2), and this is the only consumer.
    */
-  const renderLayers = useCallback(() => {
-    const moveDx = isDraggingPixels ? moveDragOffset.dx : 0;
-    const moveDy = isDraggingPixels ? moveDragOffset.dy : 0;
-    // The whole view is shifted so world (viewMinX, viewMinY) lands at
-    // canvas (0, 0) — outside variant-edit both are 0 and this is a no-op.
-    const viewOx = isEditingVariantResolved ? -viewMinX : 0;
-    const viewOy = isEditingVariantResolved ? -viewMinY : 0;
+  const renderLayers = useCallback(
+    (scope: DirtyScope) => {
+      const moveDx = isDraggingPixels ? moveDragOffset.dx : 0;
+      const moveDy = isDraggingPixels ? moveDragOffset.dy : 0;
+      // The whole view is shifted so world (viewMinX, viewMinY) lands at
+      // canvas (0, 0) — outside variant-edit both are 0 and this is a no-op.
+      const viewOx = isEditingVariantResolved ? -viewMinX : 0;
+      const viewOy = isEditingVariantResolved ? -viewMinY : 0;
 
-    for (const item of layerPlan) {
-      const canvas = layerCanvasesRef.current.get(item.key);
-      const ctx = canvas?.getContext("2d");
-      if (!canvas || !ctx) continue;
+      /**
+       * The dirty cells for one paint key, or `null` for "repaint it whole".
+       *
+       * Returns `null` — never an empty array — when the scope is `"all"`, so
+       * the caller cannot confuse "everything" with "nothing".
+       */
+      const dirtyCellsFor = (
+        key: string,
+      ): readonly { x: number; y: number }[] | null => {
+        if (scope.kind === "all") return null;
+        const direct = scope.byLayer.get(key);
+        if (direct) return direct;
+        // The variant form: the plan key is `parent::sub` and the store
+        // published `sub`. See note 1 in the header.
+        const sep = key.lastIndexOf("::");
+        if (sep === -1) return null;
+        const sub = scope.byLayer.get(key.slice(sep + 2));
+        return sub ?? null;
+      };
 
-      // ⚠️ Cleared unconditionally, INCLUDING for a hidden layer. `display:
-      // none` keeps the bitmap alive, so a layer that is emptied or hidden
-      // while its canvas still holds paint would show that paint again the
-      // moment it is re-shown. Clearing costs nothing next to a repaint.
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (!item.visible) continue;
+      for (const item of layerPlan) {
+        const canvas = layerCanvasesRef.current.get(item.key);
+        const ctx = canvas?.getContext("2d");
+        if (!canvas || !ctx) continue;
 
-      if (!item.pixels) continue;
+        // ══════════════════════════════════════════════════════════════════
+        //  ⚠️ THE GRID IS RE-READ FROM THE LIVE TREE, NOT TAKEN FROM THE PLAN
+        // ══════════════════════════════════════════════════════════════════
+        //
+        // `layerPlan` is a `useMemo`, so its `pixels` are whatever React last
+        // rendered with. The dirty reaction fires SYNCHRONOUSLY at the end of
+        // the write action — before React has re-rendered — so a frame that
+        // runs from that reaction can see a plan one write behind.
+        //
+        // In a browser rAF defers the paint past React's commit and the two
+        // usually agree; "usually" is not a guarantee worth resting the
+        // whole feature on, and under a synchronous scheduler they never
+        // agree. Measured: the incremental path painted the OLD colour, so a
+        // fresh stroke drew nothing at all while every `putImageData` call
+        // looked perfectly correct.
+        //
+        // `livePixelsFor` resolves the key against the current tree. It is a
+        // plain imperative read of an `observableRef` field — no proxying, no
+        // observation, and nothing walks a cell (R2).
+        const pixels = livePixelsFor(item.key) ?? item.pixels;
 
-      const buffer = ctx.createImageData(canvas.width, canvas.height);
-      paintLayerCells(buffer, {
-        pixels: item.pixels,
-        gridWidth: item.gridWidth ?? 0,
-        gridHeight: item.gridHeight ?? 0,
-        getPixelColor,
-        offsetX: (item.offsetX ?? 0) + viewOx,
-        offsetY: (item.offsetY ?? 0) + viewOy,
-        moveDx: item.moves === true ? moveDx : 0,
-        moveDy: item.moves === true ? moveDy : 0,
-        onionOutline: item.onionOutline === true,
-      });
-      ctx.putImageData(buffer, 0, 0);
-    }
-  }, [
+        const cells = scope.kind === "all" ? null : dirtyCellsFor(item.key);
+
+        // ── The FAST PATH: this scope names cells, and none are ours ──────
+        //
+        // Nothing on this layer changed, so its canvas is already correct.
+        // Leaving it entirely alone is the whole saving: on a 7-layer sprite
+        // an edit now touches ONE canvas, not seven.
+        if (scope.kind === "cells" && (!cells || cells.length === 0)) continue;
+
+        if (cells === null) {
+          // ⚠️ Cleared unconditionally, INCLUDING for a hidden layer.
+          // `display: none` keeps the bitmap alive, so a layer that is
+          // emptied or hidden while its canvas still holds paint would show
+          // that paint again the moment it is re-shown. Clearing costs
+          // nothing next to a repaint.
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          if (!item.visible) continue;
+          if (!pixels) continue;
+
+          const buffer = ctx.createImageData(canvas.width, canvas.height);
+          paintLayerCells(buffer, {
+            pixels,
+            gridWidth: item.gridWidth ?? 0,
+            gridHeight: item.gridHeight ?? 0,
+            getPixelColor,
+            offsetX: (item.offsetX ?? 0) + viewOx,
+            offsetY: (item.offsetY ?? 0) + viewOy,
+            moveDx: item.moves === true ? moveDx : 0,
+            moveDy: item.moves === true ? moveDy : 0,
+            onionOutline: item.onionOutline === true,
+          });
+          ctx.putImageData(buffer, 0, 0);
+          continue;
+        }
+
+        // ── The INCREMENTAL PATH ─────────────────────────────────────────
+        if (!item.visible || !pixels) {
+          // A hidden or gridless layer under an incremental scope: the
+          // full-repaint branch above would have cleared it, and it must
+          // still be cleared here or paint from before it was hidden
+          // survives. Cheap, and it cannot be skipped.
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          continue;
+        }
+
+        const gw = item.gridWidth ?? 0;
+        const gh = item.gridHeight ?? 0;
+        const ox = (item.offsetX ?? 0) + viewOx;
+        const oy = (item.offsetY ?? 0) + viewOy;
+        const mdx = item.moves === true ? moveDx : 0;
+        const mdy = item.moves === true ? moveDy : 0;
+        const onion = item.onionOutline === true;
+
+        // D9: grow the list BEFORE it is used, and use the grown list for the
+        // clear as well as the paint.
+        const painted = onion ? dilateCells(cells) : cells;
+
+        // The destination bounding box, in surface cells, clipped to the
+        // surface. Computed on the SHIFTED, OFFSET positions because that is
+        // where the writes land.
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        for (const cell of painted) {
+          if (cell.x < 0 || cell.y < 0 || cell.x >= gw || cell.y >= gh) continue;
+          const sx = cell.x + mdx;
+          const sy = cell.y + mdy;
+          if (sx < 0 || sy < 0 || sx >= gw || sy >= gh) continue;
+          const px = sx + ox;
+          const py = sy + oy;
+          if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) {
+            continue;
+          }
+          if (px < minX) minX = px;
+          if (py < minY) minY = py;
+          if (px > maxX) maxX = px;
+          if (py > maxY) maxY = py;
+        }
+        // Every cell fell outside the surface — the clear above already did
+        // whatever was needed and there is nothing to paint.
+        if (minX === Infinity) continue;
+
+        const boxW = maxX - minX + 1;
+        const boxH = maxY - minY + 1;
+
+        // ══════════════════════════════════════════════════════════════════
+        //  ⚠️ THE BUFFER IS SEEDED FROM THE CANVAS, NOT CREATED BLANK
+        // ══════════════════════════════════════════════════════════════════
+        //
+        // `putImageData` REPLACES every pixel of the rectangle it is given —
+        // it does not composite. A blank `createImageData` box would
+        // therefore ERASE every pixel inside the box that is not in
+        // `painted`, and the box is only as tight as the dirty cells happen
+        // to be: two dots at opposite corners of one frame produce a box
+        // spanning the whole sprite, and everything between them would
+        // vanish. That is the exact "stale/wrong pixel" failure this task
+        // treats as strictly worse than a redundant repaint.
+        //
+        // So the box is READ BACK first. Untouched interior pixels are
+        // written back byte-identical; the dirty ones are zeroed
+        // (`clearLayerCells` below, which is what makes an erase to
+        // transparent actually clear rather than leave a ghost) and then
+        // repainted from the live grid.
+        const buffer = ctx.getImageData(minX, minY, boxW, boxH);
+
+        // Clear the dirty destinations INSIDE the read-back buffer. Same
+        // clipping as the paint, so a cell whose move pushes it off the grid
+        // is left alone here too.
+        clearLayerCells(
+          {
+            clearRect: (cx: number, cy: number) => {
+              const idx = ((cy - minY) * boxW + (cx - minX)) * 4;
+              buffer.data[idx] = 0;
+              buffer.data[idx + 1] = 0;
+              buffer.data[idx + 2] = 0;
+              buffer.data[idx + 3] = 0;
+            },
+          },
+          {
+            cells: painted,
+            gridWidth: gw,
+            gridHeight: gh,
+            surfaceWidth: canvas.width,
+            surfaceHeight: canvas.height,
+            offsetX: ox,
+            offsetY: oy,
+            moveDx: mdx,
+            moveDy: mdy,
+          },
+        );
+
+        paintLayerCells(buffer, {
+          pixels,
+          gridWidth: gw,
+          gridHeight: gh,
+          getPixelColor,
+          // Shift the destination into the box's own coordinates.
+          offsetX: ox - minX,
+          offsetY: oy - minY,
+          moveDx: mdx,
+          moveDy: mdy,
+          onionOutline: onion,
+          cells: painted,
+        });
+        ctx.putImageData(buffer, minX, minY);
+      }
+    },
+    [
     layerPlan,
+    livePixelsFor,
     isDraggingPixels,
     moveDragOffset.dx,
     moveDragOffset.dy,
@@ -1449,10 +1707,22 @@ export const CanvasContainer = observer(function CanvasContainer({
    * The one entry point `useCanvasRender` drives, so the two halves stay in
    * lockstep on a single animation frame.
    */
-  const render = useCallback(() => {
-    renderLayers();
-    renderChrome();
-  }, [renderLayers, renderChrome]);
+  const render = useCallback(
+    (scope: DirtyScope) => {
+      renderLayers(scope);
+      // ⚠️ CHROME IS ALWAYS REPAINTED IN FULL, and deliberately so.
+      //
+      // The chrome surface carries the brush preview, the selection fill, the
+      // move preview and the variant rectangle. None of those is a pixel
+      // write and none of them is described by `pixelDirty`, so narrowing
+      // them by the dirty region would be narrowing them by an unrelated
+      // signal. It is one `clearRect` plus a handful of `fillRect`s on the
+      // cells the user is actually interacting with, not a sweep of the grid,
+      // so there is nothing here worth the risk of getting wrong.
+      renderChrome();
+    },
+    [renderLayers, renderChrome],
+  );
 
   /* ── the hover marker (concern #12) ────────────────────────────────────── */
   //
@@ -2008,11 +2278,163 @@ export const CanvasContainer = observer(function CanvasContainer({
   // MobX never looks inside a 300,249-cell grid. `PixelStore` bumps this
   // counter once per committed mutation, and the counter is what is observed.
   //
-  // Two entries, not nineteen — and listing `render`'s inputs again alongside
-  // `render` would be redundant, not safer: the rAF scheduler cancels any
-  // pending frame before requesting a new one, so a redundant dependency buys
-  // an extra cancel/reschedule inside the same frame and never a second paint.
-  useCanvasRender(render, [render, pixelVersion]);
+  // ══════════════════════════════════════════════════════════════════════
+  //  ⚠️ TASK 07: THE DEPS ARE NO LONGER THE INVALIDATION SIGNAL BY
+  //     THEMSELVES — THEY ARE GATED, AND MEASUREMENT IS WHY
+  // ══════════════════════════════════════════════════════════════════════
+  //
+  // The deps list is `[]` and invalidation is driven by the effect below.
+  // The reason is a measured one, and it is not obvious from reading the
+  // list that used to be here:
+  //
+  //   ⚠️ **`render`'s identity changes on EVERY PIXEL WRITE.**
+  //
+  // `render` closes over `layerPlan`, `layerPlan` holds each layer's
+  // `pixels` array, and `PixelStore.writeGridInAction` REPLACES that array
+  // (the grid is `observableRef` and is rebuilt, never mutated in place —
+  // R2 depends on that). So a one-cell edit gives `layerPlan` a new
+  // identity, which gives `render` a new identity, which fires the deps
+  // effect, which calls `invalidate()` — a FULL repaint, in the same tick
+  // as the dirty region.
+  //
+  // Measured before this gate was added: a one-cell edit on a 6x4 fixture
+  // painted 25 cells (1 incremental + 24 full) and on a 64x64 fixture
+  // painted 4,097 (1 + 4,096). The fast path ran correctly and was then
+  // immediately overwritten by the very repaint it exists to avoid — the
+  // whole plan, silently no-oping while every test passed.
+  //
+  // So the two channels are reconciled in ONE place instead of racing:
+  // `paintTick` below decides, per tick, whether this was a pixel write
+  // that named itself (fast path, already scheduled by the reaction) or
+  // anything else (full repaint).
+  //
+  // `pixelVersion` is NOT removed from the invalidation path — it is read
+  // by that effect and is still what covers every `PixelStore` write. It is
+  // narrowed, exactly as the task requires.
+  const { invalidate, invalidateRegion } = useCanvasRender(render, []);
+
+  /* ── the dirty-region fast path (plan 05, task 07 — D7/D8/R6) ──────────── */
+  //
+  // ══════════════════════════════════════════════════════════════════════
+  //  ⚠️ TWO CHANNELS, AND THE SECOND ONE DEFERS TO THE FIRST
+  // ══════════════════════════════════════════════════════════════════════
+  //
+  // `pixelVersion` and `pixelDirty` describe the SAME write from two angles,
+  // and `PixelStore` publishes them in a fixed order: `publishAndBump()` (the
+  // version) and then `publishDirty(...)` (the region), inside one action. So
+  // by the time either effect below runs, both values are settled.
+  //
+  //   - A write that CAN name its cells bumps the version AND publishes a
+  //     region. The region is the better signal, so the version effect stands
+  //     down — `coveredVersionRef` is how it knows to.
+  //   - A write that CANNOT (a flip, an empty-patch lighting commit) bumps the
+  //     version and publishes `null`. `null` promotes the accumulator to
+  //     "all", so it is a full repaint either way (R6).
+  //   - A write that goes through `DomainMutator` instead of `PixelStore` —
+  //     `moveLayerPixels`, variant resize, `applyInterpolation`, a project
+  //     load — publishes NEITHER. It bumps `domainVersion`, which changes
+  //     `layerPlan`, which changes `render`'s identity, which is the deps
+  //     effect above. Full repaint. See the audit in the task's report.
+  //
+  // ── ⚠️ D8: THE REGION IS THE ONLY SIGNAL UNDO HAS ───────────────────────
+  //
+  // `PixelStore.publishAndBump` does NOT bump `pixelVersion` during replay —
+  // that is the no-save-on-undo gate (`autoSave.test.ts:225` pins it) — so on
+  // undo and redo `pixelVersion` never changes and the version effect never
+  // re-runs. `applyPatch` publishes the dirty region anyway, deliberately
+  // outside that gate, and THIS reaction is what turns it into a repaint.
+  // Break it and undo silently stops painting: the model is right, the
+  // history is right, and the pixels on screen are stale.
+  //
+  // ── Why a `reaction` and not a read in the `observer()` body ────────────
+  //
+  // `pixelDirty` is `observableRef`, so reading it is cheap and the cell
+  // array is never proxied (R2). But reading it in the render body would
+  // re-render this ~3,000-line container on every pixel write, which is
+  // exactly the cost the plan exists to remove. A `reaction` observes the
+  // field without a React render.
+
+  /**
+   * Set by the dirty reaction to CLAIM the repaint that the React effect
+   * below would otherwise schedule as a full one.
+   *
+   * ⚠️ A boolean claim, not a version comparison, and the difference is
+   * UNDO. `publishAndBump` does not bump `pixelVersion` during replay, so an
+   * undo leaves the version untouched while `layerPlan` — and therefore
+   * `render` — still gets a new identity from the rewritten grid. A
+   * version-based test would see "the version did not move, so this is not a
+   * pixel write" and schedule a full repaint on every single undo. The claim
+   * records what actually happened instead of inferring it.
+   *
+   * ⚠️ A REF, not state: writing state here would re-render this
+   * ~3,000-line container on every pixel write, which is the cost this whole
+   * task removes.
+   */
+  const dirtyClaimedRef = useRef(false);
+
+  useEffect(() => {
+    return reaction(
+      () => app.domain.pixelDirty,
+      (region) => {
+        // ⚠️ The claim is made BEFORE scheduling and consumed by the effect
+        // below. MobX runs this reaction synchronously at the end of the
+        // write action, which is before React re-renders — so the claim is
+        // always standing by the time the effect looks at it.
+        dirtyClaimedRef.current = true;
+        // `null` is the store's honest "I replaced a grid wholesale and
+        // cannot name the cells" (R6). The hook promotes it to a full
+        // repaint; passing it through unchanged is the whole contract.
+        invalidateRegion(region);
+      },
+    );
+    // ⚠️ `fireImmediately` is deliberately OFF: the value standing at mount is
+    // whatever the last edit left there, and the mount already schedules a
+    // full repaint through the effect below.
+  }, [app.domain, invalidateRegion]);
+
+  /* ── the reconciled invalidation gate ──────────────────────────────────── */
+  //
+  // ⚠️ THIS IS THE OLD `useCanvasRender(render, [render, pixelVersion])`
+  // EFFECT, with one guard added. The dependency list is unchanged and it is
+  // still the invalidation signal; what changed is that a tick already
+  // described by the dirty channel does not ALSO get a full repaint.
+  //
+  // Correctness argument, which matters more than the saving:
+  //
+  //   - The claim is only ever set by a `pixelDirty` publish, and every such
+  //     publish schedules a repaint of its own (a region, or `"all"` for
+  //     `null`). So a claimed tick is never an unpainted tick.
+  //   - The claim is cleared here, every time, whether or not it was used. A
+  //     stale claim could otherwise swallow the NEXT full repaint — which
+  //     would be a stale-pixel bug, so it is cleared unconditionally rather
+  //     than inside the branch.
+  //   - Anything that is not a `PixelStore` write never sets it, so layer
+  //     visibility, focus mode, zoom, variant selection, tool changes,
+  //     project loads and every `DomainMutator` path fall through to
+  //     `invalidate()` exactly as they did before.
+  /**
+   * ⚠️ The hook's own `deps: []` effect already schedules the MOUNT paint, so
+   * this effect must not schedule a second one for the same frame. Measured:
+   * without this guard the mount painted every layer TWICE — 8,192 cells
+   * instead of 4,096 on a 64x64 fixture — on the single most expensive paint
+   * in a session, the first full sweep of every layer.
+   */
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    const claimed = dirtyClaimedRef.current;
+    dirtyClaimedRef.current = false;
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    if (claimed) return;
+    invalidate();
+    // ⚠️ `render` and `pixelVersion` ARE the invalidation signal — the same
+    // two the hook's own deps list carried before task 07 — and neither is
+    // called in the body. They are listed because their CHANGING is the
+    // event, which is the whole idiom of this hook.
+  }, [render, pixelVersion, invalidate]);
 
   // Clear a selection whose grid no longer matches — prevents a stale mask
   // surviving a mode switch.

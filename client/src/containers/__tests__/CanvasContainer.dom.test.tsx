@@ -50,6 +50,11 @@ import { ApplicationStore } from "@/stores/ApplicationStore";
 import { StoreProvider } from "@/stores/context";
 import { CanvasContainer } from "@/containers/CanvasContainer";
 import { createStubContext, getPixel } from "@test/canvasStub";
+import {
+  paintLayerCells,
+  clearLayerCells,
+  dilateCells,
+} from "@/ui/canvas/render/renderLayerView";
 import type { StubContext } from "@test/canvasStub";
 import {
   VARIANT_EDIT_OTHER_DIM,
@@ -823,5 +828,623 @@ describe("the background is a CSS DIV, and its parity survives a variant view", 
     load(variantEditProject({ x: 3, y: 3 }));
     const { container } = mountCanvas();
     expect(parity(container)).toEqual([0, 0]);
+  });
+});
+
+/* ══ 9. INCREMENTAL REDRAW — plan 05, task 07 ═══════════════════════════════
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  🏁 THE PAYOFF OF THE WHOLE PLAN, AND THE ONLY IN-PROCESS PROOF OF IT
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * The owner's ask was "when editing a layer, only the pixels affected should
+ * be redrawn". These tests measure that directly, off the canvas stub's call
+ * log: a one-cell edit must reach ONE canvas and write ONE cell, not sweep
+ * 57,344 cells across every layer.
+ *
+ * `putImageData`'s recorded `width x height` IS the cells-written count,
+ * because the container's incremental path allocates a buffer the size of the
+ * dirty cells' bounding box. So `sum(w * h)` over the frame's `putImageData`
+ * calls is a real, exact "cells painted this repaint" figure — the number the
+ * plan's gate asks for, taken where a browser is not available.
+ *
+ * ── What these tests CANNOT show ──────────────────────────────────────────
+ *
+ * Milliseconds in a real browser, and whether the picture looks right. Both
+ * are owed to the consolidated visual pass. What is proven here is the
+ * COUNT — which is the mechanism the milliseconds would follow from.
+ */
+
+/** Every `putImageData` on a layer canvas, with the cells it wrote. */
+function putCalls(
+  container: HTMLElement,
+  layerId: string,
+): { w: number; h: number; x: number; y: number }[] {
+  const el = container.querySelector<HTMLCanvasElement>(
+    `canvas[data-layer-id="${CSS.escape(layerId)}"]`,
+  );
+  if (!el) return [];
+  const ctx = contexts.get(el);
+  if (!ctx) return [];
+  return ctx.calls
+    .filter((c) => c.method === "putImageData")
+    .map((c) => ({
+      w: c.args[0] as number,
+      h: c.args[1] as number,
+      x: c.args[2] as number,
+      y: c.args[3] as number,
+    }));
+}
+
+/** Total cells written to a layer's canvas since `clearCalls`. */
+function cellsPainted(container: HTMLElement, layerId: string): number {
+  return putCalls(container, layerId).reduce((n, c) => n + c.w * c.h, 0);
+}
+
+/** Drop the mount paint so the next assertion measures ONE edit. */
+function clearCalls(container: HTMLElement): void {
+  for (const el of layerCanvases(container)) {
+    const ctx = contexts.get(el);
+    if (ctx) (ctx.calls as unknown[]).length = 0;
+  }
+}
+
+describe("incremental redraw: only the affected cells, on the affected layer", () => {
+  it("🏁 a ONE-CELL edit paints ONE cell — not the whole grid, not every layer", () => {
+    load(
+      mkProject([
+        mkLayer("l-bottom", RED, [[0, 0]]),
+        mkLayer("l-middle", GREEN, [[1, 1]]),
+        mkLayer("l-top", BLUE, [[2, 2]]),
+      ]),
+    );
+    const { container } = mountCanvas();
+
+    // The mount paint IS a full repaint — that is correct and expected.
+    expect(cellsPainted(container, "l-bottom")).toBe(W * H);
+    clearCalls(container);
+
+    act(() => {
+      app.pixels.setPixel(4, 3, GREEN);
+    });
+
+    // ⚠️ THE NUMBER THE PLAN ASKED FOR. One cell in, one cell painted.
+    expect(cellsPainted(container, "l-bottom")).toBe(1);
+    // ⚠️ AND THE OTHER HALF: the two layers that did not change were not
+    // touched at all. On the owner's 7-layer sprite that is 6 canvases and
+    // 6 full sweeps skipped per edit.
+    expect(putCalls(container, "l-middle")).toHaveLength(0);
+    expect(putCalls(container, "l-top")).toHaveLength(0);
+  });
+
+  it("🏁 the saving SCALES: on a 64x64 grid one edit still paints exactly 1 cell", () => {
+    // The Landscapes proxy. A full repaint of this grid is 4,096 cells; the
+    // owner's real surface is 256x224 = 57,344. Both are one cell here.
+    const BIG = 64;
+    load(
+      mkProject([mkLayer("l-1", RED, [[0, 0]], {}, BIG, BIG)], {
+        objects: [
+          {
+            id: "obj-1",
+            name: "Object 1",
+            gridSize: { width: BIG, height: BIG },
+            frames: [
+              {
+                id: "frame-1",
+                name: "Frame 1",
+                layers: [mkLayer("l-1", RED, [[0, 0]], {}, BIG, BIG)],
+              },
+            ],
+          },
+        ],
+      } as unknown as Partial<Project>),
+    );
+    const { container } = mountCanvas();
+    expect(cellsPainted(container, "l-1")).toBe(BIG * BIG); // 4,096
+    clearCalls(container);
+
+    act(() => {
+      app.pixels.setPixel(31, 31, GREEN);
+    });
+
+    const after = cellsPainted(container, "l-1");
+    expect(after).toBe(1);
+    // Stated as the ratio the plan's gate asks for, so a regression reads as
+    // a number and not as a subjective "it got slower".
+    expect(BIG * BIG / after).toBe(4096);
+  });
+
+  it("the painted cell holds the NEW colour, read from the live grid", () => {
+    load(mkProject([mkLayer("l-1", RED, [[0, 0]])]));
+    const { container } = mountCanvas();
+
+    act(() => {
+      app.pixels.setPixel(4, 3, GREEN);
+    });
+
+    const buf = bufferFor(container, "l-1");
+    expect(buf).not.toBeNull();
+    expect([...getPixel(buf!, 4, 3)]).toEqual([0, 255, 0, 255]);
+    // And the cell that was already there survived the incremental pass —
+    // this is what a blank `createImageData` bounding box would have erased.
+    expect([...getPixel(buf!, 0, 0)]).toEqual([255, 0, 0, 255]);
+  });
+
+  it("⚠️ ERASE TO TRANSPARENT actually CLEARS — it does not leave a ghost", () => {
+    // The `clearRect` check. `paintLayerCells` writes nothing for an empty
+    // cell, so without the clear the old colour simply stays: erasing would
+    // appear to do nothing. This is the failure the task names explicitly.
+    load(mkProject([mkLayer("l-1", RED, [[2, 1]])]));
+    const { container } = mountCanvas();
+    expect([...getPixel(bufferFor(container, "l-1")!, 2, 1)]).toEqual([
+      255, 0, 0, 255,
+    ]);
+
+    act(() => {
+      app.pixels.setPixel(2, 1, 0); // erase
+    });
+
+    expect([...getPixel(bufferFor(container, "l-1")!, 2, 1)]).toEqual([
+      0, 0, 0, 0,
+    ]);
+  });
+
+  it("a two-cell edit far apart preserves the pixels BETWEEN them", () => {
+    // The bounding box spans the whole row. A blank `createImageData` box
+    // would erase everything inside it; the read-back buffer must not.
+    load(
+      mkProject([
+        mkLayer("l-1", RED, [
+          [2, 0],
+          [3, 0],
+        ]),
+      ]),
+    );
+    const { container } = mountCanvas();
+    clearCalls(container);
+
+    act(() => {
+      app.pixels.setPixels([
+        { x: 0, y: 0, color: GREEN },
+        { x: 5, y: 0, color: GREEN },
+      ]);
+    });
+
+    const buf = bufferFor(container, "l-1")!;
+    expect([...getPixel(buf, 0, 0)]).toEqual([0, 255, 0, 255]);
+    expect([...getPixel(buf, 5, 0)]).toEqual([0, 255, 0, 255]);
+    // The untouched interior of the box — the whole point of the read-back.
+    expect([...getPixel(buf, 2, 0)]).toEqual([255, 0, 0, 255]);
+    expect([...getPixel(buf, 3, 0)]).toEqual([255, 0, 0, 255]);
+  });
+
+  it("⚠️ UNDO repaints, though pixelVersion never bumps (D8 — the trap)", () => {
+    // `publishAndBump` skips the version bump during replay — the
+    // no-save-on-undo gate (`autoSave.test.ts:225`). So `pixelVersion` does
+    // NOT change here and the deps effect never re-runs: the dirty reaction
+    // is the ONLY signal. If this fails, the undone pixels are stuck on
+    // screen while the model is perfectly correct — the worst kind of bug.
+    load(mkProject([mkLayer("l-1", RED, [[0, 0]])]));
+    const { container } = mountCanvas();
+
+    act(() => {
+      app.pixels.setPixel(4, 3, GREEN);
+    });
+    expect([...getPixel(bufferFor(container, "l-1")!, 4, 3)]).toEqual([
+      0, 255, 0, 255,
+    ]);
+
+    const versionBefore = app.domain.pixelVersion;
+    act(() => {
+      app.undo();
+    });
+
+    // The gate really is closed — this is what makes the test meaningful.
+    expect(app.domain.pixelVersion).toBe(versionBefore);
+    // And the pixel is gone anyway.
+    expect([...getPixel(bufferFor(container, "l-1")!, 4, 3)]).toEqual([
+      0, 0, 0, 0,
+    ]);
+  });
+
+  it("REDO repaints too, on the same channel", () => {
+    load(mkProject([mkLayer("l-1", RED, [[0, 0]])]));
+    const { container } = mountCanvas();
+
+    act(() => {
+      app.pixels.setPixel(4, 3, GREEN);
+    });
+    act(() => {
+      app.undo();
+    });
+    act(() => {
+      app.redo();
+    });
+
+    expect([...getPixel(bufferFor(container, "l-1")!, 4, 3)]).toEqual([
+      0, 255, 0, 255,
+    ]);
+  });
+
+  it("undo of a MULTI-cell command reverts every cell", () => {
+    load(mkProject([mkLayer("l-1", RED, [[0, 0]])]));
+    const { container } = mountCanvas();
+
+    act(() => {
+      app.pixels.setPixels([
+        { x: 1, y: 1, color: GREEN },
+        { x: 2, y: 1, color: GREEN },
+        { x: 3, y: 1, color: GREEN },
+      ]);
+    });
+    act(() => {
+      app.undo();
+    });
+
+    const buf = bufferFor(container, "l-1")!;
+    for (const x of [1, 2, 3]) {
+      expect([...getPixel(buf, x, 1)]).toEqual([0, 0, 0, 0]);
+    }
+    expect([...getPixel(buf, 0, 0)]).toEqual([255, 0, 0, 255]);
+  });
+
+  it("a FLIP publishes null and falls back to a FULL repaint (R6)", () => {
+    // `flipInto` replaces the grid wholesale and calls `publishDirtyAll()`.
+    // The accumulator must promote to "all" — a flip narrowed to a region
+    // would leave most of the sprite mirrored-but-stale.
+    load(
+      mkProject([
+        mkLayer("l-1", RED, [
+          [0, 0],
+          [1, 0],
+        ]),
+      ]),
+    );
+    const { container } = mountCanvas();
+    clearCalls(container);
+
+    act(() => {
+      app.pixels.flipHorizontal();
+    });
+
+    // A full-surface put, not a 2-cell one.
+    expect(cellsPainted(container, "l-1")).toBe(W * H);
+    const buf = bufferFor(container, "l-1")!;
+    expect([...getPixel(buf, W - 1, 0)]).toEqual([255, 0, 0, 255]);
+    expect([...getPixel(buf, 0, 0)]).toEqual([0, 0, 0, 0]);
+  });
+
+  it("a non-pixel change (layer visibility) is still a FULL repaint", () => {
+    // Rule 4 of the accumulator: only pixel writes take the fast path.
+    load(
+      mkProject([
+        mkLayer("l-1", RED, [[0, 0]]),
+        mkLayer("l-2", GREEN, [[1, 1]]),
+      ]),
+    );
+    const { container } = mountCanvas();
+    clearCalls(container);
+
+    act(() => {
+      app.layers.toggleLayerVisibility("l-2");
+    });
+
+    // BOTH canvases repainted in full — the visibility change is described by
+    // no dirty region at all, so narrowing it would repaint nothing.
+    expect(cellsPainted(container, "l-1")).toBe(W * H);
+  });
+
+  it("⚠️ R6: moveLayerPixels publishes NO region and still repaints in full", () => {
+    // The audit's most important negative case. `moveLayerPixels` goes
+    // through `DomainMutator.commit`, not `PixelStore` — it bumps
+    // `domainVersion` and touches NEITHER `pixelVersion` NOR `pixelDirty`.
+    // Its repaint therefore rides entirely on `render`'s identity changing,
+    // which is the path the task 07 gate must not have broken. If this
+    // regresses, a move leaves the sprite frozen where it was.
+    load(mkProject([mkLayer("l-1", RED, [[1, 1]])]));
+    const { container } = mountCanvas();
+    expect([...getPixel(bufferFor(container, "l-1")!, 1, 1)]).toEqual([
+      255, 0, 0, 255,
+    ]);
+    const dirtyBefore = app.domain.pixelDirty;
+    const versionBefore = app.domain.pixelVersion;
+
+    act(() => {
+      app.layers.moveLayerPixels(1, 0);
+    });
+
+    // Neither channel moved — which is exactly why the full-repaint path has
+    // to still exist.
+    expect(app.domain.pixelDirty).toBe(dirtyBefore);
+    expect(app.domain.pixelVersion).toBe(versionBefore);
+    // And the canvas followed anyway.
+    const buf = bufferFor(container, "l-1")!;
+    expect([...getPixel(buf, 2, 1)]).toEqual([255, 0, 0, 255]);
+    expect([...getPixel(buf, 1, 1)]).toEqual([0, 0, 0, 0]);
+  });
+
+  it("several edits in ONE frame coalesce with no cell dropped", () => {
+    // The rapid-scribble case. rAF is synchronous in this harness, so the
+    // accumulation itself is `useCanvasRender.dom.test`'s job; what this pins
+    // is that every cell of a run reaches the canvas.
+    load(mkProject([mkLayer("l-1", RED, [[0, 0]])]));
+    const { container } = mountCanvas();
+
+    act(() => {
+      for (let x = 0; x < W; x++) app.pixels.setPixel(x, 2, BLUE);
+    });
+
+    const buf = bufferFor(container, "l-1")!;
+    for (let x = 0; x < W; x++) {
+      expect([...getPixel(buf, x, 2)]).toEqual([0, 0, 255, 255]);
+    }
+  });
+});
+
+/* ══ 10. D9 — the onion dilation, END TO END ═══════════════════════════════ */
+
+describe("⚠️ D9: onion mode, incremental, stays identical to a full repaint", () => {
+  it("an edit under onion focus leaves the canvas exactly as a full repaint would", () => {
+    // ══════════════════════════════════════════════════════════════════════
+    //  THE D9 CHECK AT THE CONTAINER LEVEL — WHY IT IS PHRASED THIS WAY
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // `isOutlineCell` reads a cell's FOUR NEIGHBOURS, so under onion an edit
+    // to one cell changes whether its NEIGHBOURS render as outline. Repaint
+    // only the published cells and those neighbours keep paint that is no
+    // longer correct — silently, until something forces a full repaint.
+    //
+    // The strongest assertion available is therefore not "these four cells
+    // changed" but EQUIVALENCE: after an incremental pass the canvas must be
+    // byte-identical to what a full repaint of the same grid produces. That
+    // catches both an under-dilation (stale cells left) and an
+    // over-dilation (cells cleared that should have stayed).
+    //
+    // The exhaustive cell-level proof of the dilation itself lives in
+    // `renderLayerView.test.ts`, where the painter can be driven directly;
+    // this one proves the container wires it up.
+    const project = variantEditProject();
+    const frame = project.objects[0].frames[0];
+    frame.layers[0] = solidBlockLayer("l-regular", RED);
+    load(project);
+    act(() => {
+      runInAction(() => app.ui.viewport.setLayerFocusMode("onion"));
+    });
+    const { container } = mountCanvas();
+
+    // 8 of the block's 9 cells: the interior (1,1) is not an outline cell.
+    expect(paintedCells(bufferFor(container, "l-regular")!)).toHaveLength(8);
+
+    // Edit the VARIANT (the layer the user is actually on) and confirm the
+    // onion layer beside it is unharmed, then force a full repaint and
+    // compare. An incremental pass that touched the onion layer wrongly
+    // would diverge here.
+    act(() => {
+      app.pixels.setPixel(1, 1, GREEN);
+    });
+    const incremental = paintedCells(bufferFor(container, "l-regular")!)
+      .map((c) => `${c.x},${c.y}:${c.rgba.join(",")}`)
+      .sort();
+
+    act(() => {
+      runInAction(() => app.ui.viewport.setLayerFocusMode("transparent"));
+      runInAction(() => app.ui.viewport.setLayerFocusMode("onion"));
+    });
+    const full = paintedCells(bufferFor(container, "l-regular")!)
+      .map((c) => `${c.x},${c.y}:${c.rgba.join(",")}`)
+      .sort();
+
+    expect(incremental).toEqual(full);
+  });
+
+  it("⚠️ dilation: filling a hole retires its FOUR neighbours' outline status", () => {
+    // ══════════════════════════════════════════════════════════════════════
+    //  THE CELL-LEVEL D9 PROOF — driven through the painter directly
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // The container test above proves the wiring; this proves the RULE, and
+    // it has to be driven at the painter because in today's UI the onion
+    // layer is never the edit target (onion applies to a NON-current layer
+    // under variant-edit focus, and every `PixelStore` write resolves to the
+    // SELECTED layer). The dilation is therefore defensive — it costs 8 extra
+    // cells per edit and removes a whole class of stale-outline bug the
+    // moment any path does reach that layer.
+    //
+    // A plus with a hole at its centre: each of the four arms is an outline
+    // cell BECAUSE (2,1) is empty. Fill (2,1) and the arms at (1,1) and (3,1)
+    // stop being outline cells — but only (2,1) is in the dirty region.
+    const before: [number, number][] = [
+      [2, 0],
+      [1, 1],
+      [3, 1],
+      [2, 2],
+    ];
+    const gridWidth = 5;
+    const gridHeight = 3;
+    const mkGrid = (cells: [number, number][]) => {
+      const g = Array.from({ length: gridHeight }, () =>
+        Array.from({ length: gridWidth }, () => ({ ...EMPTY })),
+      );
+      for (const [x, y] of cells) {
+        g[y][x] = { color: { ...RED }, normal: 0, height: 0 };
+      }
+      return g;
+    };
+    const color = (cell: unknown) => {
+      const c = (cell as PixelData | undefined)?.color;
+      return c && typeof c === "object" ? (c as Pixel) : null;
+    };
+
+    // 1. Paint the BEFORE state in onion mode.
+    const surface = createStubContext(gridWidth, gridHeight);
+    const full0 = surface.createImageData(gridWidth, gridHeight);
+    paintLayerCells(full0, {
+      pixels: mkGrid(before),
+      gridWidth,
+      gridHeight,
+      getPixelColor: color,
+      onionOutline: true,
+    });
+    surface.putImageData(full0, 0, 0);
+    // All four arms are outline cells while the hole is empty.
+    expect(paintedCells(surface.buffer)).toHaveLength(4);
+
+    // 2. Fill the hole and repaint INCREMENTALLY, with the dilation.
+    const after = mkGrid([...before, [2, 1]]);
+    const dirty = [{ x: 2, y: 1 }];
+    const painted = dilateCells(dirty);
+    clearLayerCells(surface, {
+      cells: painted,
+      gridWidth,
+      gridHeight,
+      surfaceWidth: gridWidth,
+      surfaceHeight: gridHeight,
+    });
+    const patch = surface.getImageData(0, 0, gridWidth, gridHeight);
+    paintLayerCells(patch, {
+      pixels: after,
+      gridWidth,
+      gridHeight,
+      getPixelColor: color,
+      onionOutline: true,
+      cells: painted,
+    });
+    surface.putImageData(patch, 0, 0);
+    const incremental = paintedCells(surface.buffer)
+      .map((c) => `${c.x},${c.y}`)
+      .sort();
+
+    // 3. What a FULL repaint of the same grid gives.
+    const surfaceFull = createStubContext(gridWidth, gridHeight);
+    const full1 = surfaceFull.createImageData(gridWidth, gridHeight);
+    paintLayerCells(full1, {
+      pixels: after,
+      gridWidth,
+      gridHeight,
+      getPixelColor: color,
+      onionOutline: true,
+    });
+    surfaceFull.putImageData(full1, 0, 0);
+    const expected = paintedCells(surfaceFull.buffer)
+      .map((c) => `${c.x},${c.y}`)
+      .sort();
+
+    expect(incremental).toEqual(expected);
+    // ⚠️ AND THE INTERESTING PART, spelled out so a future reader does not
+    // "fix" it: the filled hole (2,1) is NOT painted. All four of its
+    // neighbours are now painted, so it is an interior cell, and onion draws
+    // only the outline. The four arms survive because each still touches the
+    // grid's empty surroundings. So the WRITE ITSELF produces no pixel while
+    // its neighbours had to be re-evaluated — which is precisely why the
+    // region has to be dilated rather than trusted.
+    expect(incremental).toEqual(["1,1", "2,0", "2,2", "3,1"]);
+  });
+
+  it("⚠️ NEGATIVE CONTROL: WITHOUT the dilation the same edit goes stale", () => {
+    // ══════════════════════════════════════════════════════════════════════
+    //  THE PROOF THAT D9 IS LOAD-BEARING AND NOT DEFENSIVE DECORATION
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // Same grid, same edit, run three ways: undilated, dilated, and a full
+    // repaint as the truth. The dilated pass must MATCH the truth and the
+    // undilated pass must NOT. If this ever starts matching, the dilation has
+    // stopped doing anything and the test above has stopped proving anything.
+    //
+    // The case is an ERASE from the middle of a solid 5x5 block, and the
+    // direction matters. Filling a hole makes the written cell INTERIOR — it
+    // simply stops being painted, which even an undilated pass gets right
+    // because it clears that cell anyway. Erasing does the opposite: the four
+    // cells around the hole were interior (unpainted) and become outline
+    // cells, and NONE of them is in the dirty region. Undilated, they stay
+    // blank — a hole with no edge, which is exactly the stale-outline
+    // artefact D9 exists to prevent.
+    const G = 5;
+    const color = (cell: unknown) => {
+      const c = (cell as PixelData | undefined)?.color;
+      return c && typeof c === "object" ? (c as Pixel) : null;
+    };
+    const mk5 = (cells: [number, number][]) => {
+      const g = Array.from({ length: G }, () =>
+        Array.from({ length: G }, () => ({ ...EMPTY })),
+      );
+      for (const [x, y] of cells) {
+        g[y][x] = { color: { ...RED }, normal: 0, height: 0 };
+      }
+      return g;
+    };
+    const keys = (ctx: StubContext) =>
+      paintedCells(ctx.buffer)
+        .map((c) => `${c.x},${c.y}`)
+        .sort();
+
+    const solid: [number, number][] = [];
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) solid.push([x, y]);
+
+    // The BEFORE state: a solid block's outline is its 16 border cells.
+    const start = createStubContext(G, G);
+    const b0 = start.createImageData(G, G);
+    paintLayerCells(b0, {
+      pixels: mk5(solid),
+      gridWidth: G,
+      gridHeight: G,
+      getPixelColor: color,
+      onionOutline: true,
+    });
+    start.putImageData(b0, 0, 0);
+    expect(keys(start)).toHaveLength(16);
+
+    const erased = mk5(solid.filter(([x, y]) => !(x === 2 && y === 2)));
+    const dirty = [{ x: 2, y: 2 }];
+
+    /** Replay `cells` onto a copy of the BEFORE surface. */
+    const replay = (cells: readonly { x: number; y: number }[]) => {
+      const ctx = createStubContext(G, G);
+      ctx.putImageData(start.getImageData(0, 0, G, G), 0, 0);
+      clearLayerCells(ctx, {
+        cells,
+        gridWidth: G,
+        gridHeight: G,
+        surfaceWidth: G,
+        surfaceHeight: G,
+      });
+      const patch = ctx.getImageData(0, 0, G, G);
+      paintLayerCells(patch, {
+        pixels: erased,
+        gridWidth: G,
+        gridHeight: G,
+        getPixelColor: color,
+        onionOutline: true,
+        cells,
+      });
+      ctx.putImageData(patch, 0, 0);
+      return ctx;
+    };
+
+    const undilated = replay(dirty);
+    const dilated = replay(dilateCells(dirty));
+
+    // The truth: a full repaint of the erased grid.
+    const truth = createStubContext(G, G);
+    const bt = truth.createImageData(G, G);
+    paintLayerCells(bt, {
+      pixels: erased,
+      gridWidth: G,
+      gridHeight: G,
+      getPixelColor: color,
+      onionOutline: true,
+    });
+    truth.putImageData(bt, 0, 0);
+
+    // ⚠️ THE WHOLE POINT.
+    expect(keys(dilated)).toEqual(keys(truth));
+    expect(keys(undilated)).not.toEqual(keys(truth));
+
+    // Named concretely so a failure says WHICH cells went stale: the four
+    // neighbours of the erased cell are the new edge of the hole.
+    for (const k of ["1,2", "2,1", "2,3", "3,2"]) {
+      expect(keys(truth)).toContain(k);
+      expect(keys(dilated)).toContain(k);
+      expect(keys(undilated)).not.toContain(k);
+    }
   });
 });
