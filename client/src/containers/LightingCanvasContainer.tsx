@@ -149,6 +149,7 @@ import {
   PREVIEW_BORDER,
 } from "../ui/canvas/render/renderLightingPreview";
 import { renderNormalEdit } from "../ui/canvas/render/renderNormalEdit";
+import { drawLitComposite } from "../ui/canvas/render/renderLitComposite";
 import {
   paintBrushCells,
   strokeBrushOutlines,
@@ -165,6 +166,40 @@ import type { LightingRenderMode } from "../stores/ui/LightingViewsUIStore";
 
 /** The colour the brush shapes are asked for. Discarded — see `brushStamp`. */
 const SHAPE_COLOR = { r: 0, g: 0, b: 0, a: 255 } as const;
+
+/**
+ * The painter a scheduler is given when its surface does not exist in this
+ * render mode, and the handler a read-only pane gives a required pointer prop.
+ *
+ * Module scope so its identity is STABLE — a fresh `() => {}` per render would
+ * re-run `useCanvasRender`'s effect on every render. A `function` declaration
+ * with a lower-case name rather than a `const` arrow, so `react-refresh` does
+ * not read it as a component export.
+ */
+function noop(): void {}
+
+/**
+ * ⚠️ READ-ONLY PANE, NOT A DISABLED ONE.
+ *
+ * `LightingSurfaceProps` makes the seven pointer handlers REQUIRED, and that
+ * file belongs to task 03 — so the Preview pane supplies no-ops rather than
+ * widening a prop type in another task's scope. The effect is what the owner
+ * asked for: a click, a drag or a touch on the Preview pane resolves no brush
+ * cells, opens no history transaction and writes no pixel. There is
+ * deliberately no hover marker either — `setHoverPixel` is never called from
+ * here.
+ *
+ * One object at module scope, so the identity is stable across renders.
+ */
+const READ_ONLY_POINTERS = {
+  onMouseDown: noop,
+  onMouseMove: noop,
+  onMouseUp: noop,
+  onMouseLeave: noop,
+  onTouchStart: noop,
+  onTouchMove: noop,
+  onTouchEnd: noop,
+} as const;
 
 export interface LightingCanvasContainerProps {
   /** Which mode this instance shows. `"edit"` (default) is today's painting canvas. */
@@ -204,6 +239,7 @@ export const LightingCanvasContainer = observer(
     // (MASTER D4). "Camera" here is pan + view zoom only, and each pane owns
     // its own — session-only, exactly as the lighting transform already was.
     const views = app.lightingViews;
+    const previewMode = renderMode === "preview";
     const camera: CanvasCamera = views.cameraFor(renderMode);
 
     const zoom = viewport.zoom;
@@ -247,8 +283,15 @@ export const LightingCanvasContainer = observer(
         ? variantData.variant.gridSize.height
         : objHeight;
 
-    const canvasWidth = gridWidth * zoom;
-    const canvasHeight = gridHeight * zoom;
+    // ⚠️ The Preview pane shows the WHOLE OBJECT composite — what the retiring
+    // floating thumbnail showed — so it sizes from `objWidth/objHeight`, not
+    // from the (possibly variant-cropped) edit grid. Cropping the preview to
+    // the edit grid would make it a different thing (MASTER §1).
+    const viewCellsX = previewMode ? objWidth : gridWidth;
+    const viewCellsY = previewMode ? objHeight : gridHeight;
+
+    const canvasWidth = viewCellsX * zoom;
+    const canvasHeight = viewCellsY * zoom;
 
     /* ── the viewport engine (task 31) ───────────────────────────────────── */
     //
@@ -528,6 +571,68 @@ export const LightingCanvasContainer = observer(
       bgTheme,
     ]);
 
+    /* ── render: the Preview render mode's lit composite pane ────────────── */
+    //
+    // The SAME `composeLayers` → `renderWithLighting` pipeline the floating
+    // thumbnail used, painted into THIS pane's main canvas at the editor's own
+    // scale instead of a fixed 200 px square.
+    //
+    // ⚠️ NOT `renderLightingPreview`. Its `previewPlacement` picks an integer
+    // fit into `PREVIEW_THUMB_SIZE` and CROPS anything larger — correct for a
+    // thumbnail, wrong for a workspace pane, which is a real viewport driven by
+    // the shared pixel scale and its own camera. `drawLitComposite` does no
+    // fit, no centring and no crop (MASTER D9).
+    const renderLitPane = useCallback(() => {
+      const canvas = editCanvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (!canvas || !ctx || !frame || !obj) return;
+
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      ctx.imageSmoothingEnabled = false;
+
+      const baseFrameIndex = obj.frames.findIndex((f) => f.id === frame.id);
+      const composed = composeLayers(
+        frame,
+        objWidth,
+        objHeight,
+        baseFrameIndex >= 0 ? baseFrameIndex : 0,
+        variants,
+        variantFrameIndices,
+      );
+      const lit = renderWithLighting(composed, {
+        lightDirection,
+        lightColor,
+        ambientColor,
+        heightScale,
+      });
+
+      const buffer = ctx.createImageData(canvasWidth, canvasHeight);
+      drawLitComposite(buffer, {
+        source: lit,
+        objWidth,
+        objHeight,
+        zoom,
+        theme: bgTheme,
+      });
+      ctx.putImageData(buffer, 0, 0);
+    }, [
+      frame,
+      obj,
+      objWidth,
+      objHeight,
+      variants,
+      variantFrameIndices,
+      lightDirection,
+      lightColor,
+      ambientColor,
+      heightScale,
+      canvasWidth,
+      canvasHeight,
+      zoom,
+      bgTheme,
+    ]);
+
     /* ── render: the brush overlay (concern b3) ──────────────────────────── */
     const renderBrushOverlay = useCallback(() => {
       const canvas = overlayCanvasRef.current;
@@ -561,12 +666,27 @@ export const LightingCanvasContainer = observer(
     // signals — the preview depends on the LIGHTING parameters, the edit canvas
     // on the grid and the theme. Merging them would repaint a 200x200 lit
     // composite every time the cursor changed the brush overlay.
-    const { invalidate: invalidatePreview } = useCanvasRender(renderPreview, [
-      renderPreview,
+    //
+    // ⚠️ Which painter owns the MAIN canvas depends on the render mode. In
+    // Preview mode `renderEdit`'s normal/height visualisation and the brush
+    // overlay are BOTH skipped: the pane is read-only, so there is no hover
+    // cell to mark and no editable channel to visualise. The `renderPreview`
+    // thumbnail painter runs only in Edit mode, where the floating panel that
+    // owns its canvas is mounted (task 06 retires both).
+    const { invalidate: invalidatePreview } = useCanvasRender(
+      previewMode ? noop : renderPreview,
+      [previewMode, renderPreview, pixelVersion],
+    );
+    useCanvasRender(previewMode ? renderLitPane : renderEdit, [
+      previewMode,
+      renderLitPane,
+      renderEdit,
       pixelVersion,
     ]);
-    useCanvasRender(renderEdit, [renderEdit, pixelVersion]);
-    useCanvasRender(renderBrushOverlay, [renderBrushOverlay]);
+    useCanvasRender(previewMode ? noop : renderBrushOverlay, [
+      previewMode,
+      renderBrushOverlay,
+    ]);
 
     /* ── pointer handling ────────────────────────────────────────────────── */
     const handleMouseDown = useCallback(
@@ -675,6 +795,12 @@ export const LightingCanvasContainer = observer(
     // Three shortcuts, verbatim. See the header for why `useCanvasKeyboard` is
     // NOT adopted here.
     useEffect(() => {
+      // ⚠️ EXACTLY ONE PANE MAY BIND THIS. The listener is on `window`, so with
+      // both panes mounted an ungated effect would register it twice and every
+      // ⌘Z would undo twice and every `.` would step two frames. `keyboardOwner`
+      // is Edit whenever Edit is open, else Preview (MASTER D12).
+      if (views.keyboardOwner !== renderMode) return;
+
       const handleKeyDown = (e: KeyboardEvent) => {
         if (
           e.target instanceof HTMLInputElement ||
@@ -712,7 +838,7 @@ export const LightingCanvasContainer = observer(
       };
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [app, app.timelineUI.selectedFrameId]);
+    }, [app, app.timelineUI.selectedFrameId, views.keyboardOwner, renderMode]);
 
     /* ── the panel, and its one imperative coupling ──────────────────────── */
     //
@@ -740,25 +866,37 @@ export const LightingCanvasContainer = observer(
         viewPanOffset={viewPanOffset}
         viewZoom={viewZoom}
         editMode={editMode}
-        gridWidth={gridWidth}
-        gridHeight={gridHeight}
+        // The readout describes what THIS pane shows: the edit grid in Edit
+        // mode, the whole object in Preview mode.
+        gridWidth={viewCellsX}
+        gridHeight={viewCellsY}
         zoom={zoom}
         empty={empty}
         viewControls={<CanvasViewControls onResetView={handleResetView} />}
+        // ⚠️ EDIT MODE ONLY. Two mounted copies would fight over the one
+        // persisted panel position in `ViewportUIStore.panels.lightingPreview`.
+        // Task 06 retires the floating panel entirely; until then Edit keeps it
+        // so Edit mode is unchanged.
         previewPanel={
-          <LightingPreviewPanelContainer
-            canvasRef={previewCanvasRef}
-            containerRef={rootRef}
-            onMinimizedChange={handlePanelMinimizedChange}
-          />
+          previewMode ? undefined : (
+            <LightingPreviewPanelContainer
+              canvasRef={previewCanvasRef}
+              containerRef={rootRef}
+              onMinimizedChange={handlePanelMinimizedChange}
+            />
+          )
         }
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        {...(previewMode
+          ? READ_ONLY_POINTERS
+          : {
+              onMouseDown: handleMouseDown,
+              onMouseMove: handleMouseMove,
+              onMouseUp: handleMouseUp,
+              onMouseLeave: handleMouseLeave,
+              onTouchStart: handleTouchStart,
+              onTouchMove: handleTouchMove,
+              onTouchEnd: handleTouchEnd,
+            })}
       />
     );
   },
