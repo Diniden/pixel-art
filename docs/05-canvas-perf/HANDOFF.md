@@ -1,8 +1,8 @@
 # HANDOFF — Canvas rendering performance for large editing surfaces
 
-**Current position:** BLOCKED — W2: task 03 DONE, task 02 PARTIAL. Plan defect; awaiting owner decision.
+**Current position:** W2 DONE (via owner-authorized follow-up) — W3 (task 04) next
 **Branch:** `feat/03-reflection-tool`
-**Last commit:** `23ac19c`
+**Last commit:** `c2963cf`
 
 Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 `feat/03-reflection-tool`, working tree clean.
@@ -12,7 +12,7 @@ Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01 | DONE | 2026-08-30 | `cacfafe` | typecheck 0 · vitest **132 files / 2269 tests passed** · lint:boundaries OK (5/5) |
-| W2 | 02, 03 | **BLOCKED** | 2026-08-30 | `5b2401d` `fd871c9` (03) · `cf4c7dd` `23ac19c` (02) | typecheck **exit 2**, 5 errors · vitest **1 failed / 2329 passed** — see W2 section |
+| W2 | 02, 03 | **DONE** | 2026-08-30 | `5b2401d` `fd871c9` (03) · `cf4c7dd` `23ac19c` `c2963cf` (02) | typecheck 0 · vitest **134 files / 2330 passed** · lint 0 · boundaries 0 · `lint:css` exit 2 **pre-existing, see below** |
 | W3 | 04 | TODO | | | |
 | W4 | 05 | TODO | | | |
 | W5 | 06 | TODO | | | |
@@ -76,7 +76,7 @@ Coordinator spot-checks beyond the gate:
   triggering a save.
 - `pixelDirty` is annotated `observableRef`, not `observable` (R2).
 
-## W2 BLOCKED — the plan cannot be executed as written (coordinator-verified)
+## W2 — RESOLVED. Was blocked by a plan defect; unblocked by owner-authorized follow-up `c2963cf`
 
 **Task 03: DONE.** Commits `5b2401d`, `fd871c9`. Exactly 4 new files, 1,397 insertions,
 **zero existing files modified**. Pure (no React/JSX/store/MobX/API). `ui/canvas` +
@@ -102,7 +102,54 @@ Task 05's own task file already assumes `cellWidth` exists in `CanvasContainer`
 (`05-...md:38`), confirming the rename was always meant to reach that file — the plan simply
 never assigned the edit to anyone.
 
-### Verified failing gate (coordinator re-ran on the settled tree, not taken on report)
+### RESOLUTION (owner chose "follow-up agent, 3 extra files")
+
+Follow-up commit **`c2963cf`** finished the rename in `CanvasContainer.tsx`,
+`LightingCanvasContainer.tsx` and `CanvasSurface.dom.test.tsx` (90 insertions, 19 deletions,
+exactly those three files). `MASTER.md` §8 item 2 was corrected in `eca9011` so task 05 does
+not redo this work.
+
+**Final W2 gate, re-run by the coordinator on the settled tree:**
+
+```
+bun run --cwd client typecheck        -> $ tsc --noEmit   (no output)   exit 0
+bun run --cwd client lint:boundaries  -> OK — all 5 boundary rules hold  exit 0
+cd client && bunx vitest run          -> Test Files  134 passed (134)
+                                              Tests  2330 passed (2330)   69.17s
+bun run --cwd client lint             -> 0 errors, 65 warnings           exit 0
+bun run --cwd client lint:css         -> 2 errors, 67 warnings           exit 2  (PRE-EXISTING)
+```
+
+Corpus golden digests + round-trip suites passed **unchanged**. No lockfile.
+
+Coordinator spot-checks: diff is exactly the 3 authorized files; the only `fillRect` line in
+the diff is an explanatory comment, so **the render loop is untouched** (task 05 owns it);
+`handleResetView` centres on `contentWidth` with the §8-item-3 trap documented inline; four
+R1 regression tests pin the data-safety invariant, including "the content box is
+byte-identical to the pre-1:1 canvas box". Verified `contentWidth = cellWidth * zoom`
+(view zoom 1, excluding `viewZoom`), so the call sites' `contentWidth * viewZoom` is correct
+and does NOT square the factor — it preserves the persisted `panOffset` box exactly (R1).
+
+### ⚠️ LEDGER CORRECTION — `lint:css` was never green, and an earlier W2 entry said it was
+
+The follow-up agent challenged my ledger, and **it was right**. I had recorded "`lint:css`
+exits 0" from task 02's report without checking it myself. `lint:css` exits **2** with 2
+errors in `src/ui/components/OtherHand/OtherHand.css` (design-token rule, refresh task 12).
+
+Proven pre-existing three ways: the file is byte-identical to the plan baseline
+(`git diff 5d76ce9..HEAD` on it is empty), it was last touched in `d1fc2ac` ("Checkpoint:
+Pre brush studio") long before this plan, and a **clean `5d76ce9` worktree reproduces
+`stylelint` exit 2 with the same 2 errors**. It is outside every task's `Touches` list.
+
+**Consequence for the plan: MASTER §4's claim that all gate commands were "verified to run
+on 2026-08-30" is wrong for `lint:css` — it never exited 0.** W2's gate is therefore judged
+green on typecheck + vitest + lint + boundaries, with `lint:css`'s 2 errors carried as a
+pre-existing condition. W5 and W7 list `lint:css` in their gates and **must not** be blocked
+by these 2 errors; fixing `OtherHand.css` belongs to refresh task 12, not to this plan.
+
+### Original diagnosis (kept for the record)
+
+**Verified failing gate at `23ac19c`, before the follow-up:**
 
 ```
 bun run --cwd client typecheck   -> exit 2
@@ -123,20 +170,18 @@ bunx vitest run                  -> Test Files  1 failed | 133 passed (134)
 No lockfile. Both agents stayed exactly in scope — the 9 changed files are precisely the two
 `Touches` lists, which is why the defect is the plan's and not theirs.
 
-### The app is knowingly broken at this commit
+### ⚠️ EXPECTED INTERMEDIATE STATE — the app compiles and boots, but artwork is CLIPPED
 
-Vite still builds (it strips types without checking), but `CanvasContainer` destructures
-`canvasWidth` as `undefined`, so canvases fall back to the 300x150 default while the render
-loop still paints at `* zoom`. **`bun run dev` will not render correctly until the follow-up
-lands.** No manual check is meaningful before then.
+Resolved as far as W2 can take it: the app now boots and mounts cleanly (Vite ready, `GET /`
+200, all three modules transform without error) where at `23ac19c` it fell back to a
+300x150 default canvas.
 
-### Remaining work (small, mechanical, but needs 2 files outside W2's scope)
-
-`geom.cellWidth/cellHeight`; `contentWidth`/`contentHeight` into `useCanvasViewport`;
-`combinedScale={zoom * viewZoom}` + `cellWidth`/`cellHeight` onto `<CanvasSurface>`;
-`contentWidth` at the two pan-clamp sites and the centring site (section 8 items 2 and 3);
-and `contentWidth: viewCellsX * zoom` in `LightingCanvasContainer` (its own sizing stays,
-R7). Plus the one-line `CanvasSurface.dom.test.tsx` transform assertion.
+**But `CanvasContainer`'s ~1000-line render loop still paints at `ctx.fillRect(x * zoom, ...)`
+into 1:1 canvases, so the artwork is clipped to the top-left `cellWidth x cellHeight`
+corner until TASK 05 converts it.** A documented transitional alias
+`const canvasWidth = cellWidth * zoom` at `CanvasContainer.tsx:747-748` keeps that loop
+compiling verbatim — **task 05 must delete it.** Sub-cell overlays stay wrong/invisible
+until task 04. Both are the planned intermediate state, not regressions.
 
 ### 0 of 7 manual checks performed — all still owed
 
