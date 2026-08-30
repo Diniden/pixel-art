@@ -24,6 +24,18 @@
  * construction. So the stories double as a visual check on the renderers, and
  * `LightGridMode` shows the exact pixels the app now produces.
  *
+ * ## ⚠️ 1:1 CANVASES AND A COMBINED SCALE (plan 05, task 08 — R7 closed)
+ *
+ * Every story now passes `cellWidth`/`cellHeight` in GRID CELLS and a single
+ * `combinedScale` of `zoom * viewZoom`; the painters are called with a `zoom`
+ * of one. That is the same model `CanvasSurface`'s stories use, and the two
+ * engines finally interpret the shared `ViewportUIStore.zoom` identically.
+ *
+ * The grid and the brush OUTLINE left the canvas with it: at one pixel per
+ * cell the raster grid is a flat wash of colour and the raster outline strokes
+ * 0×0 rectangles and renders nothing. Both are `ui/canvas/svg/` paths passed as
+ * props — the SAME emitters `CanvasSurface` renders, never a second copy.
+ *
  * ## ⚠️ `Default` vs `LightGridMode` IS the Q3 sign-off
  *
  * Task 33's manual check 4 asks for `CanvasSurface`'s and `LightingSurface`'s
@@ -39,19 +51,26 @@ import { fn } from "storybook/test";
 import { LightingSurface } from "./LightingSurface";
 import { CanvasViewControls } from "../CanvasViewControls/CanvasViewControls";
 import type { LightingSurfaceProps } from "./LightingSurface";
-import {
-  backgroundTheme,
-  strokeGrid,
-} from "../../canvas/render/canvasBackground";
+import { backgroundTheme } from "../../canvas/render/canvasBackground";
 import { renderNormalEdit } from "../../canvas/render/renderNormalEdit";
-import {
-  paintBrushCells,
-  strokeBrushOutlines,
-} from "../../canvas/render/renderBrushOverlay";
+import { paintBrushCells } from "../../canvas/render/renderBrushOverlay";
+import { gridOverlayPath } from "../../canvas/svg/gridOverlay";
+import { brushOutlineOverlay } from "../../canvas/svg/chromeOverlay";
 
+/** The shared pixel scale. A CSS scale factor now, never a backing-store size. */
 const ZOOM = 14;
 const GRID_W = 16;
 const GRID_H = 16;
+
+/**
+ * The `zoom` the raster painters are called with: **one**.
+ *
+ * The same constant `LightingCanvasContainer` names `CELL_SCALE`, and for the
+ * same reason — these stories deliberately call the REAL painters with the REAL
+ * arguments the container passes, so a story that quietly kept `ZOOM` here
+ * would be showing pixels the app no longer produces.
+ */
+const CELL_SCALE = 1;
 
 /**
  * A synthetic NORMAL visualisation — the shape `renderNormalAsRGB` produces.
@@ -123,46 +142,41 @@ function LightingHarness({ surface, source, light, brushCells }: HarnessProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const { canvasWidth, canvasHeight } = surface;
+  const { cellWidth, cellHeight } = surface;
 
   const paint = useCallback(() => {
     const ctx = editCanvasRef.current?.getContext("2d");
     if (ctx) {
       ctx.imageSmoothingEnabled = false;
       const theme = backgroundTheme(light);
-      const buffer = ctx.createImageData(canvasWidth, canvasHeight);
+      // ⚠️ 1:1 with the pixel data, and `CELL_SCALE` not `ZOOM` — exactly what
+      // the container does. The magnification is the `combinedScale` transform
+      // `LightingSurface` applies, so what these stories show on screen is the
+      // GPU's upscale of these bytes, which is what ships.
+      const buffer = ctx.createImageData(cellWidth, cellHeight);
       renderNormalEdit(buffer, {
         source: source(ctx),
         gridWidth: GRID_W,
         gridHeight: GRID_H,
-        zoom: ZOOM,
+        zoom: CELL_SCALE,
         theme,
       });
       ctx.putImageData(buffer, 0, 0);
-      strokeGrid(
-        ctx,
-        {
-          canvasWidth,
-          canvasHeight,
-          cellsX: GRID_W,
-          cellsY: GRID_H,
-          offsetX: 0,
-          offsetY: 0,
-          zoom: ZOOM,
-        },
-        theme,
-      );
+      // ⚠️ NO `strokeGrid`. The grid is the `grid` PROP now — vector chrome
+      // from `gridOverlayPath`, because at 1:1 the raster grid degenerates
+      // into a flat wash of colour over the whole canvas. See `baseSurface`.
     }
 
     const overlayCtx = overlayCanvasRef.current?.getContext("2d");
     if (overlayCtx && brushCells?.length) {
-      overlayCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-      const buffer = overlayCtx.createImageData(canvasWidth, canvasHeight);
-      paintBrushCells(buffer, brushCells, ZOOM);
+      overlayCtx.clearRect(0, 0, cellWidth, cellHeight);
+      const buffer = overlayCtx.createImageData(cellWidth, cellHeight);
+      paintBrushCells(buffer, brushCells, CELL_SCALE);
       overlayCtx.putImageData(buffer, 0, 0);
-      strokeBrushOutlines(overlayCtx, brushCells, ZOOM);
+      // ⚠️ NO `strokeBrushOutlines` either — at 1:1 it strokes 0x0 rectangles
+      // and renders nothing. The outline is the `brushOutline` prop.
     }
-  }, [source, light, brushCells, canvasWidth, canvasHeight]);
+  }, [source, light, brushCells, cellWidth, cellHeight]);
 
   useEffect(paint, [paint]);
 
@@ -179,12 +193,26 @@ function LightingHarness({ surface, source, light, brushCells }: HarnessProps) {
   );
 }
 
-/** Props shared by every story; each overrides what it is demonstrating. */
+/**
+ * Props shared by every story; each overrides what it is demonstrating.
+ *
+ * ⚠️ `cellWidth`/`cellHeight` are GRID CELLS — 16, not 16 × 14. That is the
+ * whole of task 08 in one line: the backing store dropped by a factor of
+ * `ZOOM²` (196× here, and up to 2,500× at the zoom ceiling) and the pixels
+ * that used to be written into it are now the GPU's problem, via
+ * `combinedScale`. The sprite is exactly the same size on screen.
+ */
 const baseSurface: HarnessProps["surface"] = {
-  canvasWidth: GRID_W * ZOOM,
-  canvasHeight: GRID_H * ZOOM,
+  cellWidth: GRID_W,
+  cellHeight: GRID_H,
   viewPanOffset: { x: 24, y: 24 },
-  viewZoom: 1,
+  // `zoom * viewZoom`, with view zoom 1. Every story that changes the view
+  // zoom must change this, not a separate field — there is only one scale.
+  combinedScale: ZOOM,
+  // The REAL emitters, from `ui/canvas/svg/` — the same single implementations
+  // `CanvasSurface` renders. The stories are a visual check on the vector
+  // chrome exactly as they already were on the raster renderers.
+  grid: gridOverlayPath({ cellWidth: GRID_W, cellHeight: GRID_H }, false),
   editMode: "normals",
   gridWidth: GRID_W,
   gridHeight: GRID_H,
@@ -219,7 +247,19 @@ export const Default: Story = {
  * for owner sign-off in the task 33 report.
  */
 export const LightGridMode: Story = {
-  args: { surface: baseSurface, source: normalSource, light: true },
+  args: {
+    surface: {
+      ...baseSurface,
+      // The grid's colour rule lives in `gridOverlayAttrs` (black 8% light,
+      // white 5% dark), so the light theme has to be selected HERE as well as
+      // in `backgroundTheme(light)` — the checkerboard and the grid are two
+      // mechanisms now, and this story is the one that would catch them
+      // disagreeing.
+      grid: gridOverlayPath({ cellWidth: GRID_W, cellHeight: GRID_H }, true),
+    },
+    source: normalSource,
+    light: true,
+  },
 };
 
 /** The height brush's grayscale visualisation, and the info bar's other label. */
@@ -231,26 +271,50 @@ export const HeightMode: Story = {
   },
 };
 
-/** The cyan brush footprint on the overlay canvas — a 3×3 circular brush. */
+/** The brush footprint's cells — the shape both halves of the overlay draw. */
+const BRUSH_CELLS = [
+  { x: 7, y: 6 },
+  { x: 6, y: 7 },
+  { x: 7, y: 7 },
+  { x: 8, y: 7 },
+  { x: 7, y: 8 },
+];
+
+/**
+ * The cyan brush footprint — a 3×3 circular brush.
+ *
+ * ⚠️ TWO MECHANISMS, DELIBERATELY. The FILL is the overlay canvas (a cell
+ * fill, safe at 1:1); the OUTLINE is the `brushOutline` `<path>`, because the
+ * raster outline sizes each rect `zoom - 1` and at 1:1 strokes 0×0 rectangles —
+ * it renders nothing, silently. This story is where that would be visible.
+ */
 export const BrushOverlay: Story = {
   args: {
-    surface: baseSurface,
+    surface: {
+      ...baseSurface,
+      brushOutline: brushOutlineOverlay(BRUSH_CELLS),
+    },
     source: normalSource,
     light: false,
-    brushCells: [
-      { x: 7, y: 6 },
-      { x: 6, y: 7 },
-      { x: 7, y: 7 },
-      { x: 8, y: 7 },
-      { x: 7, y: 8 },
-    ],
+    brushCells: BRUSH_CELLS,
   },
 };
 
-/** The pinch-zoom transform, which is CSS on the wrapper and not a redraw. */
+/**
+ * The pinch-zoom transform, which is CSS on the wrapper and not a redraw.
+ *
+ * ⚠️ `combinedScale: ZOOM * 1.75`, not `1.75`. The view zoom multiplies the
+ * shared pixel scale rather than replacing it — that is what `zoom * viewZoom`
+ * means, and passing 1.75 alone would shrink the sprite to an eighth of its
+ * size rather than magnifying it.
+ */
 export const Zoomed: Story = {
   args: {
-    surface: { ...baseSurface, viewZoom: 1.75, viewPanOffset: { x: 0, y: 0 } },
+    surface: {
+      ...baseSurface,
+      combinedScale: ZOOM * 1.75,
+      viewPanOffset: { x: 0, y: 0 },
+    },
     source: normalSource,
     light: false,
   },

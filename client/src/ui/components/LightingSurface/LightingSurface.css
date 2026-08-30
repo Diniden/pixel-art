@@ -77,6 +77,12 @@
   min-height: 100%;
 }
 
+/* ⚠️ `image-rendering: pixelated` IS LOAD-BEARING, NOT DECORATIVE (task 08).
+   This canvas is 1:1 with the pixel data and is magnified by a CSS
+   `scale(zoom * viewZoom)` that reaches 200x. Without this declaration the
+   browser smooths the upscale and a crisp normal map becomes a blurry mess.
+   Never remove it. The `crisp-edges` line below is the Firefox fallback and
+   must stay paired with it. Same for `.lighting-canvas__overlay`. */
 .lighting-canvas__edit-canvas {
   display: block;
   image-rendering: pixelated;
@@ -86,11 +92,53 @@
   cursor: crosshair;
 }
 
+/* The brush footprint's FILL. Also 1:1 and also magnified, so it needs the
+   same load-bearing `pixelated` the edit canvas does — without it a one-pixel
+   cyan cell at 50x smears into a soft blob instead of marking the cell the
+   next stroke lands in. It had no `image-rendering` before task 08 because it
+   was pre-scaled and there was nothing to interpolate. */
 .lighting-canvas__overlay {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* The SVG chrome: the pixel grid and the brush footprint's outline
+   (plan 05, decision D5, task 08).
+
+   ⚠️ WHAT THIS REPLACED, AND WHY IT HAD TO. Both were canvas strokes until
+   task 08 took the lighting canvases to 1:1 with the pixel data. Neither
+   survives that: `strokeGrid` places lines at `x * zoom + 0.5`, so at one
+   pixel per cell there is one line per pixel column and the grid becomes a
+   flat wash of colour over the whole canvas; `strokeBrushOutlines` sizes each
+   rect `zoom - 1`, so it strokes 0x0 rectangles and renders nothing at all.
+   Both fail SILENTLY — no error, no artifact — which is why they moved to
+   vector chrome rather than being left to be noticed later.
+
+   Mounted LAST inside `.lighting-canvas__stack`, so it sits above both
+   canvases by source order. It is inside `.lighting-canvas__surface`, so it
+   inherits `scale(zoom * viewZoom)`; `vector-effect: non-scaling-stroke`,
+   emitted per-path by `ui/canvas/svg/`, exempts the stroke WIDTHS from that
+   transform and gives back the screen-constant hairline both painters
+   documented as their intent.
+
+   No 2px border, unlike `CanvasSurface`'s `.canvas__svg` — that one offsets
+   itself to match `.canvas__surface`'s 2px accent border, and
+   `.lighting-canvas__edit-canvas` has none. A border here would point every
+   grid line at the wrong seam between pixels.
+
+   `pointer-events: none`: the editable canvas is the only element that may
+   take input, and an SVG stacked above everything would otherwise swallow
+   every stroke. No `image-rendering` — it is meaningless on vector content. */
+.lighting-canvas__svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
 }
 
 .lighting-canvas__info {
