@@ -1,17 +1,21 @@
-/* block: canvas-view-controls (2026-08-28).
+/* block: canvas-view-controls (2026-08-28, row layout 2026-08-29).
 
-   The floating control column in the BOTTOM-LEFT of the canvas viewport.
+   The floating control cluster in the BOTTOM-LEFT of a canvas viewport.
 
-   ⚠️ `position: absolute` against `.app__canvas-area`, which is already
-   `position: relative` — the same containing block the floating reference
-   panels use. It deliberately does NOT live inside `.canvas__layout`: that
-   element carries the pan/zoom transform, so a control placed there would be
-   scaled and panned along with the artwork and could itself be dragged
-   off-screen. A control whose whole job is to rescue a lost view must never
-   be reachable by the gesture that lost it.
+   ⚠️ `position: absolute` against `.canvas__viewport`, which is
+   `position: relative` — `CanvasSurface` renders these controls as a direct
+   child of the viewport, so each pane of a split canvas gets its own cluster
+   anchored to its own corner. It deliberately does NOT live inside
+   `.canvas__layout`: that element carries the pan/zoom transform, so a
+   control placed there would be scaled and panned along with the artwork and
+   could itself be dragged off-screen. A control whose whole job is to rescue
+   a lost view must never be reachable by the gesture that lost it.
 
    `--z-overlay-control` is the token for exactly this role ("floating buttons
-   over a canvas"), one layer below the floating panels. */
+   over a canvas"), one layer below the floating panels.
+
+   Shape: a bottom-anchored ROW — the `__stack` column (mode → close? → reset)
+   and, to its right, the optional `__offsets` row of variant-offset arrows. */
 
 .canvas-view-controls {
   position: absolute;
@@ -19,17 +23,33 @@
   bottom: var(--space-3);
   z-index: var(--z-overlay-control);
   display: flex;
-  /* A column: this stack is expected to gain siblings. */
-  flex-direction: column;
-  gap: var(--space-2);
-  /* The column is only as wide as its buttons, so the canvas stays clickable
-     everywhere the controls are not. */
-  align-items: flex-start;
+  flex-direction: row;
+  /* Both groups sit on the bottom edge: the arrows line up with reset. */
+  align-items: flex-end;
+  gap: var(--space-3);
+  /* The cluster is only as wide as its buttons, so the canvas stays
+     clickable everywhere the controls are not. */
   pointer-events: none;
 }
 
 .canvas-view-controls > * {
   pointer-events: auto;
+}
+
+/* The column: mode button on top, then close (when two panes are open),
+   then reset at the bottom. */
+.canvas-view-controls__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+/* The variant-offset arrows: ← ↑ ↓ →, a single row. */
+.canvas-view-controls__offsets {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-2);
 }
 
 .canvas-view-controls__btn {
@@ -52,6 +72,12 @@
   background: var(--bg-tertiary);
   border-color: var(--accent-primary);
   color: var(--text-primary);
+}
+
+/* Arrows share every rule with the other buttons; the modifier exists so a
+   future tweak (e.g. a tighter row) has a hook without splitting the block. */
+.canvas-view-controls__btn--arrow {
+  flex: none;
 }
 
 .canvas-view-controls__icon {
