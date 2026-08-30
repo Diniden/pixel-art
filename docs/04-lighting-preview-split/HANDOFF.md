@@ -1,8 +1,8 @@
 # HANDOFF — Lighting Preview Split
 
-**Current position:** W1 IN PROGRESS
-**Branch:** `feat/02-split-canvas-render-modes`
-**Last commit:** `4216879`
+**Current position:** W2 IN PROGRESS
+**Branch:** `feat/03-reflection-tool`
+**Last commit:** `63145d3`
 
 Planned 2026-08-29 from `feat/02-split-canvas-render-modes` @ `fe06e86` with a clean tree (two
 untracked docs entries from a parallel planning session: `docs/plans/reflection-tool.md`,
@@ -12,12 +12,23 @@ untracked docs entries from a parallel planning session: `docs/plans/reflection-
 
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
-| W1 | 01, 02, 03, 04 | IN PROGRESS | 2026-08-29 | | |
-| W2 | 05 | TODO | | | |
+| W1 | 01, 02, 03, 04 | DONE | 2026-08-29 | `63145d3` | tsc clean · eslint 0 errors / 64 warnings · vitest 119 files, 2029 tests pass · boundaries OK (5 rules) · stylelint 2 pre-existing errors only · no lockfile · corpus digests unchanged |
+| W2 | 05 | IN PROGRESS | 2026-08-29 | | |
 | W3 | 06 | TODO | | | |
 
 ## Deviations
-(none yet)
+
+- **W1 landed as one owner checkpoint commit, not four task commits.** All four task
+  deliverables (01 store + tests + `ApplicationStore`, 02 `useLightingPaint` stroke callbacks +
+  tests, 03 `LightingSurface` `viewControls` slot + css/story/test, 04 `renderLitComposite` +
+  tests) are present in `63145d3` ("Checkpoint: Workspace splitting for previews etc") and were
+  verified against their specs by the coordinator. Per-task commit granularity was not achieved
+  for W1.
+- **Branch is `feat/03-reflection-tool`, not `feat/02-split-canvas-render-modes`.** `4216879` is
+  an ancestor of HEAD; the reflection-tool branch carries plan 04's W1 work. Continuing here
+  rather than rewriting history.
+- **`63145d3` also carries unrelated plan-03 work** (`CanvasSurface.tsx` doc comment for the
+  reflection canvas, `docs/03-reflection-tool/`). Not plan 04's, left alone.
 
 ## Notes for the next session
 
