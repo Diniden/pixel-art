@@ -10,6 +10,8 @@
  *
  * Every hash below was recorded from a real run (MASTER.md §10 rule 10).
  */
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 import {
   backgroundTheme,
@@ -97,6 +99,183 @@ describe("paintCheckerboard — golden hashes", () => {
     const g = geom({ canvasWidth: 8, canvasHeight: 8 });
     expect(() => paint(g, false)).not.toThrow();
     expect(hashBuffer(paint(g, false))).toBe("8x8:99fe61a5");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * The CSS DIV's equivalence to the raster painter (plan 05, task 06, D11)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * `paintCheckerboard` NO LONGER PAINTS THE EDITING CANVAS's background — it is
+ * a `conic-gradient` on `.canvas__background` now. But the function survives,
+ * because the LIGHTING studio still calls it through `renderNormalEdit.ts` and
+ * `renderLitComposite.ts` (task 08 owns that migration), which is exactly why
+ * the two implementations can now drift apart silently.
+ *
+ * These tests are the guard. They model the CSS rules in a few lines of
+ * arithmetic and assert the model agrees with the raster painter cell for
+ * cell. If someone edits the quadrant order in `CanvasSurface.css`, or drops
+ * the `background-position` phase, or "simplifies" the double modulo in
+ * `CanvasContainer`'s `checkerParity`, the disagreement shows up HERE rather
+ * than as a checkerboard that looks subtly wrong on someone's screen — which
+ * is the one failure mode a green suite otherwise cannot catch.
+ *
+ * ⚠️ They assert the CSS is EQUIVALENT, not that the CSS renders. jsdom has no
+ * gradient rasteriser and there is no browser in this environment, so
+ * "the pattern is crisp and not grey mush" still needs eyes.
+ */
+describe("the CSS checkerboard reproduces paintCheckerboard exactly", () => {
+  /**
+   * `.canvas__background`'s tile, as the browser resolves it.
+   *
+   * `background-size: 2px 2px` with `conic-gradient(B 0 25%, A 0 50%, B 0
+   * 75%, A 0)`. A conic gradient starts at 12 o'clock and sweeps CLOCKWISE
+   * from the tile centre, so the four stops land on the quadrants in the
+   * order top-right, bottom-right, bottom-left, top-left:
+   *
+   *     0-25%   top-right    (1,0) -> B
+   *     25-50%  bottom-right (1,1) -> A
+   *     50-75%  bottom-left  (0,1) -> B
+   *     75-100% top-left     (0,0) -> A
+   *
+   * i.e. A on EVEN `(x + y)`, which is `paintCheckerboard`'s `color1` rule.
+   */
+  const tileIsColorA = (tileX: number, tileY: number) =>
+    (tileX + tileY) % 2 === 0;
+
+  /**
+   * `background-position`, from `CanvasContainer`'s `checkerParity`.
+   *
+   * ⚠️ HONEST NOTE ON WHAT THIS DOES AND DOES NOT PIN. `bgGeom.offsetX` is
+   * `Math.min(0, variantOffset.x)` in variant-edit mode, so it can be
+   * NEGATIVE, and JS's `%` returns -1 for -1. The double modulo normalises
+   * that to 0 or 1. Verified by mutation on 2026-08-30: replacing it with a
+   * bare `% 2` does NOT fail these tests, and that is CORRECT rather than a
+   * gap — on a 2px tile `background-position: -1px` and `1px` are congruent
+   * mod 2, so both flip the phase. The normalisation is defensive (a
+   * negative background-position reads as a bug, and it would stop being
+   * congruent the moment the tile size changed), not load-bearing.
+   *
+   * What IS load-bearing and IS pinned: that the offset reaches the CSS at
+   * all, and the quadrant order below. Both fail loudly if broken.
+   */
+  const checkerParity = (offset: number) => ((offset % 2) + 2) % 2;
+
+  /**
+   * What colour the CSS paints at SURFACE cell (px, py).
+   *
+   * `background-position: P` makes surface pixel `x` sample tile position
+   * `x - P`, and the element is inside `.canvas__layout` so one CSS pixel is
+   * one cell.
+   */
+  const cssIsColorA = (
+    px: number,
+    py: number,
+    offsetX: number,
+    offsetY: number,
+  ) => {
+    const shiftX = px - checkerParity(offsetX);
+    const shiftY = py - checkerParity(offsetY);
+    return tileIsColorA(((shiftX % 2) + 2) % 2, ((shiftY % 2) + 2) % 2);
+  };
+
+  /** What the RASTER painter put at surface cell (px, py), read back. */
+  const rasterIsColorA = (
+    px: number,
+    py: number,
+    offsetX: number,
+    offsetY: number,
+  ) => {
+    const g = geom({ offsetX, offsetY });
+    const buf = paint(g, false);
+    const [r] = getPixel(buf, px * g.zoom, py * g.zoom);
+    // dark color1 = #2a2a3a (r = 42); dark color2 = #222230 (r = 34).
+    return r === 42;
+  };
+
+  /**
+   * ⚠️ THE PARITY CHECK. Both offset parities, on both axes, over a full 4×4
+   * of surface cells — this is manual check #4 made automatic.
+   *
+   * An ODD world offset must INVERT the pattern, because
+   * `paintCheckerboard` chose its colour from `(offsetX + px + offsetY + py)
+   * % 2` in WORLD cells: a variant view scrolled an odd number of cells keeps
+   * the phase it had in object space. Testing only offset 0 would pass with
+   * the phase dropped entirely.
+   */
+  for (const [ox, oy] of [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+    // Negative, which is the shape a variant dragged left actually produces
+    // (`viewMinX = Math.min(0, variantOffset.x)`), and the case a bare `% 2`
+    // gets wrong.
+    [-1, 0],
+    [-3, -2],
+  ] as const) {
+    it(`agrees cell-for-cell at world offset (${ox}, ${oy})`, () => {
+      for (let py = 0; py < 4; py++) {
+        for (let px = 0; px < 4; px++) {
+          expect({ px, py, a: cssIsColorA(px, py, ox, oy) }).toEqual({
+            px,
+            py,
+            a: rasterIsColorA(px, py, ox, oy),
+          });
+        }
+      }
+    });
+  }
+
+  it("an ODD offset really does invert the pattern — a negative control", () => {
+    // Without this the agreement above would also hold for an implementation
+    // that ignored the offset on BOTH sides.
+    expect(cssIsColorA(0, 0, 0, 0)).toBe(true);
+    expect(cssIsColorA(0, 0, 1, 0)).toBe(false);
+    expect(cssIsColorA(0, 0, 0, 1)).toBe(false);
+    // Both axes odd cancels out — the phase is the SUM, not either axis.
+    expect(cssIsColorA(0, 0, 1, 1)).toBe(true);
+  });
+
+  it("the tokens the CSS names carry the raster theme's exact colours", () => {
+    // `tokens.css` is the source of truth for the DIV; `backgroundTheme` is
+    // the source for the lighting canvas. They must be the same three
+    // colours or the two surfaces show different checkerboards.
+    const tokens = readFileSync(
+      new URL("../../../../styles/tokens.css", import.meta.url),
+      "utf8",
+    );
+    const tokenValue = (name: string) =>
+      tokens.match(new RegExp(`${name}:\\s*([^;]+?)\\s*(?:;|/\\*)`))?.[1];
+
+    const dark = backgroundTheme(false);
+    const light = backgroundTheme(true);
+    const hex = (c: { r: number; g: number; b: number }) =>
+      `#${[c.r, c.g, c.b].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+
+    expect(tokenValue("--canvas-bg-base")).toBe(hex(dark.base));
+    expect(tokenValue("--canvas-bg-a")).toBe(hex(dark.color1));
+    expect(tokenValue("--canvas-bg-b")).toBe(hex(dark.color2));
+    expect(tokenValue("--canvas-bg-base-light")).toBe(hex(light.base));
+    expect(tokenValue("--canvas-bg-a-light")).toBe(hex(light.color1));
+    expect(tokenValue("--canvas-bg-b-light")).toBe(hex(light.color2));
+  });
+
+  it("the grid-line tokens carry the MEASURED alpha rule: black 8% light, white 5% dark", () => {
+    // ⚠️ Measured 2026-08-19 and documented at `canvasBackground.ts:19-24`.
+    // The asymmetry corrects the task-30 spec and is what `Canvas.tsx:400-402`
+    // actually did. `gridOverlayAttrs` strokes the SVG grid with the same two
+    // values, so this pins CSS and SVG to one rule.
+    const tokens = readFileSync(
+      new URL("../../../../styles/tokens.css", import.meta.url),
+      "utf8",
+    );
+    expect(tokens).toContain("--canvas-grid-line: rgba(255, 255, 255, 0.05);");
+    expect(tokens).toContain(
+      "--canvas-grid-line-light: rgba(0, 0, 0, 0.08);",
+    );
+    expect(backgroundTheme(false).gridStroke).toBe("rgba(255, 255, 255, 0.05)");
+    expect(backgroundTheme(true).gridStroke).toBe("rgba(0, 0, 0, 0.08)");
   });
 });
 

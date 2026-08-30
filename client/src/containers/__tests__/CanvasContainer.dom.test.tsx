@@ -240,7 +240,7 @@ function load(project: Project): void {
 /* ══ 1. N layers → N canvases ═══════════════════════════════════════════════ */
 
 describe("the layer stack: N layers produce N registered canvases", () => {
-  it("mounts one canvas per layer PLUS the background, bottom → top", () => {
+  it("mounts EXACTLY one canvas per layer, bottom → top — no synthetic ids", () => {
     load(
       mkProject([
         mkLayer("l-bottom", RED, [[0, 0]]),
@@ -251,11 +251,11 @@ describe("the layer stack: N layers produce N registered canvases", () => {
     const { container } = mountCanvas();
 
     const ids = layerCanvases(container).map((c) => c.dataset.layerId);
-    // The background is the synthetic BOTTOM canvas: it has to sit behind the
-    // artwork, and the pointer surface and every overlay are in FRONT of the
-    // stack by DOM order, so there is nowhere else for it to go until task 06
-    // replaces it with a CSS DIV.
-    expect(ids).toEqual(["::background", "l-bottom", "l-middle", "l-top"]);
+    // ⚠️ NO `"::background"`. Task 05 prepended a synthetic bottom canvas so
+    // the checkerboard could sit behind the artwork; task 06 replaced it with
+    // a CSS DIV on `--z-behind`, so every id here is a real `Layer.id` again.
+    // Regressing this would put a raster background back on the repaint path.
+    expect(ids).toEqual(["l-bottom", "l-middle", "l-top"]);
   });
 
   it("sizes every layer canvas 1:1 with the pixel data, never gridWidth * zoom", () => {
@@ -279,7 +279,7 @@ describe("the layer stack: N layers produce N registered canvases", () => {
     // canvas" and blame the container for the harness's mistake.
     load(mkProject([mkLayer("l-1", RED, [[0, 0]])]));
     const { container } = mountCanvas();
-    expect(layerCanvases(container)).toHaveLength(2); // bg + 1
+    expect(layerCanvases(container)).toHaveLength(1); // no synthetic bg (task 06)
 
     let newId = "";
     act(() => {
@@ -287,9 +287,9 @@ describe("the layer stack: N layers produce N registered canvases", () => {
     });
 
     const ids = layerCanvases(container).map((c) => c.dataset.layerId);
-    expect(ids).toHaveLength(3);
+    expect(ids).toHaveLength(2);
     expect(ids).toContain(newId);
-    expect(ids[0]).toBe("::background");
+    expect(ids[0]).toBe("l-1");
   });
 
   it("hides a layer with display:none, keeping its element and its bitmap", () => {
@@ -410,14 +410,14 @@ describe("each layer's cells land on its own canvas and on no other", () => {
  * exercised too — a variant layer that is NOT the one being edited is,
  * structurally, another sub-layer of the same variant group here.
  */
-function variantEditProject(): Project {
+function variantEditProject(offset = { x: 1, y: 1 }): Project {
   const project = mkProject([
     mkLayer("l-regular", RED, [[0, 0]]),
     mkLayer("l-variant", GREEN, [], {
       isVariant: true,
       variantGroupId: "vg-1",
       selectedVariantId: "v-1",
-      variantOffsets: { "v-1": { x: 1, y: 1 } },
+      variantOffsets: { "v-1": offset },
     }),
   ]);
   return {
@@ -431,7 +431,7 @@ function variantEditProject(): Project {
             id: "v-1",
             name: "v-1",
             gridSize: { width: 3, height: 3 },
-            baseFrameOffsets: { 0: { x: 1, y: 1 } },
+            baseFrameOffsets: { 0: offset },
             frames: [
               {
                 id: "vf-1",
@@ -506,17 +506,20 @@ describe("layerOpacity matches D4's table for all three focus modes", () => {
     );
   });
 
-  it("the background canvas is NEVER dimmed, in any focus mode", () => {
-    // It carries the checkerboard, which is not artwork and must not fade
-    // with it. It is also why `layerOpacity` cannot simply be a per-mode
-    // constant applied to the whole stack.
+  it("the background is NEVER dimmed — it is a DIV outside the opacity map", () => {
+    // The checkerboard is not artwork and must not fade with it. Task 05 got
+    // that by pinning a synthetic layer's opacity to 1; task 06 gets it
+    // structurally, because the background is no longer a layer at all.
+    // Asserting BOTH halves is the point: the DIV exists in every focus mode,
+    // and no `::`-prefixed id survives in the layer opacity map.
     for (const mode of ["normal", "transparent", "onion"] as const) {
       load(variantEditProject());
       act(() => {
         runInAction(() => app.ui.viewport.setLayerFocusMode(mode));
       });
       const { container, unmount } = mountCanvas();
-      expect(opacities(container)["::background"]).toBe("1");
+      expect(container.querySelector(".canvas__background")).not.toBeNull();
+      expect(opacities(container)["::background"]).toBeUndefined();
       unmount();
     }
   });
@@ -655,7 +658,6 @@ describe("both split-canvas render modes keep working", () => {
     );
     const { container } = mountCanvas({ renderMode: "full" });
     expect(layerCanvases(container).map((c) => c.dataset.layerId)).toEqual([
-      "::background",
       "l-1",
       "l-2",
     ]);
@@ -673,7 +675,6 @@ describe("both split-canvas render modes keep working", () => {
     );
     const { container } = mountCanvas({ renderMode: "layer" });
     expect(layerCanvases(container).map((c) => c.dataset.layerId)).toEqual([
-      "::background",
       "l-1",
     ]);
   });
@@ -752,5 +753,75 @@ describe("the retired raster painters", () => {
     // `cells + 1` lines per axis, both outer edges included.
     const segments = (grid!.getAttribute("d") ?? "").split("M").length - 1;
     expect(segments).toBe(W + 1 + (H + 1));
+  });
+});
+
+/* ══ 7. the background DIV — plan 05, task 06, decision D11 ═════════════════ */
+
+describe("the background is a CSS DIV, and its parity survives a variant view", () => {
+  /** `.canvas__background`'s `background-position`, as `[x, y]` numbers. */
+  function parity(container: HTMLElement): [number, number] {
+    const bg = container.querySelector<HTMLElement>(".canvas__background")!;
+    const [x, y] = bg.style.backgroundPosition.split(" ");
+    return [parseFloat(x), parseFloat(y)];
+  }
+
+  it("mounts exactly ONE background DIV, and no background canvas", () => {
+    // The whole point of the task: two offscreen canvases, a cache key and a
+    // per-repaint `drawImage` became one compositor-drawn element. A second
+    // `.canvas__background` — or a surviving `::background` layer canvas —
+    // would mean the checkerboard is being drawn twice.
+    load(mkProject([mkLayer("l-1", RED, [[0, 0]])]));
+    const { container } = mountCanvas();
+
+    expect(container.querySelectorAll(".canvas__background")).toHaveLength(1);
+    expect(
+      layerCanvases(container).map((c) => c.dataset.layerId),
+    ).not.toContain("::background");
+  });
+
+  it("is dark by default and takes the light modifier from lightGridMode", () => {
+    load(mkProject([mkLayer("l-1", RED, [[0, 0]])]));
+    const dark = mountCanvas();
+    expect(
+      dark.container.querySelector(".canvas__background")!.className,
+    ).toBe("canvas__background");
+    dark.unmount();
+
+    act(() => {
+      runInAction(() => app.ui.viewport.toggleLightGridMode());
+    });
+    const light = mountCanvas();
+    expect(
+      light.container.querySelector(".canvas__background")!.className,
+    ).toContain("canvas__background--light");
+    light.unmount();
+  });
+
+  it("uses phase (0, 0) outside variant-edit — the surface IS object space", () => {
+    load(mkProject([mkLayer("l-1", RED, [[0, 0]])]));
+    const { container } = mountCanvas();
+    expect(parity(container)).toEqual([0, 0]);
+  });
+
+  it("⚠️ PARITY: a NEGATIVE variant offset yields 0/1, never a negative px", () => {
+    // ⚠️ `bgGeom.offsetX` is `Math.min(0, variantOffset.x)`, so a variant
+    // dragged left is negative — and JS's `%` returns -1 for -1. The double
+    // modulo in `checkerParity` is what keeps `background-position` a
+    // NON-NEGATIVE 0 or 1 rather than `-1px`.
+    load(variantEditProject({ x: -1, y: -2 }));
+    const { container } = mountCanvas();
+    const [x, y] = parity(container);
+    expect([x, y]).toEqual([1, 0]);
+  });
+
+  it("a positive offset that leaves viewMin at 0 keeps phase (0, 0)", () => {
+    // `viewMinX = Math.min(0, offsetX)`, so a variant dragged RIGHT does not
+    // move the view origin and the checkerboard does not shift. This is the
+    // negative control for the test above: it proves the offset is read from
+    // the VIEW origin and not from `variantOffset` directly.
+    load(variantEditProject({ x: 3, y: 3 }));
+    const { container } = mountCanvas();
+    expect(parity(container)).toEqual([0, 0]);
   });
 });

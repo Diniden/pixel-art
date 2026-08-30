@@ -205,10 +205,11 @@ import {
 import { resolveVariantOffset } from "../ui/canvas/model/variantOffset";
 import { screenToPixel } from "../ui/canvas/model/coords";
 import { expandWrites } from "../ui/canvas/model/reflection";
-import {
-  backgroundTheme,
-  paintCheckerboard,
-} from "../ui/canvas/render/canvasBackground";
+// ⚠️ NOTHING is imported from `ui/canvas/render/canvasBackground` any more.
+// `backgroundTheme` and `paintCheckerboard` came out with `ensureBgCanvas`
+// (task 06) — but they are NOT dead code: `renderNormalEdit.ts`,
+// `renderLitComposite.ts` and `LightingCanvasContainer` (which also still
+// calls `strokeGrid`) are the lighting studio's, and task 08 owns those.
 import {
   renderFrameOverlay as renderFrameOverlayBuffer,
   overlayVariantFrameIndices,
@@ -281,22 +282,16 @@ function isGestureTool(tool: string): boolean {
   );
 }
 
-/**
- * The synthetic bottom canvas that carries the checkerboard.
+/*
+ * ⚠️ THE SYNTHETIC `"::background"` LAYER ID IS GONE (task 06).
  *
- * ⚠️ It reaches `CanvasSurface` as one more STRING in `layerIds` and nothing
- * else — the component never learns that this id means anything (R8: no
- * domain object, in any shape, crosses that boundary). The `::` separator
- * cannot collide with a real `Layer.id`, which comes from `LayerStore`'s id
- * generator, and it is the same separator variant sub-layers are keyed with.
- *
- * The background needs a canvas of its own because it has to sit BEHIND the
- * artwork, and the only pre-existing surface below the layer stack is... the
- * layer stack. `CanvasSurface.css` makes DOM order the z-order, so the
- * pointer surface and every overlay are in FRONT of it. Task 06 replaces this
- * with a CSS DIV on `--z-behind`, at which point the id goes away.
+ * Task 05 prepended one to `layerIds` so the checkerboard could get a canvas
+ * BELOW the artwork — DOM order is z-order in `CanvasSurface.css`, and the
+ * only surface under the layer stack was the layer stack. Its own comment
+ * said task 06 would delete it, and this is that deletion: the checkerboard
+ * is a CSS DIV on `--z-behind` now, so `layerIds` holds real `Layer.id`s and
+ * nothing else again.
  */
-const BACKGROUND_LAYER_ID = "::background";
 
 /**
  * The one place 1:1-ness is still spelled out.
@@ -356,13 +351,15 @@ const DEFAULT_ORIGIN_COLOR = { r: 255, g: 50, b: 50, a: 255 };
 interface LayerPaintPlan {
   /** The id this layer's canvas is registered under. */
   key: string;
-  /** `"background"` paints the cached checkerboard; `"cells"` paints a grid. */
-  kind: "background" | "cells";
   /** Applied as `display: none`, which keeps the element and its bitmap. */
   visible: boolean;
   /** CSS `opacity` on the layer canvas — D4's dimming, not a per-cell alpha. */
   opacity: number;
-  /** Absent for `"background"`, which paints the cached checkerboard. */
+  /**
+   * The layer's cells. Every plan entry has them now: the `"background"`
+   * kind that task 05 carried here was deleted in task 06 when the
+   * checkerboard became a CSS DIV.
+   */
   pixels?: PixelData[][];
   /** The SOURCE grid's extent, which is not the surface's. */
   gridWidth?: number;
@@ -404,11 +401,11 @@ export const CanvasContainer = observer(function CanvasContainer({
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Offscreen caches for the static checkerboard and grid lines. Concern #3:
-  // the PAINTERS are pure functions in `ui/canvas/render/canvasBackground`;
-  // only the cache lives here, because a cache is state.
-  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const bgCacheKeyRef = useRef<string>("");
+  // ⚠️ THE OFFSCREEN BACKGROUND CACHE AND ITS KEY ARE GONE (task 06). The
+  // checkerboard is a CSS DIV now — no canvas, no `ImageData`, no cache
+  // identity to keep in sync, and no `drawImage` on the repaint path.
+  // `useCanvasGeometry` still returns `bgCacheKey` because the lighting
+  // canvas (task 08) has not moved yet; this container no longer reads it.
 
   /* ── the gesture arbitration state ─────────────────────────────────────── */
   //
@@ -787,9 +784,15 @@ export const CanvasContainer = observer(function CanvasContainer({
     // dependency array, and `render`'s identity now carries that signal (see
     // the `useCanvasRender` call below). It stays on the hook because the
     // lighting canvas — task 33 — has the same hand-written-deps problem.
-    bgCacheKey,
+    //
+    // ⚠️ `bgCacheKey` and `bgGeomRef` are likewise ON the hook but NOT taken
+    // here any more (task 06). They existed for `ensureBgCanvas`, which is
+    // gone: there is no cached bitmap to key and no imperative painter that
+    // needs the geometry as-of-the-event. Only `bgGeom` itself is read now,
+    // and only for the checkerboard's parity. Both stay on the contract for
+    // the lighting canvas (task 08).
+    bgGeom,
     coordGeomRef,
-    bgGeomRef,
   } = geom;
 
   /**
@@ -914,50 +917,58 @@ export const CanvasContainer = observer(function CanvasContainer({
     [coordGeomRef],
   );
 
-  /* ── the offscreen checkerboard cache (concern #3) ────────────────────── */
+  /* ── the background: NO CANVAS, NO CACHE, NO BLIT (task 06) ───────────── */
   //
-  // ⚠️ 1:1 NOW, and it paints into a LAYER canvas, not the pointer surface.
+  // ⚠️ Read this before reintroducing anything here.
   //
-  // The checkerboard has to sit BEHIND the artwork, and the pointer surface
-  // sits in FRONT of the layer stack (`CanvasSurface.css` — DOM order is
-  // z-order there). So the background gets a canvas of its own at the BOTTOM
-  // of `layerIds`, under the id `BACKGROUND_LAYER_ID`. That is still ids-only
-  // across the `ui/` boundary (R8): `CanvasSurface` sees one more string and
-  // knows nothing about what is painted into it.
+  // What stood in this slot was `ensureBgCanvas`: allocate a
+  // `cellWidth × cellHeight` offscreen canvas, `createImageData`, run
+  // `paintCheckerboard` (a base fill over EVERY pixel plus a per-cell block
+  // write), `putImageData`, cache the bitmap under `bgCacheKey`, and
+  // `drawImage` it into a synthetic bottom layer canvas on every repaint.
   //
-  // `bgGeom` already carries `zoom: 1` and cell-sized dimensions — task 02
-  // prepared it — so `paintCheckerboard`'s `x * zoom` collapses to `x`, one
-  // device pixel per cell, and the CSS transform magnifies the result. At
-  // Landscapes that is a 224 KB buffer instead of 546 MB at zoom 50.
+  // It is a CSS DIV now — `.canvas__background`, one compositor-drawn
+  // element with a 2px `conic-gradient` tile, sitting inside the same
+  // `scale(zoom * viewZoom)` transform as everything else and therefore
+  // repainting on neither pan nor zoom. The only thing this container still
+  // owns is the PHASE (`checkerParity` below), because the variant offset
+  // lives here.
   //
-  // ⚠️ THE GRID CACHE IS GONE. `strokeGrid` at 1:1 draws a 1px line every 1px
-  // — a flat wash of `gridStroke` over the whole canvas, which is MASTER §4's
-  // first named silent failure. The grid is now VECTOR chrome (D5): see
-  // `gridPath` below. Task 06 replaces both with a CSS DIV.
-  const ensureBgCanvas = useCallback(() => {
-    if (bgCacheKeyRef.current === bgCacheKey && bgCanvasRef.current) {
-      return bgCanvasRef.current;
-    }
-    if (!bgCanvasRef.current) {
-      bgCanvasRef.current = document.createElement("canvas");
-    }
-    const bgCanvas = bgCanvasRef.current;
-    bgCanvas.width = cellWidth;
-    bgCanvas.height = cellHeight;
-    const bgCtx = bgCanvas.getContext("2d");
-    if (!bgCtx) return bgCanvas;
+  // The grid is not here either, and was not before this task: it is SVG
+  // chrome (`gridPath` below, D5), where `non-scaling-stroke` keeps the
+  // hairline one SCREEN pixel at every zoom. At 1:1 the raster `strokeGrid`
+  // drew a 1px line every 1px — a flat wash over the whole canvas, MASTER
+  // §4's first named silent failure.
+  //
+  // `paintCheckerboard` / `backgroundTheme` are deliberately still imported
+  // by NOBODY in this file, but they are NOT dead: `renderNormalEdit.ts` and
+  // `renderLitComposite.ts` in the lighting studio still call them, and
+  // `LightingCanvasContainer` still calls `strokeGrid`. Deleting them breaks
+  // the lighting canvas (task 08 owns that migration).
 
-    const imageData = bgCtx.createImageData(cellWidth, cellHeight);
-    paintCheckerboard(
-      imageData,
-      bgGeomRef.current,
-      backgroundTheme(lightGridMode),
-    );
-    bgCtx.putImageData(imageData, 0, 0);
-
-    bgCacheKeyRef.current = bgCacheKey;
-    return bgCanvas;
-  }, [bgCacheKey, cellWidth, cellHeight, lightGridMode, bgGeomRef]);
+  /**
+   * The checkerboard's world-space phase, reduced to 0 or 1 per axis.
+   *
+   * ⚠️ THIS IS THE PARITY INVARIANT, and it is the one thing about the
+   * background that is easy to lose. `paintCheckerboard` chose a square's
+   * colour from `(offsetX + px + offsetY + py) % 2` — WORLD cells, not
+   * surface cells — so a variant view scrolled by an ODD number of cells
+   * keeps the phase it had in object space. The CSS DIV reproduces it with a
+   * `background-position` shift on a 2px tile, where a one-pixel shift IS a
+   * parity flip.
+   *
+   * `bgGeom.offsetX` is `Math.min(0, variantOffset.x)` in variant-edit mode
+   * and 0 otherwise, so it can be NEGATIVE — hence the double modulo rather
+   * than a bare `% 2`, which in JS returns -1 for -1 and would offset the
+   * background by a negative pixel instead of flipping it.
+   */
+  const checkerParity = useMemo(
+    () => ({
+      x: ((bgGeom.offsetX % 2) + 2) % 2,
+      y: ((bgGeom.offsetY % 2) + 2) % 2,
+    }),
+    [bgGeom.offsetX, bgGeom.offsetY],
+  );
 
   /* ══════════════════════════════════════════════════════════════════════
    *  THE PER-LAYER RENDER (concern #6) — plan 05, task 05
@@ -1077,15 +1088,12 @@ export const CanvasContainer = observer(function CanvasContainer({
    * pixels are read imperatively, in `renderLayers`, from an animation frame.
    */
   const layerPlan = useMemo((): LayerPaintPlan[] => {
-    const plan: LayerPaintPlan[] = [
-      // The checkerboard, always at the bottom and never dimmed.
-      {
-        key: BACKGROUND_LAYER_ID,
-        kind: "background",
-        visible: true,
-        opacity: 1,
-      },
-    ];
+    // ⚠️ Starts EMPTY. Task 05 seeded it with a synthetic `"::background"`
+    // entry so the checkerboard could get a canvas under the artwork; task 06
+    // deleted that when the checkerboard became a CSS DIV on `--z-behind`.
+    // Every key in here is a real `Layer.id` (or a `parent::child` variant
+    // sub-layer key) again.
+    const plan: LayerPaintPlan[] = [];
     if (!frame || !obj) return plan;
 
     // Layer Render Mode: the editable grid at the origin and nothing else —
@@ -1102,7 +1110,6 @@ export const CanvasContainer = observer(function CanvasContainer({
       for (const l of layers) {
         plan.push({
           key: l.id,
-          kind: "cells",
           visible: l.visible,
           opacity: 1,
           pixels: l.pixels,
@@ -1152,8 +1159,7 @@ export const CanvasContainer = observer(function CanvasContainer({
             // One canvas per variant SUB-layer: see the header on why this is
             // what makes `putImageData` safe.
             key: `${l.id}::${vl.id}`,
-            kind: "cells",
-            visible: l.visible && vl.visible,
+              visible: l.visible && vl.visible,
             opacity,
             pixels: vl.pixels,
             gridWidth: variant.gridSize.width,
@@ -1172,7 +1178,6 @@ export const CanvasContainer = observer(function CanvasContainer({
       // truncate the object — the object's own dimensions are the right ones.
       plan.push({
         key: l.id,
-        kind: "cells",
         visible: l.visible,
         opacity: editing && layerFocusMode !== "normal"
           ? VARIANT_EDIT_REGULAR_DIM
@@ -1250,11 +1255,6 @@ export const CanvasContainer = observer(function CanvasContainer({
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (!item.visible) continue;
 
-      if (item.kind === "background") {
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(ensureBgCanvas(), 0, 0);
-        continue;
-      }
       if (!item.pixels) continue;
 
       const buffer = ctx.createImageData(canvas.width, canvas.height);
@@ -1273,7 +1273,6 @@ export const CanvasContainer = observer(function CanvasContainer({
     }
   }, [
     layerPlan,
-    ensureBgCanvas,
     isDraggingPixels,
     moveDragOffset.dx,
     moveDragOffset.dy,
@@ -3425,6 +3424,14 @@ export const CanvasContainer = observer(function CanvasContainer({
       // fields with unchanged ranges, defaults and persistence; only their
       // APPLICATION moved, from six backing stores into this transform.
       combinedScale={zoom * viewZoom}
+      // ── the background DIV (task 06, D11) ──────────────────────────────
+      // Two primitives, no theme object: `lightGridMode` picks the palette
+      // via a modifier class in `CanvasSurface.css`, and `checkerParity`
+      // carries the world-space phase the raster painter derived from
+      // `(offsetX + px + offsetY + py) % 2`. The JS `BackgroundTheme` does
+      // not cross the `ui/` boundary at all.
+      lightGridMode={lightGridMode}
+      checkerParity={checkerParity}
       cursor={cursor}
       // All three overlays are object-space aids — hidden in Layer mode.
       showReferenceOverlay={!layerMode && isReferenceTraceActive}
