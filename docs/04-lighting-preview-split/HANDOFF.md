@@ -1,6 +1,6 @@
 # HANDOFF — Lighting Preview Split
 
-**Current position:** W2 DONE — **W3 BLOCKED, see Deviations**
+**Current position:** W3 IN PROGRESS (unblocked 2026-08-29)
 **Branch:** `feat/03-reflection-tool`
 **Last commit:** `a08606d` (task 05); HEAD is `24f09a4`, a plan-03 commit
 
@@ -14,14 +14,19 @@ untracked docs entries from a parallel planning session: `docs/plans/reflection-
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02, 03, 04 | DONE | 2026-08-29 | `63145d3` | tsc clean · eslint 0 errors / 64 warnings · vitest 119 files, 2029 tests pass · boundaries OK (5 rules) · stylelint 2 pre-existing errors only · no lockfile · corpus digests unchanged |
 | W2 | 05 | DONE | 2026-08-29 | `586cfb6`, `cb90966`, `a08606d` | subagent: tsc exit 0 · eslint 0 errors / 1 pre-existing max-lines warning on the file · vitest 123 files, 2130 tests pass · boundaries OK · prettier clean · build ✓ · no lockfile · corpus digests unchanged |
-| W3 | 06 | **BLOCKED** | 2026-08-29 | | not dispatched — concurrent session owns the tree |
+| W3 | 06 | IN PROGRESS | 2026-08-29 | | unblocked: tree typechecks clean again, eslint back to 0 errors / 64 warnings |
 
 
 ## Deviations
 
-### 🔴 W3 BLOCKED — a second Claude session is executing plan 03 on this same branch
+### ✅ RESOLVED — W3 was BLOCKED by a second Claude session on this same branch
 
-Discovered 2026-08-29 while verifying W2. **Do not resume W3 until this is resolved.**
+Discovered 2026-08-29 while verifying W2; **cleared later the same day** — the plan-03 session
+finished wiring `CanvasContainer.tsx`, `bunx tsc --noEmit` returned clean and eslint returned to
+its 0-error / 64-warning baseline, so W3 was dispatched. That session is **still writing** to
+`CanvasContainer.tsx`, `PixelStudioPanelContainer.tsx` and `PixelStudioPanel*`; task 06's
+`Touches` is entirely lighting-side and disjoint from those, which is why it was safe to run.
+The history-rewrite hazard below remains real for any future wave.
 
 - Another session is running `/plan-go` for `docs/03-reflection-tool/` on `feat/03-reflection-tool`,
   the same branch this plan is on. It **rewrote history under us**: the W1 ledger commit `bb9a247`
