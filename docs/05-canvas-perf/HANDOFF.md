@@ -1,8 +1,8 @@
 # HANDOFF — Canvas rendering performance for large editing surfaces
 
-**Current position:** W4 DONE — W5 (task 06) next. Owner deferred ALL visual checks to one pass after W6.
+**Current position:** W5 DONE — W6 (task 07) next. Owner deferred ALL visual checks to one pass after W6.
 **Branch:** `feat/03-reflection-tool`
-**Last commit:** `221b58f`
+**Last commit:** `ed7da83`
 
 Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 `feat/03-reflection-tool`, working tree clean.
@@ -15,7 +15,7 @@ Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 | W2 | 02, 03 | **DONE** | 2026-08-30 | `5b2401d` `fd871c9` (03) · `cf4c7dd` `23ac19c` `c2963cf` (02) | typecheck 0 · vitest **134 files / 2330 passed** · lint 0 · boundaries 0 · `lint:css` exit 2 **pre-existing, see below** |
 | W3 | 04 | **DONE** | 2026-08-30 | `75d3cf7` `72856b8` | typecheck 0 · vitest **134 files / 2353 passed** · lint 0 · lint:css no new · boundaries 0 · storybook 0 · **8 visual checks deferred** |
 | W4 | 05 | **DONE** | 2026-08-30 | `82ae19a` `221b58f` | typecheck 0 · vitest **134 files / 2365 passed** · lint 0 · boundaries 0 · **10 visual checks owed, incl. R4** |
-| W5 | 06 | TODO | | | |
+| W5 | 06 | **DONE** | 2026-08-30 | `1025d6b` `ed7da83` | typecheck 0 · vitest **134 files / 2385 passed** · lint 0 · lint:css **no new errors (still exactly 2 pre-existing)** · boundaries 0 |
 | W6 | 07 | TODO | | | |
 | W7 | 08 | TODO | | | |
 
@@ -191,6 +191,88 @@ chromedriver). Still owed, including **the Landscapes KB-not-MB memory measureme
 headline claim of this task, entirely unmeasured.** Static substitutes that did pass:
 `coords.test.ts` 21/21 unmodified; the R1 wheel-pan test drives a real `WheelEvent` and
 asserts the clamp against full content size; the D1 variant-edit sizing test.
+
+## W5 DONE — coordinator-verified
+
+Commits `1025d6b`, `ed7da83`.
+
+```
+typecheck        -> exit 0
+vitest run       -> Test Files  134 passed (134) · Tests  2385 passed (2385)   69.07s
+lint             -> 0 errors, 65 warnings                exit 0
+lint:css         -> 69 problems (2 errors, 67 warnings)  — EXACTLY the 2 pre-existing
+                    OtherHand.css:267/:288; count, rule and line numbers all unchanged.
+                    CanvasSurface.css and tokens.css do NOT appear in the error list.
+lint:boundaries  -> OK — all 5 boundary rules hold        exit 0
+build-storybook  -> built in 5.49s                        exit 0
+```
++20 tests, no pre-existing test regressed. Corpus unchanged. No lockfile.
+
+### ⭐ THE GRID DECISION: kept in SVG, NOT moved to CSS — deliberate, and correct
+
+Task 06's file predates W4 and assumed the grid was still canvas-painted; task 05 had already
+moved it to SVG. Asked to decide, the executor kept it vector. **Coordinator agrees, and the
+reasoning is worth preserving:**
+
+1. **`calc(1px / var(--combined-scale))` is not the same invariant as `non-scaling-stroke`.**
+   It is a computed *length*, resolved once and then scaled by the transform, with antialiased
+   sub-pixel stops. `non-scaling-stroke` exempts the stroke at *paint* time, and
+   `shape-rendering="crispEdges"` snaps to device pixels.
+2. **`combinedScale` spans 0.25–200**, so that computed width would be 0.005px at the top and
+   4px at the bottom — rounding to nothing or to a solid fill: **precisely the grey-wash
+   silent failure the plan set out to eliminate.**
+3. The **variant-edit grid is a placed sub-rectangle** (only `gridWidth x gridHeight` at
+   `variantOffset − viewMin` inside a larger surface). On one DIV that needs a second
+   `no-repeat` background layer driven by four more custom properties — more machinery than
+   the path it replaces, with its own silent failure mode.
+4. The owner's requirement ("CSS border tricks to maximize hardware utilization and not raw
+   compute") is still met: one GPU-composited `<path>` allocating no raster.
+
+**Coordinator verified exactly ONE mechanism draws the grid:** `CanvasSurface.css` contains
+**zero** `linear-gradient`/`repeating-linear-gradient` declarations (only the two
+`conic-gradient` checkerboards); `strokeGrid` survives in `CanvasContainer.tsx` only as
+comments. The checkerboard DID move to CSS as specified — that half of the task landed.
+
+**Synthetic `::background` id removed** (task 05 deviation 1 closed): survives only in
+comments explaining its removal. `ensureBgCanvas`, `bgCanvasRef`, `bgCacheKeyRef` and the
+`drawImage` blit are all deleted — likewise comments only. Pinned by tests asserting
+`layerIds` does not contain it and exactly one `.canvas__background` DIV exists.
+
+### Task 06 deviations (accepted)
+
+1. **⚠️ SCOPE: two files beyond `Touches`** — `CanvasContainer.dom.test.tsx` and
+   `CanvasSurface.dom.test.tsx`. Justified and unavoidable: 6 of their tests hard-code
+   `"::background"` or the layer wrapper's child index, and removing that id is *mandated by
+   the task*. A green suite was unreachable without them. Coordinator confirmed the edits are
+   confined to those assertions plus new background-DIV tests.
+2. `useCanvasGeometry.ts` (in Touches) **not** modified — `bgCacheKey` stays on the hook's
+   contract for the lighting canvas (task 08); it is merely no longer destructured.
+3. `canvasTokens.ts` **not** modified — its parity test iterates `CSS_MIRROR` only, so the new
+   tokens were pinned against `backgroundTheme()` directly in `canvasBackground.test.ts`
+   instead, catching drift without touching a file outside Touches.
+4. **Nothing deleted from `canvasBackground.ts`** — grep proved `strokeGrid` is still called
+   by `LightingCanvasContainer.tsx:517` and `LightingSurface.stories.tsx:142`, `gridLinePath`
+   by `gridOverlay.ts:123`, and `paintCheckerboard`/`backgroundTheme` by three lighting/normal
+   renderers. All retained. (Task 08 may revisit.)
+5. **Checkerboard tokens are deliberately NOT per-`data-theme`.** `DARK_THEME` hard-coded the
+   `:root` values, so the canvas well has always been theme-independent; aliasing onto
+   `--bg-tertiary`/`--bg-hover`/`--canvas-checker-b` would have silently made the checkerboard
+   follow the chrome palette. Six dedicated `--canvas-bg-*` tokens added on `:root` only.
+6. A test comment was corrected rather than left overclaiming: mutation testing showed the
+   double modulo in `checkerParity` is not caught by the pure-arithmetic model (on a 2px tile
+   `-1px` is equivalent to `1px`) — it IS caught by the container DOM test.
+
+### W5 manual checks — none claimed
+
+Strongest static coverage: **checkerboard phase parity** — six world offsets including
+negatives asserted cell-for-cell against `paintCheckerboard`, with a negative control proving
+an odd offset inverts, mutation-verified (quadrant reversal fails 7 tests, phase removal 5).
+Colours pinned byte-equal to `backgroundTheme()`'s exact RGB in both palettes.
+
+**Still needing eyes, and all SILENT failure modes:** checkerboard crispness (a 2px tile at
+200x that smooths is grey mush — `image-rendering: pixelated` is asserted present but jsdom
+cannot rasterise a gradient); behaviour at zoom 50 and at minimum zoom; and whether a real
+browser resolves the `conic-gradient` quadrants the same way the arithmetic model does.
 
 ## W4 DONE — coordinator-verified
 
