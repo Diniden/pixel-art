@@ -279,13 +279,91 @@ describe("CanvasSurface — the per-layer canvas stack (plan 05, D3)", () => {
     );
     const frame = container.querySelector(".canvas__frame")!;
     const kids = Array.from(frame.children);
+    const background = container.querySelector(".canvas__background")!;
     const layers = container.querySelector(".canvas__layers")!;
     const surface = container.querySelector(".canvas__surface")!;
     const hover = container.querySelector(".canvas__overlay--hover")!;
 
-    expect(kids.indexOf(layers)).toBe(0);
+    // ⚠️ The BACKGROUND DIV is index 0 now (task 06), not the layer wrapper.
+    // It also carries `--z-behind`, so it stays under the stack even if
+    // `.canvas__layers` ever gains a z-index — source order alone would not
+    // survive that. The chain below is unchanged.
+    expect(kids.indexOf(background)).toBe(0);
+    expect(kids.indexOf(background)).toBeLessThan(kids.indexOf(layers));
     expect(kids.indexOf(layers)).toBeLessThan(kids.indexOf(surface));
     expect(kids.indexOf(surface)).toBeLessThan(kids.indexOf(hover));
+  });
+
+  /* ── the background DIV (plan 05, task 06, decision D11) ───────────────── */
+
+  it("sizes the background DIV 1:1 with the cells, like every layer canvas", () => {
+    // It lives inside `.canvas__layout`, so one CSS pixel here is one grid
+    // cell and the transform magnifies it — the same model the 1:1 canvases
+    // use. A `cellWidth * zoom` here would put the checkerboard out of
+    // register with the artwork on top of it.
+    const { container } = render(<CanvasSurface {...baseProps()} />);
+    const bg = container.querySelector<HTMLElement>(".canvas__background")!;
+    expect(bg.style.width).toBe("24px");
+    expect(bg.style.height).toBe("32px");
+  });
+
+  it("lightGridMode selects the palette by MODIFIER CLASS, not a theme object", () => {
+    // D11: the colours are custom properties and `lightGridMode` is a class.
+    // The JS `BackgroundTheme` must never cross this boundary.
+    const dark = render(<CanvasSurface {...baseProps()} />);
+    expect(
+      dark.container.querySelector(".canvas__background")!.className,
+    ).toBe("canvas__background");
+    dark.unmount();
+
+    const light = render(
+      <CanvasSurface {...baseProps()} lightGridMode={true} />,
+    );
+    expect(
+      light.container.querySelector(".canvas__background")!.className,
+    ).toContain("canvas__background--light");
+  });
+
+  it("treats an ABSENT lightGridMode as dark, never as light", () => {
+    // ⚠️ `ViewportUIStore.lightGridMode` is TRI-STATE (`undefined` = absent
+    // from the project file). The container collapses it with `?? false` at
+    // the read site and only a boolean arrives here — but if a future caller
+    // forwards the undefined, the dark palette is the safe resolution, and it
+    // is what `lightGridMode ?? false` has always produced.
+    const { container } = render(
+      <CanvasSurface {...baseProps()} lightGridMode={undefined} />,
+    );
+    expect(container.querySelector(".canvas__background")!.className).toBe(
+      "canvas__background",
+    );
+  });
+
+  it("⚠️ PARITY: checkerParity becomes the background-position", () => {
+    // The one invariant of the background that fails SILENTLY. On a 2px tile
+    // a 1px shift IS a phase flip, which is how the CSS reproduces
+    // `paintCheckerboard`'s `(offsetX + px + offsetY + py) % 2` in WORLD
+    // cells. A variant view scrolled an odd number of cells must keep the
+    // checkerboard it had in object space.
+    const { container } = render(
+      <CanvasSurface {...baseProps()} checkerParity={{ x: 1, y: 0 }} />,
+    );
+    const bg = container.querySelector<HTMLElement>(".canvas__background")!;
+    expect(bg.style.backgroundPosition).toBe("1px 0px");
+  });
+
+  it("defaults the parity to 0 0 when no offset is supplied", () => {
+    const { container } = render(<CanvasSurface {...baseProps()} />);
+    const bg = container.querySelector<HTMLElement>(".canvas__background")!;
+    expect(bg.style.backgroundPosition).toBe("0px 0px");
+  });
+
+  it("is inert to the pointer and hidden from assistive tech", () => {
+    // The pointer surface is the only element that may take input; a DIV
+    // stacked in the frame that swallowed events would break every stroke.
+    const { container } = render(<CanvasSurface {...baseProps()} />);
+    const bg = container.querySelector(".canvas__background")!;
+    expect(bg.getAttribute("aria-hidden")).toBe("true");
+    expect(bg.tagName).toBe("DIV");
   });
 
   it("maps layerOpacity onto CSS opacity, defaulting missing ids to 1", () => {

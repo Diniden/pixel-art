@@ -71,7 +71,7 @@
  *                         moved to the SVG above (D5/D6 split)
  *   pointer surface       `canvasRef` — see below
  *   layer canvases        one per layer, bottom → top
- *   [background DIV]      task 06 — the slot is left empty on purpose
+ *   background DIV        the checkerboard, in CSS (task 06) — `--z-behind`
  *
  * ── ⚠️ `canvasRef` IS THE POINTER SURFACE. DO NOT "OPTIMISE" IT AWAY ──────
  *
@@ -289,6 +289,37 @@ export interface CanvasSurfaceProps {
    */
   combinedScale: number;
 
+  /* ── the background DIV (task 06, decision D11) ────────────────────────── */
+  /**
+   * The checkerboard palette: `true` = the light triple, `false` = the dark.
+   *
+   * ⚠️ NOT the UI theme. `lightGridMode` is a per-project toggle stored on
+   * `ViewportUIStore` and it is TRI-STATE there (`undefined` = absent from
+   * the project file). The container collapses it with `?? false` at the read
+   * site exactly as it always has; the undefined never reaches this boundary
+   * and is never persisted collapsed. Rendered as the
+   * `canvas__background--light` modifier, which swaps three custom
+   * properties — the JS `BackgroundTheme` does not cross into `ui/` at all.
+   */
+  lightGridMode?: boolean;
+  /**
+   * The checkerboard's world-space PHASE, as `{x, y}` each already reduced to
+   * 0 or 1.
+   *
+   * ⚠️ This is the one piece of the old raster background that is easy to
+   * lose. `paintCheckerboard` picked a square's colour from
+   * `(offsetX + px + offsetY + py) % 2` — WORLD cells, not surface cells — so
+   * a variant view scrolled by an ODD number of cells keeps the checker phase
+   * it had in object space. Drop it and every odd-offset variant edit gets a
+   * checkerboard inverted against the one the user saw a moment ago.
+   *
+   * It becomes a `background-position` of `{x}px {y}px` on a 2px tile: a
+   * one-tile-pixel shift is exactly a parity flip. Supplying the reduced
+   * value rather than the raw offset keeps the (negative-safe) modulo in the
+   * container, where the offset actually lives.
+   */
+  checkerParity?: { x: number; y: number };
+
   /* ── cursor ────────────────────────────────────────────────────────────── */
   /** A CSS `cursor` value. Resolved by the container from the active tool. */
   cursor: string;
@@ -456,6 +487,8 @@ export function CanvasSurface({
   cellHeight,
   viewPanOffset,
   combinedScale,
+  lightGridMode,
+  checkerParity,
   cursor,
   showReferenceOverlay,
   showFrameOverlay,
@@ -509,11 +542,48 @@ export function CanvasSurface({
         >
           <div className="canvas__frame">
             {/*
-              ── the background DIV's slot ───────────────────────────────────
-              TASK 06 builds the CSS checkerboard + grid DIV here, behind the
-              layer stack, on `--z-behind`. Deliberately EMPTY for now: the
-              checkerboard is still painted by the container's raster pass.
+              ── the background: ONE DIV, no canvas, no cache, no blit ───────
+              (plan 05, task 06, decision D11)
+
+              This replaced an offscreen `<canvas>` that allocated a
+              `cellWidth × cellHeight` `ImageData`, ran an O(w·h) base fill
+              plus a per-cell block write, cached the result by key, and
+              `drawImage`-blitted it on every repaint. It is now a
+              `conic-gradient` on a 2px tile that the compositor draws for
+              free and never repaints on pan or zoom.
+
+              It sits INSIDE `.canvas__layout`, so it inherits
+              `scale(zoom * viewZoom)` and the 2px tile is magnified to two
+              cells — which is why `image-rendering: pixelated` in the
+              stylesheet is load-bearing rather than decorative. Without it a
+              2px pattern scaled 50× is grey mush.
+
+              First child, and on `--z-behind`, so it is under the layer
+              stack. Both matter: source order alone would not put it under
+              `.canvas__layers` if that wrapper ever gained a z-index.
+
+              ⚠️ The GRID IS NOT HERE. It is SVG chrome, below — see the
+              `grid` prop's comment and `ui/canvas/svg/gridOverlay.ts`.
+              Exactly one mechanism draws it.
             */}
+            <div
+              className={
+                lightGridMode === true
+                  ? "canvas__background canvas__background--light"
+                  : "canvas__background"
+              }
+              style={{
+                width: cellWidth,
+                height: cellHeight,
+                // The world-space checker phase (see `checkerParity`). A 1px
+                // shift of a 2px tile IS the parity flip.
+                backgroundPosition: `${checkerParity?.x ?? 0}px ${
+                  checkerParity?.y ?? 0
+                }px`,
+              }}
+              data-testid="canvas-background"
+              aria-hidden="true"
+            />
 
             {/*
               ── the layer stack, bottom → top ───────────────────────────────

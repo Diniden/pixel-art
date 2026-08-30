@@ -17,6 +17,55 @@
  * `stroke-width` of 1 is 1 SCREEN pixel at every zoom, which is exactly the
  * hairline the canvas grid was trying to be.
  *
+ * ## ⚠️ WHY THE GRID IS STILL HERE AND NOT IN CSS (plan 05, task 06)
+ *
+ * Task 06 moved the CHECKERBOARD to a CSS DIV (`.canvas__background`,
+ * decision D11) and its brief offered the grid the same treatment —
+ * `repeating-linear-gradient` lines at `calc(1px / var(--combined-scale))`.
+ * That option was evaluated and DECLINED. This module keeps the grid, and
+ * `.canvas__background` deliberately draws NO lines, so exactly one mechanism
+ * renders it. Four reasons, in order of weight:
+ *
+ * 1. **The variant-edit grid is a placed SUB-RECTANGLE, and CSS cannot
+ *    express it alongside the checkerboard.** While a variant is being
+ *    edited the surface is the UNION of the object and the offset variant,
+ *    the checkerboard covers all of it, and the grid covers only the
+ *    `gridWidth × gridHeight` editable area at `variantOffset - viewMin`
+ *    inside it. `CanvasContainer`'s `gridPath` emits exactly that. On one DIV
+ *    it would need a second, `no-repeat`, separately positioned and sized
+ *    background layer whose geometry is four more custom properties — more
+ *    machinery than the path string it replaces, and with a silent failure
+ *    mode if any of the four drifts.
+ *
+ * 2. **`calc(1px / var(--combined-scale))` is not screen-constant the way
+ *    `non-scaling-stroke` is.** It is a computed LENGTH: the browser
+ *    resolves it once, then the transform scales the rasterised gradient
+ *    along with everything else, and sub-pixel gradient stops are
+ *    antialiased rather than snapped. `non-scaling-stroke` exempts the
+ *    stroke from the transform at PAINT time, which is the actual invariant
+ *    the grid needs, and `shape-rendering="crispEdges"` snaps the hairline to
+ *    device pixels — the thing that stops a 1px grid becoming a 2px smear.
+ *
+ * 3. **`combinedScale` spans 0.25 to 200.** At the top of that range the
+ *    computed width is 0.005px; at the bottom, 4px. A gradient stop pair that
+ *    narrow rounds to nothing or to a solid fill depending on the browser,
+ *    which is the "flat wash" failure this whole module exists to avoid — and
+ *    it fails SILENTLY, exactly like the raster version did.
+ *
+ * 4. **It already works.** Task 05 moved the grid here rather than leave a
+ *    grey wash on screen, and the owner's requirement — "gridding effects
+ *    handled with CSS border tricks to maximize hardware utilization and not
+ *    raw compute" — is met either way: one `<path>` with 482 segments is
+ *    GPU-composited vector chrome, not per-pixel compute, and it allocates no
+ *    raster. Moving working, tested code sideways to satisfy the letter of a
+ *    mechanism rather than its intent would have traded a real risk for no
+ *    gain.
+ *
+ * The alpha rule below is shared with `--canvas-grid-line` /
+ * `--canvas-grid-line-light` in `tokens.css`, and
+ * `canvasBackground.test.ts` pins the two to the same values so a future CSS
+ * grid — should one ever be wanted — starts from the same colours.
+ *
  * ## The coordinate model (shared with `chromeOverlay.ts`)
  *
  * The consumer (task 04) renders:

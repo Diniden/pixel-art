@@ -76,6 +76,107 @@
   cursor: crosshair;
 }
 
+/* The checkerboard background (plan 05, task 06, decision D11).
+
+   ⚠️ WHAT THIS REPLACED. An offscreen `<canvas>` in `CanvasContainer` that
+   allocated a `cellWidth x cellHeight` `ImageData`, wrote the base colour to
+   EVERY pixel, then wrote each cell's block, cached the bitmap under a
+   `bgCacheKey`, and `drawImage`-blitted it into a layer canvas on every
+   repaint. It is now one compositor-drawn element with no raster of its own.
+
+   ── The checkerboard ──────────────────────────────────────────────────
+   A `conic-gradient` on a `2px 2px` tile, which is TWO CELLS square because
+   this element lives inside `.canvas__layout` and one CSS pixel here is one
+   grid cell (the same 1:1 model the layer canvases use).
+
+   The quadrant order is load-bearing. `conic-gradient` starts at 12 o'clock
+   and sweeps clockwise, so 0-25% is the top-RIGHT quadrant, 25-50% the
+   bottom-right, 50-75% the bottom-left and 75-100% the top-left. Writing
+   B, A, B, A therefore puts A at tile-local (0,0) and (1,1) and B at (1,0)
+   and (0,1) — i.e. A wherever `(x + y)` is EVEN, which is exactly the rule
+   `paintCheckerboard` used (`color1` on even parity).
+
+   `background-color` under it is the base fill `paintCheckerboard` wrote
+   across the whole buffer first. It shows only where the gradient does not
+   reach, which after the sizing below is nowhere — it is kept because the
+   raster version kept it, and because a fractional `cellWidth` would expose
+   a seam otherwise.
+
+   ── ⚠️ `image-rendering: pixelated` IS LOAD-BEARING ──────────────────────
+   The tile is 2px and the transform on `.canvas__layout` magnifies it by up
+   to 200x (`zoom` up to 50 times `viewZoom` up to 4). With default smoothing
+   a 2px pattern at 50x is a flat grey wash — the exact silent failure mode
+   the raster grid had. Both spellings are kept for the same reason the layer
+   canvases keep them: `crisp-edges` is Firefox's, and the later declaration
+   wins where both are understood. DO NOT REMOVE EITHER.
+
+   ── ⚠️ PARITY IS SET INLINE, NOT HERE ────────────────────────────────────
+   `background-position` comes from `CanvasSurface`'s `checkerParity` prop.
+   `paintCheckerboard` chose a square's colour from
+   `(offsetX + px + offsetY + py) % 2` — WORLD cells — so a variant view
+   scrolled an odd number of cells keeps its object-space phase. On a 2px
+   tile a 1px `background-position` shift IS that parity flip. There is no
+   default here on purpose: a value in this file would silently win over an
+   absent prop and invert every odd-offset variant.
+
+   ── z-index ──────────────────────────────────────────────────────────────
+   `var(--z-behind)` — the EXISTING token, documented in `tokens.css` for
+   "decorative ::before / bg grids", which is this exact slot. No new number:
+   a new z-index is both redundant and a stylelint error.
+
+   ── placement ────────────────────────────────────────────────────────────
+   The same absolute origin and the same 2px TRANSPARENT border as
+   `.canvas__layers` and `.canvas__overlay`, compensating for
+   `.canvas__surface`'s visible 2px one. A 2px drift here puts the checker
+   squares out of register with the artwork sitting on top of them, and the
+   misalignment reads as a rendering bug rather than as a border. If that
+   surface border changes, it changes here too.
+
+   ⚠️ THE GRID IS NOT DRAWN HERE. It is SVG (`.canvas__svg-grid`), where
+   `vector-effect: non-scaling-stroke` keeps the hairline one SCREEN pixel at
+   every zoom. Adding grid lines to this element would draw it TWICE. */
+.canvas__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  z-index: var(--z-behind);
+  background-color: var(--canvas-bg-base);
+  background-image: conic-gradient(
+    var(--canvas-bg-b) 0 25%,
+    var(--canvas-bg-a) 0 50%,
+    var(--canvas-bg-b) 0 75%,
+    var(--canvas-bg-a) 0
+  );
+  background-size: 2px 2px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* `lightGridMode` — the per-project toggle, NOT the UI theme.
+
+   It swaps the three checker colours and nothing else. Expressed as a
+   modifier class rather than a `data-` attribute so it composes with the
+   block above by the ordinary cascade, and so the JS `BackgroundTheme` never
+   has to cross the `ui/` boundary (D11).
+
+   ⚠️ Tri-state on the store side: `ViewportUIStore.lightGridMode` is
+   `boolean | undefined`, where `undefined` means "absent from the project
+   file". The container collapses it with `?? false` at the read site, as it
+   always has, and only the resulting boolean reaches this stylesheet. The
+   undefined is never persisted as `false`. */
+.canvas__background--light {
+  background-color: var(--canvas-bg-base-light);
+  background-image: conic-gradient(
+    var(--canvas-bg-b-light) 0 25%,
+    var(--canvas-bg-a-light) 0 50%,
+    var(--canvas-bg-b-light) 0 75%,
+    var(--canvas-bg-a-light) 0
+  );
+}
+
 /* The per-layer canvas stack (plan 05, task 04, decision D3).
 
    One 1:1 `<canvas>` per layer lives in here, bottom → top in DOM order, and
