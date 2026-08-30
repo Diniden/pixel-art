@@ -201,6 +201,7 @@ import {
   FRAME_OVERLAY_MODE,
   FRAME_TRACE_MODE,
 } from "../ui/canvas/render/renderFrameOverlay";
+import { drawLayerView } from "../ui/canvas/render/renderLayerView";
 import { drawOriginCross } from "../ui/canvas/render/renderOriginCross";
 import {
   drawLasso,
@@ -556,7 +557,20 @@ export const CanvasContainer = observer(function CanvasContainer({
     editingVariant && variantData
       ? variantData.variant.gridSize.height
       : objHeight;
-  const isEditingVariantResolved = Boolean(editingVariant && variantData);
+  // Two flags, deliberately (split-canvas task 05):
+  //  - `hasVariantData` — DATA: a variant layer is selected and resolved, so
+  //    fills sample and the eyedropper reads the variant's own grid. True in
+  //    both render modes.
+  //  - `isEditingVariantResolved` — VIEW: lay the canvas out as the object ∪
+  //    variant union with the grid drawn at `variantOffset`. Forced false in
+  //    Layer mode, where the view IS the editable grid at (0,0); that single
+  //    flag already routes geometry, coordinates, background, selection and
+  //    preview to "grid at origin".
+  const hasVariantData = Boolean(editingVariant && variantData);
+  const isEditingVariantResolved = !layerMode && hasVariantData;
+  // Layer mode: the "object" the geometry sees is the grid itself.
+  const geomObjWidth = layerMode ? gridWidth : objWidth;
+  const geomObjHeight = layerMode ? gridHeight : objHeight;
   // Memoised on its two SCALARS, not on `variantData.offset`'s identity: the
   // computed rebuilds the offset object on every read, so an unmemoised value
   // here would invalidate `render`, `traceSpace` and the geometry on every
@@ -569,8 +583,8 @@ export const CanvasContainer = observer(function CanvasContainer({
   );
 
   const geom = useCanvasGeometry({
-    objWidth,
-    objHeight,
+    objWidth: geomObjWidth,
+    objHeight: geomObjHeight,
     gridWidth,
     gridHeight,
     editingVariant: isEditingVariantResolved,
@@ -748,7 +762,39 @@ export const CanvasContainer = observer(function CanvasContainer({
       ctx.translate(-viewMinX * zoom, -viewMinY * zoom);
     }
 
-    if (isEditingVariantResolved && variantData) {
+    if (layerMode) {
+      // Layer Render Mode: just the editable grid at origin — the variant's
+      // OWN layers (the set the Full view composites for it; `editableGrid`
+      // writes `layers[0]`), or the current layer on the object grid. No
+      // offset, no dimming, no object outline.
+      drawLayerView(ctx, {
+        layers:
+          editingVariant && variantData
+            ? variantData.variantFrame.layers
+            : layer
+              ? [layer]
+              : [],
+        gridWidth,
+        gridHeight,
+        zoom,
+        getPixelColor,
+        moveDx,
+        moveDy,
+        movesWithDrag: (l) => l.id !== undefined && movesWithDrag({ id: l.id }),
+      });
+
+      if (previewPixels.length > 0) {
+        ctx.fillStyle = `rgba(${currentColor.r}, ${currentColor.g}, ${currentColor.b}, ${(currentColor.a / 255) * 0.6})`;
+        for (const { x, y } of previewPixels) {
+          if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+            ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
+          }
+        }
+      }
+
+      const gridCanvas = ensureGridCanvas();
+      ctx.drawImage(gridCanvas, 0, 0);
+    } else if (isEditingVariantResolved && variantData) {
       for (const l of frame.layers) {
         if (!l.visible) continue;
 
@@ -1083,9 +1129,15 @@ export const CanvasContainer = observer(function CanvasContainer({
       drawMarchingAnts(ctx, selBox, zoom, offsetX, offsetY, dragDx, dragDy);
     }
 
-    // The origin cross shows only while the origin tool is selected.
+    // The origin cross shows only while the origin tool is selected. It is
+    // object-space, so the Layer view of a VARIANT hides it (for a regular
+    // layer the grid is the object grid and it is correct as-is).
     const originPos = obj.origin;
-    if (originPos && currentTool === "origin") {
+    if (
+      originPos &&
+      currentTool === "origin" &&
+      !(layerMode && editingVariant)
+    ) {
       drawOriginCross(
         ctx,
         originPos,
@@ -1120,6 +1172,8 @@ export const CanvasContainer = observer(function CanvasContainer({
     variantData,
     variantOffset,
     layerFocusMode,
+    layerMode,
+    editingVariant,
     viewMinX,
     viewMinY,
     viewMaxX,
@@ -1349,8 +1403,9 @@ export const CanvasContainer = observer(function CanvasContainer({
   );
 
   /* ── the reference-trace overlay (concern #7) ──────────────────────────── */
+  // The reference image is an object-space aid: never active in Layer mode.
   const isReferenceTraceActive =
-    currentTool === "reference-trace" && referenceImage != null;
+    !layerMode && currentTool === "reference-trace" && referenceImage != null;
 
   const frameRefObj = useMemo(() => {
     const id = referenceUI.frameReferenceObjectId;
@@ -1371,7 +1426,13 @@ export const CanvasContainer = observer(function CanvasContainer({
   const renderOverlay = useCallback(() => {
     const canvas = overlayCanvasRef.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx || !referenceImage || !isReferenceTraceActive) {
+    if (
+      !canvas ||
+      !ctx ||
+      !referenceImage ||
+      !isReferenceTraceActive ||
+      layerMode
+    ) {
       if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;
     }
@@ -1422,6 +1483,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   }, [
     referenceImage,
     isReferenceTraceActive,
+    layerMode,
     canvasWidth,
     canvasHeight,
     zoom,
@@ -1445,7 +1507,15 @@ export const CanvasContainer = observer(function CanvasContainer({
       active: boolean,
     ) => {
       const ctx = canvas?.getContext("2d");
-      if (!canvas || !ctx || !overlaySourceFrame || !frameRefObj || !active) {
+      // Frame overlays are object-space aids: cleared in Layer mode.
+      if (
+        !canvas ||
+        !ctx ||
+        !overlaySourceFrame ||
+        !frameRefObj ||
+        !active ||
+        layerMode
+      ) {
         if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
         return;
       }
@@ -1519,6 +1589,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       zoom,
       frameRefObj,
       isEditingVariantResolved,
+      layerMode,
       viewMinX,
       viewMinY,
     ],
@@ -1603,6 +1674,8 @@ export const CanvasContainer = observer(function CanvasContainer({
   // canvas must see WASD and the arrows before anything else does. W23 added
   // the dialog guard that stops it swallowing Escape from an open modal.
   useCanvasKeyboard({
+    // Exactly ONE pane owns the window keyboard map (MASTER D12).
+    enabled: views.keyboardOwner === renderMode,
     currentTool,
     hasSelection: Boolean(selection),
     selectionBehavior,
@@ -1792,11 +1865,11 @@ export const CanvasContainer = observer(function CanvasContainer({
   /* ── the editable grid the fills sample ────────────────────────────────── */
   const editableGrid = useCallback((): PixelData[][] | null => {
     if (!layer) return null;
-    if (isEditingVariantResolved && variantData) {
+    if (hasVariantData && variantData) {
       return variantData.variantFrame.layers[0]?.pixels ?? layer.pixels;
     }
     return layer.pixels;
-  }, [layer, isEditingVariantResolved, variantData]);
+  }, [layer, hasVariantData, variantData]);
 
   /**
    * The stroke cursor — the last cell painted, or `null` between strokes.
@@ -1938,10 +2011,13 @@ export const CanvasContainer = observer(function CanvasContainer({
     }
     if (e.button !== 0) return;
 
-    // The origin tool snaps to half-pixels and writes immediately.
+    // The origin tool snaps to half-pixels and writes immediately. Object-
+    // space, so the Layer view of a variant does not place it.
     if (currentTool === "origin" && obj) {
-      const originCoords = getOriginCoords(e.clientX, e.clientY);
-      if (originCoords) actions.setObjectOrigin(obj.id, originCoords);
+      if (!(layerMode && editingVariant)) {
+        const originCoords = getOriginCoords(e.clientX, e.clientY);
+        if (originCoords) actions.setObjectOrigin(obj.id, originCoords);
+      }
       return;
     }
 
@@ -1986,7 +2062,9 @@ export const CanvasContainer = observer(function CanvasContainer({
 
     // Eyedropper: first visible layer, top to bottom, then the reference image.
     if (currentTool === "eyedropper") {
-      if (isEditingVariantResolved && variantData) {
+      // `hasVariantData`, not the view flag: `coords` are variant-grid space
+      // in BOTH render modes whenever a variant is selected.
+      if (hasVariantData && variantData) {
         const variantLayer = variantData.variantFrame.layers[0];
         if (variantLayer) {
           const pixel = getPixelColor(
@@ -2000,7 +2078,7 @@ export const CanvasContainer = observer(function CanvasContainer({
         }
       }
 
-      if (frame && !isEditingVariantResolved) {
+      if (frame && !hasVariantData) {
         for (let i = frame.layers.length - 1; i >= 0; i--) {
           const l = frame.layers[i];
           if (!l.visible) continue;
@@ -2016,12 +2094,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       if (referenceImage) {
         // In variant-edit mode `coords` are variant-grid space; the sampler
         // wants object space, so add the offset back.
-        const canvasX = isEditingVariantResolved
-          ? coords.x + variantOffset.x
-          : coords.x;
-        const canvasY = isEditingVariantResolved
-          ? coords.y + variantOffset.y
-          : coords.y;
+        const canvasX = hasVariantData ? coords.x + variantOffset.x : coords.x;
+        const canvasY = hasVariantData ? coords.y + variantOffset.y : coords.y;
         const refPixel = getRefPixelAtCoord(canvasX, canvasY);
         if (refPixel && refPixel.a > 0) {
           app.setColorAndAddToHistory(refPixel);
@@ -2630,14 +2704,18 @@ export const CanvasContainer = observer(function CanvasContainer({
       viewPanOffset={viewPanOffset}
       viewZoom={viewZoom}
       cursor={cursor}
-      showReferenceOverlay={isReferenceTraceActive}
+      // All three overlays are object-space aids — hidden in Layer mode.
+      showReferenceOverlay={!layerMode && isReferenceTraceActive}
       // #8 hides while EITHER trace mode is on: two semi-transparent onion
       // skins stacked on one sprite are unreadable. Verbatim from
       // `Canvas.tsx:2022`.
       showFrameOverlay={
-        Boolean(overlayFrame) && !isReferenceTraceActive && !frameTraceActive
+        !layerMode &&
+        Boolean(overlayFrame) &&
+        !isReferenceTraceActive &&
+        !frameTraceActive
       }
-      showFrameTraceOverlay={frameTraceActive}
+      showFrameTraceOverlay={!layerMode && frameTraceActive}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
