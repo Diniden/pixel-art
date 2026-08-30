@@ -1,0 +1,56 @@
+/* block: canvas-split (2026-08-29).
+
+   The 1-or-2 pane container that fills `.app__canvas-stack`. A single pane is
+   visually identical to mounting the canvas directly; two panes share the
+   width equally with a 1px divider, and stack vertically in portrait so the
+   iPad still gets two usable halves.
+
+   ⚠️ Pane identity is the React `key` — a swap reorders DOM nodes, it never
+   remounts them. Nothing here may depend on a pane being first or last for
+   anything other than the divider (the `+` sibling combinator — a lone pane
+   has no sibling, so the `--dual` modifier only needs to flip the axis).
+
+   Each pane is a flex COLUMN with `min-*: 0` and `overflow: hidden`, because
+   `CanvasSurface`'s root is `flex: 1` column and needs a bounded flex parent
+   to size against. `position: relative` on the pane is for its own content
+   only; the floating reference panels are siblings of this block and keep
+   positioning against `.app__canvas-area`. */
+
+.canvas-split {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.canvas-split--dual {
+  flex-direction: row;
+}
+
+.canvas-split__pane {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.canvas-split__pane + .canvas-split__pane {
+  border-left: 1px solid var(--border-primary);
+}
+
+@media (orientation: portrait) {
+  .canvas-split--dual {
+    flex-direction: column;
+  }
+
+  .canvas-split__pane + .canvas-split__pane {
+    border-left: none;
+    border-top: 1px solid var(--border-primary);
+  }
+}
