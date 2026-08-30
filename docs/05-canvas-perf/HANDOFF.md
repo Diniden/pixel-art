@@ -1,6 +1,6 @@
 # HANDOFF — Canvas rendering performance for large editing surfaces
 
-**Current position:** W1 DONE — W2 (tasks 02, 03) next
+**Current position:** W2 IN PROGRESS (tasks 02, 03 dispatched in parallel)
 **Branch:** `feat/03-reflection-tool`
 **Last commit:** `cacfafe`
 
@@ -12,7 +12,7 @@ Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01 | DONE | 2026-08-30 | `cacfafe` | typecheck 0 · vitest **132 files / 2269 tests passed** · lint:boundaries OK (5/5) |
-| W2 | 02, 03 | TODO | | | |
+| W2 | 02, 03 | IN PROGRESS | 2026-08-30 | | |
 | W3 | 04 | TODO | | | |
 | W4 | 05 | TODO | | | |
 | W5 | 06 | TODO | | | |
