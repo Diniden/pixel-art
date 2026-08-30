@@ -238,7 +238,7 @@ drawn twice — once raster (wrong at 1:1) and once vector.
    sibling wins, which is the rule the file already documents. `.canvas__layers` has no
    z-index and stacks purely by source order. `lint:css` clean on this file.
 2. **`useLayerRefs`, a memoised per-id ref-callback map** — found by the executor's own test.
-   The obvious `ref={(el) => register(id, el)}` is a fresh closure每 render, so React would
+   The obvious `ref={(el) => register(id, el)}` is a fresh closure every render, so React would
    detach/reattach EVERY layer canvas on EVERY render, firing `(id, null)` through the
    container's ref map on every pan frame, wheel tick and hover sample. That would discard at
    the ref level exactly the pooling that keyed reconciliation buys at the DOM level. Memo is
