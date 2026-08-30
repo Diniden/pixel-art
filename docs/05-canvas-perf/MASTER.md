@@ -332,6 +332,12 @@ in the profiler. The checkerboard and grid look as they do today. Undo restores 
 1. Dropping the `editingVariant ? viewWidth : gridWidth` conditional (D1). Breaks variants.
 2. Fixing `canvasWidth * viewZoom` at `CanvasContainer.tsx:2457`/`2885` but missing
    `useCanvasViewport.ts:339-340`, or vice versa. All three must become `contentWidth`.
+   **⚠️ CORRECTED 2026-08-30 (see `HANDOFF.md`, W2):** as written this item contradicted
+   §7 — it asked task 02 to edit `CanvasContainer.tsx`, which §7 assigns to task 05, so
+   task 02 could not reach a passing typecheck from inside its own `Touches`. The
+   `CanvasContainer.tsx` and `LightingCanvasContainer.tsx` call sites were landed by an
+   owner-authorized **task 02 follow-up**, not by task 05. Task 05 inherits them already
+   renamed to `cellWidth`/`cellHeight`/`contentWidth` and must not redo them.
 3. Forgetting `handleResetView`'s comment *"At view zoom 1 the content is exactly
    canvasWidth × canvasHeight"* (`CanvasContainer.tsx:3010`) — that assumption is exactly
    what breaks. Centring must use `cellWidth * zoom`.
