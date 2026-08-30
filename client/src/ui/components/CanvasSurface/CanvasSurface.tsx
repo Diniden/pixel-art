@@ -126,10 +126,22 @@ export interface CanvasSurfaceProps {
   containerRef: RefObject<HTMLDivElement | null>;
 
   /* ── dimensions ────────────────────────────────────────────────────────── */
-  /** Backing-store width in device pixels (`viewWidth * zoom`). */
-  canvasWidth: number;
-  /** Backing-store height in device pixels. */
-  canvasHeight: number;
+  /**
+   * Backing-store width in GRID CELLS — one sprite pixel, one canvas pixel.
+   *
+   * ⚠️ 1:1, NOT `gridWidth * zoom` (plan 05, task 02). Magnification is the
+   * CSS transform below and nothing else, which is what takes a Landscapes
+   * layer from 546 MB at zoom 50 to 224 KB at any zoom. `image-rendering:
+   * pixelated` in `CanvasSurface.css` is consequently load-bearing rather than
+   * belt-and-braces: it is now the ONLY thing between this canvas and a blurry
+   * upscale. Do not remove it.
+   *
+   * `viewWidth` while a variant is being edited, `gridWidth` otherwise — the
+   * conditional lives in `useCanvasGeometry` and must survive (D1).
+   */
+  cellWidth: number;
+  /** Backing-store height in grid cells. See `cellWidth`. */
+  cellHeight: number;
 
   /* ── the view transform ────────────────────────────────────────────────── */
   /**
@@ -141,8 +153,19 @@ export interface CanvasSurfaceProps {
    * so a drag does not write to the project sixty times a second.
    */
   viewPanOffset: { x: number; y: number };
-  /** View scale, applied as a `scale`. Also separate from `uiState.zoom`. */
-  viewZoom: number;
+  /**
+   * The ONE scale the layout is magnified by: `zoom * viewZoom`.
+   *
+   * ⚠️ The caller multiplies the two and passes the product, rather than
+   * passing both and multiplying here, so the combined scale is computed in
+   * exactly one place. The two store fields stay separate on the other side of
+   * this boundary and neither changes range, default or persistence (D2):
+   * `zoom` ∈ [1,50] is the shared pixel scale, `viewZoom` ∈ [0.25,4] is the
+   * per-pane gesture scale, and because they already multiplied, applying the
+   * product here keeps the on-screen content box exactly the size every saved
+   * `panOffset` was recorded against — so no project needs migrating.
+   */
+  combinedScale: number;
 
   /* ── cursor ────────────────────────────────────────────────────────────── */
   /** A CSS `cursor` value. Resolved by the container from the active tool. */
@@ -182,10 +205,10 @@ export function CanvasSurface({
   hoverCanvasRef,
   reflectionCanvasRef,
   containerRef,
-  canvasWidth,
-  canvasHeight,
+  cellWidth,
+  cellHeight,
   viewPanOffset,
-  viewZoom,
+  combinedScale,
   cursor,
   showReferenceOverlay,
   showFrameOverlay,
@@ -205,7 +228,11 @@ export function CanvasSurface({
         <div
           className="canvas__layout"
           style={{
-            transform: `translate(${viewPanOffset.x}px, ${viewPanOffset.y}px) scale(${viewZoom})`,
+            // ⚠️ `combinedScale` is `zoom * viewZoom` — the GPU does ALL the
+            // magnification now, because the canvases below are 1:1 with the
+            // pixel data. This one declaration is what replaced allocating a
+            // `zoom`-times-larger backing store per canvas.
+            transform: `translate(${viewPanOffset.x}px, ${viewPanOffset.y}px) scale(${combinedScale})`,
             // `0 0` so the transform anchors at the sprite's top-left; the
             // pinch/wheel maths in `useCanvasViewport` assumes this origin.
             transformOrigin: "0 0",
@@ -214,8 +241,8 @@ export function CanvasSurface({
           <div className="canvas__frame">
             <canvas
               ref={canvasRef}
-              width={canvasWidth}
-              height={canvasHeight}
+              width={cellWidth}
+              height={cellHeight}
               className="canvas__surface"
               style={{ cursor }}
               onMouseDown={onMouseDown}
@@ -232,8 +259,8 @@ export function CanvasSurface({
 
             <canvas
               ref={hoverCanvasRef}
-              width={canvasWidth}
-              height={canvasHeight}
+              width={cellWidth}
+              height={cellHeight}
               className="canvas__overlay canvas__overlay--hover"
               style={OVERLAY_STYLE}
             />
@@ -241,8 +268,8 @@ export function CanvasSurface({
             {showReferenceOverlay && (
               <canvas
                 ref={overlayCanvasRef}
-                width={canvasWidth}
-                height={canvasHeight}
+                width={cellWidth}
+                height={cellHeight}
                 className="canvas__overlay"
               />
             )}
@@ -250,8 +277,8 @@ export function CanvasSurface({
             {showFrameOverlay && (
               <canvas
                 ref={frameOverlayCanvasRef}
-                width={canvasWidth}
-                height={canvasHeight}
+                width={cellWidth}
+                height={cellHeight}
                 className="canvas__overlay"
                 style={OVERLAY_STYLE}
               />
@@ -260,8 +287,8 @@ export function CanvasSurface({
             {showFrameTraceOverlay && (
               <canvas
                 ref={frameTraceOverlayCanvasRef}
-                width={canvasWidth}
-                height={canvasHeight}
+                width={cellWidth}
+                height={cellHeight}
                 className="canvas__overlay"
               />
             )}
@@ -277,8 +304,8 @@ export function CanvasSurface({
             */}
             <canvas
               ref={reflectionCanvasRef}
-              width={canvasWidth}
-              height={canvasHeight}
+              width={cellWidth}
+              height={cellHeight}
               className="canvas__overlay canvas__overlay--reflection"
               style={OVERLAY_STYLE}
             />

@@ -21,8 +21,35 @@
  * the object's bounds and the offset variant's bounds, so a variant that hangs
  * off the left edge (`variantOffset.x < 0`) is still visible and still
  * editable rather than being clipped away. That union is `viewMin*`/`viewMax*`,
- * and it is why `canvasWidth` is `viewWidth * zoom` in variant-edit mode and
- * `gridWidth * zoom` otherwise.
+ * and it is why `cellWidth` is `viewWidth` in variant-edit mode and `gridWidth`
+ * otherwise.
+ *
+ * ## ⚠️ THREE SIZES, AND THEY ARE NOT INTERCHANGEABLE (plan 05, task 02)
+ *
+ * Until 2026-08-30 there was one number, `canvasWidth = gridWidth * zoom`, and
+ * it meant BOTH the `<canvas>` backing store and the on-screen box. Backing
+ * stores are now 1:1 with pixel data and all magnification is one CSS
+ * transform, so the two have separated:
+ *
+ *   - `cellWidth`/`cellHeight`      — GRID CELLS. The `<canvas>` backing store.
+ *                                     A Landscapes layer is 256x224 = 224 KB,
+ *                                     not 12800x11200 = 546 MB.
+ *   - `contentWidth`/`contentHeight`— `cellWidth * zoom`. The on-screen CSS box
+ *                                     at view zoom 1. This — NOT `cellWidth` —
+ *                                     is what pan clamping and view centring
+ *                                     measure against, and it is the box every
+ *                                     persisted `panOffset` was recorded in.
+ *
+ * The rename from `canvasWidth` is deliberate rather than cosmetic: a stale
+ * `* zoom` that survived the refactor would be invisible under the old name,
+ * and the compiler finds every site under the new one.
+ *
+ * ⚠️ `zoom` is deliberately still a multiplier in `contentWidth`. It is NOT
+ * merged into the view zoom and NOT renormalised — `panOffset` persists in
+ * post-transform CSS pixels against a box of `gridWidth * zoom`, and there is
+ * no migration hook for `zoom` (`ViewportUIStore.ts:230` hydrates it straight
+ * in). Keeping the box the same size is what lets every saved project load
+ * with its view exactly where the owner left it.
  *
  * ## `variantOffsetKey` is not decoration
  *
@@ -39,6 +66,11 @@
  * deliberately includes `lightGridMode` (`"l"`/`"d"`), because the two themes
  * are different pixels, and deliberately excludes pan — panning does not
  * change the cached image, only where it lands.
+ *
+ * ⚠️ It also deliberately excludes `zoom` as of 2026-08-30. The background is
+ * painted at 1:1 like everything else now, so `zoom` cannot change a single
+ * pixel of it; leaving it in the key would rebuild the whole bitmap on every
+ * zoom step for an identical result.
  *
  * ## Purity
  *
@@ -86,9 +118,20 @@ export interface CanvasGeometry {
   viewWidth: number;
   viewHeight: number;
 
-  /* — the <canvas> element's pixel size — */
-  canvasWidth: number;
-  canvasHeight: number;
+  /* — the <canvas> backing store, in GRID CELLS (1:1 with pixel data) — */
+  /** `viewWidth` while editing a variant, `gridWidth` otherwise. */
+  cellWidth: number;
+  /** `viewHeight` while editing a variant, `gridHeight` otherwise. */
+  cellHeight: number;
+
+  /* — the on-screen CSS box at view zoom 1 — */
+  /**
+   * `cellWidth * zoom`. What pan clamping and view centring measure against,
+   * and the box every persisted `panOffset` was recorded in. See the header.
+   */
+  contentWidth: number;
+  /** `cellHeight * zoom`. See `contentWidth`. */
+  contentHeight: number;
 
   /* — cache identities — */
   /** Stable scalar for `variantOffset`; safe in a dependency array. */
@@ -146,19 +189,30 @@ export function useCanvasGeometry({
     const viewWidth = viewMaxX - viewMinX;
     const viewHeight = viewMaxY - viewMinY;
 
-    const canvasWidth = editingVariant ? viewWidth * zoom : gridWidth * zoom;
-    const canvasHeight = editingVariant ? viewHeight * zoom : gridHeight * zoom;
+    // ⚠️ The `editingVariant` conditional SURVIVES the move to 1:1 (plan 05,
+    // locked decision D1). In variant-edit mode the surface covers the union
+    // of the object and the offset variant, which is larger than the editable
+    // grid; collapsing this to `gridWidth` truncates the object.
+    const cellWidth = editingVariant ? viewWidth : gridWidth;
+    const cellHeight = editingVariant ? viewHeight : gridHeight;
+
+    // The on-screen box at view zoom 1. `zoom` is applied by the CSS transform
+    // now, not by the backing store — but it still sizes the box, which is why
+    // every saved `panOffset` remains valid without a migration.
+    const contentWidth = cellWidth * zoom;
+    const contentHeight = cellHeight * zoom;
 
     const variantOffsetKey = `${offsetX},${offsetY}`;
 
-    // Verbatim from `Canvas.tsx:268-270`, including the two distinct shapes —
-    // the variant-edit key carries the view origin because a variant dragged
-    // left changes which cells the checkerboard covers.
+    // `zoom` is NOT in the key — see the header. The two distinct shapes are
+    // preserved from `Canvas.tsx:268-270`: the variant-edit key carries the
+    // view origin because a variant dragged left changes which cells the
+    // checkerboard covers.
     const bgCacheKey = editingVariant
-      ? `view-${viewWidth}-${viewHeight}-${viewMinX}-${viewMinY}-${zoom}-${
+      ? `view-${viewWidth}-${viewHeight}-${viewMinX}-${viewMinY}-${
           lightGridMode ? "l" : "d"
         }`
-      : `${gridWidth}-${gridHeight}-${zoom}-${lightGridMode ? "l" : "d"}`;
+      : `${gridWidth}-${gridHeight}-${lightGridMode ? "l" : "d"}`;
 
     const coordGeom: CanvasViewGeometry = {
       gridWidth,
@@ -173,14 +227,19 @@ export function useCanvasGeometry({
       viewHeight,
     };
 
+    // ⚠️ `zoom: 1` and 1:1 dimensions. `BackgroundGeometry`'s field names are
+    // `canvasWidth`/`canvasHeight` because they name the BACKING STORE the
+    // painters write into — which is now `cellWidth`/`cellHeight`. With
+    // `zoom: 1` the painters' `x * zoom` collapses to `x`, one device pixel
+    // per cell, and the CSS transform magnifies the result.
     const bgGeom: BackgroundGeometry = {
-      canvasWidth,
-      canvasHeight,
+      canvasWidth: cellWidth,
+      canvasHeight: cellHeight,
       cellsX: editingVariant ? viewWidth : gridWidth,
       cellsY: editingVariant ? viewHeight : gridHeight,
       offsetX: editingVariant ? viewMinX : 0,
       offsetY: editingVariant ? viewMinY : 0,
-      zoom,
+      zoom: 1,
     };
 
     return {
@@ -190,8 +249,10 @@ export function useCanvasGeometry({
       viewMaxY,
       viewWidth,
       viewHeight,
-      canvasWidth,
-      canvasHeight,
+      cellWidth,
+      cellHeight,
+      contentWidth,
+      contentHeight,
       variantOffsetKey,
       bgCacheKey,
       coordGeom,

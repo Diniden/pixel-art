@@ -77,9 +77,21 @@ const PINCH_EXPONENT = 1.15;
 export interface UseCanvasViewportOptions {
   /** The element the gesture is measured against and the wheel is bound to. */
   containerRef: React.RefObject<HTMLElement | null>;
-  /** Unscaled content size in px. Multiplied by view zoom to clamp panning. */
-  canvasWidth: number;
-  canvasHeight: number;
+  /**
+   * The content's on-screen CSS size AT VIEW ZOOM 1, in px — for the pixel
+   * canvas that is `cellWidth * zoom` (`useCanvasGeometry.contentWidth`).
+   * Multiplied by the live view zoom to clamp panning.
+   *
+   * ⚠️ NOT the `<canvas>` backing store (plan 05, task 02). Backing stores are
+   * 1:1 with pixel data now and all magnification is one CSS transform, so
+   * passing `cellWidth` here would tell the clamp the content is `zoom` times
+   * smaller than it renders — typically 10x — and a large sprite could not be
+   * panned at all. The parameter was called `canvasWidth` until 2026-08-30,
+   * when the two stopped being the same number; it was renamed precisely so
+   * that mistake cannot be made silently.
+   */
+  contentWidth: number;
+  contentHeight: number;
   /** Pan owned by the caller (typically persisted). Seeds and re-syncs local pan. */
   panOffset: ViewPoint;
   /**
@@ -139,8 +151,8 @@ export interface CanvasViewport {
 
 export function useCanvasViewport({
   containerRef,
-  canvasWidth,
-  canvasHeight,
+  contentWidth,
+  contentHeight,
   panOffset,
   onCommitPan,
   viewZoom: externalViewZoom,
@@ -277,8 +289,8 @@ export function useCanvasViewport({
 
   const wheelStateRef = useRef({
     viewPanOffset: { x: 0, y: 0 } as ViewPoint,
-    canvasWidth,
-    canvasHeight,
+    contentWidth,
+    contentHeight,
     viewZoom,
     clampPanToViewport,
   });
@@ -287,8 +299,8 @@ export function useCanvasViewport({
   /* eslint-disable react-hooks/refs */
   wheelStateRef.current = {
     viewPanOffset: viewPanRef.current,
-    canvasWidth,
-    canvasHeight,
+    contentWidth,
+    contentHeight,
     viewZoom,
     clampPanToViewport,
   };
@@ -336,8 +348,12 @@ export function useCanvasViewport({
         scheduleCommitPan();
       } else {
         e.preventDefault();
-        const displayedW = state.canvasWidth * state.viewZoom;
-        const displayedH = state.canvasHeight * state.viewZoom;
+        // The FULL on-screen size: `contentWidth` already carries the shared
+        // pixel scale (`cellWidth * zoom`), and the live view zoom rides on
+        // top. Clamping against anything smaller locks a large sprite in
+        // place — see `contentWidth`'s doc on the options interface.
+        const displayedW = state.contentWidth * state.viewZoom;
+        const displayedH = state.contentHeight * state.viewZoom;
         const next = state.clampPanToViewport(
           {
             x: state.viewPanOffset.x - e.deltaX,
