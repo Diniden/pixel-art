@@ -6,7 +6,7 @@
  * transitive import, a `useContext` call or a module-level singleton would all
  * pass a grep and still throw on mount.
  *
- * So this file MOUNTS EVERY ONE OF THE FIVE STORIES, using their real args,
+ * So this file MOUNTS EVERY ONE OF THE SIX STORIES, using their real args,
  * with no `StoreProvider`, no `ApplicationStore`, no `installBridge` and no
  * decorator of any kind. Nothing in the render tree can reach a store, and if
  * anything tried, these tests would throw rather than pass quietly.
@@ -39,10 +39,11 @@ const NAMES = [
   "SelectionActive",
   "FrameOverlay",
   "LightGridMode",
+  "ReflectionGuides",
 ] as const;
 
 describe("CanvasSurface — GATE 2: renders with NO store provider", () => {
-  it("exposes exactly the five stories the task requires", () => {
+  it("exposes exactly the six stories the task requires", () => {
     expect(Object.keys(composed).sort()).toEqual([...NAMES].sort());
   });
 
@@ -63,13 +64,15 @@ describe("CanvasSurface — GATE 2: renders with NO store provider", () => {
   }
 
   it("mounts the frame-overlay canvas only when asked to", () => {
-    // ⚠️ Counts the CONDITIONAL overlays only. The hover marker also carries
-    // `.canvas__overlay` — it takes that class for its positioning — but is
-    // mounted unconditionally, so a bare `.canvas__overlay` count would
-    // always be one higher and would stop measuring what this test is about.
+    // ⚠️ Counts the CONDITIONAL overlays only. TWO canvases also carry
+    // `.canvas__overlay` — the hover marker and the reflection guides — and
+    // take that class purely for its positioning, but both are mounted
+    // unconditionally. A bare `.canvas__overlay` count would therefore always
+    // be two higher and would stop measuring what this test is about.
     const conditional = (c: HTMLElement) =>
-      c.querySelectorAll(".canvas__overlay:not(.canvas__overlay--hover)")
-        .length;
+      c.querySelectorAll(
+        ".canvas__overlay:not(.canvas__overlay--hover):not(.canvas__overlay--reflection)",
+      ).length;
 
     const withOverlay = render(<composed.FrameOverlay />);
     expect(conditional(withOverlay.container)).toBe(1);
@@ -87,6 +90,39 @@ describe("CanvasSurface — GATE 2: renders with NO store provider", () => {
     expect(container.querySelectorAll(".canvas__overlay--hover")).toHaveLength(
       1,
     );
+  });
+
+  it("mounts the reflection guide canvas unconditionally, LAST in the frame", () => {
+    // Two claims, and the second is the load-bearing one.
+    //
+    // Unconditional, for the same reason as the hover marker: the dash ticker
+    // repaints through `useCanvasRender(...).invalidate()`, which needs a
+    // context to already exist. Mounting behind a `hasReflectionLines` flag
+    // would drop the first frame of every guide.
+    //
+    // LAST, because these siblings are absolutely positioned and DOM order is
+    // z-order. The guides say where the next stroke will be mirrored, so a
+    // semi-transparent trace or onion overlay painted over them would hide the
+    // one thing the tool exists to communicate. `FrameOverlay` is the story to
+    // assert against precisely because it mounts a competing overlay.
+    const { container } = render(<composed.FrameOverlay />);
+    const frame = container.querySelector(".canvas__frame");
+    expect(frame).not.toBeNull();
+
+    const guides = container.querySelectorAll(".canvas__overlay--reflection");
+    expect(guides).toHaveLength(1);
+    expect(frame?.lastElementChild).toBe(guides[0]);
+  });
+
+  it("does not let the reflection canvas swallow pointer events", () => {
+    // The editable surface is the ONLY canvas that takes input. A guide layer
+    // stacked above everything would otherwise intercept every stroke — the
+    // exact failure the `pointer-events: none` inline style prevents.
+    const { container } = render(<composed.ReflectionGuides />);
+    const guides = container.querySelector<HTMLElement>(
+      ".canvas__overlay--reflection",
+    );
+    expect(guides?.style.pointerEvents).toBe("none");
   });
 
   it("applies the view transform and the cursor from props alone", () => {

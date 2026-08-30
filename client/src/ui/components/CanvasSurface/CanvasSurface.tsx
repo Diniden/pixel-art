@@ -8,7 +8,7 @@
  * `Canvas.tsx` was 3,062 lines with eleven responsibilities and **47 store
  * members in a single destructure** — the largest coupling site in the
  * application. Tasks 30, 31 and 32 took it apart. What survives here is the
- * markup: five `<canvas>` elements, the pan/zoom transform wrapper, and the
+ * markup: six `<canvas>` elements, the pan/zoom transform wrapper, and the
  * cursor. Roughly 15 props, every one a plain value or a callback.
  *
  * A component that took all 47 members as props would have had a ~52-prop
@@ -23,7 +23,7 @@
  * probe-verified rather than assumed — a `no-restricted-imports` rule that
  * matches nothing looks exactly like a rule that passes.
  *
- * The practical consequence is the story file next door: all five stories
+ * The practical consequence is the story file next door: all six stories
  * mount this component with **no store provider at all**. That is the proof
  * the boundary holds, and it is task 32's second gate.
  *
@@ -105,6 +105,18 @@ export interface CanvasSurfaceProps {
    */
   hoverCanvasRef: RefObject<HTMLCanvasElement | null>;
   /**
+   * The reflection tool's animated guide lines. See the header for why the
+   * dashes get a surface of their own rather than a pass in the main `render`.
+   *
+   * ⚠️ OPTIONAL, deliberately (plan 03, locked decision D9). The canvas is
+   * mounted unconditionally, but the PROP is not required, so this component
+   * and `CanvasContainer` both compile before the container is taught to pass
+   * a ref. When it is absent the canvas still exists and simply stays blank —
+   * nothing paints into it. Do not tighten this to a required prop without
+   * checking every call site; there is no behavioural gain in doing so.
+   */
+  reflectionCanvasRef?: RefObject<HTMLCanvasElement | null>;
+  /**
    * The scroll/gesture viewport.
    *
    * `tabIndex={0}` is on this element so it can hold focus for the keyboard
@@ -168,6 +180,7 @@ export function CanvasSurface({
   frameOverlayCanvasRef,
   frameTraceOverlayCanvasRef,
   hoverCanvasRef,
+  reflectionCanvasRef,
   containerRef,
   canvasWidth,
   canvasHeight,
@@ -252,6 +265,23 @@ export function CanvasSurface({
                 className="canvas__overlay"
               />
             )}
+
+            {/*
+              LAST in the frame, and that ordering is the whole point: these
+              siblings are absolutely positioned, so DOM order IS z-order.
+              The guides mark where every subsequent stroke will be mirrored,
+              which is useless information if the hover marker or a
+              semi-transparent trace/onion overlay can cover it. Mounted
+              unconditionally so the painter's `invalidate()` always has a
+              context, exactly as the hover marker is.
+            */}
+            <canvas
+              ref={reflectionCanvasRef}
+              width={canvasWidth}
+              height={canvasHeight}
+              className="canvas__overlay canvas__overlay--reflection"
+              style={OVERLAY_STYLE}
+            />
           </div>
         </div>
         {viewControls}

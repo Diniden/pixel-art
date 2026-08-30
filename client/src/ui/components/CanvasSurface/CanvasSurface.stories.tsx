@@ -2,7 +2,7 @@
  * CanvasSurface stories — and the PROOF that the `ui/` boundary holds.
  *
  * ══════════════════════════════════════════════════════════════════════════
- *  🏁 GATE 2 OF REFRESH TASK 32: THESE FIVE STORIES RENDER WITH NO STORE
+ *  🏁 GATE 2 OF REFRESH TASK 32: THESE SIX STORIES RENDER WITH NO STORE
  *  PROVIDER OF ANY KIND
  * ══════════════════════════════════════════════════════════════════════════
  *
@@ -19,7 +19,7 @@
  *
  * ## How a pure canvas gets something to look at
  *
- * `CanvasSurface` paints NOTHING — it owns four `<canvas>` elements and hands
+ * `CanvasSurface` paints NOTHING — it owns six `<canvas>` elements and hands
  * their refs out, because grids may never cross the `ui/` boundary as props
  * (R2: the owner's real project is 300,249 cells). In the app, the imperative
  * draw is driven by `CanvasContainer`'s `reaction` on `pixelVersion`.
@@ -30,16 +30,17 @@
  * (`projectTypical`), never `Base Unit.json` — the owner's real 1.1 MB project
  * is migration-corpus data, not story data.
  *
- * ## The five states
+ * ## The six states
  *
- * | Story          | What it exercises                                       |
- * | -------------- | ------------------------------------------------------- |
- * | Default        | the plain editing surface; no overlay mounted            |
- * | VariantEdit    | the EXPANDED view — the union of object and variant      |
- * |                | bounds — with the object outline and the variant frame   |
- * | SelectionActive| the marching-ants box and the mask fill                  |
- * | FrameOverlay   | the onion-skin overlay canvas mounted above the surface  |
- * | LightGridMode  | the light checkerboard theme                             |
+ * | Story           | What it exercises                                      |
+ * | --------------- | ------------------------------------------------------ |
+ * | Default         | the plain editing surface; no overlay mounted           |
+ * | VariantEdit     | the EXPANDED view — the union of object and variant     |
+ * |                 | bounds — with the object outline and the variant frame  |
+ * | SelectionActive | the marching-ants box and the mask fill                 |
+ * | FrameOverlay    | the onion-skin overlay canvas mounted above the surface |
+ * | LightGridMode   | the light checkerboard theme                            |
+ * | ReflectionGuides| the SIXTH canvas: dotted mirror guides, stacked last    |
  *
  * ⚠️ `LightGridMode` is where task 02's `lightGridMode` round-trip fix first
  * becomes VISIBLE, and the task 32 spec nominates it as the manual
@@ -126,7 +127,7 @@ const GRID = projectTypical.objects[0].gridSize;
 type PaintFn = (ctx: CanvasRenderingContext2D) => void;
 
 interface HarnessProps {
-  /** Everything `CanvasSurface` needs except the six refs. */
+  /** Everything `CanvasSurface` needs except the seven refs. */
   surface: Omit<
     CanvasSurfaceProps,
     | "canvasRef"
@@ -134,24 +135,40 @@ interface HarnessProps {
     | "frameOverlayCanvasRef"
     | "frameTraceOverlayCanvasRef"
     | "hoverCanvasRef"
+    | "reflectionCanvasRef"
     | "containerRef"
   >;
   /** Draws the main surface. Runs once the refs are attached. */
   paint: PaintFn;
   /** Draws the frame-overlay canvas, when the story mounts one. */
   paintOverlay?: PaintFn;
+  /**
+   * Draws the reflection guide canvas.
+   *
+   * Optional because most stories have no guides — but the canvas is mounted
+   * either way (see `CanvasSurface`'s header), so a story that omits this
+   * still proves the sixth surface is present and transparent rather than
+   * covering the artwork.
+   */
+  paintReflection?: PaintFn;
 }
 
 /**
  * Stands in for `CanvasContainer` — holds the refs and drives the imperative
  * draw. It reads NO store; the values it forwards are literals from the story.
  */
-function SurfaceHarness({ surface, paint, paintOverlay }: HarnessProps) {
+function SurfaceHarness({
+  surface,
+  paint,
+  paintOverlay,
+  paintReflection,
+}: HarnessProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
+  const reflectionCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -165,7 +182,12 @@ function SurfaceHarness({ surface, paint, paintOverlay }: HarnessProps) {
       overlayCtx.imageSmoothingEnabled = false;
       paintOverlay(overlayCtx);
     }
-  }, [paint, paintOverlay]);
+    const reflectionCtx = reflectionCanvasRef.current?.getContext("2d");
+    if (reflectionCtx && paintReflection) {
+      reflectionCtx.imageSmoothingEnabled = false;
+      paintReflection(reflectionCtx);
+    }
+  }, [paint, paintOverlay, paintReflection]);
 
   return (
     <div style={{ height: "100%", display: "flex" }}>
@@ -176,6 +198,7 @@ function SurfaceHarness({ surface, paint, paintOverlay }: HarnessProps) {
         frameOverlayCanvasRef={frameOverlayCanvasRef}
         frameTraceOverlayCanvasRef={frameTraceOverlayCanvasRef}
         hoverCanvasRef={hoverCanvasRef}
+        reflectionCanvasRef={reflectionCanvasRef}
         containerRef={containerRef}
       />
     </div>
@@ -211,7 +234,7 @@ const meta = {
         component:
           "BEM block `canvas`. The pure replacement for `Canvas.tsx` " +
           "(3,062 lines, 11 responsibilities, 47 store members in one " +
-          "destructure). It owns the four-`<canvas>` stack, the pan/zoom " +
+          "destructure). It owns the six-`<canvas>` stack, the pan/zoom " +
           "transform wrapper and the cursor — and nothing else. **No pixel " +
           "grid is ever a prop**: grids reach the canvas imperatively " +
           "through the refs, driven by `CanvasContainer`'s reaction on " +
@@ -407,6 +430,65 @@ export const LightGridMode: Story = {
       paintBackground(ctx, GRID.width, GRID.height, true);
       for (const layer of heroFrame.layers) paintLayer(ctx, layer, 0, 0);
       strokeGridLines(ctx, GRID.width, GRID.height, true);
+    },
+  },
+};
+
+/* ── 6. reflection guides ────────────────────────────────────────────────── */
+
+/**
+ * The SIXTH canvas, carrying the reflection tool's guide lines.
+ *
+ * ⚠️ What this story exists to show is the STACKING, not the artwork. The
+ * guides are painted into a surface that is mounted last inside
+ * `.canvas__frame`, so they sit above the hover marker and above both
+ * semi-transparent trace overlays — a guide the user cannot see is a guide
+ * that cannot be trusted, because it is the only indication of where the next
+ * stroke will be mirrored.
+ *
+ * The dashes here are STATIC. In the app they crawl, driven by `useDashTicker`
+ * (plan 03 task 04) repainting this canvas alone at ~12 fps; a story cannot
+ * usefully assert an animation, and routing that tick anywhere near the main
+ * `render` is precisely the mistake the separate canvas exists to prevent.
+ *
+ * The endpoints are on the integer CORNER lattice, not on cell centres — the
+ * line falls *between* pixel columns, which is what "reflect between pixels"
+ * means geometrically.
+ */
+export const ReflectionGuides: Story = {
+  args: {
+    surface: baseSurface,
+    paint: (ctx) => {
+      paintBackground(ctx, GRID.width, GRID.height, false);
+      for (const layer of heroFrame.layers) paintLayer(ctx, layer, 0, 0);
+      strokeGridLines(ctx, GRID.width, GRID.height, false);
+    },
+    paintReflection: (ctx) => {
+      // A vertical guide down the middle and a diagonal one, both snapped to
+      // corners. Two-pass stroke (accent under, white over, opposite dash
+      // phase) matching `renderReflectionLines`' documented approach.
+      const segments: Array<[number, number, number, number]> = [
+        [GRID.width / 2, 0, GRID.width / 2, GRID.height],
+        [0, 0, GRID.width, GRID.height],
+      ];
+      for (const [x1, y1, x2, y2] of segments) {
+        ctx.beginPath();
+        ctx.moveTo(x1 * ZOOM, y1 * ZOOM);
+        ctx.lineTo(x2 * ZOOM, y2 * ZOOM);
+        ctx.setLineDash([4, 4]);
+
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#8b5cf6";
+        ctx.lineDashOffset = 0;
+        ctx.stroke();
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineDashOffset = 4;
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
     },
   },
 };

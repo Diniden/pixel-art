@@ -104,6 +104,24 @@
    trace overlays rather than drifting 2px away from them. The class exists to
    identify the marker canvas in the DOM and in tests. */
 
+/* The reflection tool's animated guide lines.
+
+   Like `--hover` above, the `canvas__overlay--reflection` modifier carries NO
+   declarations of its own, and DELIBERATELY so — there is no rule for it here
+   and there should not be one. Absolute placement, pixelated scaling, the
+   z-index and the 2px transparent border that compensates for
+   `.canvas__surface`'s visible one all come from `.canvas__overlay`, and they
+   must keep coming from there: a guide that drifts 2px from the artwork points
+   at the wrong seam between pixels, which is the one thing this overlay exists
+   to get right.
+
+   ⚠️ The guides sit above every other overlay, and that is SOURCE ORDER, not a
+   z-index. `CanvasSurface` mounts this canvas last inside `.canvas__frame`;
+   all the overlays share `var(--z-canvas-overlay)`, so the later sibling wins.
+   Reaching for a higher numeric z-index here would be both redundant and a
+   stylelint error. The class exists to identify the canvas in the DOM and in
+   tests. */
+
 /* Touch-friendly adjustments */
 @media (pointer: coarse) {
   .canvas__surface {
