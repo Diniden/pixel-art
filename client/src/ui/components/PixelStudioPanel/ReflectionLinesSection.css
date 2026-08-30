@@ -1,0 +1,147 @@
+/* block: reflection-lines (reflection-tool task 06, 2026-08-29).
+
+   The Reflection tool's section inside the right rail. `PixelStudioPanel`
+   wraps it in the standard `.panel` / `panel__header--compact` /
+   `panel__body--dense` card, so this sheet styles only what is INSIDE that
+   body: the preset row, the list of committed lines, and Clear all.
+
+   Two deliberate borrowings from `pixel-studio-panel`:
+     - the preset row copies the `__shape-buttons` / `__shape-btn` skin (a
+       tinted tray of flush segments), which is the visual precedent named in
+       the task. It is copied rather than reused because a `ui/` block may not
+       reach into another block's classes — that cross-component dependency is
+       exactly what the BEM conversion removed.
+     - the row labels use `--font-mono`, like `__origin-position-value`: they
+       are coordinate pairs, and proportional digits make two lines of the
+       same shape look different.
+
+   Tokens only, no literals, no `!important`, max two class compounds per
+   selector (stylelint). */
+
+.reflection-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  width: 100%;
+  padding: 0 var(--space-1);
+}
+
+/* elements, DOM order */
+
+/* The preset row WRAPS. Five labels ("Vertical" … "Diagonals") do not fit the
+   rail's width on one line at any theme scale, and the shape-button row's
+   `flex: 1` equal-segment trick would squash them to ellipses. Wrapping keeps
+   every label readable and lets the tray grow to two rows instead. */
+.reflection-lines__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-px);
+  padding: var(--space-px);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.reflection-lines__preset {
+  flex: 1 1 auto;
+  padding: var(--space-1) var(--space-1-5);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.reflection-lines__preset:disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  /* 0.5 is the house disabled value (`blocks/btn.css:42`); `opacity` is not a
+     tokenised property in `.stylelintrc.json`'s strict-value list. */
+  opacity: 0.5;
+}
+
+/* `:not(:disabled)` rather than a plain `:hover`: at capacity the buttons
+   still receive pointer events (they must, to show their explanatory title),
+   and a hover highlight on a dead button reads as a bug. */
+.reflection-lines__preset:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.reflection-lines__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  /* The rail's own list reset does not reach here; `ul` defaults would add a
+     bullet gutter that misaligns the labels with the preset tray above. */
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reflection-lines__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0-5) var(--space-1);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+/* `min-width: 0` is the flex-item override that lets a long coordinate pair
+   ellipsize instead of forcing the whole rail wider (the same reason
+   `.pixel-studio-panel__section` carries one). */
+.reflection-lines__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reflection-lines__remove {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-0-5);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.reflection-lines__remove:hover {
+  background: var(--accent-danger-20);
+  color: var(--accent-danger);
+}
+
+.reflection-lines__empty {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-65);
+  line-height: var(--leading-snug);
+}
+
+.reflection-lines__clear {
+  align-self: flex-start;
+  padding: var(--space-0-5) var(--space-1-5);
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.reflection-lines__clear:hover {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}

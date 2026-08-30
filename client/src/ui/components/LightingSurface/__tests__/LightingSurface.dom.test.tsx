@@ -11,9 +11,10 @@
  * destructured 14 store members; if one had survived into the presentational
  * half, these tests would throw rather than pass quietly.
  *
- * ⚠️ The `LightingPreviewPanel` stories are covered by their own file next
- * door, and they are the stronger case: that panel is where a persistence KEY
- * could have leaked in.
+ * ⚠️ There used to be a companion file next door for the floating
+ * `LightingPreviewPanel`. That panel was retired on 2026-08-29 (MASTER D7)
+ * when the lit composite became a workspace pane, so this file is now the
+ * whole of the lighting studio's `ui/` purity gate.
  */
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";

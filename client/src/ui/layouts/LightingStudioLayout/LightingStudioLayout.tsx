@@ -20,28 +20,22 @@
  *   - **no `FrameReferencePanel`** (inside the `!isLightingMode` fragment)
  *   - **no `ReferenceImagePanel`** (same fragment)
  *
- * Four of the pixel layout's twelve regions are absent, and one region exists
- * ONLY here: `previewPanel`, the floating lit-composite thumbnail extracted by
- * task 33.
+ * Four of the pixel layout's twelve regions are absent.
  *
- * A merged layout would carry five props that are dead in one of its two modes
+ * A merged layout would carry four props that are dead in one of its two modes
  * and a `mode` discriminant to say which — i.e. it would reconstruct
  * `App.tsx`'s runtime branch inside a component whose entire purpose was to
  * dissolve it. Two layouts make the difference a TYPE error instead: passing
  * `canvasInfo` here does not compile.
  *
- * ── `previewPanel` is optional, and usually absent ─────────────────────────
+ * ── 🏁 THE `previewPanel` SLOT IS GONE (2026-08-29, MASTER D7) ─────────────
  *
- * ⚠️ In the running app this prop is **not** how the preview panel mounts.
- * `LightingPreviewPanelContainer` needs the thumbnail canvas ref and the
- * float-bounds ref, both of which live inside `LightingCanvasContainer`, so it
- * is rendered THERE (`LightingCanvasContainer.tsx:668`) — inside the `canvas`
- * region this layout receives as one opaque node.
- *
- * The prop exists so a story can place a stub panel in the canvas area without
- * standing up the whole canvas container, and so the arrangement is
- * expressible if the ref plumbing is ever hoisted. It is deliberately NOT
- * wired by `LightingStudioContainer`: doing so would mount the panel twice.
+ * This layout used to carry an optional `previewPanel` region for the floating
+ * 200 px lit-composite thumbnail. That panel was retired when the lit
+ * composite became a real workspace pane: `LightingStudioContainer` now passes
+ * a `CanvasSplit` of `LightingCanvasContainer`s as `canvas`, and the preview
+ * is one of them. There is no floating panel left to slot in, so the layout is
+ * back to a single canvas region.
  */
 import type { ReactNode, RefObject } from "react";
 import { AppShell } from "../../components/AppShell/AppShell";
@@ -56,8 +50,6 @@ export interface LightingStudioLayoutProps {
   studioPanel: ReactNode;
   timeline: ReactNode;
   canvas: ReactNode;
-  /** The floating lit-composite thumbnail. See the header note — story-only. */
-  previewPanel?: ReactNode;
 
   /**
    * Rail placement + sizes, and the layout-mode scrims. Both are passed
@@ -81,7 +73,6 @@ export function LightingStudioLayout({
   studioPanel,
   timeline,
   canvas,
-  previewPanel,
   layout,
   railOverlays,
   focusMode,
@@ -111,7 +102,6 @@ export function LightingStudioLayout({
       bottomPanel={focusMode ? undefined : timeline}
     >
       {canvas}
-      {previewPanel}
     </AppShell>
   );
 }

@@ -34,6 +34,15 @@
  * |    |                             | `ui/canvas/tools/toolHandlers` + the   |
  * |    |                             | gesture arbitration below              |
  * | 11 | Keyboard shortcuts          | `ui/hooks/useCanvasKeyboard`           |
+ * | 13 | Reflection guides           | this file's `renderReflection` + the   |
+ * |    |                             | gesture branches; the painter is       |
+ * |    |                             | `ui/canvas/render/renderReflectionLines`|
+ *
+ * (#12 is the hover marker, further down. #13 is the reflection tool, added
+ * 2026-08-29: its own overlay canvas, its own scheduler and its own rAF phase
+ * ticker, none of which touch `render` or `pixelVersion`. Its gesture is
+ * arbitrated here like `origin`'s, and the mirroring of every pixel write
+ * lives in one place — `actions.setPixels`.)
  *
  * ══════════════════════════════════════════════════════════════════════════
  *  ⚠️ `observer()` HERE, `reaction` FOR THE PIXELS — AND THE DIFFERENCE
@@ -190,6 +199,7 @@ import {
 } from "../components/Canvas/drawingUtils";
 import { resolveVariantOffset } from "../ui/canvas/model/variantOffset";
 import { screenToPixel } from "../ui/canvas/model/coords";
+import { expandWrites } from "../ui/canvas/model/reflection";
 import {
   backgroundTheme,
   paintCheckerboard,
@@ -203,6 +213,10 @@ import {
 } from "../ui/canvas/render/renderFrameOverlay";
 import { drawLayerView } from "../ui/canvas/render/renderLayerView";
 import { drawOriginCross } from "../ui/canvas/render/renderOriginCross";
+import {
+  drawReflectionLines,
+  reflectionSegments,
+} from "../ui/canvas/render/renderReflectionLines";
 import {
   drawLasso,
   drawMarchingAnts,
@@ -225,6 +239,7 @@ import { useCanvasGeometry } from "../ui/hooks/useCanvasGeometry";
 import { useCanvasKeyboard } from "../ui/hooks/useCanvasKeyboard";
 import { useCanvasPointer } from "../ui/hooks/useCanvasPointer";
 import { useCanvasRender } from "../ui/hooks/useCanvasRender";
+import { useDashTicker } from "../ui/hooks/useDashTicker";
 import { useCanvasViewport } from "../ui/hooks/useCanvasViewport";
 import { usePencilHover } from "../ui/hooks/usePencilHover";
 import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
@@ -276,13 +291,23 @@ function isOutlineCell(
   );
 }
 
-/** Tools whose gesture is arbitrated here rather than by `toolHandlers`. */
+/**
+ * Tools whose gesture is arbitrated here rather than by `toolHandlers`.
+ *
+ * ⚠️ `reflection` is in this list AND has a branch of its own ahead of the
+ * touch bail-outs below. The list is what stops `toolHandlers` dispatching a
+ * pixel write for it; the branch is what makes the gesture actually work on
+ * touch. Adding one without the other is the bug this ordering exists to
+ * prevent (MASTER §9: "touch gesture-tool bail swallows the reflection
+ * gesture") — every other member of this list simply does nothing on touch.
+ */
 function isGestureTool(tool: string): boolean {
   return (
     tool === "move" ||
     tool === "selection" ||
     tool === "eyedropper" ||
-    tool === "origin"
+    tool === "origin" ||
+    tool === "reflection"
   );
 }
 
@@ -312,6 +337,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   const frameOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
+  const reflectionCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Offscreen caches for the static checkerboard and grid lines. Concern #3:
@@ -424,6 +450,21 @@ export const CanvasContainer = observer(function CanvasContainer({
   const drawStartPoint = interaction.drawStartPoint;
   const previewPixels = interaction.previewPixels;
 
+  // ── the reflection guides (reflection-tool task 07) ────────────────────
+  //
+  // Both are `observableRef` on `ReflectionUIStore` and are replaced
+  // WHOLESALE, so reading them here subscribes this `observer()` to their
+  // IDENTITY — the same signal `previewPixels` above uses, and the correct
+  // one: the painter has to repaint exactly when the set of lines changes.
+  //
+  // ⚠️ This is the ONLY React-visible reflection state. The animation PHASE
+  // is a ref (see `reflectionPhaseRef`), because a phase in state would
+  // re-render this container ~12 times a second forever and re-create the
+  // pointer handlers mid-drag — the 2026-08-28 "unable to slide and draw"
+  // class of regression documented at `hoverPixelRef`.
+  const reflectionLines = app.reflection.lines;
+  const reflectionDraft = app.reflection.draft;
+
   /* ══════════════════════════════════════════════════════════════════════
    *  ACTIONS — now assembled from the MobX stores (W29i)
    * ══════════════════════════════════════════════════════════════════════
@@ -478,8 +519,55 @@ export const CanvasContainer = observer(function CanvasContainer({
       /* pixel writes — `writeOptions` is the mask/behaviour/variant-index
        * bundle, read on the UI side and passed DOWN, so `PixelStore` never
        * reads a UI store (the one-directional boundary). */
-      setPixels: (pixels: Parameters<typeof app.pixels.setPixels>[0]) =>
-        app.pixels.setPixels(pixels, app.selectionUI.writeOptions),
+      /* ══════════════════════════════════════════════════════════════════
+       *  ⚠️ THE REFLECTION MIRROR LIVES HERE, AND ONLY HERE (D5)
+       * ══════════════════════════════════════════════════════════════════
+       *
+       * All ten production write paths — pencil, eraser, square, flood,
+       * gaussian, both trace modes and the three shape commits — funnel
+       * through this one closure, which is why mirroring one function
+       * mirrors every drawing tool without `PixelStore` or `toolHandlers`
+       * learning that the feature exists.
+       *
+       * `expandWrites` is a no-op (one array copy, one `Set` pass) when
+       * there are no lines, so the cost on the overwhelmingly common path
+       * is a linear walk of a batch that is usually a handful of cells.
+       *
+       * ⚠️ MIRROR-THEN-MASK is the locked order. The expansion happens
+       * BEFORE `writeOptions` reaches `PixelStore`, so images that land
+       * outside an `editMask` selection are dropped by `PixelStore.allows`
+       * rather than escaping the mask. That asymmetry (draw inside a
+       * selection, the mirror lands outside, nothing appears) is
+       * documented, intentional and manual check 10.
+       *
+       * ⚠️ Dimensions come from `app.editableGrid.dims`, read AT CALL TIME
+       * — variant-local while a variant is being edited, exactly the frame
+       * `lines` are stored in. Reading it here rather than closing over the
+       * container's `gridWidth`/`gridHeight` keeps this memo's dependency
+       * list at `[app]`; a captured dimension would have to be added to the
+       * deps and would rebuild every action on a grid resize.
+       *
+       * ⚠️ `app.reflection.lines` is likewise read at call time. This memo
+       * must NOT depend on it: rebuilding `actions` mid-stroke would
+       * rebuild the tool context and the pointer handlers with it.
+       *
+       * NOT mirrored, deliberately (D5): `moveLayerPixels`,
+       * `moveSelectedPixels`, `deleteSelectionPixels` and the lighting
+       * studio. Those are layer-wide transforms, not drawing. */
+      setPixels: (pixels: Parameters<typeof app.pixels.setPixels>[0]) => {
+        const editable = app.editableGrid;
+        const lines = app.reflection.lines;
+        const mirrored =
+          lines.length > 0 && editable
+            ? expandWrites(
+                pixels,
+                lines,
+                editable.dims.width,
+                editable.dims.height,
+              )
+            : pixels;
+        app.pixels.setPixels(mirrored, app.selectionUI.writeOptions);
+      },
 
       /* selection geometry */
       setSelection: (box: SelectionBox | null) =>
@@ -519,9 +607,34 @@ export const CanvasContainer = observer(function CanvasContainer({
 
       /* gesture state */
       endDrawing: () => app.canvasInteraction.endDrawing(),
+      /* Mirrored for the same reason `setPixels` is: a rectangle previewed
+       * on one side of a guide but committed on both would misrepresent
+       * what release is about to do. Same call-time reads, same no-op when
+       * there are no lines.
+       *
+       * The double expansion this implies for the shape tools — the preview
+       * is expanded here, then `finishDrawingStroke` hands the ALREADY
+       * expanded preview to `setPixels`, which expands it again — is
+       * harmless: a reflection group is closed under its own reflections,
+       * so every image of an image is a cell already in the set and
+       * `expandWrites`' seen-set drops it. Idempotent, not wasteful enough
+       * to special-case. */
       setPreviewPixels: (
         pixels: Parameters<typeof app.canvasInteraction.setPreviewPixels>[0],
-      ) => app.canvasInteraction.setPreviewPixels(pixels),
+      ) => {
+        const editable = app.editableGrid;
+        const lines = app.reflection.lines;
+        const mirrored =
+          lines.length > 0 && editable
+            ? expandWrites(
+                pixels,
+                lines,
+                editable.dims.width,
+                editable.dims.height,
+              )
+            : pixels;
+        app.canvasInteraction.setPreviewPixels(mirrored);
+      },
       clearPreviewPixels: () => app.canvasInteraction.clearPreviewPixels(),
 
       /* layer / object / variant / frame */
@@ -675,6 +788,35 @@ export const CanvasContainer = observer(function CanvasContainer({
         canvas.getBoundingClientRect(),
         coordGeomRef.current,
         "origin",
+      );
+    },
+    [coordGeomRef],
+  );
+
+  /**
+   * Reflection coords, snapped to the integer CORNER lattice.
+   *
+   * ⚠️ `"corner"`, not `"origin"`. Both round rather than floor, but they
+   * round in different SPACES: `"origin"` is object-space half-cells (where
+   * the origin marker lives), while `"corner"` is editable-grid space and
+   * lands on `0..gridWidth × 0..gridHeight` — the lattice BETWEEN pixels,
+   * which is the whole premise of the tool (D2).
+   *
+   * ⚠️ It CLAMPS rather than returning `null` off-grid, unlike the other two
+   * modes. Dragging a guide past the edge of the sprite must give a line that
+   * spans the whole grid, not abandon the gesture — so this returns `null`
+   * only when there is no canvas at all.
+   */
+  const getCornerCoords = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      return screenToPixel(
+        clientX,
+        clientY,
+        canvas.getBoundingClientRect(),
+        coordGeomRef.current,
+        "corner",
       );
     },
     [coordGeomRef],
@@ -1299,6 +1441,19 @@ export const CanvasContainer = observer(function CanvasContainer({
   const resolveHoverCells = useCallback((): StampPoint[] => {
     const center = hoverPixelRef.current;
     if (!center || !layer) return [];
+    // ⚠️ The reflection tool is the ONE tool whose marker is suppressed
+    // (reflection-tool task 07, recorded choice). `toolFootprint` gives it the
+    // class-3 single-cell marker, which is not merely uninformative here but
+    // actively WRONG: the gesture snaps to the corner LATTICE between cells,
+    // so a filled cell outline sits half a cell away from where the guide will
+    // land and reads as "this pixel will be edited". The draft guide on the
+    // reflection overlay is the correct feedback and is already drawn.
+    //
+    // `origin` deliberately keeps its marker — it writes an object-space point
+    // that is genuinely near the cell shown — so this is not "treat like
+    // origin"; it is a divergence, made because the two snap to different
+    // lattices.
+    if (currentTool === "reflection") return [];
     return toolFootprint(center, {
       tool: currentTool,
       brushSize,
@@ -1373,6 +1528,81 @@ export const CanvasContainer = observer(function CanvasContainer({
   // reaches the current `invalidate` through this ref rather than by closing
   // over one that would go stale.
   invalidateHoverRef.current = invalidateHover;
+
+  /* ── the reflection guides (concern #13, reflection-tool task 07) ───────── */
+  //
+  // ══════════════════════════════════════════════════════════════════════
+  //  ⚠️ ITS OWN CANVAS, ITS OWN SCHEDULER, AND A PHASE IN A REF
+  // ══════════════════════════════════════════════════════════════════════
+  //
+  // Three separate decisions, each of which the alternative gets wrong:
+  //
+  // 1. **Its own canvas.** The guides animate continuously; `render` above
+  //    repaints every visible cell of every visible layer with `fillRect`.
+  //    Routing an animation through it would re-rasterise a 300k-cell sprite
+  //    ~12 times a second forever. Same argument as the hover marker's.
+  //
+  // 2. **Its own `useCanvasRender`.** The guides must repaint when the LINES
+  //    change and when the PHASE advances — two signals that have nothing to
+  //    do with `pixelVersion`. Nothing reflection-related may appear in
+  //    `[render, pixelVersion]`.
+  //
+  // 3. **The phase in a ref.** This is the load-bearing one and it is the
+  //    2026-08-28 regression restated: a `useState` phase would re-render
+  //    this container every 80 ms, rebuilding `getToolContext`, the tool
+  //    handlers and `pointer` — including in the middle of a live touch
+  //    stroke, which is exactly the "unable to slide and draw" failure
+  //    documented at `hoverPixelRef` above. The ticker writes the ref and
+  //    calls `invalidate()`; React is never told anything happened.
+  const reflectionPhaseRef = useRef(0);
+
+  const renderReflection = useCallback(() => {
+    const canvas = reflectionCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    if (reflectionLines.length === 0 && !reflectionDraft) return;
+
+    // The same view-space mapping `renderOverlay` uses: while a variant is
+    // being edited the grid is drawn inside an expanded view, so a grid
+    // coordinate has to lose `viewMin` before it is scaled by `zoom`. Lines
+    // are stored in EDITABLE-grid space, which in Layer mode is already the
+    // view — hence `isEditingVariantResolved`, not `editingVariant`.
+    const ox = isEditingVariantResolved ? viewMinX : 0;
+    const oy = isEditingVariantResolved ? viewMinY : 0;
+
+    const segments = reflectionSegments(
+      reflectionLines,
+      reflectionDraft,
+      zoom,
+      ox,
+      oy,
+    );
+    drawReflectionLines(ctx, segments, reflectionPhaseRef.current);
+  }, [
+    canvasWidth,
+    canvasHeight,
+    reflectionLines,
+    reflectionDraft,
+    zoom,
+    isEditingVariantResolved,
+    viewMinX,
+    viewMinY,
+  ]);
+
+  const { invalidate: invalidateReflection } = useCanvasRender(
+    renderReflection,
+    [renderReflection],
+  );
+
+  // ⚠️ `active` is false whenever there is nothing to animate, so the rAF loop
+  // does not exist at all in the common case — manual check 8 is exactly this
+  // (delete every line, no rAF left in the Performance panel).
+  useDashTicker(reflectionLines.length > 0 || Boolean(reflectionDraft), (p) => {
+    reflectionPhaseRef.current = p;
+    invalidateReflection();
+  });
 
   /**
    * Bridged Apple Pencil hover (iPad companion app only).
@@ -2021,6 +2251,29 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  THE REFLECTION GESTURE — ARBITRATED HERE, AND NEVER A HISTORY STROKE
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // Placed with `origin` ahead of the tool table (D7) for the same reason:
+    // it snaps to a different lattice than `getPixelCoords` produces and it
+    // writes no pixels, so there is nothing for `toolHandlers` to dispatch —
+    // its entry there is deliberately empty.
+    //
+    // ⚠️ NO `beginStroke`, NO `startDrawing`. A guide line is session state,
+    // not a pixel mutation: opening a history stroke here would put an empty
+    // entry on the undo stack, and `startDrawing` would additionally set
+    // `isDrawing`, which every branch below and in the two move handlers
+    // tests. Adding a line is simply not undoable (D6).
+    //
+    // ⚠️ It runs BEFORE the `!layer` guard below. Guides are grid geometry and
+    // are perfectly meaningful on an object with no layer selected.
+    if (currentTool === "reflection") {
+      const corner = getCornerCoords(e.clientX, e.clientY);
+      if (corner) app.reflection.beginDraft(corner.x, corner.y);
+      return;
+    }
+
     const coords = getPixelCoords(e.clientX, e.clientY);
     if (!coords || !layer) return;
 
@@ -2211,6 +2464,19 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    // ⚠️ BEFORE the `getPixelCoords` bail below, not after. `"corner"` CLAMPS
+    // where `"pixel"` returns `null`, and that difference is the feature:
+    // dragging a guide out past the edge of the sprite must keep extending it
+    // to the grid border, which a shared `!coords` early return would abort
+    // mid-drag. Reads the store rather than a local flag — `draft` is the
+    // gesture's only state and there is no second place for it to disagree.
+    if (currentTool === "reflection") {
+      if (!app.reflection.draft) return;
+      const corner = getCornerCoords(e.clientX, e.clientY);
+      if (corner) app.reflection.updateDraft(corner.x, corner.y);
+      return;
+    }
+
     const coords = getPixelCoords(e.clientX, e.clientY);
     if (!coords) {
       // Leaving the drawable area mid-drag must not "bridge" a long gap when
@@ -2371,6 +2637,18 @@ export const CanvasContainer = observer(function CanvasContainer({
     // On a genuine mouse-up the next move re-establishes it immediately.
     applyMarker("mouse", "end", () => null);
 
+    // ⚠️ This handler is `onMouseLeave` as well, so leaving the canvas mid-drag
+    // COMMITS the guide at its last position rather than abandoning it. That is
+    // the deliberate choice: the corner lattice is clamped, so the last update
+    // already sits on the grid border, which is where a user dragging off the
+    // edge means to put the line. `commitDraft` is a no-op with no draft and
+    // rejects a degenerate (never-moved) one on its own, so a plain click
+    // leaves nothing behind — and it always clears the draft either way.
+    if (currentTool === "reflection") {
+      app.reflection.commitDraft();
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       setLastPanPoint(null);
@@ -2498,11 +2776,34 @@ export const CanvasContainer = observer(function CanvasContainer({
     if (pinchTouches(startTouches).length >= 2) {
       setIsPanning(false);
       setLastPanPoint(null);
+      // A second finger during a guide drag is a pinch, not a line. Drop the
+      // draft so the zoom does not also leave a stray guide behind on release.
+      app.reflection.cancelDraft();
       return;
     }
 
     const touch = drawingTouch(startTouches);
     if (!touch) return;
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  ⚠️ BEFORE THE GESTURE-TOOL BAIL BELOW — THIS ORDERING IS THE FEATURE
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // `isGestureTool(currentTool)` now includes `"reflection"`, and the bail
+    // further down returns for every member of that list. Reflection is the
+    // FIRST gesture tool touch actually implements (the eyedropper, selection
+    // and origin were never wired for it and fall through that bail doing
+    // nothing), so its branch has to run first or the gesture is swallowed
+    // silently — the highest-likelihood risk in MASTER §9.
+    //
+    // Also before the `!coords || !layer` guard: corner coords clamp and a
+    // guide does not need a layer, so neither condition may abort it.
+    if (currentTool === "reflection") {
+      const corner = getCornerCoords(touch.clientX, touch.clientY);
+      if (corner) app.reflection.beginDraft(corner.x, corner.y);
+      return;
+    }
+
     const coords = getPixelCoords(touch.clientX, touch.clientY);
     if (!coords || !layer) return;
 
@@ -2532,7 +2833,14 @@ export const CanvasContainer = observer(function CanvasContainer({
     // two contacts and were being discarded as a pinch, which is the
     // "unable to slide and draw" report of 2026-08-28.
     const moveTouches = canvasTouches(e);
-    if (pinchTouches(moveTouches).length >= 2 || isPinching()) return;
+    if (pinchTouches(moveTouches).length >= 2 || isPinching()) {
+      // ⚠️ Manual check 6: a pinch STARTED mid-drag has to kill the draft, or
+      // the guide follows the zoom gesture and commits somewhere the user
+      // never dragged. `cancelDraft` is a no-op with no draft, so this costs
+      // nothing on the far more common pinch-with-no-guide-in-flight path.
+      app.reflection.cancelDraft();
+      return;
+    }
 
     // ══════════════════════════════════════════════════════════════════════
     //  THE MARKER DURING A TOUCH STROKE — the mirror of the mouse path's
@@ -2590,6 +2898,17 @@ export const CanvasContainer = observer(function CanvasContainer({
     // Pencil keeps drawing through any number of resting fingers.
     const touch = drawingTouch(moveTouches);
     if (!touch) return;
+
+    // Before BOTH bails below — the `!coords` one (corner coords clamp; see
+    // `handleMouseMove`) and the `isGestureTool` one at the end of this
+    // handler, which would otherwise swallow every sample of the drag.
+    if (currentTool === "reflection") {
+      if (!app.reflection.draft) return;
+      const corner = getCornerCoords(touch.clientX, touch.clientY);
+      if (corner) app.reflection.updateDraft(corner.x, corner.y);
+      return;
+    }
+
     const coords = getPixelCoords(touch.clientX, touch.clientY);
     if (!coords) {
       if (isDrawing) lastStrokePixelRef.current = null;
@@ -2622,6 +2941,17 @@ export const CanvasContainer = observer(function CanvasContainer({
     // including a pan and a pixel-drag.
     applyMarker("touch", "end", () => null);
 
+    // Before the `isGestureTool` bail this handler reaches via
+    // `finishDrawingStroke`'s siblings, and before every early return below:
+    // a reflection gesture sets none of `isPanning` / `isDraggingPixels` /
+    // `isDrawing`, so without this branch the guide's draft would survive the
+    // lift and keep following the next gesture. `commitDraft` clears it either
+    // way and rejects a degenerate tap.
+    if (currentTool === "reflection") {
+      app.reflection.commitDraft();
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       setLastPanPoint(null);
@@ -2651,6 +2981,11 @@ export const CanvasContainer = observer(function CanvasContainer({
     if (currentTool === "eyedropper") return "crosshair";
     if (currentTool === "selection") return "crosshair";
     if (currentTool === "origin") return "crosshair";
+    // Explicit rather than left to the fallthrough, for the same documentary
+    // reason the four branches above are: this list is the record of which
+    // tools were considered, and a crosshair is genuinely right here — the
+    // gesture places a point on the corner lattice.
+    if (currentTool === "reflection") return "crosshair";
     return "crosshair";
   })();
 
@@ -2728,6 +3063,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       frameOverlayCanvasRef={frameOverlayCanvasRef}
       frameTraceOverlayCanvasRef={frameTraceOverlayCanvasRef}
       hoverCanvasRef={hoverCanvasRef}
+      reflectionCanvasRef={reflectionCanvasRef}
       containerRef={containerRef}
       canvasWidth={canvasWidth}
       canvasHeight={canvasHeight}

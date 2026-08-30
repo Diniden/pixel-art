@@ -11,13 +11,10 @@
  * Where each went:
  *
  *   (a) viewport pan/zoom      → `ui/hooks/useCanvasViewport`   (task 31)
- *   (b) three renderers        → `ui/canvas/render/renderLightingPreview`,
+ *   (b) three renderers        → `ui/canvas/render/renderLitComposite`,
  *                                `renderNormalEdit`, `renderBrushOverlay`
  *   (c) normal/height painting → `ui/hooks/useLightingPaint`
  *   (d) keyboard               → this file (see the note below)
- *   (e) the floating panel     → `ui/components/LightingPreviewPanel` on the
- *                                task-19 `FloatingPanel` primitive, wired by
- *                                `LightingPreviewPanelContainer`
  *   the markup                 → `ui/components/LightingSurface`
  *   the store binding          → **this file, the only place left**
  *
@@ -29,7 +26,7 @@
  * `observableRef` objects — the zoom, the brush, the light direction, the
  * current layer's IDENTITY. It never reads a pixel grid, and there is no code
  * path by which it could: the grids are consumed only inside `renderEdit` and
- * `renderPreview` below, which run from a scheduled animation frame and not
+ * `renderLitPane` below, which run from a scheduled animation frame and not
  * from React's render phase.
  *
  * The redraw signal is `useCanvasRender(render, deps)` with `pixelVersion` in
@@ -67,11 +64,10 @@
  *    owner decision (2026-08-16, "unify onto Canvas's behaviour; both canvases
  *    honour `lightGridMode`") asks for, and it is flagged in the task report.
  *
- *    The FLOATING PREVIEW is deliberately NOT theme-aware: it stays
- *    `backgroundTheme(false)`. It is a thumbnail of the LIT SPRITE, not an
- *    editing grid, and its cyan border and dark well are designed against the
- *    dark base. Q3 is about the two canvases' GRIDS agreeing, and the preview
- *    has no grid.
+ *    The PREVIEW PANE is deliberately NOT theme-aware: it stays
+ *    `backgroundTheme(false)`. It shows the LIT SPRITE, not an editing grid,
+ *    and its dark well is designed against the dark base. Q3 is about the two
+ *    canvases' GRIDS agreeing, and the preview has no grid.
  *
  * ── ⚠️ THE KEYBOARD IS NOT `useCanvasKeyboard` ────────────────────────────
  *
@@ -143,11 +139,6 @@ import {
   strokeGrid,
 } from "../ui/canvas/render/canvasBackground";
 import type { BackgroundGeometry } from "../ui/canvas/render/canvasBackground";
-import {
-  renderLightingPreview,
-  PREVIEW_THUMB_SIZE,
-  PREVIEW_BORDER,
-} from "../ui/canvas/render/renderLightingPreview";
 import { renderNormalEdit } from "../ui/canvas/render/renderNormalEdit";
 import { drawLitComposite } from "../ui/canvas/render/renderLitComposite";
 import {
@@ -160,7 +151,6 @@ import { useCanvasViewport } from "../ui/hooks/useCanvasViewport";
 import { useLightingPaint } from "../ui/hooks/useLightingPaint";
 import { LightingSurface } from "../ui/components/LightingSurface/LightingSurface";
 import { CanvasViewControls } from "../ui/components/CanvasViewControls/CanvasViewControls";
-import { LightingPreviewPanelContainer } from "./LightingPreviewPanelContainer";
 import type { CanvasCamera } from "../stores/ui/CanvasCameraStore";
 import type { LightingRenderMode } from "../stores/ui/LightingViewsUIStore";
 
@@ -216,7 +206,6 @@ export const LightingCanvasContainer = observer(
     const rootRef = useRef<HTMLDivElement>(null);
     const editCanvasRef = useRef<HTMLCanvasElement>(null);
     const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
-    const previewCanvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     /* ── observable reads ────────────────────────────────────────────────── */
@@ -468,65 +457,6 @@ export const LightingCanvasContainer = observer(
       [gridWidth, gridHeight],
     );
 
-    /* ── render: the floating lit thumbnail (concern b1) ─────────────────── */
-    const renderPreview = useCallback(() => {
-      const canvas = previewCanvasRef.current;
-      const ctx = canvas?.getContext("2d");
-      if (!canvas || !ctx || !frame || !obj) return;
-
-      canvas.width = PREVIEW_THUMB_SIZE;
-      canvas.height = PREVIEW_THUMB_SIZE;
-      ctx.imageSmoothingEnabled = false;
-
-      const baseFrameIndex = obj.frames.findIndex((f) => f.id === frame.id);
-      const composed = composeLayers(
-        frame,
-        objWidth,
-        objHeight,
-        baseFrameIndex >= 0 ? baseFrameIndex : 0,
-        variants,
-        variantFrameIndices,
-      );
-      const lit = renderWithLighting(composed, {
-        lightDirection,
-        lightColor,
-        ambientColor,
-        heightScale,
-      });
-
-      const buffer = ctx.createImageData(
-        PREVIEW_THUMB_SIZE,
-        PREVIEW_THUMB_SIZE,
-      );
-      renderLightingPreview(buffer, {
-        lit,
-        objWidth,
-        objHeight,
-        // Deliberately NOT `lightGridMode` — see the header. The thumbnail is a
-        // lit-sprite preview, not an editing grid.
-        theme: backgroundTheme(false),
-      });
-      ctx.putImageData(buffer, 0, 0);
-
-      // The border is a STROKE, so it stays here: `canvasStub` cannot rasterise
-      // it and hashing it would be a lie. `PREVIEW_BORDER` keeps the values with
-      // the renderer so the two cannot drift.
-      ctx.strokeStyle = PREVIEW_BORDER.strokeStyle;
-      ctx.lineWidth = PREVIEW_BORDER.lineWidth;
-      ctx.strokeRect(0.5, 0.5, PREVIEW_THUMB_SIZE - 1, PREVIEW_THUMB_SIZE - 1);
-    }, [
-      frame,
-      obj,
-      objWidth,
-      objHeight,
-      variants,
-      variantFrameIndices,
-      lightDirection,
-      lightColor,
-      ambientColor,
-      heightScale,
-    ]);
-
     /* ── render: the editable surface (concern b2) ───────────────────────── */
     const bgTheme = useMemo(
       () => backgroundTheme(lightGridMode),
@@ -677,21 +607,12 @@ export const LightingCanvasContainer = observer(
     // Both now go through the same scheduler `Canvas` uses: at most one paint
     // per animation frame, and the pending frame is cancelled on unmount.
     //
-    // Two schedulers, not one, because the two surfaces invalidate on different
-    // signals — the preview depends on the LIGHTING parameters, the edit canvas
-    // on the grid and the theme. Merging them would repaint a 200x200 lit
-    // composite every time the cursor changed the brush overlay.
-    //
     // ⚠️ Which painter owns the MAIN canvas depends on the render mode. In
     // Preview mode `renderEdit`'s normal/height visualisation and the brush
     // overlay are BOTH skipped: the pane is read-only, so there is no hover
-    // cell to mark and no editable channel to visualise. The `renderPreview`
-    // thumbnail painter runs only in Edit mode, where the floating panel that
-    // owns its canvas is mounted (task 06 retires both).
-    const { invalidate: invalidatePreview } = useCanvasRender(
-      previewMode ? noop : renderPreview,
-      [previewMode, renderPreview, pixelVersion],
-    );
+    // cell to mark and no editable channel to visualise. Each pane runs exactly
+    // one main painter and, in Edit mode only, the overlay — the third
+    // scheduler that used to drive the retired floating thumbnail is gone.
     useCanvasRender(previewMode ? renderLitPane : renderEdit, [
       previewMode,
       renderLitPane,
@@ -855,19 +776,6 @@ export const LightingCanvasContainer = observer(
       return () => window.removeEventListener("keydown", handleKeyDown);
     }, [app, app.timelineUI.selectedFrameId, views.keyboardOwner, renderMode]);
 
-    /* ── the panel, and its one imperative coupling ──────────────────────── */
-    //
-    // Expanding the panel re-mounts the thumbnail canvas, so the ref it was
-    // painted through is a NEW element with a blank backing store. The legacy
-    // code re-rendered on the next frame (`LightingCanvas.tsx:565-570`);
-    // `invalidate()` is the same thing through the scheduler.
-    const handlePanelMinimizedChange = useCallback(
-      (next: boolean) => {
-        if (!next) invalidatePreview();
-      },
-      [invalidatePreview],
-    );
-
     /* ── per-pane view controls ──────────────────────────────────────────── */
     //
     // Mode button (open the other pane, or swap sides when both are open) above
@@ -921,19 +829,6 @@ export const LightingCanvasContainer = observer(
             modeButton={modeButton}
             onClose={onClose}
           />
-        }
-        // ⚠️ EDIT MODE ONLY. Two mounted copies would fight over the one
-        // persisted panel position in `ViewportUIStore.panels.lightingPreview`.
-        // Task 06 retires the floating panel entirely; until then Edit keeps it
-        // so Edit mode is unchanged.
-        previewPanel={
-          previewMode ? undefined : (
-            <LightingPreviewPanelContainer
-              canvasRef={previewCanvasRef}
-              containerRef={rootRef}
-              onMinimizedChange={handlePanelMinimizedChange}
-            />
-          )
         }
         {...(previewMode
           ? READ_ONLY_POINTERS

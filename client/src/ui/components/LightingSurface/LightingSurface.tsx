@@ -80,10 +80,9 @@ export interface LightingSurfaceProps {
    */
   containerRef: RefObject<HTMLDivElement | null>;
   /**
-   * The positioning context the floating preview panel lives inside. The
-   * container passes the same ref to `LightingPreviewPanel`, which is how the
-   * panel stays clamped to this component's bounds without this component
-   * knowing the panel exists.
+   * The component's outermost element. Kept as a separate ref from
+   * `containerRef` because that one is the gesture viewport INSIDE the layout;
+   * this one is the whole block, including the info bar.
    */
   rootRef: RefObject<HTMLDivElement | null>;
 
@@ -118,15 +117,6 @@ export interface LightingSurfaceProps {
   /** When true, renders only the placeholder. No canvas, no info bar. */
   empty?: boolean;
 
-  /* ── the floating preview panel, injected as a child ───────────────────── */
-  /**
-   * Rendered inside the root so it can position itself against it. The panel is
-   * a SIBLING component (`LightingPreviewPanel`) wired by its own container;
-   * passing it as a node keeps this component from importing anything that
-   * needs a store.
-   */
-  previewPanel?: React.ReactNode;
-
   /* ── the floating control cluster, injected as a child ─────────────────── */
   /**
    * Floating control cluster (reset view, mode/close buttons) drawn over this
@@ -160,7 +150,6 @@ export function LightingSurface({
   gridHeight,
   zoom,
   empty = false,
-  previewPanel,
   viewControls,
   onMouseDown,
   onMouseMove,
@@ -239,8 +228,6 @@ export function LightingSurface({
           Two-finger scroll to pan • Pinch to zoom • Shift = erase (height)
         </span>
       </div>
-
-      {previewPanel}
     </div>
   );
 }

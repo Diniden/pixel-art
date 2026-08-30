@@ -16,9 +16,19 @@
  * ⚠️ `colorPicker` and `paletteManager` are passed as ELEMENTS — both are
  * containers, and `ui/` may not import one (MobX would cross the purity
  * boundary transitively).
+ *
+ * ⚠️ The REFLECTION section's preset geometry is computed HERE, not in the
+ * component (MASTER D10). `presetLines()` needs the editable grid's
+ * dimensions, and `app.editableGrid` is a store read that `ui/` may not make.
+ * The component therefore emits only the preset NAME and this container turns
+ * it into lines.
  */
 import { observer } from "mobx-react-lite";
 import { PixelStudioPanel } from "../ui/components/PixelStudioPanel/PixelStudioPanel";
+import {
+  describeLine,
+  presetLines,
+} from "../ui/canvas/model/reflection";
 import { ColorPickerContainer } from "./ColorPickerContainer";
 import { PaletteManagerContainer } from "./PaletteManagerContainer";
 import { useStores } from "../stores/context";
@@ -36,6 +46,12 @@ export const PixelStudioPanelContainer = observer(
     if (!domain.hasProject) return null;
 
     const tool = ui.tool;
+    const reflection = app.reflection;
+
+    // `selectionDims` is `editableGrid?.dims` with the transcribed 32×32
+    // floor, which is exactly the fallback presets want: with no resolvable
+    // layer a preset still produces a definite line rather than one at NaN.
+    const gridDims = app.selectionDims;
 
     return (
       <PixelStudioPanel
@@ -60,6 +76,26 @@ export const PixelStudioPanelContainer = observer(
             ? () => ui.layout.enterOtherHand(OTHER_HAND_SECTIONS.tool)
             : undefined
         }
+        reflection={{
+          // `lines` is `observableRef` and replaced wholesale, so this map
+          // re-runs only when the array identity changes — never per line.
+          lines: reflection.lines.map((line) => ({
+            id: line.id,
+            label: describeLine(line),
+          })),
+          atCapacity: reflection.atCapacity,
+          onRemoveLine: (id) => reflection.removeLine(id),
+          onClearAll: () => reflection.clear(),
+          // ⚠️ IDS ARE ASSIGNED BY THE STORE. `presetLines` takes a `makeId`
+          // so the geometry module needs no id source of its own; here it
+          // returns `""` because `addLines` takes `Omit<ReflectionLine,"id">`
+          // and stamps its own session-unique `refl-N`. Generating a real id
+          // here would produce one that is thrown away.
+          onApplyPreset: (preset) =>
+            reflection.addLines(
+              presetLines(preset, gridDims.width, gridDims.height, () => ""),
+            ),
+        }}
       />
     );
   },

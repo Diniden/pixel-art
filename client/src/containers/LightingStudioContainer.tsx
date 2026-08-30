@@ -8,28 +8,33 @@
  * so none of the reference-image plumbing that dominates the pixel container
  * exists here at all. It reads exactly one layout-shaping field, `focusMode`.
  *
- * ══════════════════════════════════════════════════════════════════════════
- *  ⚠️ `previewPanel` IS DELIBERATELY NOT PASSED
- * ══════════════════════════════════════════════════════════════════════════
+ * ── The canvas region is a `CanvasSplit` of `LightingCanvasContainer`s ─────
  *
- * `LightingStudioLayout` accepts a `previewPanel` prop, and wiring it here
- * would be a bug. `LightingPreviewPanelContainer` needs two refs that exist
- * only inside `LightingCanvasContainer` — the thumbnail `<canvas>` it paints
- * through and the `LightingSurface` root it floats within — so task 33 mounts
- * it there (`LightingCanvasContainer.tsx:668`), inside the node this container
- * passes as `canvas`. Passing it again here would mount the panel TWICE: two
- * float-drag handlers writing the same persisted `lightingPreview` position,
- * and two canvases racing for one thumbnail.
+ * `app.lightingViews.openModes` (left→right) is the third thing this container
+ * reads; it changes only on open / close / swap. One `LightingCanvasContainer`
+ * is rendered per open mode, and the pane `key` IS the mode string: a swap is
+ * an array reorder with the same keys, so React moves the existing DOM nodes
+ * and neither canvas remounts (offscreen state, the raw `window` keyboard
+ * listener and each pane's camera all survive). The split state itself is
+ * session-only (MASTER D3): nothing here is persisted, so a reload comes back
+ * to a single Edit pane.
  *
- * The prop exists so a story can show the arrangement with a stub. See
- * `LightingStudioLayout`'s header.
+ * ── The floating preview panel is GONE (2026-08-29, MASTER D7) ────────────
+ *
+ * The lit composite used to be a 200 px thumbnail floating over the edit
+ * canvas, mounted from inside `LightingCanvasContainer`. It is now the
+ * `"preview"` render mode — a real workspace pane with its own camera — so
+ * both the panel and the layout's `previewPanel` slot that existed to express
+ * it are retired. ⚠️ Its PERSISTED keys (`lightingPreviewPanelPosition` /
+ * `lightingPreviewPanelMinimized`) deliberately REMAIN in the wire format and
+ * simply stop being read: removing one would change `toPersistedUIState()`'s
+ * output and move 151 corpus snapshot digests of the owner's real work.
  *
  * ── Both W19 containers are rendered here ─────────────────────────────────
  *
  * `LightingCanvasContainer` (task 33) and `LightingStudioPanelContainer`
  * (tasks 27/36) were left deliberately unwired by W19 because their only
- * render sites were in `App.tsx`. This is that render site. Both take no
- * props, so the wiring is exactly the one-line import each that W19 predicted.
+ * render sites were in `App.tsx`. This is that render site.
  */
 import { observer } from "mobx-react-lite";
 import { LightingStudioLayout } from "../ui/layouts/LightingStudioLayout/LightingStudioLayout";
@@ -41,14 +46,22 @@ import { RightSidebarTopControlsContainer } from "./RightSidebarTopControlsConta
 import { LightingStudioPanelContainer } from "./LightingStudioPanelContainer";
 import { FrameTimelineContainer } from "./FrameTimelineContainer";
 import { LightingCanvasContainer } from "./LightingCanvasContainer";
+import { CanvasSplit } from "../ui/components/CanvasSplit/CanvasSplit";
 import { useStores } from "../stores/context";
 import { OtherHandRailContainer } from "./OtherHandRailContainer";
 import { useRailLayout } from "./hooks/useRailLayout";
 
 export const LightingStudioContainer = observer(
   function LightingStudioContainer() {
-    const { ui } = useStores();
+    const app = useStores();
+    const { ui } = app;
     const railLayout = useRailLayout();
+
+    // One pane per open render mode; key = mode (see the header block).
+    const panes = app.lightingViews.openModes.map((mode) => ({
+      key: mode,
+      node: <LightingCanvasContainer renderMode={mode} />,
+    }));
 
     return (
       <LightingStudioLayout
@@ -73,7 +86,7 @@ export const LightingStudioContainer = observer(
           )
         }
         timeline={<FrameTimelineContainer />}
-        canvas={<LightingCanvasContainer />}
+        canvas={<CanvasSplit panes={panes} />}
       />
     );
   },

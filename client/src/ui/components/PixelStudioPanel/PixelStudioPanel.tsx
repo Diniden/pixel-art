@@ -13,6 +13,10 @@
 import type { ReactNode } from "react";
 import type { Color } from "../../../types";
 import { OtherHandButton } from "../OtherHand/OtherHandButton";
+import {
+  ReflectionLinesSection,
+  type ReflectionLinesSectionProps,
+} from "./ReflectionLinesSection";
 import "./PixelStudioPanel.css";
 
 interface OriginColorPickerProps {
@@ -101,6 +105,17 @@ interface PixelStudioPanelProps {
    * is drawn — see `OtherHandButton`.
    */
   onOtherHand?: () => void;
+  /**
+   * The Reflection tool's controls, shown only while that tool is selected
+   * (reflection-tool task 06).
+   *
+   * ⚠️ OPTIONAL, and grouped into ONE prop rather than spread as five. Every
+   * existing caller and story of this panel predates the reflection tool; a
+   * required prop — or five — would break all of them at compile time for a
+   * section they never render. When it is absent the section is simply not
+   * drawn, even with `selectedTool === "reflection"`.
+   */
+  reflection?: ReflectionLinesSectionProps;
 }
 
 export function PixelStudioPanel({
@@ -119,10 +134,12 @@ export function PixelStudioPanel({
   colorPicker,
   paletteManager,
   onOtherHand,
+  reflection,
 }: PixelStudioPanelProps) {
   const showEraserControls = selectedTool === "eraser";
   const showPencilControls = selectedTool === "pixel";
   const showOriginControls = selectedTool === "origin";
+  const showReflectionControls = selectedTool === "reflection" && !!reflection;
   const maxOptions = [8, 16, 32, 64, 128] as const;
 
   return (
@@ -252,6 +269,19 @@ export function PixelStudioPanel({
           </div>
         </div>
       )}
+      {showReflectionControls && reflection ? (
+        <div className="panel pixel-studio-panel__section">
+          <div className="panel__header panel__header--compact">
+            <span className="panel__title">Reflection</span>
+            {onOtherHand ? (
+              <OtherHandButton onClick={onOtherHand} sectionLabel="Reflection" />
+            ) : null}
+          </div>
+          <div className="panel__body panel__body--dense">
+            <ReflectionLinesSection {...reflection} />
+          </div>
+        </div>
+      ) : null}
       {colorPicker}
       {paletteManager}
     </div>
