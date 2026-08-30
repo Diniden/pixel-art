@@ -512,6 +512,10 @@ export class PixelStore {
     }
 
     this.publishAndBump();
+    // D7: the dirty region, from the patches we already hold. Separate from
+    // `publishAndBump` on purpose — that method's `isReplaying` gate is the
+    // no-save-on-undo mechanism and must not acquire a second meaning.
+    this.publishDirty(layer.id, patches);
     // AFTER the publish: the mirror reconstructs each entry's pre-state by
     // rewinding from the LIVE project, so it must see the post-write tree.
     if (trackHistory) this.mirror.syncHistory();
@@ -606,6 +610,40 @@ export class PixelStore {
   }
 
   /**
+   * Publish the D7 dirty region for a write that CAN name its cells.
+   *
+   * ⚠️ DELIBERATELY NOT GATED ON `isReplaying` (D8). `publishAndBump` above
+   * suppresses the version bump during undo/redo so a replay never schedules
+   * a save; the CANVAS has the opposite requirement — the undone pixels must
+   * be repainted or they stay on screen. Folding this into `publishAndBump`
+   * would make one flag mean two contradictory things.
+   *
+   * Only `{x, y}` is published: the renderer re-reads the colour off the live
+   * grid, so shipping `before`/`after` here would duplicate cell data into
+   * the observable graph for nothing.
+   */
+  private publishDirty(
+    layerId: string,
+    cells: readonly { x: number; y: number }[],
+  ): void {
+    runInAction(() =>
+      this.domain.setPixelDirty({
+        layerId,
+        cells: cells.map((c) => ({ x: c.x, y: c.y })),
+      }),
+    );
+  }
+
+  /**
+   * Publish "repaint everything" (D7 / risk R6) — the honest answer from any
+   * path that replaced a grid wholesale and cannot enumerate what changed.
+   * Slower than a region, never wrong.
+   */
+  private publishDirtyAll(): void {
+    runInAction(() => this.domain.setPixelDirty(null));
+  }
+
+  /**
    * Undo/redo re-entry. Re-resolves the target from the CURRENT tree (the
    * command holds ids, never a grid reference) and writes the recorded side
    * of each cell back.
@@ -644,6 +682,11 @@ export class PixelStore {
       ),
     );
     this.publishAndBump();
+    // D8. `publishAndBump` skipped the version bump just now (we are inside
+    // `history.isReplaying`) — but the tree WAS published and the canvas has
+    // to repaint these cells or the undone pixels stay visible. This is the
+    // whole reason the dirty channel is separate from `pixelVersion`.
+    this.publishDirty(layer.id, ordered);
   }
 
   /** Locate a patch target's layer in the live tree, or `null` if it is gone. */
@@ -1364,6 +1407,11 @@ export class PixelStore {
     if (patches.length === 0) {
       // Nothing to write, but the legacy path still tripped the save trigger.
       this.publishAndBump();
+      // D7 / R6: nothing actually changed, but this path publishes the tree
+      // anyway, so it must not leave a STALE region standing from the
+      // previous write — a consumer would repaint those cells a second time
+      // from an unrelated write. `null` is the honest answer here.
+      this.publishDirtyAll();
       return;
     }
     this.commitCells(target, layer, label, patches, trackHistory);
@@ -1659,5 +1707,8 @@ export class PixelStore {
 
     this.writeGrid(target, transform(layer.pixels, width, height));
     this.publishAndBump();
+    // D7 / R6: a flip replaces the grid WHOLESALE — there are no patches to
+    // name, and every cell may have moved. `null` = repaint everything.
+    this.publishDirtyAll();
   }
 }
