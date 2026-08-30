@@ -102,6 +102,14 @@ function isFromTextEntry(target: EventTarget | null): boolean {
 }
 
 export interface CanvasKeyboardOptions {
+  /**
+   * When false the handler ignores every key. Exactly one canvas container
+   * may be enabled at a time — with two panes mounted (split-canvas plan,
+   * task 04) each would otherwise register its own capture listener and
+   * every WASD nudge and ⌘Z would fire twice. Default (`undefined`) = enabled.
+   */
+  enabled?: boolean;
+
   /* — mode flags — */
   currentTool: string;
   hasSelection: boolean;
@@ -160,6 +168,10 @@ export function handleCanvasKeyDown(
   e: KeyboardEvent,
   o: CanvasKeyboardOptions,
 ): void {
+  // One keyboard owner. Read at event time through `useLatest`, so flipping
+  // it never re-registers the listener.
+  if (o.enabled === false) return;
+
   // 🔴 THE ESCAPE FIX. Must be first: below this line the handler calls
   // `stopPropagation()`, which in capture phase would stop the key ever
   // reaching an open dialog. Yield the whole keyboard map to a dialog.

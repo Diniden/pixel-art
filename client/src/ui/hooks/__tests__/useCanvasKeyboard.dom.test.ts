@@ -257,6 +257,43 @@ describe("WASD — reference-trace > frame-trace > variant", () => {
   });
 });
 
+describe("enabled gate — one keyboard owner (split-canvas task 04)", () => {
+  it("enabled: false ignores WASD and ⌘Z", () => {
+    const o = makeOptions({ enabled: false, editingVariant: true });
+    const w = keyOn(canvasEl, "w");
+    handleCanvasKeyDown(w, o);
+    expect(o.setVariantOffset).not.toHaveBeenCalled();
+    expect(w.preventDefault).not.toHaveBeenCalled();
+
+    const z = keyOn(canvasEl, "z", { metaKey: true });
+    handleCanvasKeyDown(z, o);
+    expect(o.undo).not.toHaveBeenCalled();
+    expect(z.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("enabled: false ignores tool hotkeys and Delete too", () => {
+    const o = makeOptions({ enabled: false, hasSelection: true });
+    handleCanvasKeyDown(keyOn(canvasEl, "1"), o);
+    handleCanvasKeyDown(keyOn(canvasEl, "Delete"), o);
+    expect(o.setTool).not.toHaveBeenCalled();
+    expect(o.deleteSelectionPixels).not.toHaveBeenCalled();
+  });
+
+  it("enabled omitted (the default) still handles WASD and ⌘Z", () => {
+    const o = makeOptions({ editingVariant: true });
+    handleCanvasKeyDown(keyOn(canvasEl, "w"), o);
+    expect(o.setVariantOffset).toHaveBeenCalledWith(0, -1, false);
+    handleCanvasKeyDown(keyOn(canvasEl, "z", { metaKey: true }), o);
+    expect(o.undo).toHaveBeenCalledTimes(1);
+  });
+
+  it("enabled: true behaves like the default", () => {
+    const o = makeOptions({ enabled: true, editingVariant: true });
+    handleCanvasKeyDown(keyOn(canvasEl, "d"), o);
+    expect(o.setVariantOffset).toHaveBeenCalledWith(1, 0, false);
+  });
+});
+
 describe("arrows — under each selectionBehavior", () => {
   it("moveSelection moves the mask", () => {
     const o = makeOptions({
