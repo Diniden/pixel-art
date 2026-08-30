@@ -76,6 +76,33 @@ Coordinator spot-checks beyond the gate:
   triggering a save.
 - `pixelDirty` is annotated `observableRef`, not `observable` (R2).
 
+## ⚠️ W2 task-03 findings that TASK 04 MUST READ
+
+Task 03 (SVG primitives, commits `5b2401d` + `fd871c9`) hit four places where the plan's
+"call the geometry function with `zoom = 1` and drop the `+ 0.5`" instruction does not
+survive contact. **Task 04 mounts these — read this before writing the JSX.**
+
+1. **⚠️ THE ORIGIN CROSS NEEDS A COUNTER-SCALED `<g>` WRAPPER.** This is the one that will
+   bite. `vector-effect: non-scaling-stroke` exempts the **stroke width** from the
+   transform, **not the geometry** — so `ORIGIN_CROSS_SIZE = 12` emitted as 12 user units
+   would render 600 screen px at zoom 50, which is the original bug in new clothes.
+   `originCrossOverlay` therefore returns *numbers*, not a cell-space path: the centre in
+   cell space, plus arm length and circle radius in **screen px**. Task 04 must place it
+   inside a `<g>` counter-scaled by `1 / combinedScale`. It is the only overlay that cannot
+   simply be spread onto a `<path>`. The same reasoning applies to any future
+   screen-constant decoration.
+2. `hoverOutlineOverlay` probes `markerPerimeter` at `zoom = 2`, not 1: at 1 the function's
+   `zoom - 1` span is zero, collapsing a cell's four edges onto one mutually
+   indistinguishable point. It normalises back exactly (`ceil((n - 0.5) / 2)`; the fraction
+   can only be 0 or 0.5), keeping the perimeter rule owned by the existing function rather
+   than duplicated. No view zoom reaches it — pinned by the zoom-independence test.
+3. `marchingAntsOverlay` discards `marchingAntsRects`'s `inner` rect and strokes `outer`
+   twice. The 1px inset is one whole cell at 1:1 and `width - 2` inverts below 3 cells;
+   under `non-scaling-stroke` both passes are already screen-width and overlap correctly.
+4. `lassoOverlay` **keeps its `+ 0.5`** — that offset is cell-*centre* placement, not stroke
+   centring, so dropping it would make the rubber band track corners instead of the cells
+   the user crossed. (The plan's "drop `+ 0.5`" applies to the grid, which did drop it.)
+
 ## Notes for the next session
 
 **⚠️ A concurrent session was editing this repo while this plan was written (2026-08-30).**
