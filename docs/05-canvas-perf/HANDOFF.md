@@ -1,8 +1,8 @@
 # HANDOFF — Canvas rendering performance for large editing surfaces
 
-**Current position:** W5 DONE — W6 (task 07) next. Owner deferred ALL visual checks to one pass after W6.
+**Current position:** W6 DONE — **W7 (task 08, lighting studio follow-on) is the only wave left.** Owner's consolidated visual pass is now due.
 **Branch:** `feat/03-reflection-tool`
-**Last commit:** `ed7da83`
+**Last commit:** `3416555`
 
 Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 `feat/03-reflection-tool`, working tree clean.
@@ -16,7 +16,7 @@ Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 | W3 | 04 | **DONE** | 2026-08-30 | `75d3cf7` `72856b8` | typecheck 0 · vitest **134 files / 2353 passed** · lint 0 · lint:css no new · boundaries 0 · storybook 0 · **8 visual checks deferred** |
 | W4 | 05 | **DONE** | 2026-08-30 | `82ae19a` `221b58f` | typecheck 0 · vitest **134 files / 2365 passed** · lint 0 · boundaries 0 · **10 visual checks owed, incl. R4** |
 | W5 | 06 | **DONE** | 2026-08-30 | `1025d6b` `ed7da83` | typecheck 0 · vitest **134 files / 2385 passed** · lint 0 · lint:css **no new errors (still exactly 2 pre-existing)** · boundaries 0 |
-| W6 | 07 | TODO | | | |
+| W6 | 07 | **DONE** | 2026-08-30 | `6553b96` `3416555` | typecheck 0 · vitest **135 files / 2417 passed** · lint 0 · boundaries 0 · **1-cell edit paints 1 cell (was 57,344)** |
 | W7 | 08 | TODO | | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
@@ -191,6 +191,107 @@ chromedriver). Still owed, including **the Landscapes KB-not-MB memory measureme
 headline claim of this task, entirely unmeasured.** Static substitutes that did pass:
 `coords.test.ts` 21/21 unmodified; the R1 wheel-pan test drives a real `WheelEvent` and
 asserts the clamp against full content size; the D1 variant-edit sizing test.
+
+## W6 DONE — the payoff wave. Coordinator-verified.
+
+Commits `6553b96`, `3416555`. Exactly the 5 authorized files (1,913 insertions / 95
+deletions). **Domain stores untouched** — task 01's publisher side needed no change.
+
+```
+typecheck        -> exit 0
+vitest run       -> Test Files  135 passed (135) · Tests  2417 passed (2417)   68.27s
+lint             -> 0 errors, 65 warnings (back to exactly baseline)  exit 0
+lint:boundaries  -> OK — all 5 boundary rules hold                     exit 0
+```
++1 file, +32 tests, no pre-existing test regressed. Corpus unchanged. No lockfile.
+
+**Coordinator-verified:** `useCanvasRender.ts` and `renderLayerView.ts` (both under `ui/`)
+import no store, MobX or API; `pixelVersion` is still consumed (narrowed, not removed); and
+`publishAndBump`'s `isReplaying` gate is byte-identical to W1.
+
+### Measured payoff
+
+| Case | Before | After |
+| --- | --- | --- |
+| 6x4 grid, 3 layers, 1-cell edit | 24 cells x 3 canvases | **1 cell x 1 canvas** |
+| 64x64, 1-cell edit | 4,096 cells | **1 cell** (4,096x) |
+| Landscapes 256x224 | 57,344 cells | **1 cell** (57,344x) |
+
+Measured off the canvas stub's call log and asserted in the test file. **Browser milliseconds
+are NOT measured** — owed to the consolidated visual pass. Mount still paints each layer
+exactly once (checked against a stashed baseline; the naive wiring doubled it).
+
+### ⭐⭐ THE MOST IMPORTANT FINDING OF THE PLAN — a silent no-op that every test passed through
+
+**The fast path was being immediately overwritten, and the entire optimisation silently
+did nothing while the whole suite stayed green.**
+
+`render`'s identity changes on *every* pixel write, because it closes over `layerPlan` →
+`pixels`, which `writeGridInAction` replaces. So the pre-existing
+`useCanvasRender(render, [render, pixelVersion])` dependency effect fired a full
+`invalidate()` in the same tick as the dirty region — and `"all"` correctly never downgrades
+to `"cells"`. Measured before the fix: **25 cells painted for a 1-cell edit** (1 + 24), and
+**4,097 on a 64x64 grid**.
+
+Nothing in the gate could have caught this: output pixels are identical either way, so every
+test passes. It was found only by counting painted cells. **This is the concrete argument for
+why the plan's per-task measurement requirement matters** — a green suite proves correctness,
+never that an optimisation engaged. Fixed by reconciling both channels in one effect via a
+boolean claim (boolean, not a version compare: D8 means undo does not move `pixelVersion` but
+*does* change `render`).
+
+### Two more real bugs found and fixed
+
+- **`putImageData` on a blank bounding box erased non-dirty interior pixels.** Two dots at
+  opposite corners give a box spanning the sprite. The box is now `getImageData`, cleared
+  per-cell, then repainted.
+- **`layerPlan` is one write stale at paint time** — the reaction fires before React
+  re-renders, so the incremental path painted the *old* colour and a fresh stroke drew
+  nothing. `livePixelsFor` re-reads the grid from the live tree.
+
+### R6 write-path audit (read at the call sites, not guessed)
+
+| Path | Publishes | Repaint |
+| --- | --- | --- |
+| pencil, brush, line, rect, ellipse, square, flood fill, gaussian fill | exact region (all funnel `ctx.setPixels` -> `PixelStore.setPixels` -> `commitCells`) | incremental |
+| erase, `deleteSelectionPixels`, `moveSelectedPixels` | exact region | incremental |
+| `adjustColor` / `adjustColorAcross` / `adjustVariantColorAcross` | exact region | incremental |
+| `setNormalPixel(s)`, `setHeightPixels`, `computeHeightMapForAllFrames` | exact region | incremental |
+| `undo` / `redo` (`applyPatch`) | exact region, **outside** the `isReplaying` gate | incremental (D8) |
+| `flipHorizontal` / `flipVertical` (`flipInto`) | **`null`** | full — asserted |
+| `commitLighting` empty-patch | **`null`** | full |
+| `moveLayerPixels`, variant resize, `applyInterpolation`, layer/frame/object ops, project load | **neither** — `DomainMutator` bumps only `domainVersion` | full, via `render` identity — asserted |
+
+There is no pixel-grid paste; `pasteTimelineCell` is a `DomainMutator` layer op (last row).
+
+### D9 and D8
+
+**D9** — dilated 1 cell in all 8 directions (diagonals deliberately included); the same list
+is cleared and repainted. **Proven by mutation:** erasing the centre of a solid 5x5 makes its
+four neighbours *become* outline cells, none of them in the dirty region. Dilated matches a
+full repaint exactly; undilated leaves `1,2 / 2,1 / 2,3 / 3,2` blank — a hole with no edge.
+Both directions asserted. Noted in-test that *filling* a hole does not diverge, so nobody
+"fixes" that non-case later.
+
+⚠️ **The dilation is currently unreachable through the UI** — the onion layer is a
+*non-current* layer under variant-edit focus, while every `PixelStore` write resolves to the
+*selected* layer. It is defensive, and correct.
+
+**D8** — undo/redo tested explicitly, including an assertion that `pixelVersion` genuinely
+does not move, which is what makes the test meaningful.
+
+### Task 07 deviations (accepted)
+
+1. Test file named `useCanvasRender.dom.test.ts` (not `.test.ts`) — `renderHook` needs jsdom
+   and vitest's `unit` project excludes `*.dom.test.*`.
+2. `renderLayerView.ts` gained `clearLayerCells` and `dilateCells` exports — in an authorized
+   file; putting them in the container would have duplicated `paintLayerCells`' clipping
+   rules, which is how the two paths drift.
+3. `pixelVersion` moved out of the hook's `deps` array into its own guarded effect —
+   narrowed, not removed, and driven by the measured bug above.
+4. `livePixelsFor` added (bug 3), not anticipated by the task file.
+5. D9's exhaustive cell-level proof lives in `CanvasContainer.dom.test.tsx` rather than
+   `renderLayerView.test.ts`, which is outside Touches.
 
 ## W5 DONE — coordinator-verified
 
