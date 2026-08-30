@@ -172,6 +172,8 @@ import {
   WHITE_08,
 } from "../ui/theme/canvasTokens";
 import { useStores } from "../stores/context";
+import type { CanvasCamera } from "../stores/ui/CanvasCameraStore";
+import type { CanvasRenderMode } from "../stores/ui/CanvasViewsUIStore";
 import { CanvasViewControls } from "../ui/components/CanvasViewControls/CanvasViewControls";
 import { strokeControl } from "../stores/history/editorHistory";
 import type { Color, Point, SelectionBox, Pixel, PixelData } from "../types";
@@ -287,11 +289,19 @@ export interface CanvasContainerProps {
   referenceImage?: ReferenceImageData | null;
   onReferenceImageChange?: (data: ReferenceImageData | null) => void;
   overlayFrameIndex?: number | null;
+  /**
+   * Which render mode this instance shows (split-canvas 2026-08-29, task 05).
+   * `"full"` (default) is the composite view exactly as before; `"layer"` is
+   * just the editable grid — the variant's own canvas, or the current layer —
+   * at origin. Each mode drives its own camera from `app.canvasViews`.
+   */
+  renderMode?: CanvasRenderMode;
 }
 
 export const CanvasContainer = observer(function CanvasContainer({
   referenceImage,
   overlayFrameIndex,
+  renderMode = "full",
 }: CanvasContainerProps) {
   const app = useStores();
 
@@ -367,6 +377,12 @@ export const CanvasContainer = observer(function CanvasContainer({
 
   const tool = app.ui.tool;
   const viewport = app.ui.viewport;
+  // The camera for THIS pane: the persisted `ViewportUIStore` for Full, the
+  // session-only `layerCamera` for Layer. `zoom` (the pixel scale) is NOT
+  // part of the camera — both panes share it.
+  const views = app.canvasViews;
+  const layerMode = renderMode === "layer";
+  const camera: CanvasCamera = layerMode ? views.layerCamera : viewport;
   const referenceUI = app.referenceUI;
   const interaction = app.canvasInteraction;
 
@@ -381,7 +397,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   const selectionBehavior = tool.selectionBehavior;
 
   const zoom = viewport.zoom;
-  const panOffset = viewport.panOffset;
+  const panOffset = camera.panOffset;
   const lightGridMode = viewport.lightGridMode ?? false;
   const layerFocusMode = viewport.layerFocusMode;
 
@@ -603,14 +619,15 @@ export const CanvasContainer = observer(function CanvasContainer({
     canvasWidth,
     canvasHeight,
     panOffset,
-    onCommitPan: (pan) => viewport.setPanOffset(pan),
+    onCommitPan: (pan) => camera.setPanOffset(pan),
     // The view scale is PROJECT state as of 2026-08-28, so it follows the
-    // project across devices exactly as `panOffset` always has.
-    viewZoom: viewport.viewZoom,
-    onCommitViewZoom: (z) => viewport.setViewZoom(z),
+    // project across devices exactly as `panOffset` always has (Full mode;
+    // the Layer camera is session-only).
+    viewZoom: camera.viewZoom,
+    onCommitViewZoom: (z) => camera.setViewZoom(z),
     resyncKey: `${app.timelineUI.selectedObjectId ?? ""}|${
       app.timelineUI.selectedFrameId ?? ""
-    }|${app.ui.lightingUI?.studioMode ?? ""}`,
+    }|${app.ui.lightingUI?.studioMode ?? ""}|${renderMode}`,
   });
 
   /* ── coordinate mapping (concern #4) ───────────────────────────────────── */
@@ -2590,14 +2607,14 @@ export const CanvasContainer = observer(function CanvasContainer({
       : { x: 0, y: 0 };
     setViewZoom(1);
     setViewPanOffset(centered);
-    viewport.resetView(centered);
+    camera.resetView(centered);
   }, [
     containerRef,
     canvasWidth,
     canvasHeight,
     setViewZoom,
     setViewPanOffset,
-    viewport,
+    camera,
   ]);
 
   return (
