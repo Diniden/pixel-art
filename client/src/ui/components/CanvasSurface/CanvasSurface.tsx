@@ -8,7 +8,7 @@
  * `Canvas.tsx` was 3,062 lines with eleven responsibilities and **47 store
  * members in a single destructure** — the largest coupling site in the
  * application. Tasks 30, 31 and 32 took it apart. What survives here is the
- * markup: four `<canvas>` elements, the pan/zoom transform wrapper, and the
+ * markup: five `<canvas>` elements, the pan/zoom transform wrapper, and the
  * cursor. Roughly 15 props, every one a plain value or a callback.
  *
  * A component that took all 47 members as props would have had a ~52-prop
@@ -40,13 +40,24 @@
  * This component therefore receives REFS and paints nothing itself. It is a
  * layout and an event surface.
  *
- * ── The four canvases, and why they are conditionally mounted ─────────────
+ * ── The five canvases, and which of them are conditionally mounted ───────
  *
  * 1. `canvasRef`                  the editable surface — always present, and
  *                                 the only one that takes pointer events.
  * 2. `overlayCanvasRef`           reference-image trace overlay.
  * 3. `frameOverlayCanvasRef`      onion-skin of another frame (#8).
  * 4. `frameTraceOverlayCanvasRef` the nudgeable frame-trace overlay (#9).
+ * 5. `hoverCanvasRef`             the pencil/mouse hover marker.
+ *
+ * The hover marker gets its OWN canvas rather than being drawn into the main
+ * render pass, and that is a performance decision, not a tidiness one. The
+ * main `render` in `CanvasContainer` repaints every visible cell of every
+ * visible layer with `fillRect`; on the owner's real project that is a
+ * six-figure loop. An Apple Pencil emits hover samples at the display's
+ * refresh rate whether or not it ever touches down, so routing the marker
+ * through that pass would re-rasterise the whole sprite continuously while the
+ * user's hand merely moved NEAR the screen. On its own canvas the marker
+ * repaints a few dozen cells and the artwork underneath is not touched.
  *
  * The three overlays mount only when active, and their mutual exclusions are
  * preserved verbatim from `Canvas.tsx:2012-2039`: the frame overlay hides
@@ -74,6 +85,14 @@ export interface CanvasSurfaceProps {
   frameOverlayCanvasRef: RefObject<HTMLCanvasElement | null>;
   /** Frame-trace overlay (#9). */
   frameTraceOverlayCanvasRef: RefObject<HTMLCanvasElement | null>;
+  /**
+   * The hover marker's surface. See the header for why it is separate.
+   *
+   * Always mounted, unlike the three overlays above: hover can begin at any
+   * moment without a mode being entered first, and mounting a canvas in
+   * response to the first sample would drop that sample while React committed.
+   */
+  hoverCanvasRef: RefObject<HTMLCanvasElement | null>;
   /**
    * The scroll/gesture viewport.
    *
@@ -137,6 +156,7 @@ export function CanvasSurface({
   overlayCanvasRef,
   frameOverlayCanvasRef,
   frameTraceOverlayCanvasRef,
+  hoverCanvasRef,
   containerRef,
   canvasWidth,
   canvasHeight,
@@ -184,6 +204,14 @@ export function CanvasSurface({
               onTouchStart={onTouchStart}
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}
+            />
+
+            <canvas
+              ref={hoverCanvasRef}
+              width={canvasWidth}
+              height={canvasHeight}
+              className="canvas__overlay canvas__overlay--hover"
+              style={OVERLAY_STYLE}
             />
 
             {showReferenceOverlay && (

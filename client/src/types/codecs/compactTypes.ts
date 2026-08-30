@@ -1,5 +1,6 @@
 import type {
   BitDepth,
+  EyedropperMode,
   PersistedRailLayout,
   SelectionBehavior,
   SelectionMode,
@@ -143,6 +144,11 @@ export interface CompactUIState {
   theme?: string;
   /** Canvas view-transform scale. Conditional: absent until the user zooms. */
   viewZoom?: number;
+  /**
+   * The eyedropper's post-sample behaviour. Conditional for the same reason:
+   * absent until the user picks a mode, so no existing project gains a key.
+   */
+  eyedropperMode?: EyedropperMode;
 }
 
 export interface CompactProject {

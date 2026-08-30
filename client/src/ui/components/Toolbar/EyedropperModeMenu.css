@@ -3,20 +3,24 @@
    The mode chooser that opens from the eyedropper tool button on a long press
    or a double click.
 
-   ⚠️ POSITIONED AGAINST `.toolbar__tool-anchor`, the wrapper that holds the
-   tool button and this menu as SIBLINGS. The menu is deliberately NOT a
-   child of the button: a menu of `<button>` rows inside a `<button>` is
-   invalid HTML and browsers hoist the inner buttons out of it, breaking both
-   the positioning and the clicks. No portal and no measurement are involved —
-   the four `--edge` modifiers below flip it so a toolbar docked to any side
-   opens the menu into the workspace rather than off-screen.
+   ⚠️ `position: fixed`, IN A PORTAL ON `document.body` — and that is not a
+   style preference. `.toolbar` is a scroll container (`overflow-x: auto` with
+   `overflow-y: hidden`, on a bar whose min-height is 36px), so a menu
+   positioned inside it is CLIPPED AWAY ENTIRELY: it opens, but nothing is
+   visible. `position: absolute` cannot escape an ancestor's overflow clip;
+   only leaving the subtree can. The `Tooltip` primitive escapes this same
+   toolbar the same way.
+
+   The offsets are therefore set from JS (the component measures the tool
+   button and clamps to the viewport) rather than by the `--edge` modifiers,
+   which now only carry per-edge cosmetics.
 
    `--z-dropdown` is the token for exactly this role ("select menus anchored
-   to a control"). It outranks the toolbar's own `--z-shell` so the menu is
-   not clipped behind neighbouring tools. */
+   to a control"). Out in `body` it must also outrank the shell, which it
+   does. */
 
 .eyedropper-mode-menu {
-  position: absolute;
+  position: fixed;
   z-index: var(--z-dropdown);
   min-width: 190px;
   padding: var(--space-1-5);
@@ -37,29 +41,32 @@
   cursor: default;
 }
 
-/* ── Where it opens, per docked edge ──────────────────────────────────────
-   A horizontal toolbar drops the menu below (or above, when docked to the
-   bottom); a vertical one pushes it out to the side. In every case the menu
-   is pinned to the near corner so it grows into the workspace. */
+/* ── The per-edge modifiers ───────────────────────────────────────────────
+   ⚠️ These no longer POSITION anything: `left`/`top` are computed in JS
+   against the measured tool button and clamped to the viewport, because a
+   fixed element in a body portal has no anchor to offset from in CSS. The
+   modifiers are kept as hooks — they are what the DOM test reads to assert
+   the menu knows its dock edge, and they are where per-edge cosmetics go.
+
+   Declared with no positional declarations on purpose: `check-classes.mjs`
+   reports a referenced-but-undeclared class, and an empty rule would read as
+   an oversight to the next person. The transform-origin is real — it points
+   the menu's growth back at the button it came from. */
 
 .eyedropper-mode-menu--top {
-  top: calc(100% + var(--space-2));
-  left: 0;
+  transform-origin: top left;
 }
 
 .eyedropper-mode-menu--bottom {
-  bottom: calc(100% + var(--space-2));
-  left: 0;
+  transform-origin: bottom left;
 }
 
 .eyedropper-mode-menu--left {
-  left: calc(100% + var(--space-2));
-  top: 0;
+  transform-origin: top left;
 }
 
 .eyedropper-mode-menu--right {
-  right: calc(100% + var(--space-2));
-  top: 0;
+  transform-origin: top right;
 }
 
 .eyedropper-mode-menu__title {

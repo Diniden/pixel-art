@@ -45,6 +45,18 @@ export const PixelStudioToolsContainer = observer(
         alternateTool={ui.tool.alternateTool}
         onSelectAlternateTool={(tool) => ui.tool.setAlternateTool(tool)}
         onSwapTools={() => ui.tool.swapTools()}
+        // ⚠️ `eyedropperModeOrDefault`, not the raw field: the store keeps it
+        // `undefined` until the user picks a mode, so that projects which
+        // never touched it gain no wire-format key. The UI needs a concrete
+        // mode to tick, and "revert" is the historical behaviour.
+        eyedropperMode={ui.tool.eyedropperModeOrDefault}
+        onSelectEyedropperMode={(mode) => ui.tool.setEyedropperMode(mode)}
+        // Read straight from the layout store rather than threaded down from
+        // `ToolbarContainer`: this component is injected into `Toolbar` as an
+        // opaque ELEMENT (the purity boundary — see the header), so the
+        // toolbar cannot hand its own `edge` to a child it never renders.
+        // Both containers read the one source, so they cannot disagree.
+        edge={ui.layout.layout.toolbar.edge}
         // ⚠️ `app.undo()`, NOT `history.undo()` — the history mirror has a
         // single writer and calling the store directly leaves it describing
         // the pre-undo stack. See `ApplicationStore.undo`'s header.

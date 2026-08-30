@@ -154,23 +154,27 @@ function ToolButton({
   /** Tooltip tail describing `secondaryAction`. */
   secondaryHint?: string;
   /**
-   * The anchored menu, when this tool has one open.
+   * The anchored menu, when this tool has one open. Called with the button
+   * element so the menu can measure it.
    *
-   * ⚠️ Rendered as a SIBLING of the `<button>`, inside a positioned wrapper —
-   * never as its child. A menu of `<button>` rows nested inside a `<button>`
-   * is invalid HTML, and browsers recover by hoisting the inner buttons OUT
-   * of the parent, which breaks both the menu's positioning and its clicks.
+   * ⚠️ A RENDER PROP, not a child: the menu portals itself to `document.body`
+   * (the toolbar clips it otherwise — see `EyedropperModeMenu`'s header), and
+   * it needs the trigger's DOM node to position against. A plain child could
+   * not be handed one.
    */
-  children?: ReactNode;
+  children?: (anchor: HTMLButtonElement | null) => ReactNode;
 }) {
   // The long press drives whichever action this button owns: the mode menu
   // where one is supplied, the slot-B assignment everywhere else.
   const longPress = useLongPress(secondaryAction ?? onSelectAlternate);
+  // `useState`, not `useRef`: the menu has to RE-RENDER once the node exists,
+  // and a ref assignment does not schedule one — the menu would mount with a
+  // null anchor and never measure.
+  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
 
-  // No wrapper unless there is a menu to anchor: every other tool keeps the
-  // exact markup it had, so the toolbar's flex layout is untouched.
   const button = (
     <button
+      ref={setAnchor}
       className={classNames(
         "toolbar__tool-btn",
         isActive && "toolbar__tool-btn--active",
@@ -226,13 +230,13 @@ function ToolButton({
     </button>
   );
 
-  if (!children) return button;
-
+  // The menu portals itself out, so there is no wrapper and no change to the
+  // toolbar's flex layout for the one tool that has one.
   return (
-    <span className="toolbar__tool-anchor">
+    <>
       {button}
-      {children}
-    </span>
+      {children?.(anchor)}
+    </>
   );
 }
 
@@ -306,17 +310,20 @@ export function PixelStudioTools({
                     : undefined
                 }
               >
-                {isEyedropper && isEyedropperMenuOpen ? (
-                  <EyedropperModeMenu
-                    mode={eyedropperMode}
-                    edge={edge}
-                    onSelectMode={(mode) => {
-                      onSelectEyedropperMode(mode);
-                      setIsEyedropperMenuOpen(false);
-                    }}
-                    onClose={() => setIsEyedropperMenuOpen(false)}
-                  />
-                ) : null}
+                {isEyedropper && isEyedropperMenuOpen
+                  ? (anchor) => (
+                      <EyedropperModeMenu
+                        mode={eyedropperMode}
+                        edge={edge}
+                        anchorEl={anchor}
+                        onSelectMode={(mode) => {
+                          onSelectEyedropperMode(mode);
+                          setIsEyedropperMenuOpen(false);
+                        }}
+                        onClose={() => setIsEyedropperMenuOpen(false)}
+                      />
+                    )
+                  : undefined}
               </ToolButton>
             );
           })}

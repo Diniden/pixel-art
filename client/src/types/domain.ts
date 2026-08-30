@@ -242,6 +242,20 @@ export interface PersistedRailLayout {
    * with the toolbar where it has always been rather than failing to narrow.
    */
   toolbar?: { edge: string; scale: string; spread?: number };
+  /**
+   * Other Hand Mode arrangements (2026-08-28), by section key. OPTIONAL and
+   * only emitted once the user has arranged something — an untouched layout
+   * carries no such key. Values are WIDE on purpose: a file may have been
+   * written by a later build with more colour models; the store narrows and
+   * drops what it does not recognise.
+   */
+  otherHand?: {
+    [sectionKey: string]: {
+      positions: { [widgetId: string]: { x: number; y: number } };
+      colorModel?: string;
+      includeAlpha?: boolean;
+    };
+  };
 }
 
 export type Tool =

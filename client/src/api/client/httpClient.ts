@@ -29,6 +29,13 @@ export interface RequestOptions {
    * live outside `/api` (the static `/exports/...` tree).
    */
   base?: string;
+  /**
+   * Extra request headers, merged over the defaults.
+   *
+   * Added for cross-instance sync: `projectApi.save` stamps the saving tab's
+   * origin id so the server can skip broadcasting a reload back to it.
+   */
+  headers?: Record<string, string>;
 }
 
 function buildUrl(
@@ -115,6 +122,7 @@ export async function request<T>(opts: RequestOptions): Promise<T> {
     timeoutMs = DEFAULT_TIMEOUT_MS,
     signal,
     base = API_BASE,
+    headers: extraHeaders,
   } = opts;
 
   const url = buildUrl(base, path, query);
@@ -140,10 +148,15 @@ export async function request<T>(opts: RequestOptions): Promise<T> {
 
   let response: Response;
   try {
+    const headers: Record<string, string> = {};
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    if (extraHeaders) Object.assign(headers, extraHeaders);
+
     response = await fetch(url, {
       method,
-      headers:
-        body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      // Preserve the old `undefined` when there is nothing to send: the
+      // characterisation tests pin the absence of a headers object.
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });

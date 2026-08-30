@@ -22,6 +22,7 @@ import { PixelStudioPanel } from "../ui/components/PixelStudioPanel/PixelStudioP
 import { ColorPickerContainer } from "./ColorPickerContainer";
 import { PaletteManagerContainer } from "./PaletteManagerContainer";
 import { useStores } from "../stores/context";
+import { OTHER_HAND_SECTIONS } from "./otherHand/otherHandSections";
 
 /** Transcribed from `OriginColorPicker`'s inline fallback. */
 const DEFAULT_ORIGIN_COLOR = { r: 255, g: 50, b: 50, a: 255 };
@@ -52,6 +53,13 @@ export const PixelStudioPanelContainer = observer(
         onOriginColorChange={(color) => tool.setOriginColor(color)}
         colorPicker={<ColorPickerContainer />}
         paletteManager={<PaletteManagerContainer />}
+        // Tablets only — see `LayoutUIStore.otherHandAvailable`. Left
+        // `undefined` elsewhere so the component draws no button.
+        onOtherHand={
+          ui.layout.otherHandAvailable
+            ? () => ui.layout.enterOtherHand(OTHER_HAND_SECTIONS.tool)
+            : undefined
+        }
       />
     );
   },

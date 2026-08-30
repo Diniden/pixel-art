@@ -27,6 +27,7 @@ import type {
   Color,
   SelectionBehavior,
   SelectionMode,
+  EyedropperMode,
   ShapeMode,
   Tool,
 } from "../../types";
@@ -73,6 +74,16 @@ export class ToolUIStore {
   moveAllLayers: boolean = DEFAULT_UI_STATE.moveAllLayers;
   selectionMode: SelectionMode = "rect";
   selectionBehavior: SelectionBehavior = "movePixels";
+  /**
+   * What the eyedropper does after it samples — see {@link EyedropperMode}.
+   *
+   * ⚠️ Tri-state, like `borderRadius` and `gaussianFill`: `undefined` means
+   * "absent from the project file", and readers apply `?? "revert"`. Seeding
+   * `"revert"` here instead would add the key to all 151 corpus snapshots the
+   * next time each was saved, which is exactly the wire-format drift R3
+   * exists to prevent.
+   */
+  eyedropperMode: EyedropperMode | undefined = undefined;
   /** `observableRef`: hex-or-undefined in the compact form. */
   originColor: Color | undefined = undefined;
   /**
@@ -116,6 +127,7 @@ export class ToolUIStore {
       moveAllLayers: observable,
       selectionMode: observable,
       selectionBehavior: observable,
+      eyedropperMode: observable,
       originColor: observableRef,
       gaussianFill: observableRef,
       previousTool: observableRef,
@@ -137,6 +149,7 @@ export class ToolUIStore {
       setMoveAllLayers: action,
       setSelectionMode: action,
       setSelectionBehavior: action,
+      setEyedropperMode: action,
       clearColorAdjustment: action,
       setOriginColor: action,
       setGaussianFillParams: action,
@@ -221,9 +234,28 @@ export class ToolUIStore {
     this.alternateTool = tool;
   }
 
-  /** No-op unless the eyedropper is active — verbatim from the legacy action. */
+  /**
+   * Return to the tool the eyedropper was entered from.
+   *
+   * No-op unless the eyedropper is active — verbatim from the legacy action —
+   * and, since 2026-08-28, no-op in `"stay"` mode as well.
+   *
+   * ⚠️ The mode is checked HERE rather than at the three canvas call sites.
+   * All three sample a colour and then revert, and a mode consulted at the
+   * call site would have to be got right three times, with a fourth sampler
+   * (a new surface, a shortcut) free to forget it. Making the revert itself
+   * mode-aware means "stay" holds everywhere by construction.
+   *
+   * `previousTool` is still CLEARED in `"stay"` mode: the memory exists only
+   * to serve a revert that is no longer going to happen, and leaving it set
+   * would strand a stale tool that a later mode switch could jump back to.
+   */
   revertToPreviousTool(): void {
     if (this.previousTool && this.selectedTool === "eyedropper") {
+      if (this.eyedropperModeOrDefault === "stay") {
+        this.previousTool = null;
+        return;
+      }
       this.selectedTool = this.previousTool;
       this.previousTool = null;
     }
@@ -280,6 +312,23 @@ export class ToolUIStore {
 
   setSelectionBehavior(behavior: SelectionBehavior): void {
     this.selectionBehavior = behavior;
+  }
+
+  /**
+   * Choose what the eyedropper does after it samples.
+   *
+   * ⚠️ Writes the key for the first time on a project that never had it —
+   * that is the intended, owner-approved extension, and it happens ONLY when
+   * the user actually picks a mode from the menu. Nothing writes this field
+   * incidentally, which is what keeps untouched projects byte-identical.
+   */
+  setEyedropperMode(mode: EyedropperMode): void {
+    this.eyedropperMode = mode;
+  }
+
+  /** The `?? "revert"` fallback every reader applies to the tri-state field. */
+  get eyedropperModeOrDefault(): EyedropperMode {
+    return this.eyedropperMode ?? "revert";
   }
 
   setOriginColor(color: Color): void {
@@ -355,6 +404,7 @@ export class ToolUIStore {
     moveAllLayers?: boolean;
     selectionMode?: SelectionMode;
     selectionBehavior?: SelectionBehavior;
+    eyedropperMode?: EyedropperMode;
     originColor?: Color;
     gaussianFill?: GaussianFill;
   }): void {
@@ -377,6 +427,8 @@ export class ToolUIStore {
     if (ui.selectionBehavior !== undefined) {
       this.selectionBehavior = ui.selectionBehavior;
     }
+    // Assigned unconditionally: absent must stay absent (see the field note).
+    this.eyedropperMode = ui.eyedropperMode;
     // `originColor` is legitimately `undefined` in the wire format, so it is
     // assigned unconditionally — see the R1 note in `UIStore`.
     this.originColor = ui.originColor;

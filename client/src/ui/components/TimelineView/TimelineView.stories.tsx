@@ -100,8 +100,6 @@ const meta = {
     onTogglePlayback: fn(),
     onOpenPreview: fn(),
     viewModeDropdown,
-    newLayerName: "",
-    onNewLayerNameChange: fn(),
     onAddLayer: fn(),
     canMoveUp: true,
     canMoveDown: true,
@@ -109,6 +107,12 @@ const meta = {
     onMoveLayerDown: fn(),
     onLayerHeaderClick: fn(),
     onLayerHeaderHover: fn(),
+    editingLayerName: null,
+    editingLayerDraft: "",
+    onStartLayerRename: fn(),
+    onEditingLayerDraftChange: fn(),
+    onFinishLayerRename: fn(),
+    onCancelLayerRename: fn(),
     renderCell,
     renderEmptyCell,
   },
@@ -149,7 +153,7 @@ export const ThumbnailMode: Story = {
 
 /** The top layer selected: move-up is disabled, move-down is live. */
 export const TopLayerSelected: Story = {
-  args: { canMoveUp: false, newLayerName: "Rim light" },
+  args: { canMoveUp: false },
 };
 
 /**

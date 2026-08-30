@@ -169,12 +169,6 @@
   color: var(--text-primary);
 }
 
-.frame-timeline__new-frame-input {
-  width: 120px;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-xs);
-}
-
 .frame-timeline__add-frame-btn {
   padding: var(--space-1) var(--space-2-5);
   font-size: var(--text-xs);
@@ -323,6 +317,16 @@
 
 .frames-view__item:hover .frames-view__action-btn {
   opacity: 1;
+}
+
+/* ⚠️ iOS two-tap trap (2026-08-29). When a tap would change what is visible
+   under a `:hover` rule, Safari spends the FIRST tap emulating the hover and
+   only the second one reaches `click` — so selecting took two taps. On a
+   device with no hover there is nothing to reveal: keep these visible. */
+@media (hover: none) {
+  .frames-view__action-btn {
+    opacity: 1;
+  }
 }
 
 .frames-view__action-btn:hover:not(:disabled) {
@@ -567,6 +571,13 @@
   opacity: 1;
 }
 
+/* See the `frames-view` note above: no hover, no reveal, no second tap. */
+@media (hover: none) {
+  .variant-view__action-btn {
+    opacity: 1;
+  }
+}
+
 .variant-view__action-btn:hover:not(:disabled) {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
@@ -752,26 +763,6 @@
   color: var(--white);
 }
 
-.timeline-view__new-layer {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.timeline-view__new-layer-input {
-  width: 100px;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-70);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-}
-
-.timeline-view__new-layer-input::placeholder {
-  color: var(--text-muted);
-}
-
 .timeline-view__playback-controls {
   display: flex;
   align-items: center;
@@ -822,6 +813,17 @@
   border-left: 3px solid var(--layer-color, var(--accent-primary));
   padding-left: var(--space-1);
   box-shadow: var(--glow-white-8-15);
+}
+
+.timeline-view__layer-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-0-5) var(--space-1);
+  font-size: var(--text-70);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
 }
 
 .timeline-view__layer-header--empty {
@@ -1009,10 +1011,6 @@
 @media (max-width: 768px) {
   .frame-timeline {
     padding: var(--space-2);
-  }
-
-  .frame-timeline__new-frame-input {
-    width: 80px;
   }
 
   .frames-view__item {

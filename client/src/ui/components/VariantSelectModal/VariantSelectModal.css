@@ -148,6 +148,16 @@
   opacity: 1;
 }
 
+/* ⚠️ iOS two-tap trap (2026-08-29). When a tap would change what is visible
+   under a `:hover` rule, Safari spends the FIRST tap emulating the hover and
+   only the second one reaches `click` — so selecting took two taps. On a
+   device with no hover there is nothing to reveal: keep these visible. */
+@media (hover: none) {
+  .variant-select-modal__actions {
+    opacity: 1;
+  }
+}
+
 .variant-select-modal__action-btn {
   width: 24px;
   height: 24px;

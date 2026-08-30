@@ -67,6 +67,7 @@ import { LayerColorsContainer } from "./LayerColorsContainer";
 import { FrameReferencePanelContainer } from "./FrameReferencePanelContainer";
 import { ReferenceImagePanelContainer } from "./ReferenceImagePanelContainer";
 import { useStores } from "../stores/context";
+import { OtherHandRailContainer } from "./OtherHandRailContainer";
 import { useRailLayout } from "./hooks/useRailLayout";
 import type { ReferenceImageData } from "../types/referenceImage";
 
@@ -158,8 +159,19 @@ export const PixelStudioContainer = observer(function PixelStudioContainer() {
       }
       objectLibrary={<ObjectLibraryContainer />}
       layerPanel={<LayerPanelContainer />}
-      rightControls={<RightSidebarTopControlsContainer />}
-      studioPanel={<PixelStudioPanelContainer />}
+      // Other Hand Mode: ONE section takes the whole rail, so the top
+      // controls go and the studio panel becomes the thumb surface. Both
+      // come back the moment the mode exits — nothing is unmounted for good.
+      rightControls={
+        ui.layout.otherHandActive ? null : <RightSidebarTopControlsContainer />
+      }
+      studioPanel={
+        ui.layout.otherHandActive ? (
+          <OtherHandRailContainer />
+        ) : (
+          <PixelStudioPanelContainer />
+        )
+      }
       timeline={<FrameTimelineContainer />}
       canvas={
         <CanvasContainer

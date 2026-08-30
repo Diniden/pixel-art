@@ -9,6 +9,7 @@
  */
 import type { CompactProject } from "../../types";
 import { request } from "../client/httpClient";
+import { syncOriginHeaders } from "../client/syncOrigin";
 
 export interface SaveProjectResult {
   success: true;
@@ -56,6 +57,9 @@ export const projectApi = {
       path: "/project",
       query: { name },
       body: project,
+      // Identify this tab so the server does not broadcast a reload back to
+      // it — see `api/client/syncOrigin.ts`.
+      headers: syncOriginHeaders(),
     });
   },
 

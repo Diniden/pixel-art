@@ -144,6 +144,16 @@
   opacity: 1;
 }
 
+/* ⚠️ iOS two-tap trap (2026-08-29). When a tap would change what is visible
+   under a `:hover` rule, Safari spends the FIRST tap emulating the hover and
+   only the second one reaches `click` — so selecting took two taps. On a
+   device with no hover there is nothing to reveal: keep these visible. */
+@media (hover: none) {
+  .palette-manager__swatch-remove {
+    opacity: 1;
+  }
+}
+
 .palette-manager__add-color-btn {
   width: 32px;
   height: 32px;

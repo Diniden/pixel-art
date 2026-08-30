@@ -430,6 +430,25 @@
   color: var(--text-tertiary);
 }
 
+/* Tablet/phone: the wordmark goes, the icon stays (owner decision).
+
+   Horizontal room in the title bar is the scarce resource on an iPad, and
+   "Pixel Studio" is the one thing there that tells the user nothing they do
+   not already know — they opened the app. The project name, which DOES vary,
+   keeps its space.
+
+   ⚠️ The test mirrors `ui/layout/deviceClass.ts` and is deliberately NOT a
+   bare `pointer: coarse`: touch-screen laptops are common and are desktops.
+   A device qualifies only when it is primarily touch-driven AND its SHORT
+   edge is tablet-sized — the short edge so that rotating an iPad cannot
+   bring the wordmark back in one orientation and remove it in the other.
+   900px is `TABLET_MAX_SHORT_EDGE` from that module; keep the two in step. */
+@media (pointer: coarse) and ((max-width: 900px) or (max-height: 900px)) {
+  .header__logo-text {
+    display: none;
+  }
+}
+
 @media (max-width: 768px) {
   .header {
     padding: 0 var(--space-3);

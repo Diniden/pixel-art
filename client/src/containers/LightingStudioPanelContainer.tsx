@@ -35,6 +35,7 @@ import { LightingStudioPanel } from "../ui/components/LightingStudioPanel/Lighti
 import { SelectedNormalPickerContainer } from "./NormalPickerContainer";
 import { LightControlContainer } from "./LightControlContainer";
 import { useStores } from "../stores/context";
+import { OTHER_HAND_SECTIONS } from "./otherHand/otherHandSections";
 
 export const LightingStudioPanelContainer = observer(
   function LightingStudioPanelContainer() {
@@ -56,6 +57,16 @@ export const LightingStudioPanelContainer = observer(
         }
         normalPicker={<SelectedNormalPickerContainer enableScrollControl />}
         lightControl={<LightControlContainer />}
+        onOtherHandBrush={
+          ui.layout.otherHandAvailable
+            ? () => ui.layout.enterOtherHand(OTHER_HAND_SECTIONS.tool)
+            : undefined
+        }
+        onOtherHandLight={
+          ui.layout.otherHandAvailable
+            ? () => ui.layout.enterOtherHand(OTHER_HAND_SECTIONS.light)
+            : undefined
+        }
       />
     );
   },

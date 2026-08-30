@@ -58,6 +58,15 @@ export interface TimelineGridProps {
   onLayerHeaderClick: (layerName: string) => void;
   onLayerHeaderHover: (layerName: string | null) => void;
 
+  /** Name of the layer whose header is being renamed inline, or `null`. */
+  editingLayerName: string | null;
+  /** Draft text of the inline header rename. */
+  editingLayerDraft: string;
+  onStartLayerRename: (layerName: string) => void;
+  onEditingLayerDraftChange: (draft: string) => void;
+  onFinishLayerRename: () => void;
+  onCancelLayerRename: () => void;
+
   /** Renders one occupied cell — a per-item container in the real app. */
   renderCell: (cell: TimelineCellData) => ReactNode;
   /** Renders one empty grid position. */
@@ -74,6 +83,12 @@ export function TimelineGrid({
   layerHeaders,
   onLayerHeaderClick,
   onLayerHeaderHover,
+  editingLayerName,
+  editingLayerDraft,
+  onStartLayerRename,
+  onEditingLayerDraftChange,
+  onFinishLayerRename,
+  onCancelLayerRename,
   renderCell,
   renderEmptyCell,
 }: TimelineGridProps) {
@@ -135,6 +150,10 @@ export function TimelineGrid({
               className={`timeline-view__layer-header ${hoveredLayerName === header.name ? "timeline-view__layer-header--hovered" : ""}`}
               style={{ "--layer-color": header.color } as React.CSSProperties}
               onClick={() => onLayerHeaderClick(header.name)}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                onStartLayerRename(header.name);
+              }}
               onMouseEnter={() => onLayerHeaderHover(header.name)}
               onMouseLeave={() => onLayerHeaderHover(null)}
             >
@@ -142,7 +161,33 @@ export function TimelineGrid({
                 className="timeline-view__layer-dot"
                 style={{ backgroundColor: header.color }}
               />
-              <span className="timeline-view__layer-name">{header.name}</span>
+              {editingLayerName === header.name ? (
+                <input
+                  // A callback ref rather than `autoFocus`, matching
+                  // `LayerRow`: a header opened by "+ Layer" carries a
+                  // placeholder name meant to be overtyped, and the row may sit
+                  // below the fold of the scrolling header column.
+                  ref={(el) => {
+                    if (!el) return;
+                    el.focus();
+                    el.select();
+                    el.scrollIntoView({ block: "nearest" });
+                  }}
+                  type="text"
+                  className="timeline-view__layer-name-input"
+                  value={editingLayerDraft}
+                  onChange={(e) => onEditingLayerDraftChange(e.target.value)}
+                  onBlur={onFinishLayerRename}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onFinishLayerRename();
+                    else if (e.key === "Escape") onCancelLayerRename();
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="timeline-view__layer-name">{header.name}</span>
+              )}
             </div>
           );
         })}

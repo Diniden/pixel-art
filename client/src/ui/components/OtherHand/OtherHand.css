@@ -1,0 +1,347 @@
+/* block: other-hand (2026-08-28).
+   The rail-takeover surface for Other Hand Mode, plus the two thumb widgets
+   it lays out (`thumb-slider`, `thumb-buttons`) and the title-bar button
+   that enters the mode (`other-hand-button`). Four blocks in one sheet
+   because they only ever appear together.
+
+   ⚠️ `touch-action: none` on the grip and the slider track is what makes
+   the feature work on the iPad at all. Without it the rail's scroll claims
+   the first vertical movement and neither the drag nor the slide ever sees
+   the pointer. */
+
+/* ── The title-bar button ──────────────────────────────────────────────── */
+
+.other-hand-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.other-hand-button:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-primary);
+  color: var(--text-primary);
+}
+
+/* ── The surface ───────────────────────────────────────────────────────── */
+
+/* Fills the rail: the scroller is a flex column, so `flex: 1` takes every
+   pixel the ordinary sections would have had. `min-height: 0` lets it shrink
+   inside that column instead of being pinned to its content. */
+.other-hand {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.other-hand__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.other-hand__title {
+  flex: 1;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.other-hand__exit,
+.other-hand__reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.other-hand__exit:hover,
+.other-hand__reset:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+.other-hand__extras {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The colour section's HSL / RGB switch. */
+.other-hand__segment {
+  display: flex;
+  gap: var(--space-px);
+  padding: var(--space-px);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.other-hand__segment-btn {
+  min-width: 44px;
+  height: 32px;
+  padding: 0 var(--space-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.other-hand__segment-btn--active {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
+.other-hand__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.other-hand__check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+/* The stage: the widgets' positioning context. A minimum height keeps a
+   short rail usable (the scroller scrolls to it) rather than crushing the
+   sliders together. */
+.other-hand__stage {
+  /* The default placement's inset from each side, in the rail's OWN px —
+     the rail's scale transform multiplies it, which is the point. */
+  --other-hand-edge: 50px;
+  flex: 1;
+  position: relative;
+  min-height: 420px;
+  border: 1px dashed var(--border-primary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.other-hand__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: var(--space-4);
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* One draggable card. `left` / `top` are set inline as percentages. */
+.other-hand__widget {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-1) var(--space-1-5);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Default placement (no stored position) ─────────────────────────────
+
+   `--other-hand-fraction` is the widget's place between the two insets
+   (0 = left inset, 1 = right inset, 0.5 = centred) and `--other-hand-row`
+   its row. The `left` walks the ANCHOR across the span; the matching
+   negative `translateX` in the widget's own width is what turns an anchor
+   walk into an edge-to-edge spread — the first widget's left edge sits on
+   the left inset, the last widget's RIGHT edge on the right inset, and the
+   ones between are evenly spaced whatever their width.
+
+   Vertically: centred in landscape, at the 3/5 mark in portrait, where the
+   thumb of a hand holding the iPad upright naturally rests. A second row
+   (more than four widgets) hangs below the first. */
+.other-hand__widget--auto {
+  left: calc(
+    var(--other-hand-edge) + (100% - 2 * var(--other-hand-edge)) *
+      var(--other-hand-fraction)
+  );
+  top: 50%;
+  transform: translate(
+    calc(var(--other-hand-fraction) * -100%),
+    calc(-50% + var(--other-hand-row) * 105%)
+  );
+}
+
+@media (orientation: portrait) {
+  .other-hand__widget--auto {
+    top: 60%;
+  }
+}
+
+.other-hand__widget--dragging {
+  z-index: var(--z-raised);
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.other-hand__grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 26px;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.other-hand__grip:active {
+  cursor: grabbing;
+}
+
+/* ── thumb-slider ──────────────────────────────────────────────────────── */
+
+.thumb-slider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.thumb-slider__value,
+.thumb-slider__label,
+.thumb-buttons__label,
+.thumb-normal__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.thumb-slider__value {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+/* 44px wide — Apple's minimum comfortable touch target — and tall enough
+   that a full sweep of the thumb covers the whole range with room to be
+   precise about it. */
+.thumb-slider__track {
+  position: relative;
+  width: 44px;
+  height: 240px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 22px;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.thumb-slider__track:focus-visible {
+  border-color: var(--accent-primary);
+}
+
+/* A tinted track paints its own gradient inline; the border just frames it. */
+.thumb-slider__track--tinted {
+  border-color: var(--border-primary);
+}
+
+.thumb-slider__fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--accent-primary-30);
+  border-radius: 22px;
+  pointer-events: none;
+}
+
+.thumb-slider__knob {
+  position: absolute;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, 50%);
+  background: var(--white);
+  border: 3px solid var(--accent-primary);
+  border-radius: 50%;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+
+/* ── thumb-buttons ─────────────────────────────────────────────────────── */
+
+.thumb-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.thumb-buttons__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.thumb-buttons__btn {
+  min-width: 60px;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.thumb-buttons__btn--active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
+/* ── thumb-normal ──────────────────────────────────────────────────────── */
+
+.thumb-normal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-1) 0;
+}

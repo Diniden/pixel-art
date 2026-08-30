@@ -7,20 +7,31 @@
    The `--brush-max-control` / `--origin-controls-panel` gaps are NOT filled
    here (spec constraint): the classNames convert, no rule is added. */
 
+/* ⚠️ NOT `gap: 0`. Each section is a `.panel`, and `.panel` carries a 1px
+   border (`blocks/panel.css`), so butted-up sections met in a doubled 2px
+   seam that read as one continuous slab — the sections between (say) the tool
+   config and the colour block had no visible separation at all on ANY theme.
+   `--space-1` is 4px on the default scale and 3px on the cozy themes, so the
+   minimum 2px separation holds everywhere rather than only where the scale is
+   generous. */
 .pixel-studio-panel {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: var(--space-1);
 }
 
 /* elements, DOM order */
 
-.pixel-studio-panel__section {
-  border-radius: 0;
-}
+/* Once the sections are separated they are individually-rounded cards, so the
+   fused first/last-child corner treatment that made the stack look like one
+   slab is gone: each section carries `.panel`'s own radius — which is why
+   this rule sets no `border-radius` at all.
 
-.pixel-studio-panel__section:first-child {
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+   `min-width: 0` is the flex-item override: without it a section refuses to
+   shrink below its content's intrinsic width, and a long control row pushes
+   the whole rail wider instead of wrapping inside it. */
+.pixel-studio-panel__section {
+  min-width: 0;
 }
 
 /* The compact header and dense body are blocks/panel.css's

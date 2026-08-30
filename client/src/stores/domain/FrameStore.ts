@@ -96,9 +96,18 @@ export class FrameStore {
     });
   }
 
-  addFrame(name: string, copyPrevious: boolean = false): void {
+  /**
+   * Inserts AFTER the selected frame and selects it.
+   *
+   * Returns the new frame's id (empty string when there is no object). The
+   * frames timeline creates a frame from "+ Add" and immediately opens its
+   * name for editing, so it needs to know which item to focus — the same
+   * `void` → `string` widening `addLayer` took, for the same reason. Existing
+   * callers may ignore the return value.
+   */
+  addFrame(name: string, copyPrevious: boolean = false): string {
     const obj = this.currentObject();
-    if (!obj) return;
+    if (!obj) return "";
     // Read BEFORE the mutation, exactly as the legacy action did.
     const currentFrame =
       obj.frames.find((f) => f.id === this.source.selectedFrameId) ?? null;
@@ -147,7 +156,9 @@ export class FrameStore {
     const frame = created as Frame | null;
     if (frame) {
       this.selectFrameAndLayer(frame.id, frame.layers[0].id);
+      return frame.id;
     }
+    return "";
   }
 
   deleteFrame(id: string): void {

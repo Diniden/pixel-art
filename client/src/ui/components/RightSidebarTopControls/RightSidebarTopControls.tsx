@@ -39,6 +39,7 @@ import { ShapeControls } from "./ShapeControls";
 import { SelectionControls, type SelectionSummary } from "./SelectionControls";
 import type { ShapeControlsProps } from "./ShapeControls";
 import type { SelectionControlsProps } from "./SelectionControls";
+import { OtherHandButton } from "../OtherHand/OtherHandButton";
 import "./RightSidebarTopControls.css";
 
 export interface RightSidebarTopControlsProps {
@@ -75,6 +76,8 @@ export interface RightSidebarTopControlsProps {
   onExpandSelection: (by: number) => void;
   onShrinkSelection: (by: number) => void;
   onClearSelection: () => void;
+  /** Hands the rail to these options in Other Hand Mode (tablets only). */
+  onOtherHand?: () => void;
 }
 
 export function RightSidebarTopControls({
@@ -103,6 +106,7 @@ export function RightSidebarTopControls({
   onExpandSelection,
   onShrinkSelection,
   onClearSelection,
+  onOtherHand,
 }: RightSidebarTopControlsProps) {
   const showBrushSize = isPixelMode && selectedTool === "fill-square";
   const showTraceBrush =
@@ -128,7 +132,13 @@ export function RightSidebarTopControls({
       {showToolOptions && (
         <div className="panel right-sidebar-top-controls__panel">
           <div className="panel__header panel__header--compact">
-            Tool Options
+            <span className="panel__title">Tool Options</span>
+            {onOtherHand ? (
+              <OtherHandButton
+                onClick={onOtherHand}
+                sectionLabel="Tool Options"
+              />
+            ) : null}
           </div>
           <div className="panel__body right-sidebar-top-controls__body">
             <BrushControls

@@ -23,6 +23,7 @@ import { Color } from "../../../types";
 // `ui/utils/colorMath.ts` (extracted verbatim — see that file's note on why
 // `prevHsl` must not be "simplified" away).
 import { hslToRgb, rgbToHsl } from "../../utils/colorMath";
+import { OtherHandButton } from "../OtherHand/OtherHandButton";
 import "./ColorPicker.css";
 
 interface ColorPickerProps {
@@ -36,6 +37,8 @@ interface ColorPickerProps {
   onAdjustColor: (color: Color, trackHistory: boolean) => void;
   /** Label omitted on drag start, `"Adjust color"` on the debounced save. */
   onSaveStateToHistory: (label?: string) => void;
+  /** Hands the rail to the colour sliders in Other Hand Mode (tablets only). */
+  onOtherHand?: () => void;
 }
 
 export function ColorPicker({
@@ -45,6 +48,7 @@ export function ColorPicker({
   onSetColor,
   onAdjustColor,
   onSaveStateToHistory,
+  onOtherHand,
 }: ColorPickerProps) {
   const [localColor, setLocalColor] = useState<Color>({
     r: 0,
@@ -382,7 +386,12 @@ export function ColorPicker({
 
   return (
     <div className="panel color-picker">
-      <div className="panel__header">Color</div>
+      <div className="panel__header">
+        <span className="panel__title">Color</span>
+        {onOtherHand ? (
+          <OtherHandButton onClick={onOtherHand} sectionLabel="Color" />
+        ) : null}
+      </div>
       <div className="panel__body">
         {/* Color History */}
         {colorHistory.length > 0 && (

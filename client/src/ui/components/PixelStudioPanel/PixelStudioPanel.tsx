@@ -12,6 +12,7 @@
  */
 import type { ReactNode } from "react";
 import type { Color } from "../../../types";
+import { OtherHandButton } from "../OtherHand/OtherHandButton";
 import "./PixelStudioPanel.css";
 
 interface OriginColorPickerProps {
@@ -94,6 +95,12 @@ interface PixelStudioPanelProps {
   colorPicker: ReactNode;
   /** `PaletteManagerContainer` element. */
   paletteManager: ReactNode;
+  /**
+   * Hands the rail to the current tool's options in Other Hand Mode. Absent
+   * on devices without the mode (anything but a tablet), and then no button
+   * is drawn — see `OtherHandButton`.
+   */
+  onOtherHand?: () => void;
 }
 
 export function PixelStudioPanel({
@@ -111,6 +118,7 @@ export function PixelStudioPanel({
   onOriginColorChange,
   colorPicker,
   paletteManager,
+  onOtherHand,
 }: PixelStudioPanelProps) {
   const showEraserControls = selectedTool === "eraser";
   const showPencilControls = selectedTool === "pixel";
@@ -128,7 +136,12 @@ export function PixelStudioPanel({
       )}
       {showPencilControls && (
         <div className="panel pixel-studio-panel__section">
-          <div className="panel__header panel__header--compact">Pencil</div>
+          <div className="panel__header panel__header--compact">
+            <span className="panel__title">Pencil</span>
+            {onOtherHand ? (
+              <OtherHandButton onClick={onOtherHand} sectionLabel="Pencil" />
+            ) : null}
+          </div>
           <div className="panel__body panel__body--dense">
             <div className="pixel-studio-panel__controls">
               <div className="pixel-studio-panel__size-control">
@@ -190,7 +203,12 @@ export function PixelStudioPanel({
       )}
       {showEraserControls && (
         <div className="panel pixel-studio-panel__section">
-          <div className="panel__header panel__header--compact">Eraser</div>
+          <div className="panel__header panel__header--compact">
+            <span className="panel__title">Eraser</span>
+            {onOtherHand ? (
+              <OtherHandButton onClick={onOtherHand} sectionLabel="Eraser" />
+            ) : null}
+          </div>
           <div className="panel__body panel__body--dense">
             <div className="pixel-studio-panel__controls">
               <div className="pixel-studio-panel__size-control">

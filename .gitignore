@@ -25,6 +25,10 @@ mprocs.log
 PAT
 
 # Build artifacts and caches
+ios-companion/build/
+ios-companion/DerivedData/
+ios-companion/**/xcuserdata/
+ios-companion/**/*.xcuserstate
 client/tsconfig.tsbuildinfo
 client/dist
 client/coverage

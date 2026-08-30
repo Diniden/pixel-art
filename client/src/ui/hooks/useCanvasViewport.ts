@@ -42,6 +42,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  pinchTouches,
+  touchesInContainer,
+} from "../canvas/model/canvasTouchFilter";
 
 export interface ViewPoint {
   x: number;
@@ -528,27 +532,49 @@ export function useCanvasViewport({
     // The native `TouchList` is structurally what the gesture math needs; the
     // hook's helpers are typed against React's `TouchList`, which differs only
     // in nominal type. This cast is the whole of the difference.
-    const asReactTouches = (t: TouchList) => t as unknown as React.TouchList;
+    const asReactTouches = (t: Touch[]) => t as unknown as React.TouchList;
+
+    // ⚠️ ONLY THE TOUCHES ON THIS VIEWPORT COUNT (Other Hand Mode, 2026-08-28).
+    //
+    // `e.touches` lists every active touch on the PAGE, not just the ones on
+    // the element the listener is bound to. With a Pencil drawing here and a
+    // thumb dragging a slider in the rail, that is two touches — and reading
+    // the raw list turned every rail interaction mid-stroke into a phantom
+    // pinch. A finger that is not on the viewport is not part of a gesture
+    // on the viewport, so it is filtered out before anything is counted.
+    // ⚠️ Shared with `CanvasContainer`'s `canvasTouches` via one module, not
+    // duplicated. The two sides counting DIFFERENT fingers is what broke
+    // drawing on 2026-08-28 — see `canvasTouchFilter`'s header.
+    //
+    // ⚠️ `pinchTouches` drops the STYLUS. A pinch is two FINGERS; a Pencil and
+    // a resting finger is a stroke, and starting a pinch from that pair set
+    // `isPinching()` for the whole gesture, which made `handleTouchMove` bail
+    // out on its first line and silently killed every Pencil stroke made with
+    // a finger on the screen.
+    const touchesHere = (e: TouchEvent): Touch[] =>
+      pinchTouches(touchesInContainer(Array.from(e.touches), container));
 
     const onStart = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return;
+      const touches = touchesHere(e);
+      if (touches.length !== 2) return;
       // Claim the gesture from Safari. Only possible because this listener is
       // non-passive — see the note above.
       e.preventDefault();
-      gestureStateRef.current.beginPinch(asReactTouches(e.touches));
+      gestureStateRef.current.beginPinch(asReactTouches(touches));
     };
 
     const onMove = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return;
+      const touches = touchesHere(e);
+      if (touches.length !== 2) return;
       e.preventDefault();
-      gestureStateRef.current.updatePinch(asReactTouches(e.touches));
+      gestureStateRef.current.updatePinch(asReactTouches(touches));
     };
 
     const onEnd = (e: TouchEvent) => {
       // Lifting one finger of two ends the gesture rather than degrading it
       // into a one-finger drag, which would otherwise start drawing with the
       // finger that is still down.
-      if (e.touches.length < 2) gestureStateRef.current.endPinch();
+      if (touchesHere(e).length < 2) gestureStateRef.current.endPinch();
     };
 
     container.addEventListener("touchstart", onStart, { passive: false });
@@ -562,7 +588,6 @@ export function useCanvasViewport({
       container.removeEventListener("touchcancel", onEnd);
     };
   }, [containerRef]);
-
 
   return {
     viewZoom,

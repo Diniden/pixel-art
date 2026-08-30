@@ -197,7 +197,6 @@ export function VariantView({
   onReorderVariantFrame: reorderVariantFrame,
   onResizeVariant: resizeVariant,
 }: VariantViewProps) {
-  const [newFrameName, setNewFrameName] = useState("");
   const [copyPrevious, setCopyPrevious] = useState(true);
   const [showResizeModal, setShowResizeModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
@@ -245,9 +244,14 @@ export function VariantView({
     currentBaseFrameIndex
   ] ?? { x: 0, y: 0 };
 
+  /**
+   * Variant frames are unnamed by construction — `VariantFrame` is
+   * `{ id, layers }` with no `name`, and the strip below renders an index,
+   * never a label. There is no create-then-name step to open here: the "+ Add"
+   * button is the whole interaction.
+   */
   const handleAddVariantFrame = useCallback(() => {
     addVariantFrame(variantGroupId, variantId, copyPrevious);
-    setNewFrameName("");
   }, [variantGroupId, variantId, copyPrevious, addVariantFrame]);
 
   const handleVariantMoveLeft = () => {
@@ -600,14 +604,6 @@ export function VariantView({
             />
             <span>Copy</span>
           </label>
-          <input
-            type="text"
-            className="frame-timeline__new-frame-input"
-            placeholder="New frame..."
-            value={newFrameName}
-            onChange={(e) => setNewFrameName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAddVariantFrame()}
-          />
           <button
             className="frame-timeline__add-frame-btn"
             onClick={handleAddVariantFrame}

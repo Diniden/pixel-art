@@ -54,6 +54,7 @@ const meta = {
     onStartRename: fn(),
     onEditingNameChange: fn(),
     onFinishRename: fn(),
+    onCancelRename: fn(),
     onDragStart: fn(),
     onDragOver: fn(),
     onDragEnd: fn(),

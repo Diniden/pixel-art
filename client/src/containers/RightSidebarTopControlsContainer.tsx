@@ -47,6 +47,7 @@ import { observer } from "mobx-react-lite";
 import { RightSidebarTopControls } from "../ui/components/RightSidebarTopControls/RightSidebarTopControls";
 import type { SelectionSummary } from "../ui/components/RightSidebarTopControls/SelectionControls";
 import { useStores } from "../stores/context";
+import { OTHER_HAND_SECTIONS } from "./otherHand/otherHandSections";
 
 export const RightSidebarTopControlsContainer = observer(
   function RightSidebarTopControlsContainer() {
@@ -105,6 +106,11 @@ export const RightSidebarTopControlsContainer = observer(
         onExpandSelection={(by) => selectionUI.expandSelection(by)}
         onShrinkSelection={(by) => selectionUI.shrinkSelection(by)}
         onClearSelection={() => selectionUI.clearSelection()}
+        onOtherHand={
+          ui.layout.otherHandAvailable
+            ? () => ui.layout.enterOtherHand(OTHER_HAND_SECTIONS.tool)
+            : undefined
+        }
       />
     );
   },

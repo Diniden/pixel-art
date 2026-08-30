@@ -224,6 +224,7 @@ const FrameItem = memo(function FrameItem({
   editingName,
   onEditingNameChange,
   onFinishRename,
+  onCancelRename,
   onOpenTags,
   variants,
   project,
@@ -249,6 +250,8 @@ const FrameItem = memo(function FrameItem({
   editingName: string;
   onEditingNameChange: (name: string) => void;
   onFinishRename: (id: string) => void;
+  /** Abandon the inline edit without writing the name (Escape). */
+  onCancelRename: () => void;
   onOpenTags: (context: FrameTagsContext) => void;
   variants?: import("../../types").VariantGroup[]; // Project-level variants
   project?: { uiState?: { variantFrameIndices?: { [key: string]: number } } };
@@ -304,14 +307,27 @@ const FrameItem = memo(function FrameItem({
       <div className="frames-view__info">
         {editingId === frame.id ? (
           <input
+            // A callback ref, not `autoFocus`: focusing is only half of what a
+            // just-created frame needs. The name is a placeholder the user is
+            // expected to overtype, so it is selected, and the new frame may
+            // be off-screen in the horizontal strip, so it is scrolled in.
+            ref={(el) => {
+              if (!el) return;
+              el.focus();
+              el.select();
+              el.scrollIntoView({ block: "nearest", inline: "nearest" });
+            }}
             type="text"
             className="frames-view__name-input"
             value={editingName}
             onChange={(e) => onEditingNameChange(e.target.value)}
             onBlur={() => onFinishRename(frame.id)}
-            onKeyDown={(e) => e.key === "Enter" && onFinishRename(frame.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onFinishRename(frame.id);
+              else if (e.key === "Escape") onCancelRename();
+            }}
             onClick={(e) => e.stopPropagation()}
-            autoFocus
+            onDoubleClick={(e) => e.stopPropagation()}
           />
         ) : (
           <span
@@ -403,7 +419,8 @@ interface FramesViewProps {
    * identical reference, and the render counts are pinned by
    * `containers/__tests__/frameThumbnailMemo.dom.test.tsx`.
    */
-  addFrame: (name: string, copyPrevious?: boolean) => void;
+  /** Returns the new frame's id so "+ Add" can open it for renaming. */
+  addFrame: (name: string, copyPrevious?: boolean) => string;
   deleteFrame: (id: string) => void;
   renameFrame: (id: string, name: string) => void;
   selectFrame: (id: string, syncVariants?: boolean) => void;
@@ -451,35 +468,50 @@ export function FramesView({
     [selectFrame],
   );
 
-  const [newFrameName, setNewFrameName] = useState("");
   const [copyPrevious, setCopyPrevious] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [tagsModalContext, setTagsModalContext] =
     useState<FrameTagsContext | null>(null);
 
-  const handleAddFrame = useCallback(() => {
-    const frames = obj?.frames ?? [];
-    const name = newFrameName.trim() || `Frame ${frames.length + 1}`;
-    addFrame(name, copyPrevious);
-    setNewFrameName("");
-  }, [obj?.frames, newFrameName, copyPrevious, addFrame]);
-
   const handleStartRename = useCallback((id: string, name: string) => {
     setEditingId(id);
     setEditingName(name);
   }, []);
 
+  /**
+   * Create the frame straight away and open its name for editing — there is
+   * no "new frame name" field to fill in first (the same create-then-name UX
+   * the layer panel and the palette manager use). The default name is only a
+   * placeholder, so `FrameItem` selects it for overtyping.
+   */
+  const handleAddFrame = useCallback(() => {
+    const frames = obj?.frames ?? [];
+    const taken = new Set(frames.map((f) => f.name));
+    let n = frames.length + 1;
+    while (taken.has(`Frame ${n}`)) n++;
+    const name = `Frame ${n}`;
+    const id = addFrame(name, copyPrevious);
+    if (id) handleStartRename(id, name);
+  }, [obj?.frames, copyPrevious, addFrame, handleStartRename]);
+
   const handleFinishRename = useCallback(
     (id: string) => {
-      if (editingName.trim()) {
-        renameFrame(id, editingName.trim());
-      }
+      // Read through the setter so a rename committed by `blur` cannot see a
+      // stale name captured at render time.
+      setEditingName((current) => {
+        if (current.trim()) renameFrame(id, current.trim());
+        return "";
+      });
       setEditingId(null);
-      setEditingName("");
     },
-    [editingName, renameFrame],
+    [renameFrame],
   );
+
+  const handleCancelRename = useCallback(() => {
+    setEditingId(null);
+    setEditingName("");
+  }, []);
 
   const handleEditingNameChange = useCallback((name: string) => {
     setEditingName(name);
@@ -675,14 +707,6 @@ export function FramesView({
             />
             <span>Copy</span>
           </label>
-          <input
-            type="text"
-            className="frame-timeline__new-frame-input"
-            placeholder="New frame..."
-            value={newFrameName}
-            onChange={(e) => setNewFrameName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAddFrame()}
-          />
           <button
             className="frame-timeline__add-frame-btn"
             onClick={handleAddFrame}
@@ -728,6 +752,7 @@ export function FramesView({
               editingName={editingName}
               onEditingNameChange={handleEditingNameChange}
               onFinishRename={handleFinishRename}
+              onCancelRename={handleCancelRename}
               onOpenTags={setTagsModalContext}
               variants={project.variants}
               project={project}

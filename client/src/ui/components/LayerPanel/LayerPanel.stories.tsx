@@ -59,8 +59,6 @@ const meta = {
     dragIndex: null,
     editingId: null,
     editingName: "",
-    newLayerName: "",
-    onNewLayerNameChange: fn(),
     onAddLayer: fn(),
     onToggleAllVisibility: fn(),
     onOpenCopyFrom: fn(),
@@ -72,6 +70,7 @@ const meta = {
     onStartRename: fn(),
     onEditingNameChange: fn(),
     onFinishRename: fn(),
+    onCancelRename: fn(),
     onDragStart: fn(),
     onDragOver: fn(),
     onDragEnd: fn(),
@@ -137,15 +136,17 @@ export const VariantSelected: Story = {
 };
 
 /**
- * Edge: 14 long-named layers, scrolling, with a long pending new-layer name.
- * The densest this panel gets before virtualisation would be needed.
+ * Edge: 14 long-named layers, scrolling, with one row's name being renamed
+ * inline to something long. The densest this panel gets before virtualisation
+ * would be needed.
  */
 export const ManyLongNames: Story = {
   args: {
     layers: MANY_LONG_NAMED_LAYERS,
     selectedLayerId: MANY_LONG_NAMED_LAYERS[3]?.id ?? null,
     allVisible: false,
-    newLayerName: "A rather long pending layer name",
+    editingId: MANY_LONG_NAMED_LAYERS[3]?.id ?? null,
+    editingName: "A rather long name being typed inline",
   },
 };
 

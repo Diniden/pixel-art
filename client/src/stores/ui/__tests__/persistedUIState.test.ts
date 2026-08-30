@@ -172,6 +172,7 @@ function fullyPopulatedProject(): Project {
     },
     theme: "light-cozy",
     viewZoom: 2.5,
+    eyedropperMode: "stay",
   });
   return project;
 }
@@ -224,7 +225,11 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     // protects the owner's 151 snapshots.
     // +1 (2026-08-28): `viewZoom`, the canvas view-transform scale, which
     // now persists so the view follows the project across devices.
-    expect(declared).toHaveLength(47);
+    // +1 (2026-08-28): `eyedropperMode`, the eyedropper's post-sample
+    // behaviour. Conditional like the three above — the store field is
+    // `undefined` until the user picks a mode from the eyedropper's menu, so
+    // no existing snapshot gains the key.
+    expect(declared).toHaveLength(48);
 
     // A FULLY-POPULATED project, because 11 of the 44 keys are
     // conditionally present by design: the legacy `...project.uiState`

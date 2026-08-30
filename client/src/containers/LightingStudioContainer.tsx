@@ -42,6 +42,7 @@ import { LightingStudioPanelContainer } from "./LightingStudioPanelContainer";
 import { FrameTimelineContainer } from "./FrameTimelineContainer";
 import { LightingCanvasContainer } from "./LightingCanvasContainer";
 import { useStores } from "../stores/context";
+import { OtherHandRailContainer } from "./OtherHandRailContainer";
 import { useRailLayout } from "./hooks/useRailLayout";
 
 export const LightingStudioContainer = observer(
@@ -57,8 +58,20 @@ export const LightingStudioContainer = observer(
         toolbar={<ToolbarContainer />}
         objectLibrary={<ObjectLibraryContainer />}
         layerPanel={<LayerPanelContainer />}
-        rightControls={<RightSidebarTopControlsContainer />}
-        studioPanel={<LightingStudioPanelContainer />}
+        // Other Hand Mode hands the whole rail to one section — see
+        // `PixelStudioContainer` for the same swap.
+        rightControls={
+          ui.layout.otherHandActive ? null : (
+            <RightSidebarTopControlsContainer />
+          )
+        }
+        studioPanel={
+          ui.layout.otherHandActive ? (
+            <OtherHandRailContainer />
+          ) : (
+            <LightingStudioPanelContainer />
+          )
+        }
         timeline={<FrameTimelineContainer />}
         canvas={<LightingCanvasContainer />}
       />

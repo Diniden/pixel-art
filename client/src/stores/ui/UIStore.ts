@@ -500,6 +500,11 @@ export class UIStore {
     // Conditional for the same reason as the two above: a project that has
     // never been pinch/wheel-zoomed must not gain the key.
     /* 47 */ assign(persisted, "viewZoom", viewport.viewZoom);
+    // Conditional for the same reason again: a project whose owner has never
+    // opened the eyedropper's mode menu must not gain the key. The store
+    // field stays `undefined` until `setEyedropperMode` runs, so `assign`
+    // writes nothing and the corpus digests are untouched.
+    /* 48 */ assign(persisted, "eyedropperMode", tool.eyedropperMode);
 
     // See the TYPE-vs-REALITY note above: `borderRadius` is declared required
     // but is genuinely absent from most real projects.

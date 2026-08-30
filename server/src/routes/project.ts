@@ -16,6 +16,7 @@ import {
   readBackupFile,
 } from "../backup.js";
 import { isValidProjectName } from "../validation.js";
+import { broadcastProjectSaved, ORIGIN_HEADER } from "../sync.js";
 
 export const projectRouter = Router();
 
@@ -131,6 +132,12 @@ projectRouter.post("/project", async (req: Request, res: Response) => {
       projectName,
       projectContent,
     );
+
+    // Tell the OTHER open tabs to reload. Broadcast only after the write has
+    // landed, so a peer reloading immediately reads the new bytes. The saving
+    // tab identifies itself so it is not told to reload its own write.
+    const origin = req.header(ORIGIN_HEADER) ?? null;
+    broadcastProjectSaved(projectName, origin);
 
     res.json({ success: true, backupCreated });
   } catch (error) {

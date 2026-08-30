@@ -83,7 +83,6 @@ export const LayerPanelContainer = observer(function LayerPanelContainer() {
     ui,
   } = store;
 
-  const [newLayerName, setNewLayerName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -181,16 +180,28 @@ export const LayerPanelContainer = observer(function LayerPanelContainer() {
 
   // ── Local editing state ─────────────────────────────────────────────────
 
-  const handleAddLayer = useCallback(() => {
-    const name =
-      newLayerName.trim() || `Layer ${(storedLayers?.length ?? 0) + 1}`;
-    layerStore.addLayer(name);
-    setNewLayerName("");
-  }, [newLayerName, storedLayers, layerStore]);
-
   const handleStartRename = useCallback((id: string, name: string) => {
     setEditingId(id);
     setEditingName(name);
+  }, []);
+
+  /**
+   * Create the layer straight away and open its name for editing — there is no
+   * "new layer name" field to fill in first. The default name is only a
+   * placeholder, so `LayerRow` selects it for overtyping.
+   */
+  const handleAddLayer = useCallback(() => {
+    const taken = new Set((storedLayers ?? []).map((l) => l.name));
+    let n = (storedLayers?.length ?? 0) + 1;
+    while (taken.has(`Layer ${n}`)) n++;
+    const name = `Layer ${n}`;
+    const id = layerStore.addLayer(name);
+    handleStartRename(id, name);
+  }, [storedLayers, layerStore, handleStartRename]);
+
+  const handleCancelRename = useCallback(() => {
+    setEditingId(null);
+    setEditingName("");
   }, []);
 
   const handleFinishRename = useCallback(
@@ -314,8 +325,6 @@ export const LayerPanelContainer = observer(function LayerPanelContainer() {
       dragIndex={dragIndex}
       editingId={editingId}
       editingName={editingName}
-      newLayerName={newLayerName}
-      onNewLayerNameChange={setNewLayerName}
       onAddLayer={handleAddLayer}
       onToggleAllVisibility={(visible) =>
         layerStore.toggleAllLayersVisibility(visible)
@@ -329,6 +338,7 @@ export const LayerPanelContainer = observer(function LayerPanelContainer() {
       onStartRename={handleStartRename}
       onEditingNameChange={setEditingName}
       onFinishRename={handleFinishRename}
+      onCancelRename={handleCancelRename}
       onDragStart={(index) => setDragIndex(index)}
       onDragOver={handleDragOver}
       onDragEnd={() => setDragIndex(null)}

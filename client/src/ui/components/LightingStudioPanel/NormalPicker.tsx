@@ -1,5 +1,6 @@
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, type PointerEvent } from "react";
 import { Normal } from "../../../types";
+import { classNames } from "../../classNames";
 import {
   ACCENT_PRIMARY,
   NORMAL_SPHERE_EDGE,
@@ -47,6 +48,16 @@ interface NormalPickerProps {
   normal: Normal;
   /** Called with the new normal on drag or scroll. */
   onNormalChange: (normal: Normal) => void;
+  /**
+   * The sphere's diameter in CSS px. Defaults to 140 (the rail). Other Hand
+   * Mode passes a larger one so a thumb can be precise with it.
+   */
+  size?: number;
+  /**
+   * Compact rendering for the Other Hand stage: no header, no value readout,
+   * no hint — just the sphere. The stage supplies its own label.
+   */
+  compact?: boolean;
 }
 
 // Convert normal vector to sphere position (x, y in -1 to 1 range)
@@ -83,14 +94,19 @@ export function NormalPicker({
   enableScrollControl = false,
   normal,
   onNormalChange,
+  size = 140,
+  compact = false,
 }: NormalPickerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  // Which pointer owns the drag, or null. A ref rather than state: the drag
+  // never needs a re-render, and the pointer-capture API keeps the events
+  // flowing to the canvas even after the finger leaves it.
+  const dragPointerRef = useRef<number | null>(null);
 
   const setNormal = onNormalChange;
 
-  const sphereSize = 140;
+  const sphereSize = size;
   const sphereRadius = sphereSize / 2 - 10;
 
   // Draw the sphere and normal indicator
@@ -187,19 +203,29 @@ export function NormalPicker({
     draw();
   }, [draw]);
 
-  // Handle mouse/touch interaction
+  // Handle mouse / touch / pencil interaction — one pointer-event path.
+  //
+  // ⚠️ The canvas's LAYOUT size is not its bitmap size: the rail is CSS-scaled
+  // (`railLayout`), so `rect.width` is `sphereSize * scale`. The contact point
+  // has to be mapped through that scale or the indicator lands progressively
+  // further from the finger the further it is from the centre — the "offset
+  // from the point of contact" report. Mapping via the rect's actual size
+  // puts the indicator exactly under the pointer on every device.
   const handleInteraction = useCallback(
     (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const scaleX = sphereSize / rect.width;
+      const scaleY = sphereSize / rect.height;
       const centerX = sphereSize / 2;
       const centerY = sphereSize / 2;
 
       // Get position relative to sphere center, normalized to -1 to 1
-      const x = (clientX - rect.left - centerX) / sphereRadius;
-      const y = (clientY - rect.top - centerY) / sphereRadius;
+      const x = ((clientX - rect.left) * scaleX - centerX) / sphereRadius;
+      const y = ((clientY - rect.top) * scaleY - centerY) / sphereRadius;
 
       const newNormal = spherePosToNormal(x, y);
       setNormal(newNormal);
@@ -207,40 +233,28 @@ export function NormalPicker({
     [sphereRadius, sphereSize, setNormal],
   );
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
+  const handlePointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
+    // The primary button only: a two-finger tap must not start a drag.
+    if (e.button !== 0) return;
+    if (dragPointerRef.current !== null) return;
+    e.preventDefault();
+    dragPointerRef.current = e.pointerId;
+    e.currentTarget.setPointerCapture(e.pointerId);
     handleInteraction(e.clientX, e.clientY);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
+  const handlePointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
+    if (dragPointerRef.current !== e.pointerId) return;
     handleInteraction(e.clientX, e.clientY);
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
+  const handlePointerEnd = (e: PointerEvent<HTMLCanvasElement>) => {
+    if (dragPointerRef.current !== e.pointerId) return;
+    dragPointerRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
   };
-
-  // Handle global mouse events for dragging outside the canvas
-  useEffect(() => {
-    if (!isDragging) return;
-
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      handleInteraction(e.clientX, e.clientY);
-    };
-
-    const handleGlobalMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    window.addEventListener("mousemove", handleGlobalMouseMove);
-    window.addEventListener("mouseup", handleGlobalMouseUp);
-
-    return () => {
-      window.removeEventListener("mousemove", handleGlobalMouseMove);
-      window.removeEventListener("mouseup", handleGlobalMouseUp);
-    };
-  }, [isDragging, handleInteraction]);
 
   // Handle scroll wheel for normal adjustment
   useEffect(() => {
@@ -273,23 +287,37 @@ export function NormalPicker({
   };
 
   return (
-    <div className="normal-picker" ref={containerRef}>
-      <div className="normal-picker__header">
-        {isLightDirection ? "Light Direction" : "Normal Direction"}
-      </div>
+    <div
+      className={classNames(
+        "normal-picker",
+        compact && "normal-picker--compact",
+      )}
+      ref={containerRef}
+    >
+      {compact ? null : (
+        <div className="normal-picker__header">
+          {isLightDirection ? "Light Direction" : "Normal Direction"}
+        </div>
+      )}
       <div className="normal-picker__canvas-frame">
         <canvas
           ref={canvasRef}
           width={sphereSize}
           height={sphereSize}
           className="normal-picker__canvas"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          role="slider"
+          aria-label={isLightDirection ? "Light direction" : "Normal direction"}
+          aria-valuetext={formatNormal(normal)}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
         />
       </div>
-      <div className="normal-picker__value">{formatNormal(normal)}</div>
-      {enableScrollControl && (
+      {compact ? null : (
+        <div className="normal-picker__value">{formatNormal(normal)}</div>
+      )}
+      {!compact && enableScrollControl && (
         <div className="normal-picker__hint">Scroll to adjust</div>
       )}
     </div>

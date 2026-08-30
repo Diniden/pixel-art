@@ -51,9 +51,19 @@ import {
   stepRail,
   stepToolbarSpread,
   canStepToolbarSpread,
+  isOtherHandColorModel,
+  isOtherHandPosition,
+  resetOtherHandPositions,
+  setOtherHandColorModel,
+  setOtherHandIncludeAlpha,
+  setOtherHandWidgetPosition,
   TOOLBAR_EDGES,
   TOOLBAR_SPREADS,
   type BottomEdge,
+  type OtherHandColorModel,
+  type OtherHandLayout,
+  type OtherHandPosition,
+  type OtherHandSectionLayout,
   type RailLayout,
   type RailName,
   type RailScale,
@@ -110,6 +120,7 @@ function narrowLayout(persisted: PersistedRailLayout | undefined): RailLayout {
 
   const d = DEFAULT_RAIL_LAYOUT;
   const narrowed: RailLayout = {
+    otherHand: narrowOtherHand(persisted.otherHand),
     left: {
       slot: slot(persisted.left?.slot, d.left.slot),
       scale: scale(persisted.left?.scale, d.left.scale),
@@ -144,9 +155,38 @@ function narrowLayout(persisted: PersistedRailLayout | undefined): RailLayout {
   return narrowed;
 }
 
+/**
+ * Narrow the Other Hand arrangements. Field-by-field, like the rest: a
+ * section with one malformed position keeps its other positions, and an
+ * unknown colour model falls back to "unset" rather than discarding the
+ * section. An entry that is not an object at all is dropped.
+ */
+function narrowOtherHand(
+  persisted: PersistedRailLayout["otherHand"],
+): OtherHandLayout {
+  if (!persisted || typeof persisted !== "object") return {};
+  const out: OtherHandLayout = {};
+  for (const [key, raw] of Object.entries(persisted)) {
+    if (!raw || typeof raw !== "object") continue;
+    const positions: OtherHandSectionLayout["positions"] = {};
+    for (const [id, pos] of Object.entries(raw.positions ?? {})) {
+      if (isOtherHandPosition(pos)) positions[id] = { x: pos.x, y: pos.y };
+    }
+    const section: OtherHandSectionLayout = { positions };
+    if (isOtherHandColorModel(raw.colorModel)) {
+      section.colorModel = raw.colorModel;
+    }
+    if (typeof raw.includeAlpha === "boolean") {
+      section.includeAlpha = raw.includeAlpha;
+    }
+    out[key] = section;
+  }
+  return out;
+}
+
 /** The store's `RailLayout` widened back to the persisted shape. */
 function widenLayout(layout: RailLayout): PersistedRailLayout {
-  return {
+  const widened: PersistedRailLayout = {
     left: { slot: layout.left.slot, scale: layout.left.scale },
     right: { slot: layout.right.slot, scale: layout.right.scale },
     bottom: { edge: layout.bottom.edge, scale: layout.bottom.scale },
@@ -156,6 +196,14 @@ function widenLayout(layout: RailLayout): PersistedRailLayout {
       spread: layout.toolbar.spread,
     },
   };
+  // ⚠️ Emitted ONLY when something has been arranged. A layout saved before
+  // Other Hand Mode existed must widen back to exactly the record it came
+  // from — an empty `otherHand: {}` on every rail layout would be wire-format
+  // drift for a feature the user has not touched.
+  if (Object.keys(layout.otherHand).length > 0) {
+    widened.otherHand = layout.otherHand;
+  }
+  return widened;
 }
 
 export class LayoutUIStore {
@@ -183,13 +231,28 @@ export class LayoutUIStore {
   /** Whether the layout overlay is showing. Session-only: never persisted. */
   layoutMode = false;
 
+  /**
+   * The section currently taking over the rail in Other Hand Mode, or `null`
+   * when the mode is off. Session-only, like `layoutMode`: the ARRANGEMENT is
+   * persisted (see `railLayout.ts`), but whether the rail is in the mode
+   * right now is not — a project must open showing its rail normally.
+   */
+  otherHandSection: string | null = null;
+
   constructor(deviceClass: DeviceClass = detectDeviceClass()) {
     this.deviceClass = deviceClass;
     makeObservable(this, {
       railLayouts: observableRef,
       theme: observable,
       layoutMode: observable,
+      otherHandSection: observable,
       setTheme: action,
+      enterOtherHand: action,
+      exitOtherHand: action,
+      setOtherHandWidgetPosition: action,
+      setOtherHandColorModel: action,
+      setOtherHandIncludeAlpha: action,
+      resetOtherHandPositions: action,
       setLayoutMode: action,
       toggleLayoutMode: action,
       stepRail: action,
@@ -272,6 +335,62 @@ export class LayoutUIStore {
     return canScaleRail(this.layout, rail, direction);
   }
 
+  /* ── Other Hand Mode ──────────────────────────────────────────────────── */
+
+  /**
+   * ⚠️ TABLETS ONLY (owner, 2026-08-28). The mode exists for one grip — an
+   * iPad held in one hand with that hand's thumb on the rail — so it is
+   * offered only where that grip is possible. A phone is too narrow for a
+   * rail of thumb sliders and a desktop has nowhere to put a thumb.
+   * Gated on the device CLASS rather than on touch support, for the same
+   * reason the layout is keyed by class: a touch-screen laptop is a desktop.
+   */
+  get otherHandAvailable(): boolean {
+    return this.deviceClass === "tablet";
+  }
+
+  /** Whether the rail is currently taken over by a section. */
+  get otherHandActive(): boolean {
+    return this.otherHandSection !== null;
+  }
+
+  /** Hand the rail to one section. A no-op where the mode is unavailable. */
+  enterOtherHand(sectionKey: string): void {
+    if (!this.otherHandAvailable) return;
+    this.otherHandSection = sectionKey;
+  }
+
+  exitOtherHand(): void {
+    this.otherHandSection = null;
+  }
+
+  /** One section's arrangement, defaulted so callers never see `undefined`. */
+  otherHandLayoutFor(sectionKey: string): OtherHandSectionLayout {
+    return this.layout.otherHand[sectionKey] ?? { positions: {} };
+  }
+
+  setOtherHandWidgetPosition(
+    sectionKey: string,
+    widgetId: string,
+    position: OtherHandPosition,
+  ): void {
+    this.write(
+      setOtherHandWidgetPosition(this.layout, sectionKey, widgetId, position),
+    );
+  }
+
+  setOtherHandColorModel(sectionKey: string, model: OtherHandColorModel): void {
+    this.write(setOtherHandColorModel(this.layout, sectionKey, model));
+  }
+
+  setOtherHandIncludeAlpha(sectionKey: string, includeAlpha: boolean): void {
+    this.write(setOtherHandIncludeAlpha(this.layout, sectionKey, includeAlpha));
+  }
+
+  resetOtherHandPositions(sectionKey: string): void {
+    this.write(resetOtherHandPositions(this.layout, sectionKey));
+  }
+
   /** Return THIS device to the historical arrangement. */
   resetLayout(): void {
     this.write(DEFAULT_RAIL_LAYOUT);
@@ -301,8 +420,7 @@ export class LayoutUIStore {
    * desktop session must not drop the iPad's saved layout when it saves.
    */
   toPersistedRailLayouts():
-    | { [deviceClass: string]: PersistedRailLayout }
-    | undefined {
+    { [deviceClass: string]: PersistedRailLayout } | undefined {
     return this.hasStoredLayout ? this.railLayouts : undefined;
   }
 }

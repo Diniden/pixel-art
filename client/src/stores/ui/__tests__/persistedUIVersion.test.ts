@@ -113,6 +113,10 @@ const PERSISTED_EDITS: [name: string, edit: (ui: UIStore) => void][] = [
   // rail the user moved that reverts on reload would look like a UI bug, not
   // a persistence one.
   ["viewZoom", (ui) => ui.viewport.setViewZoom(2)],
+  // "stay", not "revert": the field is tri-state and reads as "revert" by
+  // default, so writing "revert" would be an idempotent write that could
+  // pass this test without the reaction ever seeing a change.
+  ["eyedropperMode", (ui) => ui.tool.setEyedropperMode("stay")],
   ["railLayouts", (ui) => ui.layout.stepRail("left", 1)],
   ["theme", (ui) => ui.layout.setTheme("light-cozy")],
   [
@@ -150,7 +154,8 @@ describe("persistedUIVersion — every persisted field bumps it", () => {
     // owned by `SelectionMirror` until `TimelineUIStore` lands.
     // +2 (2026-08-25): `railLayouts` and `theme`.
     // +1 (2026-08-28): `viewZoom`.
-    expect(PERSISTED_EDITS).toHaveLength(34);
+    // +1 (2026-08-28): `eyedropperMode`.
+    expect(PERSISTED_EDITS).toHaveLength(35);
   });
 });
 

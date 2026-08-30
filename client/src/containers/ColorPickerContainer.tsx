@@ -63,6 +63,7 @@
 import { observer } from "mobx-react-lite";
 import { ColorPicker } from "../ui/components/ColorPicker/ColorPicker";
 import { useStores } from "../stores/context";
+import { OTHER_HAND_SECTIONS } from "./otherHand/otherHandSections";
 
 export const ColorPickerContainer = observer(function ColorPickerContainer() {
   const app = useStores();
@@ -104,6 +105,11 @@ export const ColorPickerContainer = observer(function ColorPickerContainer() {
         app.adjustColor(color, trackHistory)
       }
       onSaveStateToHistory={(label) => app.saveStateToHistory(label)}
+      onOtherHand={
+        ui.layout.otherHandAvailable
+          ? () => ui.layout.enterOtherHand(OTHER_HAND_SECTIONS.color)
+          : undefined
+      }
     />
   );
 });

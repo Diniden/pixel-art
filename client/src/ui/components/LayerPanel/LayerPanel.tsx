@@ -63,9 +63,7 @@ export interface LayerPanelProps {
   dragIndex: number | null;
   editingId: string | null;
   editingName: string;
-  newLayerName: string;
 
-  onNewLayerNameChange: (name: string) => void;
   onAddLayer: () => void;
   onToggleAllVisibility: (visible: boolean) => void;
   onOpenCopyFrom: () => void;
@@ -80,6 +78,7 @@ export interface LayerPanelProps {
   onStartRename: (layerId: string, currentName: string) => void;
   onEditingNameChange: (name: string) => void;
   onFinishRename: (layerId: string) => void;
+  onCancelRename: () => void;
 
   onDragStart: (displayIndex: number) => void;
   onDragOver: (e: React.DragEvent, displayIndex: number) => void;
@@ -127,8 +126,6 @@ export function LayerPanel({
   dragIndex,
   editingId,
   editingName,
-  newLayerName,
-  onNewLayerNameChange,
   onAddLayer,
   onToggleAllVisibility,
   onOpenCopyFrom,
@@ -140,6 +137,7 @@ export function LayerPanel({
   onStartRename,
   onEditingNameChange,
   onFinishRename,
+  onCancelRename,
   onDragStart,
   onDragOver,
   onDragEnd,
@@ -183,15 +181,13 @@ export function LayerPanel({
         dragIndex={dragIndex}
         editingId={editingId}
         editingName={editingName}
-        newLayerName={newLayerName}
         canDeleteLayer={canDeleteLayer}
-        onNewLayerNameChange={onNewLayerNameChange}
-        onAddLayer={onAddLayer}
         onSelect={onSelect}
         onToggleVisibility={onToggleVisibility}
         onStartRename={onStartRename}
         onEditingNameChange={onEditingNameChange}
         onFinishRename={onFinishRename}
+        onCancelRename={onCancelRename}
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}

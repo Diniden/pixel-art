@@ -227,11 +227,18 @@ export class LayerStore {
 
   /* ══ from layerActions.ts (14) ═══════════════════════════════════════════ */
 
-  /** Appends to the END of the array — the TOP of the stack. */
-  addLayer(name: string): void {
+  /**
+   * Appends to the END of the array — the TOP of the stack.
+   *
+   * Returns the new layer's id. `LayerPanel` creates a layer from the "+"
+   * button and immediately opens its name for editing, so it needs to know
+   * which row to focus — widening `void` to `string` is the least-coupled way
+   * to say that. Existing callers may ignore the return value.
+   */
+  addLayer(name: string): string {
     const obj = this.currentObject();
     const frame = this.currentFrame();
-    if (!obj || !frame) return;
+    if (!obj || !frame) return "";
 
     const layerId = generateId();
     this.mutator.commit("Add layer", true, () => {
@@ -246,6 +253,7 @@ export class LayerStore {
       );
     });
     this.selectLayerId(layerId);
+    return layerId;
   }
 
   /**
@@ -712,9 +720,9 @@ export class LayerStore {
    * selected id therefore matches no layer. Observed behaviour
    * (`timelineActions.ts:15-40`), not a transcription slip.
    */
-  addLayerToAllFrames(name: string): void {
+  addLayerToAllFrames(name: string): string {
     const obj = this.currentObject();
-    if (!obj) return;
+    if (!obj) return "";
 
     const layerId = generateId();
     this.mutator.commit("Add layer to all frames", true, () => {
@@ -729,6 +737,39 @@ export class LayerStore {
       });
     });
     this.selectLayerId(layerId);
+    return name;
+  }
+
+  /**
+   * Rename every layer called `oldName` across ALL frames.
+   *
+   * The timeline is keyed by NAME, not by id: one header row stands for the
+   * layers of that name in every frame, and `moveLayerAcrossAllFrames` and the
+   * header colours match by name too. Renaming a single frame's layer would
+   * therefore split one header into two and desynchronise the move ops, so the
+   * timeline's inline rename has to hit every frame at once.
+   *
+   * A no-op when `newName` is already taken by a different layer name — merging
+   * two header rows is not a rename, and the timeline has no way to undo it.
+   */
+  renameLayerAcrossAllFrames(oldName: string, newName: string): void {
+    const obj = this.currentObject();
+    if (!obj) return;
+    if (oldName === newName) return;
+
+    const nameExists = obj.frames.some((f) =>
+      f.layers.some((l) => l.name === newName),
+    );
+    if (nameExists) return;
+
+    this.mutator.commit("Rename layer across all frames", true, () => {
+      this.mapFrames(obj.id, (f) => ({
+        ...f,
+        layers: f.layers.map((l) =>
+          l.name === oldName ? { ...l, name: newName } : l,
+        ),
+      }));
+    });
   }
 
   /** Returns the new layer's id, or `""` when there is no selected object. */

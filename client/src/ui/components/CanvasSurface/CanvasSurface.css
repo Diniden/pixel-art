@@ -89,6 +89,21 @@
   z-index: var(--z-canvas-overlay);
 }
 
+/* The hover marker (Apple Pencil hover / mouse hover).
+
+   Sits ABOVE the artwork but BELOW the trace overlays, which is what the
+   source order gives it — the marker is a pointer affordance, and a trace
+   reference the user is drawing against must not be obscured by it.
+
+   The `canvas__overlay--hover` modifier deliberately carries NO declarations
+   of its own, so there is no rule for it here. Every property the marker
+   needs — the absolute placement, the pixelated scaling, the z-index, and the
+   2px transparent border that compensates for `.canvas__surface`'s visible
+   2px one — comes from `.canvas__overlay` above, and must keep coming from
+   there: if that surface border ever changes, the marker has to move WITH the
+   trace overlays rather than drifting 2px away from them. The class exists to
+   identify the marker canvas in the DOM and in tests. */
+
 /* Touch-friendly adjustments */
 @media (pointer: coarse) {
   .canvas__surface {

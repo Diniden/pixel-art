@@ -17,6 +17,7 @@
  * same default.
  */
 import type { ReactNode } from "react";
+import { OtherHandButton } from "../OtherHand/OtherHandButton";
 import "./LightingStudioPanel.css";
 
 interface LightingStudioPanelProps {
@@ -31,6 +32,10 @@ interface LightingStudioPanelProps {
   normalPicker: ReactNode;
   /** `LightControlContainer` element, injected by the container. */
   lightControl: ReactNode;
+  /** Other Hand Mode for the brush (tablets only; absent = no button). */
+  onOtherHandBrush?: () => void;
+  /** Other Hand Mode for the light settings (tablets only). */
+  onOtherHandLight?: () => void;
 }
 
 export function LightingStudioPanel({
@@ -43,12 +48,24 @@ export function LightingStudioPanel({
   onHeightBrushValueChange,
   normalPicker,
   lightControl,
+  onOtherHandBrush,
+  onOtherHandLight,
 }: LightingStudioPanelProps) {
   return (
     <div className="lighting-studio-panel">
       <div className="panel lighting-studio-panel__section">
         <div className="panel__header">
-          {editMode === "height" ? "Height Brush" : "Normal Brush"}
+          <span className="panel__title">
+            {editMode === "height" ? "Height Brush" : "Normal Brush"}
+          </span>
+          {onOtherHandBrush ? (
+            <OtherHandButton
+              onClick={onOtherHandBrush}
+              sectionLabel={
+                editMode === "height" ? "Height Brush" : "Normal Brush"
+              }
+            />
+          ) : null}
         </div>
         <div className="panel__body panel__body--stack">
           {editMode === "height" ? (
@@ -118,7 +135,15 @@ export function LightingStudioPanel({
       </div>
 
       <div className="panel lighting-studio-panel__section">
-        <div className="panel__header">Light Settings</div>
+        <div className="panel__header">
+          <span className="panel__title">Light Settings</span>
+          {onOtherHandLight ? (
+            <OtherHandButton
+              onClick={onOtherHandLight}
+              sectionLabel="Light Settings"
+            />
+          ) : null}
+        </div>
         <div className="panel__body panel__body--stack">{lightControl}</div>
       </div>
     </div>

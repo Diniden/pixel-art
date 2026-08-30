@@ -63,14 +63,29 @@ describe("CanvasSurface — GATE 2: renders with NO store provider", () => {
   }
 
   it("mounts the frame-overlay canvas only when asked to", () => {
+    // ⚠️ Counts the CONDITIONAL overlays only. The hover marker also carries
+    // `.canvas__overlay` — it takes that class for its positioning — but is
+    // mounted unconditionally, so a bare `.canvas__overlay` count would
+    // always be one higher and would stop measuring what this test is about.
+    const conditional = (c: HTMLElement) =>
+      c.querySelectorAll(".canvas__overlay:not(.canvas__overlay--hover)")
+        .length;
+
     const withOverlay = render(<composed.FrameOverlay />);
-    expect(
-      withOverlay.container.querySelectorAll(".canvas__overlay").length,
-    ).toBe(1);
+    expect(conditional(withOverlay.container)).toBe(1);
 
     const without = render(<composed.Default />);
-    expect(without.container.querySelectorAll(".canvas__overlay").length).toBe(
-      0,
+    expect(conditional(without.container)).toBe(0);
+  });
+
+  it("mounts the hover-marker canvas unconditionally", () => {
+    // Hover can begin at any moment without a mode being entered first —
+    // an Apple Pencil starts reporting as the hand approaches. Mounting the
+    // canvas in response to the first sample would drop that sample while
+    // React committed, so it is always present.
+    const { container } = render(<composed.Default />);
+    expect(container.querySelectorAll(".canvas__overlay--hover")).toHaveLength(
+      1,
     );
   });
 

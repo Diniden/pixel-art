@@ -140,6 +140,48 @@ export function isToolbarVertical(edge: ToolbarEdge): boolean {
 export const RAIL_SCALES = ["compact", "regular", "large", "huge"] as const;
 export type RailScale = (typeof RAIL_SCALES)[number];
 
+/* ══════════════════════════════════════════════════════════════════════════
+   OTHER HAND MODE (2026-08-28)
+   ══════════════════════════════════════════════════════════════════════════
+
+   On an iPad the drawing hand holds the Pencil and the OTHER hand holds the
+   device — with a thumb free along the rail's edge. Other Hand Mode turns one
+   rail section (the current tool's options, the colour picker, the light
+   settings) into a handful of large vertical thumb sliders and buttons that
+   the user positions wherever that thumb comfortably reaches.
+
+   The ARRANGEMENT is layout state and is persisted with the rest of the rail
+   layout, per device class, for the same reason the rail placement is: it is
+   a property of how this kind of device is held, not of the project. Whether
+   the mode is currently ON is session state on the store, like `layoutMode`.
+
+   Positions are PERCENTAGES of the section's stage (the rail's free area),
+   keyed by section and then by widget. A percentage survives the rail being
+   rescaled, the iPad being rotated, and the rail being moved to the other
+   side — a pixel offset would survive none of those. */
+
+/** One widget's top-left corner, as percentages of the stage's size. */
+export interface OtherHandPosition {
+  x: number;
+  y: number;
+}
+
+/** Which channel set the colour section's sliders show. */
+export const OTHER_HAND_COLOR_MODELS = ["hsl", "rgb"] as const;
+export type OtherHandColorModel = (typeof OTHER_HAND_COLOR_MODELS)[number];
+
+/** One section's arrangement. Every field is absent until the user sets it. */
+export interface OtherHandSectionLayout {
+  positions: { [widgetId: string]: OtherHandPosition };
+  /** Colour sections only: HSL (the default) or RGB sliders. */
+  colorModel?: OtherHandColorModel;
+  /** Colour sections only: whether the alpha slider is in the set. */
+  includeAlpha?: boolean;
+}
+
+/** Every section the user has arranged, by section key. */
+export type OtherHandLayout = { [sectionKey: string]: OtherHandSectionLayout };
+
 /** One rail's complete arrangement. */
 export interface RailLayout {
   left: { slot: SideSlot; scale: RailScale };
@@ -154,6 +196,12 @@ export interface RailLayout {
    * date round-tripping unchanged.
    */
   toolbar: { edge: ToolbarEdge; scale: RailScale; spread: ToolbarSpread };
+  /**
+   * Other Hand Mode arrangements (see the block above). `{}` — the default —
+   * is "nothing arranged", and is NOT written to the persisted record, so a
+   * layout saved before the feature existed round-trips byte-identically.
+   */
+  otherHand: OtherHandLayout;
 }
 
 /** The historical arrangement: rails where they have always been, unscaled. */
@@ -163,6 +211,7 @@ export const DEFAULT_RAIL_LAYOUT: RailLayout = {
   bottom: { edge: "bottom", scale: "regular" },
   // `top` is where the toolbar has always been, on a single line.
   toolbar: { edge: "top", scale: "regular", spread: 1 },
+  otherHand: {},
 };
 
 /**
@@ -204,7 +253,11 @@ function nextVisibleSlot(
   const from = SIDE_SLOTS.indexOf(layout[rail].slot);
   const side = slotSide(layout[rail].slot);
 
-  for (let i = from + direction; i >= 0 && i < SIDE_SLOTS.length; i += direction) {
+  for (
+    let i = from + direction;
+    i >= 0 && i < SIDE_SLOTS.length;
+    i += direction
+  ) {
     const candidate = SIDE_SLOTS[i];
     if (layout[other].slot === candidate) return candidate;
     if (slotSide(candidate) !== side) return candidate;
@@ -343,4 +396,102 @@ export function railsOnSide(
       (a, b) =>
         SIDE_SLOTS.indexOf(layout[a].slot) - SIDE_SLOTS.indexOf(layout[b].slot),
     );
+}
+
+/* ── Other Hand Mode ──────────────────────────────────────────────────────── */
+
+const clampPercent = (value: number): number =>
+  Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+
+/** Whether a persisted value is a usable position. Anything else is dropped. */
+export function isOtherHandPosition(
+  value: unknown,
+): value is OtherHandPosition {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as OtherHandPosition).x === "number" &&
+    typeof (value as OtherHandPosition).y === "number"
+  );
+}
+
+export function isOtherHandColorModel(
+  value: unknown,
+): value is OtherHandColorModel {
+  return (OTHER_HAND_COLOR_MODELS as readonly unknown[]).includes(value);
+}
+
+function otherHandSection(
+  layout: RailLayout,
+  sectionKey: string,
+): OtherHandSectionLayout {
+  return layout.otherHand[sectionKey] ?? { positions: {} };
+}
+
+function withOtherHandSection(
+  layout: RailLayout,
+  sectionKey: string,
+  section: OtherHandSectionLayout,
+): RailLayout {
+  return {
+    ...layout,
+    otherHand: { ...layout.otherHand, [sectionKey]: section },
+  };
+}
+
+/**
+ * Place one widget. The position is clamped to the stage, so a drag that
+ * ends off the rail leaves the widget at the edge rather than lost.
+ */
+export function setOtherHandWidgetPosition(
+  layout: RailLayout,
+  sectionKey: string,
+  widgetId: string,
+  position: OtherHandPosition,
+): RailLayout {
+  const section = otherHandSection(layout, sectionKey);
+  return withOtherHandSection(layout, sectionKey, {
+    ...section,
+    positions: {
+      ...section.positions,
+      [widgetId]: { x: clampPercent(position.x), y: clampPercent(position.y) },
+    },
+  });
+}
+
+export function setOtherHandColorModel(
+  layout: RailLayout,
+  sectionKey: string,
+  colorModel: OtherHandColorModel,
+): RailLayout {
+  const section = otherHandSection(layout, sectionKey);
+  if (section.colorModel === colorModel) return layout;
+  return withOtherHandSection(layout, sectionKey, { ...section, colorModel });
+}
+
+export function setOtherHandIncludeAlpha(
+  layout: RailLayout,
+  sectionKey: string,
+  includeAlpha: boolean,
+): RailLayout {
+  const section = otherHandSection(layout, sectionKey);
+  if (section.includeAlpha === includeAlpha) return layout;
+  return withOtherHandSection(layout, sectionKey, { ...section, includeAlpha });
+}
+
+/**
+ * Forget one section's positions — every widget returns to the default grid.
+ * The colour model and alpha choice are preferences, not positions, and are
+ * kept.
+ */
+export function resetOtherHandPositions(
+  layout: RailLayout,
+  sectionKey: string,
+): RailLayout {
+  if (!layout.otherHand[sectionKey]) return layout;
+  const section = otherHandSection(layout, sectionKey);
+  return withOtherHandSection(layout, sectionKey, {
+    ...section,
+    positions: {},
+  });
 }

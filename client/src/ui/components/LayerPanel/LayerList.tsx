@@ -1,6 +1,5 @@
 /**
- * LayerList — the new-layer form, the scrollable list, and the empty state
- * (REFRESH task 35).
+ * LayerList — the scrollable list and the empty state (REFRESH task 35).
  *
  * The list receives `layers` **already reversed** into display order
  * (top-layer-first) by the container, along with each row's resolved variant
@@ -27,19 +26,15 @@ export interface LayerListProps {
   /** Id of the layer whose name is being edited inline, or `null`. */
   editingId: string | null;
   editingName: string;
-  /** Draft text in the "new layer name" field. */
-  newLayerName: string;
   /** False when a single layer remains — per-row delete is refused. */
   canDeleteLayer: boolean;
-
-  onNewLayerNameChange: (name: string) => void;
-  onAddLayer: () => void;
 
   onSelect: (layerId: string) => void;
   onToggleVisibility: (layerId: string) => void;
   onStartRename: (layerId: string, currentName: string) => void;
   onEditingNameChange: (name: string) => void;
   onFinishRename: (layerId: string) => void;
+  onCancelRename: () => void;
 
   onDragStart: (displayIndex: number) => void;
   onDragOver: (e: React.DragEvent, displayIndex: number) => void;
@@ -70,15 +65,13 @@ export function LayerList({
   dragIndex,
   editingId,
   editingName,
-  newLayerName,
   canDeleteLayer,
-  onNewLayerNameChange,
-  onAddLayer,
   onSelect,
   onToggleVisibility,
   onStartRename,
   onEditingNameChange,
   onFinishRename,
+  onCancelRename,
   onDragStart,
   onDragOver,
   onDragEnd,
@@ -93,16 +86,6 @@ export function LayerList({
 }: LayerListProps) {
   return (
     <div className="panel__body">
-      <div className="layer-panel__new-form">
-        <input
-          type="text"
-          placeholder="New layer name..."
-          value={newLayerName}
-          onChange={(e) => onNewLayerNameChange(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onAddLayer()}
-        />
-      </div>
-
       <div className="layer-panel__list">
         {layers.map((layer, displayIndex) => (
           <LayerRow
@@ -120,6 +103,7 @@ export function LayerList({
             onStartRename={onStartRename}
             onEditingNameChange={onEditingNameChange}
             onFinishRename={onFinishRename}
+            onCancelRename={onCancelRename}
             onDragStart={onDragStart}
             onDragOver={onDragOver}
             onDragEnd={onDragEnd}

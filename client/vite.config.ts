@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => {
       alias: aliases,
     },
     server: {
+      // Bind all interfaces so the iPad companion app (`ios-companion/`) can
+      // reach the dev server across the LAN. Loopback-only makes it invisible.
+      host: true,
       port: 5173,
       proxy: {
         "/api": {
@@ -27,6 +30,12 @@ export default defineConfig(({ mode }) => {
           target: serverTarget,
           changeOrigin: true,
         },
+        // NOTE: there is deliberately NO "/ws" entry for the cross-instance
+        // sync socket. MEASURED: Vite's `ws: true` proxy does not forward the
+        // upgrade here — this same instance proxies `/api` fine (200) while
+        // dropping the `/ws` handshake silently, so the socket would hang
+        // rather than fail. `resolveSyncUrl()` connects straight to the
+        // Express port instead; see `src/api/client/syncClient.ts`.
       },
     },
   };

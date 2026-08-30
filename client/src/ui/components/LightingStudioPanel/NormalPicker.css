@@ -29,6 +29,17 @@
   display: block;
   cursor: crosshair;
   border-radius: 50%;
+  /* Pointer events own the sphere: without this iPadOS turns a Pencil or
+     finger drag into a rail scroll and never delivers the moves. */
+  touch-action: none;
+}
+
+/* The Other Hand stage's version: the sphere alone, on the card's ground. */
+.normal-picker--compact {
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .normal-picker__canvas:active {

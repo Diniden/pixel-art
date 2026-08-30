@@ -92,6 +92,8 @@ export interface LayerRowProps {
   onStartRename: (layerId: string, currentName: string) => void;
   onEditingNameChange: (name: string) => void;
   onFinishRename: (layerId: string) => void;
+  /** Abandon the inline edit without writing the name (Escape). */
+  onCancelRename: () => void;
 
   onDragStart: (displayIndex: number) => void;
   onDragOver: (e: React.DragEvent, displayIndex: number) => void;
@@ -133,6 +135,7 @@ export function LayerRow({
   onStartRename,
   onEditingNameChange,
   onFinishRename,
+  onCancelRename,
   onDragStart,
   onDragOver,
   onDragEnd,
@@ -199,14 +202,27 @@ export function LayerRow({
 
             {isEditing ? (
               <input
+                // A callback ref, not `autoFocus`: focusing is only half of
+                // what a just-created row needs. The name is a placeholder the
+                // user is expected to overtype, so it is selected, and the row
+                // may be below the fold of the list, so it is scrolled in.
+                ref={(el) => {
+                  if (!el) return;
+                  el.focus();
+                  el.select();
+                  el.scrollIntoView({ block: "nearest" });
+                }}
                 type="text"
                 className="layer-panel__name-input"
                 value={editingName}
                 onChange={(e) => onEditingNameChange(e.target.value)}
                 onBlur={() => onFinishRename(layer.id)}
-                onKeyDown={(e) => e.key === "Enter" && onFinishRename(layer.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onFinishRename(layer.id);
+                  else if (e.key === "Escape") onCancelRename();
+                }}
                 onClick={(e) => e.stopPropagation()}
-                autoFocus
+                onDoubleClick={(e) => e.stopPropagation()}
               />
             ) : (
               <span

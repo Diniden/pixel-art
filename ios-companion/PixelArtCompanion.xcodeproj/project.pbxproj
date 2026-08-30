@@ -1,0 +1,340 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0000000000549EDA5FBFA7B3 /* DiscoveryInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000225D2FCFF2F6FFC4 /* DiscoveryInfo.swift */; };
+		0000000002FCECD3F1296C62 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000006EA86862B6C04C37 /* RootView.swift */; };
+		00000000092364A49EAC343C /* PixelArtCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000005E1CC9C06F165F91 /* PixelArtCompanionApp.swift */; };
+		0000000032D0F7C16DE453D1 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000E156C1F6D01F205 /* WebView.swift */; };
+		0000000038A125258B5321A5 /* LocalNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000527A971195A957C6 /* LocalNetwork.swift */; };
+		000000004515B7F1E106DE6C /* ServerProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000006125D5796F0BF7C /* ServerProbe.swift */; };
+		0000000050885D4276C53D8B /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000524FC66A2F2CBBA6 /* DiscoveryView.swift */; };
+		000000005FA0E4BD57D4B2C0 /* DiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000003FA3CECB6F779483 /* DiscoveryService.swift */; };
+		000000006E787D14021E1CBB /* BonjourBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000790CCA4C5F0CD895 /* BonjourBrowser.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0000000006125D5796F0BF7C /* ServerProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerProbe.swift; sourceTree = "<group>"; };
+		000000000E156C1F6D01F205 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
+		000000001DA1D5B34ED65FBD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		00000000225D2FCFF2F6FFC4 /* DiscoveryInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryInfo.swift; sourceTree = "<group>"; };
+		000000003FA3CECB6F779483 /* DiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryService.swift; sourceTree = "<group>"; };
+		00000000524FC66A2F2CBBA6 /* DiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryView.swift; sourceTree = "<group>"; };
+		00000000527A971195A957C6 /* LocalNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNetwork.swift; sourceTree = "<group>"; };
+		000000005E1CC9C06F165F91 /* PixelArtCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixelArtCompanionApp.swift; sourceTree = "<group>"; };
+		000000006EA86862B6C04C37 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		0000000076C175EEDB6A3BCE /* PixelArtCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PixelArtCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		00000000790CCA4C5F0CD895 /* BonjourBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourBrowser.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0000000016064634D20BE8FC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0000000051E2FAE53480CEDF /* PixelArtCompanion */ = {
+			isa = PBXGroup;
+			children = (
+				000000005E1CC9C06F165F91 /* PixelArtCompanionApp.swift */,
+				000000005674B784DAE7B856 /* Discovery */,
+				000000007AF6C795C57BF357 /* Views */,
+				000000006C83D3B759264E2E /* Support */,
+			);
+			path = PixelArtCompanion;
+			sourceTree = "<group>";
+		};
+		000000005674B784DAE7B856 /* Discovery */ = {
+			isa = PBXGroup;
+			children = (
+				00000000225D2FCFF2F6FFC4 /* DiscoveryInfo.swift */,
+				0000000006125D5796F0BF7C /* ServerProbe.swift */,
+				00000000790CCA4C5F0CD895 /* BonjourBrowser.swift */,
+				00000000527A971195A957C6 /* LocalNetwork.swift */,
+				000000003FA3CECB6F779483 /* DiscoveryService.swift */,
+			);
+			path = Discovery;
+			sourceTree = "<group>";
+		};
+		000000005975D14A7686B7B9 = {
+			isa = PBXGroup;
+			children = (
+				0000000051E2FAE53480CEDF /* PixelArtCompanion */,
+				000000007D243B4CDCFB8DA7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		000000006C83D3B759264E2E /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				000000001DA1D5B34ED65FBD /* Info.plist */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		000000007AF6C795C57BF357 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				000000000E156C1F6D01F205 /* WebView.swift */,
+				00000000524FC66A2F2CBBA6 /* DiscoveryView.swift */,
+				000000006EA86862B6C04C37 /* RootView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		000000007D243B4CDCFB8DA7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0000000076C175EEDB6A3BCE /* PixelArtCompanion.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		000000007F448B06A572561B /* PixelArtCompanion */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0000000031AE7105B7043B22 /* Build configuration list for PBXNativeTarget "PixelArtCompanion" */;
+			buildPhases = (
+				0000000004C8C10D1AD381D9 /* Sources */,
+				0000000016064634D20BE8FC /* Frameworks */,
+				00000000742A4D210CFA1E34 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PixelArtCompanion;
+			productName = PixelArtCompanion;
+			productReference = 0000000076C175EEDB6A3BCE /* PixelArtCompanion.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		00000000634AEF182D6E771C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					000000007F448B06A572561B = {
+						CreatedOnToolsVersion = 26.6;
+					};
+				};
+			};
+			buildConfigurationList = 000000000ACDF285A6C6E31F /* Build configuration list for PBXProject "PixelArtCompanion" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 000000005975D14A7686B7B9;
+			productRefGroup = 000000007D243B4CDCFB8DA7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				000000007F448B06A572561B /* PixelArtCompanion */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		00000000742A4D210CFA1E34 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0000000004C8C10D1AD381D9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				00000000092364A49EAC343C /* PixelArtCompanionApp.swift in Sources */,
+				0000000000549EDA5FBFA7B3 /* DiscoveryInfo.swift in Sources */,
+				000000004515B7F1E106DE6C /* ServerProbe.swift in Sources */,
+				000000006E787D14021E1CBB /* BonjourBrowser.swift in Sources */,
+				0000000038A125258B5321A5 /* LocalNetwork.swift in Sources */,
+				000000005FA0E4BD57D4B2C0 /* DiscoveryService.swift in Sources */,
+				0000000032D0F7C16DE453D1 /* WebView.swift in Sources */,
+				0000000050885D4276C53D8B /* DiscoveryView.swift in Sources */,
+				0000000002FCECD3F1296C62 /* RootView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		000000000CF6B8E2BCA60765 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N3NJ8XQ24Q;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PixelArtCompanion/Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Pixel Art";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Pixel Art Companion looks for the Pixel Art editor running on your local network so it can display it on this iPad.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.diniden.personal.PixelArtCompanion;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Release;
+		};
+		0000000065CBF563F293B456 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		0000000069F025D54FED1D08 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = N3NJ8XQ24Q;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PixelArtCompanion/Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Pixel Art";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Pixel Art Companion looks for the Pixel Art editor running on your local network so it can display it on this iPad.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = NO;
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.diniden.personal.PixelArtCompanion;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Debug;
+		};
+		00000000735F72BEDA533496 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		000000000ACDF285A6C6E31F /* Build configuration list for PBXProject "PixelArtCompanion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0000000065CBF563F293B456 /* Debug */,
+				00000000735F72BEDA533496 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0000000031AE7105B7043B22 /* Build configuration list for PBXNativeTarget "PixelArtCompanion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0000000069F025D54FED1D08 /* Debug */,
+				000000000CF6B8E2BCA60765 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 00000000634AEF182D6E771C /* Project object */;
+}

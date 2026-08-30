@@ -108,7 +108,8 @@ export const TimelineViewContainer = observer(function TimelineViewContainer({
     layerId: string;
     startRow: number;
   } | null>(null);
-  const [newLayerName, setNewLayerName] = useState("");
+  const [editingLayerName, setEditingLayerName] = useState<string | null>(null);
+  const [editingLayerDraft, setEditingLayerDraft] = useState("");
 
   const frames = obj.frames;
   const showThumbnails = ui.viewport.timelineThumbnailMode;
@@ -259,11 +260,44 @@ export const TimelineViewContainer = observer(function TimelineViewContainer({
 
   // ── Layer ops ───────────────────────────────────────────────────────────
 
+  const handleStartLayerRename = useCallback((name: string) => {
+    setEditingLayerName(name);
+    setEditingLayerDraft(name);
+  }, []);
+
+  const handleCancelLayerRename = useCallback(() => {
+    setEditingLayerName(null);
+    setEditingLayerDraft("");
+  }, []);
+
+  /**
+   * Renames every layer of that name across all frames — the timeline is keyed
+   * by name, so a per-frame rename would split one header row into two. See
+   * `LayerStore.renameLayerAcrossAllFrames`.
+   */
+  const handleFinishLayerRename = useCallback(() => {
+    const oldName = editingLayerName;
+    const next = editingLayerDraft.trim();
+    if (oldName && next) {
+      layerStore.renameLayerAcrossAllFrames(oldName, next);
+    }
+    setEditingLayerName(null);
+    setEditingLayerDraft("");
+  }, [editingLayerName, editingLayerDraft, layerStore]);
+
+  /**
+   * Create the layer across all frames straight away and open its header for
+   * editing — there is no "new layer..." field to fill in first. The name must
+   * be unique because the timeline groups its rows by name.
+   */
   const handleAddLayer = useCallback(() => {
-    const name = newLayerName.trim() || `Layer ${maxLayers + 1}`;
+    const taken = new Set(layerHeaders.map((h) => h.name));
+    let n = maxLayers + 1;
+    while (taken.has(`Layer ${n}`)) n++;
+    const name = `Layer ${n}`;
     layerStore.addLayerToAllFrames(name);
-    setNewLayerName("");
-  }, [newLayerName, maxLayers, layerStore]);
+    handleStartLayerRename(name);
+  }, [layerHeaders, maxLayers, layerStore, handleStartLayerRename]);
 
   /**
    * Move the selected layer up/down across ALL frames, matched by NAME.
@@ -519,8 +553,6 @@ export const TimelineViewContainer = observer(function TimelineViewContainer({
       onTogglePlayback={togglePlayback}
       onOpenPreview={() => setShowPreview(true)}
       viewModeDropdown={viewModeDropdown}
-      newLayerName={newLayerName}
-      onNewLayerNameChange={setNewLayerName}
       onAddLayer={handleAddLayer}
       canMoveUp={canMoveUp}
       canMoveDown={canMoveDown}
@@ -528,6 +560,12 @@ export const TimelineViewContainer = observer(function TimelineViewContainer({
       onMoveLayerDown={handleMoveLayerDown}
       onLayerHeaderClick={handleLayerHeaderClick}
       onLayerHeaderHover={setHoveredLayerName}
+      editingLayerName={editingLayerName}
+      editingLayerDraft={editingLayerDraft}
+      onStartLayerRename={handleStartLayerRename}
+      onEditingLayerDraftChange={setEditingLayerDraft}
+      onFinishLayerRename={handleFinishLayerRename}
+      onCancelLayerRename={handleCancelLayerRename}
       renderCell={renderCell}
       renderEmptyCell={renderEmptyCell}
       previewModal={

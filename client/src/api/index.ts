@@ -14,6 +14,19 @@
  */
 export { API_BASE, DEFAULT_TIMEOUT_MS, LONG_TIMEOUT_MS } from "./client/config";
 export {
+  SyncClient,
+  SYNC_PATH,
+  resolveSyncUrl,
+  type ProjectSavedEvent,
+  type SyncClientOptions,
+} from "./client/syncClient";
+export {
+  ORIGIN_HEADER,
+  getSyncOrigin,
+  setSyncOrigin,
+  syncOriginHeaders,
+} from "./client/syncOrigin";
+export {
   ApiError,
   NetworkError,
   TimeoutError,

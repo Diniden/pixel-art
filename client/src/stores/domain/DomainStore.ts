@@ -236,6 +236,7 @@ export class DomainStore {
       bumpPixelVersion: action,
       initProject: flow,
       loadProject: flow,
+      refreshFromServer: flow,
       createProject: flow,
       switchProject: flow,
       renameProject: flow,
@@ -554,6 +555,50 @@ export class DomainStore {
       this.loadState = "failed";
       this.loadError = isApiError(error) ? error : null;
       throw error;
+    }
+  }
+
+  /**
+   * Re-read the project from disk and install it WITHOUT a loading screen —
+   * the cross-instance sync refresh (see `session/SyncController.ts`).
+   *
+   * ⚠️ `loadState` IS DELIBERATELY NEVER TOUCHED HERE. `loadProject` sets it
+   * to `"loading"` first, and `AppContainer` renders `<LoadingLayout />` for
+   * any state that is not `"loaded"` — so reusing the load path unmounts the
+   * entire editor and remounts it, which is the full-screen flash this flow
+   * exists to avoid. Staying `"loaded"` throughout means the tree is swapped
+   * underneath a mounted editor and MobX re-renders only what actually
+   * changed.
+   *
+   * Two further differences from `loadProject`, both deliberate:
+   *
+   *  - `replaceTree`, not `installTree`: a background refresh must not wipe
+   *    the undo stack. `installTree` resets history (correct when the USER
+   *    opens a different project; wrong when a peer tab saved the one already
+   *    open).
+   *  - a failure leaves the CURRENT tree untouched and `loadState` still
+   *    `"loaded"`. A refresh that cannot reach the server is a no-op, never a
+   *    reason to throw the editor onto the error page — the user has a
+   *    perfectly good project on screen.
+   *
+   * `loadGeneration` still increments, because that is what tells
+   * `AutoSaveController` to adopt the new counters as a clean baseline rather
+   * than reading the swap as an edit. Without it the refresh would echo
+   * straight back as a save.
+   */
+  *refreshFromServer(
+    name?: string,
+  ): Generator<Promise<unknown>, boolean, never> {
+    try {
+      const project: Project = yield this.fetchAndMigrate(name);
+      this.replaceTree(project);
+      if (name !== undefined) this.projectName = name;
+      this.loadGeneration += 1;
+      return true;
+    } catch (error) {
+      // Best-effort by design: keep showing what is already on screen.
+      console.warn("Sync refresh failed; keeping the current project:", error);
+      return false;
     }
   }
 

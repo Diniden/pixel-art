@@ -204,6 +204,17 @@ import {
   drawLasso,
   drawMarchingAnts,
 } from "../ui/canvas/render/renderSelectionOverlay";
+import {
+  paintHoverCells,
+  strokeHoverOutline,
+} from "../ui/canvas/render/renderHoverMarker";
+import { toolFootprint } from "../ui/canvas/tools/toolFootprint";
+import { markerAction } from "../ui/canvas/model/markerPolicy";
+import {
+  drawingTouch,
+  pinchTouches,
+  touchesInContainer,
+} from "../ui/canvas/model/canvasTouchFilter";
 import { stampTrace } from "../ui/canvas/tools/traceSampler";
 import type { ToolContext } from "../ui/canvas/tools/toolHandlers";
 import type { StampPoint } from "../ui/canvas/tools/brushStamp";
@@ -212,6 +223,7 @@ import { useCanvasKeyboard } from "../ui/hooks/useCanvasKeyboard";
 import { useCanvasPointer } from "../ui/hooks/useCanvasPointer";
 import { useCanvasRender } from "../ui/hooks/useCanvasRender";
 import { useCanvasViewport } from "../ui/hooks/useCanvasViewport";
+import { usePencilHover } from "../ui/hooks/usePencilHover";
 import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
 
 /**
@@ -288,6 +300,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Offscreen caches for the static checkerboard and grid lines. Concern #3:
@@ -312,6 +325,15 @@ export const CanvasContainer = observer(function CanvasContainer({
   const [lastPanPoint, setLastPanPoint] = useState<Point | null>(null);
   const [isDraggingPixels, setIsDraggingPixels] = useState(false);
   const [lastDragPixel, setLastDragPixel] = useState<Point | null>(null);
+  // The move tool's in-flight offset. The pixels are NOT moved while the
+  // pointer is down: `moveLayerPixels` clips at the grid edge on every call,
+  // so committing each cell of movement silently ate whatever was dragged
+  // past an edge and back. The drag is previewed here and committed ONCE, on
+  // release, as a single shift — one history entry, one clip.
+  const [moveDragOffset, setMoveDragOffset] = useState<{
+    dx: number;
+    dy: number;
+  }>({ dx: 0, dy: 0 });
   const [isSelectingRegion, setIsSelectingRegion] = useState(false);
   const [selectionStart, setSelectionStart] = useState<Point | null>(null);
   const [previewSelection, setPreviewSelection] = useState<SelectionBox | null>(
@@ -693,6 +715,15 @@ export const CanvasContainer = observer(function CanvasContainer({
     const bgCanvas = ensureBgCanvas();
     ctx.drawImage(bgCanvas, 0, 0);
 
+    // The move tool's live preview: the layers `moveLayerPixels` WOULD shift
+    // are drawn displaced by `moveDragOffset`, and cells displaced off the
+    // grid are simply not drawn — which is what the eventual commit does too.
+    const moveDx = isDraggingPixels ? moveDragOffset.dx : 0;
+    const moveDy = isDraggingPixels ? moveDragOffset.dy : 0;
+    const movesWithDrag = (l: { id: string }) =>
+      (moveDx !== 0 || moveDy !== 0) &&
+      (tool.moveAllLayers || l.id === layer?.id);
+
     // In variant-edit mode, translate so world (viewMinX, viewMinY) lands at
     // canvas (0,0) — the whole variant area stays visible.
     if (isEditingVariantResolved) {
@@ -721,6 +752,10 @@ export const CanvasContainer = observer(function CanvasContainer({
           if (variant && vFrame) {
             const vOffset = resolveVariantOffset(l, variant, baseFrameIndex);
             const isCurrentLayer = l.id === layer?.id;
+            // In variant-edit mode `moveLayerPixels` shifts the VARIANT's
+            // frame layers, clipped to the variant grid.
+            const vdx = isCurrentLayer ? moveDx : 0;
+            const vdy = isCurrentLayer ? moveDy : 0;
 
             for (const vl of vFrame.layers) {
               if (!vl.visible) continue;
@@ -732,10 +767,20 @@ export const CanvasContainer = observer(function CanvasContainer({
                 for (let x = 0; x < variant.gridSize.width; x++) {
                   const pixel = getPixelColor(row[x]);
                   if (pixel && pixel.a > 0) {
-                    const drawX = (x + vOffset.x) * zoom;
-                    const drawY = (y + vOffset.y) * zoom;
-                    const worldX = x + vOffset.x;
-                    const worldY = y + vOffset.y;
+                    const sx = x + vdx;
+                    const sy = y + vdy;
+                    if (
+                      sx < 0 ||
+                      sx >= variant.gridSize.width ||
+                      sy < 0 ||
+                      sy >= variant.gridSize.height
+                    ) {
+                      continue;
+                    }
+                    const drawX = (sx + vOffset.x) * zoom;
+                    const drawY = (sy + vOffset.y) * zoom;
+                    const worldX = sx + vOffset.x;
+                    const worldY = sy + vOffset.y;
                     const inView =
                       worldX >= viewMinX &&
                       worldX < viewMaxX &&
@@ -773,6 +818,8 @@ export const CanvasContainer = observer(function CanvasContainer({
           // A regular layer while a variant is being edited, rendered per the
           // focus-mode setting (normal / transparent dim / onion outline).
           const alphaMul = layerFocusMode === "normal" ? 1 : 0.5;
+          const ldx = movesWithDrag(l) ? moveDx : 0;
+          const ldy = movesWithDrag(l) ? moveDy : 0;
           for (let y = 0; y < objHeight; y++) {
             const row = l.pixels[y];
             if (!row) continue;
@@ -786,8 +833,13 @@ export const CanvasContainer = observer(function CanvasContainer({
                 ) {
                   continue;
                 }
+                const sx = x + ldx;
+                const sy = y + ldy;
+                if (sx < 0 || sx >= objWidth || sy < 0 || sy >= objHeight) {
+                  continue;
+                }
                 ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${(pixel.a / 255) * alphaMul})`;
-                ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
+                ctx.fillRect(sx * zoom, sy * zoom, zoom, zoom);
               }
             }
           }
@@ -888,6 +940,8 @@ export const CanvasContainer = observer(function CanvasContainer({
             }
           }
         } else {
+          const ldx = movesWithDrag(l) ? moveDx : 0;
+          const ldy = movesWithDrag(l) ? moveDy : 0;
           for (let y = 0; y < gridHeight; y++) {
             const row = l.pixels[y];
             if (!row) continue;
@@ -895,8 +949,13 @@ export const CanvasContainer = observer(function CanvasContainer({
             for (let x = 0; x < gridWidth; x++) {
               const pixel = getPixelColor(row[x]);
               if (pixel && pixel.a > 0) {
+                const sx = x + ldx;
+                const sy = y + ldy;
+                if (sx < 0 || sx >= gridWidth || sy < 0 || sy >= gridHeight) {
+                  continue;
+                }
                 ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
-                ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
+                ctx.fillRect(sx * zoom, sy * zoom, zoom, zoom);
               }
             }
           }
@@ -1054,9 +1113,223 @@ export const CanvasContainer = observer(function CanvasContainer({
     selectionDragMode,
     pixelDragOffset.dx,
     pixelDragOffset.dy,
+    isDraggingPixels,
+    moveDragOffset.dx,
+    moveDragOffset.dy,
+    tool.moveAllLayers,
     isLassoSelecting,
     lassoPoints,
   ]);
+
+  /* ── the hover marker (concern #12) ────────────────────────────────────── */
+  //
+  // ══════════════════════════════════════════════════════════════════════
+  //  WHY THIS IS A SEPARATE CANVAS AND A SEPARATE SCHEDULER
+  // ══════════════════════════════════════════════════════════════════════
+  //
+  // `render` above repaints every visible cell of every visible layer with
+  // `fillRect`. An Apple Pencil emits hover samples continuously while the
+  // user's hand is merely NEAR the glass — before anything is drawn, and
+  // whether or not it ever touches down. Feeding those samples into `render`
+  // would re-rasterise the whole sprite at pointer rate for a hand that is not
+  // even drawing. So the marker owns `hoverCanvasRef` and its own
+  // `useCanvasRender`, exactly as the lighting studio's brush overlay owns
+  // its own (task 33): two surfaces, two invalidation signals.
+  //
+  // ── Why `useState`, when every other gesture value here is a ref ────────
+  //
+  // ══════════════════════════════════════════════════════════════════════
+  //  ⚠️ A REF, NOT `useState` — AND THAT IS LOAD-BEARING FOR DRAWING
+  // ══════════════════════════════════════════════════════════════════════
+  //
+  // This was `useState` when the marker only followed the MOUSE, where it is
+  // harmless: the mouse path clears the marker to a stable `null` while a
+  // stroke is in flight, so it sets state at most once per gesture.
+  //
+  // Tracking it during a TOUCH stroke changed that. `handleTouchMove` runs
+  // per pointer sample, so a state setter there re-rendered this container in
+  // the middle of a live gesture — rebuilding `getToolContext`, the tool
+  // handlers, and `pointer` between the touches of a single slide. Drawing
+  // became unreliable exactly while sliding: the observed 2026-08-28 report
+  // was "unable to slide and draw".
+  //
+  // A ref plus an explicit `invalidate()` gives the overlay what it actually
+  // needs — a repaint — without telling React anything happened. This is the
+  // same discipline the rest of this file already follows for gesture state,
+  // and the same reason `layer.pixels` is `observable.ref`: the canvas is
+  // driven imperatively, and putting per-sample data through React's render
+  // cycle is the modelling error, not a performance detail.
+  const hoverPixelRef = useRef<Point | null>(null);
+
+  /**
+   * Set the hovered cell and repaint the overlay, ignoring a sample that
+   * lands on the cell already marked.
+   *
+   * The dedupe still matters: it keeps a 120 Hz pointer stream from
+   * scheduling a canvas frame for a marker that has not moved. What it no
+   * longer does is gate a React render, because there is not one.
+   *
+   * `invalidateHoverRef` is filled in below, once the scheduler exists — the
+   * renderer has to be declared before it can be scheduled, and this setter
+   * has to exist before the handlers that call it.
+   */
+  const invalidateHoverRef = useRef<(() => void) | null>(null);
+  const setHoverPixel = useCallback((next: Point | null) => {
+    const prev = hoverPixelRef.current;
+    if (prev === next) return;
+    if (prev && next && prev.x === next.x && prev.y === next.y) return;
+    hoverPixelRef.current = next;
+    invalidateHoverRef.current?.();
+  }, []);
+
+  /**
+   * Apply `markerPolicy`'s decision for one event.
+   *
+   * ⚠️ Every marker write goes through here. The rule is asymmetric by device
+   * and has already shipped wrong once — the touch path cleared on start and
+   * end but never SET on move, so the marker was permanently null during a
+   * touch stroke. Routing all four call sites through one policy function
+   * makes that decision unit-testable (`markerPolicy.test.ts`) instead of
+   * being spread across handlers that need a canvas and a store to exercise.
+   */
+  const applyMarker = useCallback(
+    (
+      device: "mouse" | "touch" | "pencil-hover",
+      phase: "start" | "move" | "end",
+      locate: () => Point | null,
+    ) => {
+      switch (markerAction({ device, phase, isDrawing })) {
+        case "track":
+          setHoverPixel(locate());
+          break;
+        case "clear":
+          setHoverPixel(null);
+          break;
+        case "ignore":
+          break;
+      }
+    },
+    [isDrawing, setHoverPixel],
+  );
+
+  /**
+   * The cells the active tool would edit at `hoverPixel`.
+   *
+   * ⚠️ This does NOT read the pixel grid, and must not start to. The lighting
+   * studio's `resolveBrushCells` filters to cells that already hold a colour,
+   * because a normal-map brush only has meaning over existing artwork. The
+   * pixel canvas has no such restriction — a pencil paints empty cells, which
+   * is most of what it does — and reading `layer.pixels` here would put a
+   * 300k-cell grid on the hover path (R2).
+   */
+  // ⚠️ A CALLBACK, not a `useMemo` on `hoverPixel`. The hovered cell lives in
+  // a ref now (see above), so there is no render to memoise against — the
+  // renderer calls this when it paints, and reads the ref's CURRENT value.
+  const resolveHoverCells = useCallback((): StampPoint[] => {
+    const center = hoverPixelRef.current;
+    if (!center || !layer) return [];
+    return toolFootprint(center, {
+      tool: currentTool,
+      brushSize,
+      pencilShape: pencilBrushShape,
+      eraserShape,
+      circle: getCirclePixels,
+      square: getSquarePixels,
+      gridWidth,
+      gridHeight,
+    });
+  }, [
+    layer,
+    currentTool,
+    brushSize,
+    pencilBrushShape,
+    eraserShape,
+    gridWidth,
+    gridHeight,
+  ]);
+
+  const renderHover = useCallback(() => {
+    const canvas = hoverCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    const hoverCells = resolveHoverCells();
+    if (hoverCells.length === 0) return;
+
+    ctx.imageSmoothingEnabled = false;
+
+    // The marker shares the main render's coordinate space, so it needs the
+    // same variant-edit translation: while a variant is being edited the grid
+    // is drawn at the variant's offset within an expanded view, and a marker
+    // painted at raw cell coordinates would sit that offset away from the
+    // cells the stroke will actually hit.
+    const offsetX = isEditingVariantResolved ? variantOffset.x - viewMinX : 0;
+    const offsetY = isEditingVariantResolved ? variantOffset.y - viewMinY : 0;
+    const placed =
+      offsetX === 0 && offsetY === 0
+        ? hoverCells
+        : hoverCells.map((c) => ({ x: c.x + offsetX, y: c.y + offsetY }));
+
+    // Buffer for the fill, strokes for the outline — the split
+    // `renderHoverMarker` documents. `createImageData` allocates per frame, as
+    // the lighting overlay does; the marker repaints only when the hovered
+    // CELL changes, so this is not a per-sample cost.
+    const buffer = ctx.createImageData(canvasWidth, canvasHeight);
+    paintHoverCells(buffer, placed, zoom);
+    ctx.putImageData(buffer, 0, 0);
+    strokeHoverOutline(ctx, placed, zoom);
+  }, [
+    canvasWidth,
+    canvasHeight,
+    resolveHoverCells,
+    zoom,
+    isEditingVariantResolved,
+    variantOffset,
+    viewMinX,
+    viewMinY,
+  ]);
+
+  // The scheduler repaints when any of `renderHover`'s inputs change — a tool
+  // or brush-size switch, a zoom, a variant-edit toggle. Pointer movement does
+  // NOT go through here: it writes the ref and calls `invalidate` directly,
+  // which is the whole point of the ref (see `hoverPixelRef`).
+  const { invalidate: invalidateHover } = useCanvasRender(renderHover, [
+    renderHover,
+  ]);
+  // Deliberate render-phase write, same pattern as `useCanvasRender`'s own
+  // `renderRef`: `setHoverPixel` is created before the scheduler exists, so it
+  // reaches the current `invalidate` through this ref rather than by closing
+  // over one that would go stale.
+  invalidateHoverRef.current = invalidateHover;
+
+  /**
+   * Bridged Apple Pencil hover (iPad companion app only).
+   *
+   * The samples arrive in CLIENT coordinates, which is exactly what
+   * `getPixelCoords` takes — so the pencil and the mouse converge on one
+   * mapping and cannot disagree about which cell is under the pointer.
+   *
+   * ⚠️ Suppressed while a stroke is in flight, and this is what keeps ONE
+   * writer on the marker at a time. A pencil that has touched down keeps
+   * reporting hover samples, so without the guard two sources would drive the
+   * marker at once during a stroke: these samples (tracking the tip in the
+   * air) and `handleTouchMove` (tracking the contact point). They disagree
+   * whenever the pencil is tilted, which would show as a marker jittering
+   * between two cells. During a stroke the touch handlers own the marker —
+   * `handleTouchMove` sets it, `handleMouseMove` clears it — and hover
+   * resumes on the first sample after the stroke ends.
+   */
+  usePencilHover(
+    useCallback(
+      (sample) => {
+        applyMarker("pencil-hover", sample ? "move" : "end", () =>
+          sample ? getPixelCoords(sample.x, sample.y) : null,
+        );
+      },
+      [applyMarker, getPixelCoords],
+    ),
+  );
 
   /* ── the reference-trace overlay (concern #7) ──────────────────────────── */
   const isReferenceTraceActive =
@@ -1744,6 +2017,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     if (currentTool === "move") {
       setIsDraggingPixels(true);
       setLastDragPixel(coords);
+      setMoveDragOffset({ dx: 0, dy: 0 });
       return;
     }
 
@@ -1816,6 +2090,21 @@ export const CanvasContainer = observer(function CanvasContainer({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    // The hover marker, on the desktop path. Updated BEFORE the gesture
+    // arbitration below because every one of those branches returns early,
+    // and the marker has to keep following the pointer through all of them —
+    // including a pan, where the artwork moves under a stationary cursor and
+    // the cell beneath it genuinely changes.
+    //
+    // ⚠️ On the MOUSE path the marker is cleared while a stroke is in flight,
+    // and on the TOUCH path it is not (see `handleTouchMove`). That asymmetry
+    // is deliberate and is about occlusion, not consistency: a mouse leaves
+    // the cells visible and puts a cursor on them, so a marker during a drag
+    // only doubles what the stroke already shows. A finger or a pencil COVERS
+    // the cells it is painting, so during a touch stroke the marker is the
+    // only indication of where the edit is actually landing.
+    applyMarker("mouse", "move", () => getPixelCoords(e.clientX, e.clientY));
+
     if (isPanning && lastPanPoint) {
       const dx = e.clientX - lastPanPoint.x;
       const dy = e.clientY - lastPanPoint.y;
@@ -1872,7 +2161,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       const dx = coords.x - lastDragPixel.x;
       const dy = coords.y - lastDragPixel.y;
       if (dx !== 0 || dy !== 0) {
-        actions.moveLayerPixels(dx, dy);
+        // Preview only — see `moveDragOffset`. Nothing is written until release.
+        setMoveDragOffset((prev) => ({ dx: prev.dx + dx, dy: prev.dy + dy }));
         setLastDragPixel(coords);
       }
       return;
@@ -1937,8 +2227,58 @@ export const CanvasContainer = observer(function CanvasContainer({
     pointer.continueStroke(e.clientX, e.clientY, "mouse");
   };
 
+  /**
+   * The move tool's release: commit the previewed offset as ONE shift.
+   * Shared by the mouse and touch paths so both clip exactly once.
+   */
+  const finishMoveDrag = () => {
+    const { dx, dy } = moveDragOffset;
+    if (dx !== 0 || dy !== 0) actions.moveLayerPixels(dx, dy);
+    setIsDraggingPixels(false);
+    setLastDragPixel(null);
+    setMoveDragOffset({ dx: 0, dy: 0 });
+  };
+
+  /**
+   * The end of a pixel-transform stroke, for BOTH devices.
+   *
+   * The three shape tools commit their preview on release. This stays here
+   * rather than in `toolHandlers` because committing a preview is a store
+   * write against `previewPixels`, which the handlers only ever WRITE.
+   *
+   * ⚠️ Shared on purpose: the touch path used to end a stroke WITHOUT this
+   * commit, so a Pencil rectangle or ellipse previewed and then vanished on
+   * lift (2026-08-29). One release routine means one set of tools that work.
+   */
+  const finishDrawingStroke = () => {
+    if (
+      previewPixels.length > 0 &&
+      (currentTool === "line" ||
+        currentTool === "rectangle" ||
+        currentTool === "ellipse")
+    ) {
+      actions.setPixels(
+        previewPixels.map((p) => ({
+          x: p.x,
+          y: p.y,
+          color: currentColor as Color,
+        })),
+      );
+    }
+
+    actions.endStroke();
+    actions.endDrawing();
+  };
+
   const handleMouseUp = () => {
     lastStrokePixelRef.current = null;
+
+    // ⚠️ This handler is bound to BOTH `onMouseUp` and `onMouseLeave` (see the
+    // `CanvasSurface` call site). Clearing the marker here is therefore what
+    // removes it when the pointer leaves the canvas — without it, the marker
+    // would stay frozen at the last cell touched, reading as a stuck cursor.
+    // On a genuine mouse-up the next move re-establishes it immediately.
+    applyMarker("mouse", "end", () => null);
 
     if (isPanning) {
       setIsPanning(false);
@@ -1953,8 +2293,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     }
 
     if (isDraggingPixels) {
-      setIsDraggingPixels(false);
-      setLastDragPixel(null);
+      finishMoveDrag();
       return;
     }
 
@@ -1988,31 +2327,57 @@ export const CanvasContainer = observer(function CanvasContainer({
     }
 
     if (!isDrawing || !drawStartPoint) return;
-
-    // The three shape tools commit their preview on release. This stays here
-    // rather than in `toolHandlers` because committing a preview is a store
-    // write against `previewPixels`, which the handlers only ever WRITE.
-    if (
-      previewPixels.length > 0 &&
-      (currentTool === "line" ||
-        currentTool === "rectangle" ||
-        currentTool === "ellipse")
-    ) {
-      actions.setPixels(
-        previewPixels.map((p) => ({
-          x: p.x,
-          y: p.y,
-          color: currentColor as Color,
-        })),
-      );
-    }
-
-    actions.endStroke();
-    actions.endDrawing();
+    finishDrawingStroke();
   };
 
   /* ── touch ─────────────────────────────────────────────────────────────── */
+  /**
+   * The touches that belong to a CANVAS gesture.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THIS MUST MATCH `useCanvasViewport`'s `touchesHere` EXACTLY
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * Both this file and the viewport's native pinch listener have to agree on
+   * "how many fingers are on this gesture", and they count from different
+   * events. When they disagree, one of them thinks a pinch is in flight while
+   * the other thinks a stroke is — and the stroke dies.
+   *
+   * `e.targetTouches` is NOT the right filter, though it looks like it. It
+   * holds only touches whose `target` is the element the handler is bound to,
+   * which here is the `<canvas>`. The pinch listener is bound to the VIEWPORT
+   * and counts anything inside it — including the floating canvas controls,
+   * which render inside `canvas__viewport` but outside the `<canvas>`.
+   *
+   * So a second finger on those controls (or anywhere in the viewport that is
+   * not the sprite) is invisible to `targetTouches` but IS a pinch to the
+   * viewport listener. `isPinching()` then goes true, `handleTouchMove`
+   * returns on its first line, and the stroke stops mid-slide while the
+   * finger is still down — observed 2026-08-28 as "unable to slide and draw".
+   *
+   * `e.touches` is not right either: that is every touch on the PAGE, which
+   * is what the Other Hand Mode change correctly moved away from — a thumb on
+   * a rail slider outside the viewport must not cancel a stroke.
+   *
+   * The correct set is the middle one, and it is the viewport's: touches
+   * inside the container. Same predicate, same source of truth.
+   */
+  const canvasTouches = useCallback(
+    (e: React.TouchEvent): React.Touch[] =>
+      touchesInContainer(Array.from(e.touches), containerRef.current),
+    [containerRef],
+  );
+
   const handleTouchStart = (e: React.TouchEvent) => {
+    // Drop any marker left over from HOVERING before re-establishing it from
+    // the touch itself on the first `handleTouchMove`.
+    //
+    // The clear matters even though the move handler is about to set it: a
+    // press that never moves (a single tap to place one pixel) should not
+    // leave the pre-touch hover marker sitting a few cells away from where
+    // the tap actually landed.
+    applyMarker("touch", "start", () => null);
+
     // ⚠️ TWO-FINGER GESTURES ARE NOT HANDLED HERE ANY MORE (2026-08-25).
     //
     // They are owned by a native, non-passive listener on the canvas
@@ -2026,13 +2391,27 @@ export const CanvasContainer = observer(function CanvasContainer({
     // What remains here is the single-touch half: drawing and the move tool.
     // Bailing out on a second finger is still required, so a pinch does not
     // also lay down a stroke with whichever finger landed first.
-    if (e.touches.length >= 2) {
+    //
+    // ⚠️ `canvasTouches`, NOT `e.touches` (Other Hand Mode, 2026-08-28).
+    // `touches` is every touch on the PAGE. A thumb working a rail slider
+    // while the Pencil draws is a second touch — and counting it here
+    // cancelled the stroke as a pinch, which is exactly the "change the brush
+    // mid-stroke" gesture the mode exists for.
+    //
+    // ⚠️ It is not `targetTouches` either — see `canvasTouches` above for why
+    // that set is too NARROW and broke sliding in a different way.
+    // ⚠️ TWO FINGERS is a pinch; a PENCIL plus fingers is still a stroke.
+    // Counting raw contacts here is what stopped the Pencil drawing whenever
+    // a finger was also on the screen (2026-08-28) — see `canvasTouchFilter`.
+    const startTouches = canvasTouches(e);
+    if (pinchTouches(startTouches).length >= 2) {
       setIsPanning(false);
       setLastPanPoint(null);
       return;
     }
 
-    const touch = e.touches[0];
+    const touch = drawingTouch(startTouches);
+    if (!touch) return;
     const coords = getPixelCoords(touch.clientX, touch.clientY);
     if (!coords || !layer) return;
 
@@ -2040,6 +2419,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     if (currentTool === "move") {
       setIsDraggingPixels(true);
       setLastDragPixel(coords);
+      setMoveDragOffset({ dx: 0, dy: 0 });
       return;
     }
 
@@ -2054,12 +2434,49 @@ export const CanvasContainer = observer(function CanvasContainer({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    // Two fingers: the native viewport listener owns zoom AND pan. Bail out
-    // so a pinch never also draws — see `handleTouchStart`.
-    if (e.touches.length >= 2 || isPinching()) return;
+    // Two FINGERS: the native viewport listener owns zoom AND pan. Bail out so
+    // a pinch never also draws — see `handleTouchStart`.
+    //
+    // ⚠️ `pinchTouches`, not the raw count. A Pencil and a resting finger are
+    // two contacts and were being discarded as a pinch, which is the
+    // "unable to slide and draw" report of 2026-08-28.
+    const moveTouches = canvasTouches(e);
+    if (pinchTouches(moveTouches).length >= 2 || isPinching()) return;
 
-    if (isPanning && lastPanPoint && e.touches.length >= 1) {
-      const touch = e.touches[0];
+    // ══════════════════════════════════════════════════════════════════════
+    //  THE MARKER DURING A TOUCH STROKE — the mirror of the mouse path's
+    //  decision, for the OPPOSITE reason.
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // `handleMouseMove` CLEARS the marker while drawing, because a mouse
+    // leaves the cells visible and puts a cursor on them. A finger or a
+    // pencil tip COVERS the cells it is painting, so during a touch stroke
+    // the marker is the only indication of where the edit is landing. It
+    // matters most for the eraser, which paints nothing to look at: without
+    // the marker there is no feedback at all under the hand.
+    //
+    // ⚠️ Placed HERE, immediately after the two-finger bail-out and before
+    // every other branch, because each branch below returns early: a
+    // one-finger pan, a pixel-drag and an off-grid move all leave via their
+    // own `return`, and the marker has to keep tracking through all of them.
+    // A pinch is excluded above on purpose — `getPixelCoords` maps through a
+    // rect that is mid-transform during one.
+    //
+    // ⚠️ Set unconditionally rather than only while `isDrawing`. A pencil
+    // resting on the glass between strokes still reports moves, and marking
+    // where the NEXT edit would land is the whole point of the feature.
+    // The marker follows whichever contact is DRAWING — the Pencil when one is
+    // down, not whichever finger happens to be first in the list.
+    const markerTouch = drawingTouch(moveTouches);
+    if (markerTouch) {
+      applyMarker("touch", "move", () =>
+        getPixelCoords(markerTouch.clientX, markerTouch.clientY),
+      );
+    }
+
+    const panTouch = drawingTouch(moveTouches);
+    if (isPanning && lastPanPoint && panTouch) {
+      const touch = panTouch;
       const dx = touch.clientX - lastPanPoint.x;
       const dy = touch.clientY - lastPanPoint.y;
       const next = clampPanToViewport(
@@ -2076,9 +2493,12 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
-    if (e.touches.length !== 1) return;
-
-    const touch = e.touches[0];
+    // ⚠️ NOT `moveTouches.length !== 1`. That rejected a Pencil stroke the
+    // moment a finger touched down anywhere in the viewport. `drawingTouch`
+    // returns the stylus when there is one and a lone finger otherwise, so a
+    // Pencil keeps drawing through any number of resting fingers.
+    const touch = drawingTouch(moveTouches);
+    if (!touch) return;
     const coords = getPixelCoords(touch.clientX, touch.clientY);
     if (!coords) {
       if (isDrawing) lastStrokePixelRef.current = null;
@@ -2089,7 +2509,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       const dx = coords.x - lastDragPixel.x;
       const dy = coords.y - lastDragPixel.y;
       if (dx !== 0 || dy !== 0) {
-        actions.moveLayerPixels(dx, dy);
+        // Preview only — see `moveDragOffset`. Nothing is written until release.
+        setMoveDragOffset((prev) => ({ dx: prev.dx + dx, dy: prev.dy + dy }));
         setLastDragPixel(coords);
       }
       return;
@@ -2103,6 +2524,12 @@ export const CanvasContainer = observer(function CanvasContainer({
 
   const handleTouchEnd = () => {
     lastStrokePixelRef.current = null;
+    // The finger is gone, so the marker goes with it: unlike a mouse there is
+    // no resting pointer position left to mark, and a marker still sitting on
+    // the last cell reads as a selection rather than as a cursor. Set before
+    // the early returns below so it clears on EVERY way a touch can end,
+    // including a pan and a pixel-drag.
+    applyMarker("touch", "end", () => null);
 
     if (isPanning) {
       setIsPanning(false);
@@ -2110,8 +2537,11 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
     if (isDraggingPixels) {
-      setIsDraggingPixels(false);
-      setLastDragPixel(null);
+      finishMoveDrag();
+      return;
+    }
+    if (isDrawing && drawStartPoint) {
+      finishDrawingStroke();
       return;
     }
     actions.endStroke();
@@ -2161,7 +2591,14 @@ export const CanvasContainer = observer(function CanvasContainer({
     setViewZoom(1);
     setViewPanOffset(centered);
     viewport.resetView(centered);
-  }, [containerRef, canvasWidth, canvasHeight, setViewZoom, setViewPanOffset, viewport]);
+  }, [
+    containerRef,
+    canvasWidth,
+    canvasHeight,
+    setViewZoom,
+    setViewPanOffset,
+    viewport,
+  ]);
 
   return (
     <CanvasSurface
@@ -2169,6 +2606,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       overlayCanvasRef={overlayCanvasRef}
       frameOverlayCanvasRef={frameOverlayCanvasRef}
       frameTraceOverlayCanvasRef={frameTraceOverlayCanvasRef}
+      hoverCanvasRef={hoverCanvasRef}
       containerRef={containerRef}
       canvasWidth={canvasWidth}
       canvasHeight={canvasHeight}
@@ -2190,9 +2628,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      viewControls={
-        <CanvasViewControls onResetView={handleResetView} />
-      }
+      viewControls={<CanvasViewControls onResetView={handleResetView} />}
     />
   );
 });

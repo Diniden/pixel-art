@@ -75,8 +75,6 @@ export interface TimelineViewProps {
   /** The view-mode dropdown, supplied by `FrameTimeline`. */
   viewModeDropdown: ReactNode;
 
-  newLayerName: string;
-  onNewLayerNameChange: (name: string) => void;
   onAddLayer: () => void;
 
   /** Move the selected layer across ALL frames. */
@@ -87,6 +85,15 @@ export interface TimelineViewProps {
 
   onLayerHeaderClick: (layerName: string) => void;
   onLayerHeaderHover: (layerName: string | null) => void;
+
+  /** Name of the layer whose header is being renamed inline, or `null`. */
+  editingLayerName: string | null;
+  /** Draft text of the inline header rename. */
+  editingLayerDraft: string;
+  onStartLayerRename: (layerName: string) => void;
+  onEditingLayerDraftChange: (draft: string) => void;
+  onFinishLayerRename: () => void;
+  onCancelLayerRename: () => void;
 
   /** Renders one occupied cell — a per-item container in the real app. */
   renderCell: (cell: TimelineCellData) => ReactNode;
@@ -110,8 +117,6 @@ export function TimelineView({
   onTogglePlayback,
   onOpenPreview,
   viewModeDropdown,
-  newLayerName,
-  onNewLayerNameChange,
   onAddLayer,
   canMoveUp,
   canMoveDown,
@@ -119,6 +124,12 @@ export function TimelineView({
   onMoveLayerDown,
   onLayerHeaderClick,
   onLayerHeaderHover,
+  editingLayerName,
+  editingLayerDraft,
+  onStartLayerRename,
+  onEditingLayerDraftChange,
+  onFinishLayerRename,
+  onCancelLayerRename,
   renderCell,
   renderEmptyCell,
   previewModal,
@@ -145,23 +156,13 @@ export function TimelineView({
           >
             <Icon icon={ChevronDown} size={12} />
           </button>
-          <div className="timeline-view__new-layer">
-            <input
-              type="text"
-              className="timeline-view__new-layer-input"
-              placeholder="New layer..."
-              value={newLayerName}
-              onChange={(e) => onNewLayerNameChange(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && onAddLayer()}
-            />
-            <button
-              className="timeline-view__action-btn timeline-view__action-btn--add-layer"
-              onClick={onAddLayer}
-              title="Add layer to all frames"
-            >
-              + Layer
-            </button>
-          </div>
+          <button
+            className="timeline-view__action-btn timeline-view__action-btn--add-layer"
+            onClick={onAddLayer}
+            title="Add layer to all frames"
+          >
+            + Layer
+          </button>
         </div>
         <div className="timeline-view__playback-controls">
           <button
@@ -202,6 +203,12 @@ export function TimelineView({
         layerHeaders={layerHeaders}
         onLayerHeaderClick={onLayerHeaderClick}
         onLayerHeaderHover={onLayerHeaderHover}
+        editingLayerName={editingLayerName}
+        editingLayerDraft={editingLayerDraft}
+        onStartLayerRename={onStartLayerRename}
+        onEditingLayerDraftChange={onEditingLayerDraftChange}
+        onFinishLayerRename={onFinishLayerRename}
+        onCancelLayerRename={onCancelLayerRename}
         renderCell={renderCell}
         renderEmptyCell={renderEmptyCell}
       />

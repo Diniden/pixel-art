@@ -21,7 +21,13 @@ initTheme();
 // a module-level singleton (task 14). Tests and Storybook build their own.
 // The Zustand bridge that used to be installed here retired with the legacy
 // store (task 38): the ApplicationStore is self-hosting now.
-const store = new ApplicationStore({ autoSaveEnabled: true });
+// `syncEnabled` opens the cross-instance websocket: when another tab saves,
+// this one reloads from the server. Only the real app opts in — tests and
+// Storybook must not acquire a socket implicitly.
+const store = new ApplicationStore({
+  autoSaveEnabled: true,
+  syncEnabled: true,
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -126,13 +126,14 @@ const GRID = projectTypical.objects[0].gridSize;
 type PaintFn = (ctx: CanvasRenderingContext2D) => void;
 
 interface HarnessProps {
-  /** Everything `CanvasSurface` needs except the five refs. */
+  /** Everything `CanvasSurface` needs except the six refs. */
   surface: Omit<
     CanvasSurfaceProps,
     | "canvasRef"
     | "overlayCanvasRef"
     | "frameOverlayCanvasRef"
     | "frameTraceOverlayCanvasRef"
+    | "hoverCanvasRef"
     | "containerRef"
   >;
   /** Draws the main surface. Runs once the refs are attached. */
@@ -150,6 +151,7 @@ function SurfaceHarness({ surface, paint, paintOverlay }: HarnessProps) {
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -173,6 +175,7 @@ function SurfaceHarness({ surface, paint, paintOverlay }: HarnessProps) {
         overlayCanvasRef={overlayCanvasRef}
         frameOverlayCanvasRef={frameOverlayCanvasRef}
         frameTraceOverlayCanvasRef={frameTraceOverlayCanvasRef}
+        hoverCanvasRef={hoverCanvasRef}
         containerRef={containerRef}
       />
     </div>

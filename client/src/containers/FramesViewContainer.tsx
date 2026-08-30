@@ -79,7 +79,9 @@ export const FramesViewContainer = observer(function FramesViewContainer(
   return (
     <FramesView
       {...props}
-      addFrame={(name, copyPrevious) => app.frames.addFrame(name, copyPrevious)}
+      addFrame={(name, copyPrevious) =>
+        app.frames.addFrame(name, copyPrevious)
+      }
       deleteFrame={(id) => app.frames.deleteFrame(id)}
       renameFrame={(id, name) => app.frames.renameFrame(id, name)}
       selectFrame={(id, syncVariants) =>

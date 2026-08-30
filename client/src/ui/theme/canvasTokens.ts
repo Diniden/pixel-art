@@ -61,6 +61,18 @@ export const ACCENT_PRIMARY_25 = "rgba(0, 217, 255, 0.25)";
 export const ACCENT_PRIMARY_55 = "rgba(0, 217, 255, 0.55)";
 
 /**
+ * The Apple Pencil hover marker (`renderHoverMarker`).
+ *
+ * Deliberately FAINTER than the lighting studio's brush overlay above: that
+ * overlay marks where paint IS being applied, this one marks where paint WOULD
+ * be. A hover marker at the same weight would read as a committed stroke, and
+ * on the pixel canvas it sits over the artwork itself rather than over a
+ * normal-map edit surface. Canvas-only values; no CSS counterpart.
+ */
+export const HOVER_MARKER_FILL = "rgba(0, 217, 255, 0.10)";
+export const HOVER_MARKER_STROKE = "rgba(0, 217, 255, 0.35)";
+
+/**
  * Trace/object-bounds orange. NOTE the measured drift: rgb(255, 171, 0) is
  * one red unit off --accent-warning's #ffaa00 = rgb(255, 170, 0). Both
  * observed values are pinned by tests (renderFrameOverlay.test.ts), so they
