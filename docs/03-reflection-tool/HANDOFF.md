@@ -72,7 +72,24 @@ plan 03. Observed consequences:
    isolated `GIT_INDEX_FILE`. **History therefore contains two identical
    `feat(stores): ReflectionUIStore…` commits (`10882b4`, `1200f8d`).** The working tree
    is correct — exactly one `readonly reflection` field, one `new ReflectionUIStore()`,
-   one dispose call — but the duplicate commit is cosmetic debt.
+   one dispose call — but the history is damaged in a way that matters:
+
+   ⚠️ **`31ed99c` (task 02) contains spurious DELETIONS.** Verified by the coordinator:
+   ```
+   $ git show --stat 31ed99c
+    client/src/stores/ApplicationStore.ts              |  31 +-    ← reverts task 03
+    client/src/stores/ui/ReflectionUIStore.ts          | 196 -----  ← deletes task 03
+    .../stores/ui/__tests__/ReflectionUIStore.test.ts  | 304 -----  ← deletes task 03
+    ...plus task 02's own four files, correctly added
+   ```
+   `1200f8d` restores all three. **`31ed99c` and `1200f8d` must therefore be kept
+   together and in order.** Do NOT cherry-pick, reorder, drop or individually revert
+   either one, and do not squash the range without checking the result — the deletion
+   would resurface. An interactive rebase of this branch needs care.
+
+   Root cause (both agents concur): agents shared one git index, and a
+   `git reset HEAD -- <paths>` cleared the whole index rather than the named paths, so a
+   subsequent `git commit` swept another agent's staged state.
 2. **Transient red gates.** `LightingCanvasContainer.tsx` (plan 04's task 05, uncommitted)
    broke `tsc` with TS6133/TS2304 during the wave. It cleared on its own. All W1 agents
    correctly identified it as not-theirs and left it alone.
@@ -96,6 +113,8 @@ edit risks losing real work.
   exports its own copy from `stores/ui/ReflectionUIStore.ts` (both `8`), because the store
   may not import from `ui/`. **Task 07 must reconcile** — do not let them drift.
 - Task 03's draft line carries the sentinel id `refl-draft`, discarded on commit.
+- Task 02 delivered 39 unit tests (spec asked for ≥ 12) and 6 new `"corner"` cases in
+  `coords.test.ts`; `"pixel"` and `"origin"` behaviour is untouched.
 - Task 04 deviated from its spec: `vi.useFakeTimers()` is incompatible with a stubbed
   `requestAnimationFrame` (vitest's fake timers install their own). The ticker gates on
   `performance.now()` and uses no timer, so the test drives a hand-stepped frame queue
