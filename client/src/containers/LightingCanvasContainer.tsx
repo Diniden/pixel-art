@@ -279,6 +279,14 @@ export const LightingCanvasContainer = observer(
     const viewCellsX = previewMode ? objWidth : gridWidth;
     const viewCellsY = previewMode ? objHeight : gridHeight;
 
+    // ⚠️ STILL PRE-SCALED, deliberately (plan 05, risk R7). The pixel canvas
+    // went 1:1 in task 02 and magnifies with a CSS transform; the lighting
+    // studio does NOT, and keeps a `zoom`-times-larger backing store until
+    // task 08 converts it. So here `canvasWidth` is simultaneously the
+    // `<canvas>` backing size AND the on-screen box at view zoom 1 — the two
+    // numbers the pixel canvas had to split apart. It is passed below as
+    // `contentWidth` because that is the meaning the shared hook needs; do
+    // not "helpfully" make this 1:1 without doing task 08.
     const canvasWidth = viewCellsX * zoom;
     const canvasHeight = viewCellsY * zoom;
 
@@ -301,8 +309,10 @@ export const LightingCanvasContainer = observer(
       isPinching,
     } = useCanvasViewport({
       containerRef,
-      canvasWidth,
-      canvasHeight,
+      // The shared hook clamps against the ON-SCREEN box, which for this pane
+      // is still the same number as its backing store — see the note above.
+      contentWidth: canvasWidth,
+      contentHeight: canvasHeight,
       panOffset: camera.panOffset,
       onCommitPan: (pan) => camera.setPanOffset(pan),
       viewZoom: camera.viewZoom,

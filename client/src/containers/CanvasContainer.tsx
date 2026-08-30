@@ -710,8 +710,10 @@ export const CanvasContainer = observer(function CanvasContainer({
     viewMinY,
     viewMaxX,
     viewMaxY,
-    canvasWidth,
-    canvasHeight,
+    cellWidth,
+    cellHeight,
+    contentWidth,
+    contentHeight,
     // `variantOffsetKey` is part of `useCanvasGeometry`'s contract but is not
     // destructured here: it existed to make the offset safe in a hand-written
     // dependency array, and `render`'s identity now carries that signal (see
@@ -721,6 +723,29 @@ export const CanvasContainer = observer(function CanvasContainer({
     coordGeomRef,
     bgGeomRef,
   } = geom;
+
+  /**
+   * The size the RENDER LOOP still paints into, in scaled pixels.
+   *
+   * ⚠️ TRANSITIONAL, and deliberately not `cellWidth` (plan 05). The backing
+   * stores mounted by `CanvasSurface` are 1:1 with the pixel data as of task
+   * 02, but every painter below — the background/grid caches, the reference
+   * and frame overlays, `render` itself — still emits
+   * `fillRect(x * zoom, y * zoom, zoom, zoom)`. Converting those loops to 1:1
+   * is TASK 05's job, and doing it here would mean rewriting ~1000 lines
+   * outside this task's mandate.
+   *
+   * Until then the offscreen buffers those painters build stay `zoom` times
+   * larger than the canvases they are blitted into, so the artwork is clipped
+   * to the top-left `cellWidth × cellHeight` corner. That is the KNOWN,
+   * DOCUMENTED intermediate state between tasks 02 and 05 — not a bug to fix
+   * here. `contentWidth`/`contentHeight` from `useCanvasGeometry` carry the
+   * same product for the sites that legitimately need the on-screen box
+   * (pan clamping, view centring); this alias exists only so the render loop
+   * keeps compiling untouched, and task 05 deletes it.
+   */
+  const canvasWidth = cellWidth * zoom;
+  const canvasHeight = cellHeight * zoom;
 
   /* ── the viewport engine ───────────────────────────────────────────────── */
   //
@@ -743,8 +768,8 @@ export const CanvasContainer = observer(function CanvasContainer({
     isPinching,
   } = useCanvasViewport({
     containerRef,
-    canvasWidth,
-    canvasHeight,
+    contentWidth,
+    contentHeight,
     panOffset,
     onCommitPan: (pan) => camera.setPanOffset(pan),
     // The view scale is PROJECT state as of 2026-08-28, so it follows the
@@ -2454,8 +2479,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       const dy = e.clientY - lastPanPoint.y;
       const next = clampPanToViewport(
         { x: viewPanRef.current.x + dx, y: viewPanRef.current.y + dy },
-        canvasWidth * viewZoom,
-        canvasHeight * viewZoom,
+        contentWidth * viewZoom,
+        contentHeight * viewZoom,
       );
       viewPanRef.current = next;
       setViewPanOffset(next);
@@ -2882,8 +2907,8 @@ export const CanvasContainer = observer(function CanvasContainer({
         // ⚠️ MINUS, not plus — touch panning is inverted relative to the mouse
         // (the content follows the finger). Verbatim from `Canvas.tsx:1876`.
         { x: viewPanRef.current.x - dx, y: viewPanRef.current.y - dy },
-        canvasWidth * viewZoom,
-        canvasHeight * viewZoom,
+        contentWidth * viewZoom,
+        contentHeight * viewZoom,
       );
       viewPanRef.current = next;
       setViewPanOffset(next);
@@ -3007,11 +3032,17 @@ export const CanvasContainer = observer(function CanvasContainer({
    */
   const handleResetView = useCallback(() => {
     const container = containerRef.current;
-    // At view zoom 1 the content is exactly `canvasWidth × canvasHeight`.
+    // ⚠️ `contentWidth`, NOT `cellWidth`. This resets VIEW zoom to 1, so the
+    // combined scale becomes `zoom * 1` and the on-screen content box is
+    // `cellWidth * zoom` — which is exactly `contentWidth`. Centring against
+    // the 1:1 backing size instead would offset every sprite by (zoom-1)/zoom
+    // of its width, typically 90%. The old comment here said "at view zoom 1
+    // the content is exactly canvasWidth x canvasHeight", which was true only
+    // while the backing store was itself pre-scaled.
     const centered = container
       ? {
-          x: Math.round((container.clientWidth - canvasWidth) / 2),
-          y: Math.round((container.clientHeight - canvasHeight) / 2),
+          x: Math.round((container.clientWidth - contentWidth) / 2),
+          y: Math.round((container.clientHeight - contentHeight) / 2),
         }
       : { x: 0, y: 0 };
     setViewZoom(1);
@@ -3019,8 +3050,8 @@ export const CanvasContainer = observer(function CanvasContainer({
     camera.resetView(centered);
   }, [
     containerRef,
-    canvasWidth,
-    canvasHeight,
+    contentWidth,
+    contentHeight,
     setViewZoom,
     setViewPanOffset,
     camera,
@@ -3065,10 +3096,14 @@ export const CanvasContainer = observer(function CanvasContainer({
       hoverCanvasRef={hoverCanvasRef}
       reflectionCanvasRef={reflectionCanvasRef}
       containerRef={containerRef}
-      canvasWidth={canvasWidth}
-      canvasHeight={canvasHeight}
+      cellWidth={cellWidth}
+      cellHeight={cellHeight}
       viewPanOffset={viewPanOffset}
-      viewZoom={viewZoom}
+      // ⚠️ ONE scale, multiplied here and nowhere else (D2). `zoom` (shared,
+      // [1,50]) and `viewZoom` (per-pane, [0.25,4]) stay separate store
+      // fields with unchanged ranges, defaults and persistence; only their
+      // APPLICATION moved, from six backing stores into this transform.
+      combinedScale={zoom * viewZoom}
       cursor={cursor}
       // All three overlays are object-space aids — hidden in Layer mode.
       showReferenceOverlay={!layerMode && isReferenceTraceActive}

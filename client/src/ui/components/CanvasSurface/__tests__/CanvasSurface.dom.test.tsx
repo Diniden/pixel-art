@@ -20,8 +20,17 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { composeStories } from "@storybook/react-vite";
 import * as stories from "../CanvasSurface.stories";
+import { projectTypical } from "../../../../fixtures";
 
 const composed = composeStories(stories);
+
+/**
+ * The same grid the stories size their canvases from
+ * (`CanvasSurface.stories.tsx`'s `GRID`), imported rather than hard-coded so
+ * the 1:1 assertion below cannot drift away from what the story actually
+ * renders.
+ */
+const GRID_SIZE = projectTypical.objects[0]!.gridSize;
 
 // jsdom has no 2D context, so `getContext("2d")` returns null and logs a
 // "Not implemented" notice per canvas. The harness's paint callback then
@@ -126,12 +135,29 @@ describe("CanvasSurface — GATE 2: renders with NO store provider", () => {
   });
 
   it("applies the view transform and the cursor from props alone", () => {
+    // ⚠️ `scale(12)`, not `scale(1)` (plan 05, task 02). The scale factor is
+    // `combinedScale` — `zoom * viewZoom` in the app — and it is now the ONLY
+    // magnification in the system: the canvases below are 1:1 with the pixel
+    // data, so this one declaration replaced allocating a `zoom`-times-larger
+    // backing store per canvas. Until 2026-08-30 the prop was `viewZoom`
+    // alone, and the story's `1` was the view scale with the shared pixel
+    // scale already baked into the backing store.
+    //
+    // Derived from the story's own inputs rather than pasted from the DOM:
+    // `Default` spreads `baseSurface` unmodified, which sets
+    // `viewPanOffset: {x: 24, y: 24}` and `combinedScale: ZOOM` where
+    // `ZOOM = 12`. If either story constant moves, this must move with it.
     const { container } = render(<composed.Default />);
     const layout = container.querySelector<HTMLElement>(".canvas__layout");
     const surface = container.querySelector<HTMLElement>(".canvas__surface");
-    expect(layout?.style.transform).toBe("translate(24px, 24px) scale(1)");
+    expect(layout?.style.transform).toBe("translate(24px, 24px) scale(12)");
     expect(layout?.style.transformOrigin).toBe("0 0");
     expect(surface?.style.cursor).toBe("crosshair");
+
+    // The point of the whole task: the backing store did NOT grow with the
+    // scale. 12x magnification, one device pixel per cell.
+    expect(surface?.getAttribute("width")).toBe(String(GRID_SIZE.width));
+    expect(surface?.getAttribute("height")).toBe(String(GRID_SIZE.height));
   });
 
   it("sizes the variant-edit canvas to the EXPANDED view, not the grid", () => {
