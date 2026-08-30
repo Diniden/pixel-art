@@ -158,13 +158,23 @@ import { useCanvasRender } from "../ui/hooks/useCanvasRender";
 import { useCanvasViewport } from "../ui/hooks/useCanvasViewport";
 import { useLightingPaint } from "../ui/hooks/useLightingPaint";
 import { LightingSurface } from "../ui/components/LightingSurface/LightingSurface";
+import { CanvasViewControls } from "../ui/components/CanvasViewControls/CanvasViewControls";
 import { LightingPreviewPanelContainer } from "./LightingPreviewPanelContainer";
+import type { CanvasCamera } from "../stores/ui/CanvasCameraStore";
+import type { LightingRenderMode } from "../stores/ui/LightingViewsUIStore";
 
 /** The colour the brush shapes are asked for. Discarded — see `brushStamp`. */
 const SHAPE_COLOR = { r: 0, g: 0, b: 0, a: 255 } as const;
 
+export interface LightingCanvasContainerProps {
+  /** Which mode this instance shows. `"edit"` (default) is today's painting canvas. */
+  renderMode?: LightingRenderMode;
+}
+
 export const LightingCanvasContainer = observer(
-  function LightingCanvasContainer() {
+  function LightingCanvasContainer({
+    renderMode = "edit",
+  }: LightingCanvasContainerProps) {
     const app = useStores();
 
     /* ── refs ────────────────────────────────────────────────────────────── */
@@ -187,6 +197,14 @@ export const LightingCanvasContainer = observer(
     const viewport = app.ui.viewport;
     const lighting = app.ui.lightingUI;
     const tool = app.ui.tool;
+
+    // ── which pane this is, and the camera that belongs to it ──────────────
+    //
+    // ⚠️ `viewport.zoom` below stays the SHARED pixel scale for both panes
+    // (MASTER D4). "Camera" here is pan + view zoom only, and each pane owns
+    // its own — session-only, exactly as the lighting transform already was.
+    const views = app.lightingViews;
+    const camera: CanvasCamera = views.cameraFor(renderMode);
 
     const zoom = viewport.zoom;
     // 🔧 W19 BUG 3, SECOND HALF. See the header — this is the read that
@@ -234,13 +252,18 @@ export const LightingCanvasContainer = observer(
 
     /* ── the viewport engine (task 31) ───────────────────────────────────── */
     //
-    // ⚠️ NO `onCommitPan`, exactly as `LightingCanvas` behaved: its pan stayed
-    // local and its wheel handler had none of `Canvas`'s `scheduleCommitPan()`
-    // calls. Supplying one here would silently start persisting the lighting
-    // studio's pan.
+    // ⚠️ THE CAMERA IS NOW THE STORE'S, not the hook's (plan 04 task 05).
+    // Until 2026-08-29 this passed a fresh `panOffset: {x:0,y:0}` literal with
+    // no commit sinks and no `resyncKey`, so the lighting transform was
+    // hook-local and unaddressable — it could not be reset, and two panes could
+    // not hold two different views. It is STILL session-only (neither
+    // `LightingViewsUIStore` camera is persisted, MASTER D3), so a reload comes
+    // back to 1x at the origin exactly as before.
     const {
       viewZoom,
       viewPanOffset,
+      setViewZoom,
+      setViewPanOffset,
       // `beginPinch` / `updatePinch` / `endPinch` are bound by the hook
       // itself now; only the suppression flag is read here.
       isPinching,
@@ -248,8 +271,40 @@ export const LightingCanvasContainer = observer(
       containerRef,
       canvasWidth,
       canvasHeight,
-      panOffset: { x: 0, y: 0 },
+      panOffset: camera.panOffset,
+      onCommitPan: (pan) => camera.setPanOffset(pan),
+      viewZoom: camera.viewZoom,
+      onCommitViewZoom: (z) => camera.setViewZoom(z),
+      resyncKey: `${app.timelineUI.selectedObjectId ?? ""}|${
+        app.timelineUI.selectedFrameId ?? ""
+      }|${renderMode}`,
     });
+
+    /**
+     * Recentre this pane and return its view to 100%.
+     *
+     * ⚠️ The centring MUST be MEASURED from the untransformed viewport box, not
+     * assumed: the lighting studio's canvas area changes size with the rails and
+     * — from task 06 — with the split, so a hard-coded offset would centre the
+     * sprite in yesterday's viewport. A store may not read the DOM, so the pan
+     * is computed here and `resetView` takes the result.
+     *
+     * ⚠️ `zoom` (the shared PIXEL scale) is deliberately not reset. This button
+     * rescues a lost view; it does not discard the scale the user picked.
+     */
+    const handleResetView = useCallback(() => {
+      const container = containerRef.current;
+      // At view zoom 1 the content is exactly `canvasWidth × canvasHeight`.
+      const centered = container
+        ? {
+            x: Math.round((container.clientWidth - canvasWidth) / 2),
+            y: Math.round((container.clientHeight - canvasHeight) / 2),
+          }
+        : { x: 0, y: 0 };
+      setViewZoom(1);
+      setViewPanOffset(centered);
+      camera.resetView(centered);
+    }, [canvasWidth, canvasHeight, setViewZoom, setViewPanOffset, camera]);
 
     /* ── the editable layer, and the grid reads ──────────────────────────── */
     //
@@ -607,12 +662,7 @@ export const LightingCanvasContainer = observer(
         // Touch never carried Shift in the legacy handler.
         continueStroke(coords, false);
       },
-      [
-        isPinching,
-        isPaintingRef,
-        getPixelCoordsFromClient,
-        continueStroke,
-      ],
+      [isPinching, isPaintingRef, getPixelCoordsFromClient, continueStroke],
     );
 
     // The hook's own listener ends the gesture; this only closes the stroke.
@@ -694,6 +744,7 @@ export const LightingCanvasContainer = observer(
         gridHeight={gridHeight}
         zoom={zoom}
         empty={empty}
+        viewControls={<CanvasViewControls onResetView={handleResetView} />}
         previewPanel={
           <LightingPreviewPanelContainer
             canvasRef={previewCanvasRef}
