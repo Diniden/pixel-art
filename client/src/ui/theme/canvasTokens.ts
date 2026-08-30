@@ -96,3 +96,39 @@ export const NORMAL_SPHERE_MID = "#2d3748";
 export const NORMAL_SPHERE_LO = "#1a202c";
 export const NORMAL_SPHERE_EDGE = "#718096";
 export const NORMAL_SPHERE_GRID = "rgba(113, 128, 150, 0.4)";
+
+/* ------------------------------------------------------------------ *
+ * Layer-focus dimming (plan 05, locked decisions D4 and D10)
+ *
+ * These are NOT colours and have no CSS counterpart — they are OPACITY
+ * multipliers applied to a whole layer canvas while a variant is being
+ * edited, so a reader can tell the edited variant from its surroundings.
+ * They live in the canvas-only section deliberately: `CSS_MIRROR` is for
+ * values that must byte-match `styles/tokens.css`, and there is no token
+ * for either of these on either side.
+ *
+ * ⚠️ Moved here VERBATIM from `ui/canvas/render/renderScene.ts:76-80`,
+ * which task 05 deleted (D10). The values, and the rules that select
+ * between them, are the ones `CanvasContainer`'s variant-edit branch has
+ * always used:
+ *
+ *   | Layer, while a variant is being edited | Opacity |
+ *   | -------------------------------------- | ------- |
+ *   | Regular layer, `layerFocusMode === "normal"` | 1.0        |
+ *   | Regular layer, otherwise                     | REGULAR_DIM |
+ *   | The variant layer being edited               | 1.0        |
+ *   | Another variant layer, `normal`              | 1.0        |
+ *   | Another variant layer, otherwise             | OTHER_DIM  |
+ *
+ * ⚠️ `layerFocusMode === "onion"` is NOT an opacity. It is outline-only
+ * rendering driven by a 4-neighbour emptiness test, and it stays a
+ * PAINT-time decision inside the per-layer painter. Expressing it here —
+ * or as a CSS opacity — renders solid silhouettes instead of outlines.
+ * ------------------------------------------------------------------ */
+
+/** Dimming applied to a regular layer while a variant is being edited. */
+export const VARIANT_EDIT_REGULAR_DIM = 0.5;
+/** Dimming applied to a NON-edited variant layer while a variant is being edited. */
+export const VARIANT_EDIT_OTHER_DIM = 0.7;
+/** Opacity of the in-flight preview (brush) pixels. */
+export const PREVIEW_ALPHA = 0.6;
