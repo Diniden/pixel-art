@@ -20,6 +20,7 @@
  */
 import { action, makeObservable, observable, observableRef } from "mobx";
 import { DEFAULT_UI_STATE } from "../../types";
+import type { CanvasCamera } from "./CanvasCameraStore";
 
 export interface PanelPosition {
   topPercent: number;
@@ -35,7 +36,7 @@ export interface PanelState {
 
 export type PanelName = "frameReference" | "referenceImage" | "lightingPreview";
 
-export class ViewportUIStore {
+export class ViewportUIStore implements CanvasCamera {
   zoom: number = DEFAULT_UI_STATE.zoom;
   /** `observableRef`: the offset is replaced wholesale on every pan tick. */
   panOffset: { x: number; y: number } = DEFAULT_UI_STATE.panOffset;

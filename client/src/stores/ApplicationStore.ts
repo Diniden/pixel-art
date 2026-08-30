@@ -61,6 +61,7 @@ import {
 } from "./domain/applyInterpolation";
 import { ReferenceUIStore } from "./ui/ReferenceUIStore";
 import { CanvasInteractionStore } from "./ui/CanvasInteractionStore";
+import { CanvasViewsUIStore } from "./ui/CanvasViewsUIStore";
 import { editorHistory } from "./history/editorHistory";
 import { createSnapshotCommand } from "./history/commands";
 import type { Command, SnapshotHost } from "./history/commands";
@@ -382,6 +383,13 @@ export class ApplicationStore {
    */
   readonly canvasInteraction: CanvasInteractionStore;
 
+  /**
+   * Which canvas render modes (Full / Layer) are open, which is on the left,
+   * and the Layer pane's own camera. Session-only — nothing persisted, nothing
+   * deep. No dependencies in either direction, like `canvasInteraction`.
+   */
+  readonly canvasViews: CanvasViewsUIStore;
+
   readonly options: Readonly<{
     api: unknown;
     autoSaveEnabled: boolean;
@@ -485,6 +493,8 @@ export class ApplicationStore {
     // ── task 32 ────────────────────────────────────────────────────────────
     // No dependencies in either direction; see the member declaration.
     this.canvasInteraction = new CanvasInteractionStore();
+    // Split-canvas task 01: same reasoning as `canvasInteraction`.
+    this.canvasViews = new CanvasViewsUIStore();
     // ── task 38: the NATIVE sinks — the hosted `uiState` replaces Zustand ──
     //
     // During the bridge era these wrote the Zustand SOURCE and the bridge
