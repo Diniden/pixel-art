@@ -42,7 +42,7 @@
 
 import { useEffect, useRef } from "react";
 
-/** Tools reachable from the keyboard. A subset of the 16-member `Tool` union. */
+/** Tools reachable from the keyboard. A subset of the 17-member `Tool` union. */
 export type HotkeyTool =
   | "pixel"
   | "eraser"
@@ -55,12 +55,13 @@ export type HotkeyTool =
   | "ellipse"
   | "move"
   | "selection"
-  | "origin";
+  | "origin"
+  | "reflection";
 
 /**
- * The 12 tool hotkeys, exported so a test can assert the map rather than
- * re-typing it. `g`/`G` and `o`/`O` are listed in both cases because the
- * lookup is by raw `e.key`, which is case-sensitive.
+ * The 13 tool hotkeys, exported so a test can assert the map rather than
+ * re-typing it. `g`/`G`, `o`/`O` and `r`/`R` are listed in both cases because
+ * the lookup is by raw `e.key`, which is case-sensitive.
  */
 export const TOOL_HOTKEYS: Readonly<Record<string, HotkeyTool>> = {
   "1": "pixel",
@@ -77,6 +78,8 @@ export const TOOL_HOTKEYS: Readonly<Record<string, HotkeyTool>> = {
   G: "gaussian-fill",
   o: "origin",
   O: "origin",
+  r: "reflection",
+  R: "reflection",
 };
 
 const WASD_KEYS = ["w", "a", "s", "d", "W", "A", "S", "D"];

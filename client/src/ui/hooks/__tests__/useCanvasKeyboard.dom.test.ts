@@ -350,9 +350,9 @@ describe("arrows — under each selectionBehavior", () => {
 });
 
 describe("tool hotkeys", () => {
-  it("maps all 12 tools", () => {
+  it("maps all 13 tools", () => {
     const tools = new Set(Object.values(TOOL_HOTKEYS));
-    expect(tools.size).toBe(12);
+    expect(tools.size).toBe(13);
   });
 
   for (const [key, tool] of Object.entries(TOOL_HOTKEYS)) {

@@ -252,6 +252,8 @@ export const toolHandlers = {
   selection: {},
   eyedropper: {},
   origin: {},
+  // arbitrated by `CanvasContainer`, like `origin` — see docs/03-reflection-tool/07
+  reflection: {},
 
   // A mode, not a pointer tool — see the module comment.
   "reference-trace": {},

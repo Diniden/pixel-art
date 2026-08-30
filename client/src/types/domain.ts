@@ -272,6 +272,7 @@ export type Tool =
   | "eyedropper"
   | "selection"
   | "origin"
+  | "reflection"
   | "normal-pencil"
   | "auto-normal"
   | "height-map";

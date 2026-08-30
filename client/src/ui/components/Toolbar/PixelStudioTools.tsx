@@ -30,6 +30,7 @@ import {
   Move,
   BoxSelect,
   Crosshair,
+  FlipHorizontal,
   FlipHorizontal2,
   FlipVertical2,
   Camera,
@@ -102,6 +103,12 @@ const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
     hotkey: "7",
   },
   { id: "ellipse", icon: Circle, label: "Ellipse", hotkey: "8" },
+  {
+    id: "reflection",
+    icon: FlipHorizontal,
+    label: "Reflection (mirror across lines)",
+    hotkey: "R",
+  },
   { id: "move", icon: Move, label: "Move (arrows to shift)", hotkey: "9" },
   {
     id: "selection",
@@ -121,7 +128,7 @@ const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
  * One tool button, with its own long-press timer.
  *
  * ⚠️ It is a COMPONENT rather than inline JSX because `useLongPress` is a
- * hook: twelve tools need twelve independent timers, and hooks cannot be
+ * hook: thirteen tools need thirteen independent timers, and hooks cannot be
  * called inside a `.map()`. Inlining it would either share one timer across
  * every button (so pressing one tool assigns another) or break the rules of
  * hooks outright.
