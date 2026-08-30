@@ -1,8 +1,8 @@
 # HANDOFF — Canvas rendering performance for large editing surfaces
 
-**Current position:** W2 IN PROGRESS (tasks 02, 03 dispatched in parallel)
+**Current position:** BLOCKED — W2: task 03 DONE, task 02 PARTIAL. Plan defect; awaiting owner decision.
 **Branch:** `feat/03-reflection-tool`
-**Last commit:** `cacfafe`
+**Last commit:** `23ac19c`
 
 Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 `feat/03-reflection-tool`, working tree clean.
@@ -12,7 +12,7 @@ Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01 | DONE | 2026-08-30 | `cacfafe` | typecheck 0 · vitest **132 files / 2269 tests passed** · lint:boundaries OK (5/5) |
-| W2 | 02, 03 | IN PROGRESS | 2026-08-30 | | |
+| W2 | 02, 03 | **BLOCKED** | 2026-08-30 | `5b2401d` `fd871c9` (03) · `cf4c7dd` `23ac19c` (02) | typecheck **exit 2**, 5 errors · vitest **1 failed / 2329 passed** — see W2 section |
 | W3 | 04 | TODO | | | |
 | W4 | 05 | TODO | | | |
 | W5 | 06 | TODO | | | |
@@ -76,7 +76,78 @@ Coordinator spot-checks beyond the gate:
   triggering a save.
 - `pixelDirty` is annotated `observableRef`, not `observable` (R2).
 
-## ⚠️ W2 task-03 findings that TASK 04 MUST READ
+## W2 BLOCKED — the plan cannot be executed as written (coordinator-verified)
+
+**Task 03: DONE.** Commits `5b2401d`, `fd871c9`. Exactly 4 new files, 1,397 insertions,
+**zero existing files modified**. Pure (no React/JSX/store/MobX/API). `ui/canvas` +
+`ui/theme` → 24 files / 435 tests pass, golden hashes and the `tokens.css` parity test
+included. `lint` and `lint:boundaries` exit 0. No lockfile.
+
+**Task 02: PARTIAL.** Commits `cf4c7dd`, `23ac19c`. All in-scope work is done and correct:
+`cellWidth`/`cellHeight` in grid cells, `contentWidth`/`contentHeight` derived, `zoom` out
+of `bgCacheKey`, `scale(combinedScale)` on `.canvas__layout`, the `:339-340` clamp fixed,
+D1 conditional preserved, `clampPanToViewport` and both anchor blocks untouched, R1
+regression tests added. It stopped at the boundary rather than expanding scope. Correct call.
+
+### The defect — MASTER section 8 and section 7 contradict each other
+
+**Section 8 "most likely to get wrong" item 2 instructs task 02 to fix
+`CanvasContainer.tsx:2457`, `:2885` and `:3010`. But section 7 and the `Touches` lists
+assign `CanvasContainer.tsx` to task 05 and `LightingCanvasContainer.tsx` to task 08.**
+Task 02 therefore *cannot* reach a passing typecheck from inside its own five files — the
+rename it is required to perform breaks 49 references in `CanvasContainer.tsx` and 27 in
+`LightingCanvasContainer.tsx` that no task in W2 is allowed to touch.
+
+Task 05's own task file already assumes `cellWidth` exists in `CanvasContainer`
+(`05-...md:38`), confirming the rename was always meant to reach that file — the plan simply
+never assigned the edit to anyone.
+
+### Verified failing gate (coordinator re-ran on the settled tree, not taken on report)
+
+```
+bun run --cwd client typecheck   -> exit 2
+  CanvasContainer.tsx(713,5)  TS2339  'canvasWidth' does not exist on type 'CanvasGeometry'
+  CanvasContainer.tsx(714,5)  TS2339  'canvasHeight' does not exist on type 'CanvasGeometry'
+  CanvasContainer.tsx(746,5)  TS2353  'canvasWidth' not in 'UseCanvasViewportOptions'
+  CanvasContainer.tsx(3068,7) TS2322  'canvasWidth' not in 'CanvasSurfaceProps'
+  LightingCanvasContainer.tsx(304,7) TS2353 'canvasWidth' not in 'UseCanvasViewportOptions'
+
+bunx vitest run                  -> Test Files  1 failed | 133 passed (134)
+                                        Tests  1 failed | 2329 passed (2330)
+  CanvasSurface.dom.test.tsx:132 — receives scale(12), asserts scale(1)
+  NOTE: that file is in TASK 04's Touches, so task 02 could not fix it either
+```
+
+`lint` / `lint:css` / `lint:boundaries` all exit 0; `lint:css` byte-identical to baseline.
+**Corpus snapshots passed unchanged** (R3, R6, golden digests, migrations all green).
+No lockfile. Both agents stayed exactly in scope — the 9 changed files are precisely the two
+`Touches` lists, which is why the defect is the plan's and not theirs.
+
+### The app is knowingly broken at this commit
+
+Vite still builds (it strips types without checking), but `CanvasContainer` destructures
+`canvasWidth` as `undefined`, so canvases fall back to the 300x150 default while the render
+loop still paints at `* zoom`. **`bun run dev` will not render correctly until the follow-up
+lands.** No manual check is meaningful before then.
+
+### Remaining work (small, mechanical, but needs 2 files outside W2's scope)
+
+`geom.cellWidth/cellHeight`; `contentWidth`/`contentHeight` into `useCanvasViewport`;
+`combinedScale={zoom * viewZoom}` + `cellWidth`/`cellHeight` onto `<CanvasSurface>`;
+`contentWidth` at the two pan-clamp sites and the centring site (section 8 items 2 and 3);
+and `contentWidth: viewCellsX * zoom` in `LightingCanvasContainer` (its own sizing stays,
+R7). Plus the one-line `CanvasSurface.dom.test.tsx` transform assertion.
+
+### 0 of 7 manual checks performed — all still owed
+
+Not performed for two independent reasons: the app is in the broken intermediate state
+above, and **no browser automation exists in this environment** (no Playwright/Puppeteer/
+chromedriver). Still owed, including **the Landscapes KB-not-MB memory measurement — the
+headline claim of this task, entirely unmeasured.** Static substitutes that did pass:
+`coords.test.ts` 21/21 unmodified; the R1 wheel-pan test drives a real `WheelEvent` and
+asserts the clamp against full content size; the D1 variant-edit sizing test.
+
+## W2 task-03 findings that TASK 04 MUST READ
 
 Task 03 (SVG primitives, commits `5b2401d` + `fd871c9`) hit four places where the plan's
 "call the geometry function with `zoom = 1` and drop the `+ 0.5`" instruction does not
