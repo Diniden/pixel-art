@@ -25,8 +25,10 @@
  * |    |                             | `ui/canvas/render/canvasBackground`)   |
  * |  4 | Coordinate mapping          | `ui/canvas/model/coords`               |
  * |  5 | Variant-offset resolution   | `ui/canvas/model/variantOffset`        |
- * |  6 | Scene rendering             | this file's `render` + the selection / |
- * |    |                             | origin painters in `ui/canvas/render`  |
+ * |  6 | Scene rendering             | this file's `renderLayers` (ONE canvas |
+ * |    |                             | PER LAYER, plan 05 task 05) +          |
+ * |    |                             | `renderChrome` + the SVG chrome in     |
+ * |    |                             | `ui/canvas/svg`                        |
  * |  7 | Reference-trace overlay     | this file's `renderOverlay`            |
  * |  8 | Frame overlay               | `ui/canvas/render/renderFrameOverlay`  |
  * |  9 | Frame-trace overlay         | same module, parameterised              |
@@ -34,9 +36,10 @@
  * |    |                             | `ui/canvas/tools/toolHandlers` + the   |
  * |    |                             | gesture arbitration below              |
  * | 11 | Keyboard shortcuts          | `ui/hooks/useCanvasKeyboard`           |
- * | 13 | Reflection guides           | this file's `renderReflection` + the   |
- * |    |                             | gesture branches; the painter is       |
- * |    |                             | `ui/canvas/render/renderReflectionLines`|
+ * | 13 | Reflection guides           | the SVG `reflectionGuides` prop + the  |
+ * |    |                             | gesture branches. ⚠️ The RASTER        |
+ * |    |                             | painter was retired by plan 05 task 05 |
+ * |    |                             | — see the note where it used to be.    |
  *
  * (#12 is the hover marker, further down. #13 is the reflection tool, added
  * 2026-08-29: its own overlay canvas, its own scheduler and its own rAF phase
@@ -176,9 +179,11 @@ import {
   ACCENT_PRIMARY_14,
   ACCENT_VARIANT,
   BLACK_12,
+  PREVIEW_ALPHA,
+  VARIANT_EDIT_OTHER_DIM,
+  VARIANT_EDIT_REGULAR_DIM,
   WARN_ORANGE_40,
   WARN_ORANGE_60,
-  WHITE_08,
 } from "../ui/theme/canvasTokens";
 import { useStores } from "../stores/context";
 import type { CanvasCamera } from "../stores/ui/CanvasCameraStore";
@@ -203,7 +208,6 @@ import { expandWrites } from "../ui/canvas/model/reflection";
 import {
   backgroundTheme,
   paintCheckerboard,
-  strokeGrid,
 } from "../ui/canvas/render/canvasBackground";
 import {
   renderFrameOverlay as renderFrameOverlayBuffer,
@@ -211,20 +215,19 @@ import {
   FRAME_OVERLAY_MODE,
   FRAME_TRACE_MODE,
 } from "../ui/canvas/render/renderFrameOverlay";
-import { drawLayerView } from "../ui/canvas/render/renderLayerView";
-import { drawOriginCross } from "../ui/canvas/render/renderOriginCross";
+import { paintLayerCells } from "../ui/canvas/render/renderLayerView";
 import {
-  drawReflectionLines,
-  reflectionSegments,
-} from "../ui/canvas/render/renderReflectionLines";
+  lassoOverlay,
+  marchingAntsOverlay,
+  originCrossOverlay,
+  reflectionGuideOverlays,
+} from "../ui/canvas/svg/chromeOverlay";
 import {
-  drawLasso,
-  drawMarchingAnts,
-} from "../ui/canvas/render/renderSelectionOverlay";
-import {
-  paintHoverCells,
-  strokeHoverOutline,
-} from "../ui/canvas/render/renderHoverMarker";
+  gridOverlayAttrs,
+  gridOverlayPathData,
+} from "../ui/canvas/svg/gridOverlay";
+import type { SelectionBounds } from "../ui/canvas/render/renderSelectionOverlay";
+import { paintHoverCells } from "../ui/canvas/render/renderHoverMarker";
 import { toolFootprint } from "../ui/canvas/tools/toolFootprint";
 import { markerAction } from "../ui/canvas/model/markerPolicy";
 import {
@@ -259,39 +262,6 @@ function getPixelColor(cell: unknown): Pixel | null {
 }
 
 /**
- * Onion-skin support for the layer focus mode. A cell is EMPTY when it holds
- * no colour (or alpha 0); a painted cell is an OUTLINE cell when at least one
- * of its 4-adjacent neighbours is empty. Out-of-bounds neighbours count as
- * empty, so a silhouette touching the grid border keeps its edge.
- */
-function isEmptyCell(
-  pixels: PixelData[][],
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): boolean {
-  if (x < 0 || x >= width || y < 0 || y >= height) return true;
-  const pixel = getPixelColor(pixels[y]?.[x]);
-  return !pixel || pixel.a === 0;
-}
-
-function isOutlineCell(
-  pixels: PixelData[][],
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): boolean {
-  return (
-    isEmptyCell(pixels, x - 1, y, width, height) ||
-    isEmptyCell(pixels, x + 1, y, width, height) ||
-    isEmptyCell(pixels, x, y - 1, width, height) ||
-    isEmptyCell(pixels, x, y + 1, width, height)
-  );
-}
-
-/**
  * Tools whose gesture is arbitrated here rather than by `toolHandlers`.
  *
  * ⚠️ `reflection` is in this list AND has a branch of its own ahead of the
@@ -309,6 +279,101 @@ function isGestureTool(tool: string): boolean {
     tool === "origin" ||
     tool === "reflection"
   );
+}
+
+/**
+ * The synthetic bottom canvas that carries the checkerboard.
+ *
+ * ⚠️ It reaches `CanvasSurface` as one more STRING in `layerIds` and nothing
+ * else — the component never learns that this id means anything (R8: no
+ * domain object, in any shape, crosses that boundary). The `::` separator
+ * cannot collide with a real `Layer.id`, which comes from `LayerStore`'s id
+ * generator, and it is the same separator variant sub-layers are keyed with.
+ *
+ * The background needs a canvas of its own because it has to sit BEHIND the
+ * artwork, and the only pre-existing surface below the layer stack is... the
+ * layer stack. `CanvasSurface.css` makes DOM order the z-order, so the
+ * pointer surface and every overlay are in FRONT of it. Task 06 replaces this
+ * with a CSS DIV on `--z-behind`, at which point the id goes away.
+ */
+const BACKGROUND_LAYER_ID = "::background";
+
+/**
+ * The one place 1:1-ness is still spelled out.
+ *
+ * Every backing store is now `cellWidth × cellHeight` — one sprite pixel, one
+ * device pixel — and all magnification is the single CSS
+ * `scale(zoom * viewZoom)` on `.canvas__layout` (D2). The pure painters under
+ * `ui/canvas/render/` still take a `zoom` because they predate that, and at
+ * `zoom = 1` their `x * zoom` collapses to `x`.
+ *
+ * ⚠️ Named, not inlined, so it is greppable: `CELL_SCALE` marks every call
+ * site that had to opt in, and a surviving `* zoom` in a painter stands out
+ * as the anomaly it would be. A stale one is exactly what clipped the artwork
+ * to the top-left corner between tasks 02 and 05. `ui/canvas/svg/` uses the
+ * same device for the same reason (`CELL_SPACE_ZOOM`).
+ */
+const CELL_SCALE = 1;
+
+/**
+ * Chrome stroke width and dash, in CELL units.
+ *
+ * ⚠️ Both are RASTER chrome that survives at 1:1 (D6) — full-cell-scale
+ * rectangles, not sub-cell geometry. They are the two values the pre-1:1
+ * render used, and they now mean cells rather than device pixels, so a 2-unit
+ * border is two sprite pixels wide at every zoom instead of a hairline. That
+ * is the same relationship the dashes and the rectangle always had to the
+ * artwork; what changed is that the browser magnifies them with everything
+ * else. The sub-cell chrome — grid, lasso, ants, origin cross — moved to SVG
+ * instead, because it CANNOT survive at 1:1 (D5).
+ */
+const CHROME_STROKE = 2;
+
+/** The object-bounds rectangle's dash, preserved verbatim. */
+const OBJECT_BOUNDS_DASH = [6, 4];
+
+/** The reference-trace border's dash, preserved verbatim. */
+const TRACE_BORDER_DASH = [4, 4];
+
+/**
+ * Above this the selection fills are skipped. On the owner's real project a
+ * select-all is 300,249 cells and painting it per frame would stall the drag.
+ * Preserved verbatim from the pre-per-layer render.
+ */
+const SELECTION_FILL_CELL_LIMIT = 20000;
+
+/** The origin cross's colour when the tool has none. Preserved verbatim. */
+const DEFAULT_ORIGIN_COLOR = { r: 255, g: 50, b: 50, a: 255 };
+
+/**
+ * One entry in the per-layer paint plan: what gets a canvas, where its cells
+ * land, and at what CSS opacity.
+ *
+ * ⚠️ `pixels` is held BY REFERENCE and never observed — it is read only from
+ * `renderLayers`, imperatively, inside an animation frame. `layer.pixels` is
+ * `observableRef` precisely so MobX never walks a 300,249-cell tree (R2).
+ */
+interface LayerPaintPlan {
+  /** The id this layer's canvas is registered under. */
+  key: string;
+  /** `"background"` paints the cached checkerboard; `"cells"` paints a grid. */
+  kind: "background" | "cells";
+  /** Applied as `display: none`, which keeps the element and its bitmap. */
+  visible: boolean;
+  /** CSS `opacity` on the layer canvas — D4's dimming, not a per-cell alpha. */
+  opacity: number;
+  /** Absent for `"background"`, which paints the cached checkerboard. */
+  pixels?: PixelData[][];
+  /** The SOURCE grid's extent, which is not the surface's. */
+  gridWidth?: number;
+  gridHeight?: number;
+  /** Where the source grid's origin lands, in world cells. */
+  offsetX?: number;
+  offsetY?: number;
+  /** Outline-only rendering. ⚠️ NOT an opacity — see `canvasTokens`. */
+  onionOutline?: boolean;
+  /** True when the move tool's live drag shifts this layer. */
+  moves?: boolean;
 }
 
 export interface CanvasContainerProps {
@@ -337,16 +402,13 @@ export const CanvasContainer = observer(function CanvasContainer({
   const frameOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
-  const reflectionCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Offscreen caches for the static checkerboard and grid lines. Concern #3:
   // the PAINTERS are pure functions in `ui/canvas/render/canvasBackground`;
   // only the cache lives here, because a cache is state.
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const gridCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgCacheKeyRef = useRef<string>("");
-  const gridCacheKeyRef = useRef<string>("");
 
   /* ── the gesture arbitration state ─────────────────────────────────────── */
   //
@@ -708,8 +770,14 @@ export const CanvasContainer = observer(function CanvasContainer({
   const {
     viewMinX,
     viewMinY,
-    viewMaxX,
-    viewMaxY,
+    // ⚠️ `viewMaxX`/`viewMaxY` are no longer destructured, and that is a
+    // SIMPLIFICATION, not a dropped behaviour. The variant-edit branch used
+    // to test each cell's world position against `[viewMin, viewMax)` by
+    // hand; `paintLayerCells` clips to the BUFFER, and the buffer is
+    // `cellWidth × cellHeight`, which in variant-edit mode is exactly
+    // `viewWidth × viewHeight` = `viewMax − viewMin` (`useCanvasGeometry`,
+    // D1). Same rectangle, expressed once instead of at every call site.
+    // They remain on the hook's contract for the lighting canvas (task 08).
     cellWidth,
     cellHeight,
     contentWidth,
@@ -725,27 +793,26 @@ export const CanvasContainer = observer(function CanvasContainer({
   } = geom;
 
   /**
-   * The size the RENDER LOOP still paints into, in scaled pixels.
+   * ⚠️ THE TRANSITIONAL `canvasWidth = cellWidth * zoom` ALIAS IS GONE.
    *
-   * ⚠️ TRANSITIONAL, and deliberately not `cellWidth` (plan 05). The backing
-   * stores mounted by `CanvasSurface` are 1:1 with the pixel data as of task
-   * 02, but every painter below — the background/grid caches, the reference
-   * and frame overlays, `render` itself — still emits
-   * `fillRect(x * zoom, y * zoom, zoom, zoom)`. Converting those loops to 1:1
-   * is TASK 05's job, and doing it here would mean rewriting ~1000 lines
-   * outside this task's mandate.
+   * Task 02 renamed the geometry to `cellWidth`/`cellHeight` (grid cells,
+   * 1:1 with the pixel data) and left an alias here so this file's ~1000-line
+   * render loop kept compiling verbatim while still emitting
+   * `fillRect(x * zoom, y * zoom, zoom, zoom)`. The consequence was the
+   * documented intermediate state between tasks 02 and 05: the artwork was
+   * CLIPPED to the top-left `cellWidth × cellHeight` corner, because a
+   * `zoom`-times-larger drawing was being made into a 1:1 backing store.
    *
-   * Until then the offscreen buffers those painters build stay `zoom` times
-   * larger than the canvases they are blitted into, so the artwork is clipped
-   * to the top-left `cellWidth × cellHeight` corner. That is the KNOWN,
-   * DOCUMENTED intermediate state between tasks 02 and 05 — not a bug to fix
-   * here. `contentWidth`/`contentHeight` from `useCanvasGeometry` carry the
-   * same product for the sites that legitimately need the on-screen box
-   * (pan clamping, view centring); this alias exists only so the render loop
-   * keeps compiling untouched, and task 05 deletes it.
+   * This task converted every painter in this file to cell space, so the
+   * alias is deleted rather than renamed — that deletion is what proves no
+   * `* zoom` survived. `CELL_SCALE` below is the one place the 1:1-ness is
+   * still spelled out, for the pure painters whose signatures take a `zoom`.
+   *
+   * `contentWidth`/`contentHeight` (from `useCanvasGeometry`) remain the
+   * on-screen box for the sites that legitimately need it — pan clamping and
+   * view centring — and are the box every persisted `panOffset` was recorded
+   * against (R1).
    */
-  const canvasWidth = cellWidth * zoom;
-  const canvasHeight = cellHeight * zoom;
 
   /* ── the viewport engine ───────────────────────────────────────────────── */
   //
@@ -847,7 +914,26 @@ export const CanvasContainer = observer(function CanvasContainer({
     [coordGeomRef],
   );
 
-  /* ── the offscreen caches (concern #3) ─────────────────────────────────── */
+  /* ── the offscreen checkerboard cache (concern #3) ────────────────────── */
+  //
+  // ⚠️ 1:1 NOW, and it paints into a LAYER canvas, not the pointer surface.
+  //
+  // The checkerboard has to sit BEHIND the artwork, and the pointer surface
+  // sits in FRONT of the layer stack (`CanvasSurface.css` — DOM order is
+  // z-order there). So the background gets a canvas of its own at the BOTTOM
+  // of `layerIds`, under the id `BACKGROUND_LAYER_ID`. That is still ids-only
+  // across the `ui/` boundary (R8): `CanvasSurface` sees one more string and
+  // knows nothing about what is painted into it.
+  //
+  // `bgGeom` already carries `zoom: 1` and cell-sized dimensions — task 02
+  // prepared it — so `paintCheckerboard`'s `x * zoom` collapses to `x`, one
+  // device pixel per cell, and the CSS transform magnifies the result. At
+  // Landscapes that is a 224 KB buffer instead of 546 MB at zoom 50.
+  //
+  // ⚠️ THE GRID CACHE IS GONE. `strokeGrid` at 1:1 draws a 1px line every 1px
+  // — a flat wash of `gridStroke` over the whole canvas, which is MASTER §4's
+  // first named silent failure. The grid is now VECTOR chrome (D5): see
+  // `gridPath` below. Task 06 replaces both with a CSS DIV.
   const ensureBgCanvas = useCallback(() => {
     if (bgCacheKeyRef.current === bgCacheKey && bgCanvasRef.current) {
       return bgCanvasRef.current;
@@ -856,12 +942,12 @@ export const CanvasContainer = observer(function CanvasContainer({
       bgCanvasRef.current = document.createElement("canvas");
     }
     const bgCanvas = bgCanvasRef.current;
-    bgCanvas.width = canvasWidth;
-    bgCanvas.height = canvasHeight;
+    bgCanvas.width = cellWidth;
+    bgCanvas.height = cellHeight;
     const bgCtx = bgCanvas.getContext("2d");
     if (!bgCtx) return bgCanvas;
 
-    const imageData = bgCtx.createImageData(canvasWidth, canvasHeight);
+    const imageData = bgCtx.createImageData(cellWidth, cellHeight);
     paintCheckerboard(
       imageData,
       bgGeomRef.current,
@@ -871,338 +957,393 @@ export const CanvasContainer = observer(function CanvasContainer({
 
     bgCacheKeyRef.current = bgCacheKey;
     return bgCanvas;
-  }, [bgCacheKey, canvasWidth, canvasHeight, lightGridMode, bgGeomRef]);
+  }, [bgCacheKey, cellWidth, cellHeight, lightGridMode, bgGeomRef]);
 
-  const ensureGridCanvas = useCallback(() => {
-    if (gridCacheKeyRef.current === bgCacheKey && gridCanvasRef.current) {
-      return gridCanvasRef.current;
+  /* ══════════════════════════════════════════════════════════════════════
+   *  THE PER-LAYER RENDER (concern #6) — plan 05, task 05
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * This replaced a ~1000-line `useCallback` with three branches (Layer,
+   * variant-edit, normal), each of which walked EVERY cell of EVERY visible
+   * layer, built an `rgba(...)` STRING per cell, and `fillRect`-ed it into one
+   * shared canvas. On the owner's `Landscapes` project that was 57,344 string
+   * allocations and 57,344 canvas calls per repaint — on every pixel edit.
+   *
+   * ── The shape now ────────────────────────────────────────────────────────
+   *
+   * Two functions with disjoint jobs, and the split is the point:
+   *
+   *   `renderLayers`  paints EACH layer into ITS OWN 1:1 canvas, and nothing
+   *                   else. Cross-layer compositing is the browser's, via the
+   *                   stacked `<canvas>` elements CanvasSurface mounts.
+   *   `renderChrome`  paints everything that is not artwork — the selection
+   *                   fills, the move/drag previews, the preview pixels, the
+   *                   object bounds and the variant rectangle — onto the
+   *                   shared pointer surface, which sits ABOVE the stack.
+   *
+   * Both still run from ONE `useCanvasRender(render, [render, pixelVersion])`
+   * so the invalidation signal is unchanged (task 07 owns the dirty region;
+   * `pixelDirty` is deliberately not consumed here).
+   *
+   * ── Dimming: JS → CSS (D4) ──────────────────────────────────────────────
+   *
+   * `layerFocusMode`'s per-cell `alpha * 0.5` / `* 0.7` multiply is gone from
+   * the hot loop. `layerOpacity` below hands `CanvasSurface` a CSS `opacity`
+   * per layer canvas and the compositor applies it. `VARIANT_EDIT_REGULAR_DIM`
+   * and `VARIANT_EDIT_OTHER_DIM` are the same two constants, now in
+   * `ui/theme/canvasTokens`.
+   *
+   * ⚠️ `onion` is NOT an opacity and is NOT in that table. It is outline-only
+   * rendering via a 4-neighbour emptiness test, and it stays a PAINT-time
+   * decision — `paintLayerCells`' `onionOutline` flag. Passing it as an
+   * opacity renders solid silhouettes, which is the opposite of an outline.
+   *
+   * ── ⚠️ RISK R4: alpha compositing genuinely changes here ────────────────
+   *
+   * Two canvases stacked with CSS `opacity` do not composite identically to
+   * one canvas with a per-cell alpha multiply: CSS applies the opacity to the
+   * composited layer AS A WHOLE, where the old code multiplied per cell
+   * BEFORE compositing. For a single layer the two agree. For overlapping
+   * semi-transparent cells they can differ. The owner accepted this in
+   * principle ("I don't really care about the gradient per pixel effect");
+   * the side-by-side visual comparison is this wave's sign-off evidence and
+   * is deferred to the consolidated pass after W6.
+   *
+   * ── The layer identity scheme, and why variants get one canvas EACH ─────
+   *
+   * `paintKey` is the id a layer's canvas is registered under. For a regular
+   * layer it is `layer.id`. For a VARIANT layer it is
+   * `${layer.id}::${variantSubLayer.id}` — one canvas per variant SUB-layer,
+   * not one per variant layer.
+   *
+   * That is not tidiness. It is what makes `putImageData` safe: a single
+   * pixel grid holds exactly one cell per (x, y), so no two writes in one
+   * paint can land on the same device pixel. Compositing a variant's several
+   * sub-layers into one buffer would reintroduce exactly the JS alpha
+   * arithmetic R4 is about, in the one place it is avoidable.
+   */
+
+  /**
+   * Does the move tool's live drag shift this layer?
+   *
+   * ⚠️ It answers "would `moveLayerPixels` shift it", NOT "is a drag in
+   * flight" — the drag OFFSET is applied in `renderLayers`, which is the only
+   * place that reads it. Keeping the two apart is what lets `layerPlan` be
+   * memoised on the layer SHAPE and not rebuild on every pointer sample of a
+   * move drag: `moveDragOffset` changes per sample, `moveAllLayers` and the
+   * selected layer do not.
+   *
+   * Verbatim from the pre-per-layer `movesWithDrag`, minus the
+   * `moveDx !== 0 || moveDy !== 0` term, which `renderLayers` now applies by
+   * passing a zero offset.
+   */
+  const movesWithDragId = useCallback(
+    (id: string) => tool.moveAllLayers || id === layer?.id,
+    [tool.moveAllLayers, layer?.id],
+  );
+
+  /** Every layer canvas registered by `CanvasSurface`, keyed by `paintKey`. */
+  const layerCanvasesRef = useRef(new Map<string, HTMLCanvasElement>());
+
+  /**
+   * ⚠️ MUST be `useCallback`-stable.
+   *
+   * `CanvasSurface.useLayerRefs` memoises one ref callback per id and rebuilds
+   * the whole map when THIS function's identity changes. An inline arrow here
+   * would rebuild every closure on every render, so React would detach and
+   * reattach every layer canvas on every pan frame, wheel tick and hover
+   * sample — firing `(id, null)` through this map at pointer rate and
+   * discarding at the ref level exactly the pooling keyed reconciliation buys
+   * at the DOM level. `CanvasSurface`'s header says so explicitly.
+   */
+  const registerLayerCanvas = useCallback(
+    (id: string, el: HTMLCanvasElement | null) => {
+      if (el) layerCanvasesRef.current.set(id, el);
+      else layerCanvasesRef.current.delete(id);
+    },
+    [],
+  );
+
+  /**
+   * What gets a canvas, in what order, at what opacity — the whole per-layer
+   * plan, derived once and consumed by both the painter and the JSX.
+   *
+   * Ordered bottom → top: the background, then `frame.layers` in array order,
+   * which is the z-order `CanvasSurface` renders them in (D3).
+   *
+   * ⚠️ This reads `frame.layers` and the variant tree, but it reads only their
+   * SHAPE — ids, visibility, offsets, grid sizes. It never touches
+   * `layer.pixels`, so nothing here deep-observes a 300k-cell grid (R2). The
+   * pixels are read imperatively, in `renderLayers`, from an animation frame.
+   */
+  const layerPlan = useMemo((): LayerPaintPlan[] => {
+    const plan: LayerPaintPlan[] = [
+      // The checkerboard, always at the bottom and never dimmed.
+      {
+        key: BACKGROUND_LAYER_ID,
+        kind: "background",
+        visible: true,
+        opacity: 1,
+      },
+    ];
+    if (!frame || !obj) return plan;
+
+    // Layer Render Mode: the editable grid at the origin and nothing else —
+    // the variant's OWN layers (the set the Full view composites for it), or
+    // the current layer on the object grid. No offset, no dimming, no object
+    // outline. Verbatim from the branch `drawLayerView` used to serve.
+    if (layerMode) {
+      const layers =
+        editingVariant && variantData
+          ? variantData.variantFrame.layers
+          : layer
+            ? [layer]
+            : [];
+      for (const l of layers) {
+        plan.push({
+          key: l.id,
+          kind: "cells",
+          visible: l.visible,
+          opacity: 1,
+          pixels: l.pixels,
+          gridWidth,
+          gridHeight,
+          offsetX: 0,
+          offsetY: 0,
+          onionOutline: false,
+          moves: movesWithDragId(l.id),
+        });
+      }
+      return plan;
     }
-    if (!gridCanvasRef.current) {
-      gridCanvasRef.current = document.createElement("canvas");
+
+    const editing = isEditingVariantResolved;
+    const baseFrameIndex = obj.frames.findIndex((f) => f.id === frame.id);
+
+    for (const l of frame.layers) {
+      if (l.isVariant && l.variantGroupId) {
+        const vg = app.domain.variants?.find((g) => g.id === l.variantGroupId);
+        const variant = vg?.variants.find((v) => v.id === l.selectedVariantId);
+        const variantFrameIdx =
+          app.timelineUI.variantFrameIndices?.[l.variantGroupId] ?? 0;
+        const vFrame =
+          variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
+        if (!variant || !vFrame) continue;
+
+        const vOffset = resolveVariantOffset(l, variant, baseFrameIndex);
+        const isCurrentLayer = l.id === layer?.id;
+        // ── D4's table, verbatim ──────────────────────────────────────────
+        // The edited variant always reads at full alpha; another variant
+        // follows the focus mode. Outside variant-edit nothing is dimmed.
+        const opacity =
+          editing && !isCurrentLayer && layerFocusMode !== "normal"
+            ? VARIANT_EDIT_OTHER_DIM
+            : 1;
+        // Onion is a PAINT decision, never an opacity — see the header.
+        const onionOutline =
+          editing && !isCurrentLayer && layerFocusMode === "onion";
+        // In variant-edit mode `moveLayerPixels` shifts the VARIANT's frame
+        // layers, clipped to the variant grid; outside it the variant layer
+        // is composited untouched.
+        const moves = editing && isCurrentLayer;
+
+        for (const vl of vFrame.layers) {
+          plan.push({
+            // One canvas per variant SUB-layer: see the header on why this is
+            // what makes `putImageData` safe.
+            key: `${l.id}::${vl.id}`,
+            kind: "cells",
+            visible: l.visible && vl.visible,
+            opacity,
+            pixels: vl.pixels,
+            gridWidth: variant.gridSize.width,
+            gridHeight: variant.gridSize.height,
+            offsetX: vOffset.x,
+            offsetY: vOffset.y,
+            onionOutline,
+            moves,
+          });
+        }
+        continue;
+      }
+
+      // A regular layer. ⚠️ The bounds differ by mode and always did: in
+      // variant-edit the editable grid is the VARIANT's, so walking it would
+      // truncate the object — the object's own dimensions are the right ones.
+      plan.push({
+        key: l.id,
+        kind: "cells",
+        visible: l.visible,
+        opacity: editing && layerFocusMode !== "normal"
+          ? VARIANT_EDIT_REGULAR_DIM
+          : 1,
+        pixels: l.pixels,
+        gridWidth: editing ? objWidth : gridWidth,
+        gridHeight: editing ? objHeight : gridHeight,
+        offsetX: 0,
+        offsetY: 0,
+        onionOutline: editing && layerFocusMode === "onion",
+        moves: movesWithDragId(l.id),
+      });
     }
-    const gridCanvas = gridCanvasRef.current;
-    gridCanvas.width = canvasWidth;
-    gridCanvas.height = canvasHeight;
-    const gridCtx = gridCanvas.getContext("2d");
-    if (!gridCtx) return gridCanvas;
 
-    gridCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-    strokeGrid(gridCtx, bgGeomRef.current, backgroundTheme(lightGridMode));
+    return plan;
+  }, [
+    app.domain,
+    app.timelineUI,
+    frame,
+    obj,
+    layer,
+    layerMode,
+    editingVariant,
+    variantData,
+    isEditingVariantResolved,
+    layerFocusMode,
+    gridWidth,
+    gridHeight,
+    objWidth,
+    objHeight,
+    movesWithDragId,
+  ]);
 
-    gridCacheKeyRef.current = bgCacheKey;
-    return gridCanvas;
-  }, [bgCacheKey, canvasWidth, canvasHeight, lightGridMode, bgGeomRef]);
+  /** Ids only, bottom → top. The whole R8 mitigation is that this is strings. */
+  const layerIds = useMemo(() => layerPlan.map((p) => p.key), [layerPlan]);
 
-  /* ── the main render (concern #6) ──────────────────────────────────────── */
-  //
-  // ⚠️ Moved VERBATIM from `Canvas.tsx:388-755`, including its `fillRect`
-  // loops. It is deliberately NOT swapped onto `ui/canvas/render/renderScene`,
-  // which task 30 extracted and hash-tested but never adopted: `renderScene`
-  // is a BUFFER renderer that composites into `ImageData`, and swapping a
-  // `fillRect` path for an alpha-composited buffer path is a VISIBLE change to
-  // every semi-transparent pixel in variant-edit mode. That belongs to a task
-  // with an owner-reviewed visual diff, not to a decomposition. Recorded in
-  // the task 32 report.
-  const render = useCallback(() => {
+  /** CSS opacity per layer canvas (D4). */
+  const layerOpacity = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const p of layerPlan) out[p.key] = p.opacity;
+    return out;
+  }, [layerPlan]);
+
+  /** `display: none` per layer canvas — keeps the element and its bitmap. */
+  const layerVisible = useMemo(() => {
+    const out: Record<string, boolean> = {};
+    for (const p of layerPlan) out[p.key] = p.visible;
+    return out;
+  }, [layerPlan]);
+
+  /**
+   * Paint every layer into its own canvas.
+   *
+   * ⚠️ Reads `layer.pixels` IMPERATIVELY, from an animation frame — never
+   * through `observer()`. `layer.pixels` is `observableRef` exactly so MobX
+   * never walks a 300,249-cell tree (R2), and this is the only consumer.
+   */
+  const renderLayers = useCallback(() => {
+    const moveDx = isDraggingPixels ? moveDragOffset.dx : 0;
+    const moveDy = isDraggingPixels ? moveDragOffset.dy : 0;
+    // The whole view is shifted so world (viewMinX, viewMinY) lands at
+    // canvas (0, 0) — outside variant-edit both are 0 and this is a no-op.
+    const viewOx = isEditingVariantResolved ? -viewMinX : 0;
+    const viewOy = isEditingVariantResolved ? -viewMinY : 0;
+
+    for (const item of layerPlan) {
+      const canvas = layerCanvasesRef.current.get(item.key);
+      const ctx = canvas?.getContext("2d");
+      if (!canvas || !ctx) continue;
+
+      // ⚠️ Cleared unconditionally, INCLUDING for a hidden layer. `display:
+      // none` keeps the bitmap alive, so a layer that is emptied or hidden
+      // while its canvas still holds paint would show that paint again the
+      // moment it is re-shown. Clearing costs nothing next to a repaint.
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!item.visible) continue;
+
+      if (item.kind === "background") {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(ensureBgCanvas(), 0, 0);
+        continue;
+      }
+      if (!item.pixels) continue;
+
+      const buffer = ctx.createImageData(canvas.width, canvas.height);
+      paintLayerCells(buffer, {
+        pixels: item.pixels,
+        gridWidth: item.gridWidth ?? 0,
+        gridHeight: item.gridHeight ?? 0,
+        getPixelColor,
+        offsetX: (item.offsetX ?? 0) + viewOx,
+        offsetY: (item.offsetY ?? 0) + viewOy,
+        moveDx: item.moves === true ? moveDx : 0,
+        moveDy: item.moves === true ? moveDy : 0,
+        onionOutline: item.onionOutline === true,
+      });
+      ctx.putImageData(buffer, 0, 0);
+    }
+  }, [
+    layerPlan,
+    ensureBgCanvas,
+    isDraggingPixels,
+    moveDragOffset.dx,
+    moveDragOffset.dy,
+    isEditingVariantResolved,
+    viewMinX,
+    viewMinY,
+  ]);
+
+  /**
+   * Everything that is NOT artwork, on the shared pointer surface.
+   *
+   * That surface sits ABOVE the layer stack in DOM order (`CanvasSurface.css`
+   * — no z-index is involved, source order is the z-order), so chrome painted
+   * here lands over the sprite exactly as it did when one canvas held both.
+   *
+   * ⚠️ Everything is in CELL space: one unit, one device pixel, magnified by
+   * the CSS transform. There is no `* zoom` anywhere below and there may not
+   * be — a surviving one is what clipped the artwork between tasks 02 and 05.
+   *
+   * The GRID LINES are NOT here: at 1:1 a 1px line every 1px is a flat wash
+   * over the whole surface. They are vector chrome now (`gridPath`, D5).
+   */
+  const renderChrome = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx || !frame || !obj) return;
 
     ctx.imageSmoothingEnabled = false;
+    // ⚠️ CLEARED, not painted over with the background. The background moved
+    // to its own canvas UNDER the layer stack; painting it here would hide
+    // every layer beneath this surface.
+    ctx.clearRect(0, 0, cellWidth, cellHeight);
 
-    const bgCanvas = ensureBgCanvas();
-    ctx.drawImage(bgCanvas, 0, 0);
-
-    // The move tool's live preview: the layers `moveLayerPixels` WOULD shift
-    // are drawn displaced by `moveDragOffset`, and cells displaced off the
-    // grid are simply not drawn — which is what the eventual commit does too.
-    const moveDx = isDraggingPixels ? moveDragOffset.dx : 0;
-    const moveDy = isDraggingPixels ? moveDragOffset.dy : 0;
-    const movesWithDrag = (l: { id: string }) =>
-      (moveDx !== 0 || moveDy !== 0) &&
-      (tool.moveAllLayers || l.id === layer?.id);
-
-    // In variant-edit mode, translate so world (viewMinX, viewMinY) lands at
-    // canvas (0,0) — the whole variant area stays visible.
+    // View-space shift, as in `renderLayers`.
     if (isEditingVariantResolved) {
       ctx.save();
-      ctx.translate(-viewMinX * zoom, -viewMinY * zoom);
+      ctx.translate(-viewMinX, -viewMinY);
     }
 
-    if (layerMode) {
-      // Layer Render Mode: just the editable grid at origin — the variant's
-      // OWN layers (the set the Full view composites for it; `editableGrid`
-      // writes `layers[0]`), or the current layer on the object grid. No
-      // offset, no dimming, no object outline.
-      drawLayerView(ctx, {
-        layers:
-          editingVariant && variantData
-            ? variantData.variantFrame.layers
-            : layer
-              ? [layer]
-              : [],
-        gridWidth,
-        gridHeight,
-        zoom,
-        getPixelColor,
-        moveDx,
-        moveDy,
-        movesWithDrag: (l) => l.id !== undefined && movesWithDrag({ id: l.id }),
-      });
-
-      if (previewPixels.length > 0) {
-        ctx.fillStyle = `rgba(${currentColor.r}, ${currentColor.g}, ${currentColor.b}, ${(currentColor.a / 255) * 0.6})`;
-        for (const { x, y } of previewPixels) {
-          if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
-            ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
-          }
+    // The in-flight brush preview. Bounds-tested in GRID space, drawn in
+    // world space — the variant offset is applied after the test.
+    if (previewPixels.length > 0) {
+      const pox = isEditingVariantResolved ? variantOffset.x : 0;
+      const poy = isEditingVariantResolved ? variantOffset.y : 0;
+      ctx.fillStyle = `rgba(${currentColor.r}, ${currentColor.g}, ${currentColor.b}, ${(currentColor.a / 255) * PREVIEW_ALPHA})`;
+      for (const { x, y } of previewPixels) {
+        if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+          ctx.fillRect(x + pox, y + poy, 1, 1);
         }
       }
+    }
 
-      const gridCanvas = ensureGridCanvas();
-      ctx.drawImage(gridCanvas, 0, 0);
-    } else if (isEditingVariantResolved && variantData) {
-      for (const l of frame.layers) {
-        if (!l.visible) continue;
-
-        if (l.isVariant && l.variantGroupId) {
-          const vg = app.domain.variants?.find(
-            (g) => g.id === l.variantGroupId,
-          );
-          const variant = vg?.variants.find(
-            (v) => v.id === l.selectedVariantId,
-          );
-          const variantFrameIdx =
-            app.timelineUI.variantFrameIndices?.[l.variantGroupId] ?? 0;
-          const vFrame =
-            variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
-
-          const baseFrameIndex = obj.frames.findIndex((f) => f.id === frame.id);
-
-          if (variant && vFrame) {
-            const vOffset = resolveVariantOffset(l, variant, baseFrameIndex);
-            const isCurrentLayer = l.id === layer?.id;
-            // In variant-edit mode `moveLayerPixels` shifts the VARIANT's
-            // frame layers, clipped to the variant grid.
-            const vdx = isCurrentLayer ? moveDx : 0;
-            const vdy = isCurrentLayer ? moveDy : 0;
-
-            for (const vl of vFrame.layers) {
-              if (!vl.visible) continue;
-
-              for (let y = 0; y < variant.gridSize.height; y++) {
-                const row = vl.pixels[y];
-                if (!row) continue;
-
-                for (let x = 0; x < variant.gridSize.width; x++) {
-                  const pixel = getPixelColor(row[x]);
-                  if (pixel && pixel.a > 0) {
-                    const sx = x + vdx;
-                    const sy = y + vdy;
-                    if (
-                      sx < 0 ||
-                      sx >= variant.gridSize.width ||
-                      sy < 0 ||
-                      sy >= variant.gridSize.height
-                    ) {
-                      continue;
-                    }
-                    const drawX = (sx + vOffset.x) * zoom;
-                    const drawY = (sy + vOffset.y) * zoom;
-                    const worldX = sx + vOffset.x;
-                    const worldY = sy + vOffset.y;
-                    const inView =
-                      worldX >= viewMinX &&
-                      worldX < viewMaxX &&
-                      worldY >= viewMinY &&
-                      worldY < viewMaxY;
-                    if (inView) {
-                      // Non-edited variant layers follow the focus-mode
-                      // setting; the edited layer always reads at full alpha.
-                      if (
-                        !isCurrentLayer &&
-                        layerFocusMode === "onion" &&
-                        !isOutlineCell(
-                          vl.pixels,
-                          x,
-                          y,
-                          variant.gridSize.width,
-                          variant.gridSize.height,
-                        )
-                      ) {
-                        continue;
-                      }
-                      const alpha =
-                        isCurrentLayer || layerFocusMode === "normal"
-                          ? pixel.a / 255
-                          : (pixel.a / 255) * 0.7;
-                      ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${alpha})`;
-                      ctx.fillRect(drawX, drawY, zoom, zoom);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        } else {
-          // A regular layer while a variant is being edited, rendered per the
-          // focus-mode setting (normal / transparent dim / onion outline).
-          const alphaMul = layerFocusMode === "normal" ? 1 : 0.5;
-          const ldx = movesWithDrag(l) ? moveDx : 0;
-          const ldy = movesWithDrag(l) ? moveDy : 0;
-          for (let y = 0; y < objHeight; y++) {
-            const row = l.pixels[y];
-            if (!row) continue;
-
-            for (let x = 0; x < objWidth; x++) {
-              const pixel = getPixelColor(row[x]);
-              if (pixel && pixel.a > 0) {
-                if (
-                  layerFocusMode === "onion" &&
-                  !isOutlineCell(l.pixels, x, y, objWidth, objHeight)
-                ) {
-                  continue;
-                }
-                const sx = x + ldx;
-                const sy = y + ldy;
-                if (sx < 0 || sx >= objWidth || sy < 0 || sy >= objHeight) {
-                  continue;
-                }
-                ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${(pixel.a / 255) * alphaMul})`;
-                ctx.fillRect(sx * zoom, sy * zoom, zoom, zoom);
-              }
-            }
-          }
-        }
-      }
-
-      if (previewPixels.length > 0) {
-        ctx.fillStyle = `rgba(${currentColor.r}, ${currentColor.g}, ${currentColor.b}, ${(currentColor.a / 255) * 0.6})`;
-        for (const { x, y } of previewPixels) {
-          if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
-            ctx.fillRect(
-              (x + variantOffset.x) * zoom,
-              (y + variantOffset.y) * zoom,
-              zoom,
-              zoom,
-            );
-          }
-        }
-      }
-
-      // Grid lines over the variant edit area only.
-      ctx.strokeStyle = WHITE_08;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let x = 0; x <= gridWidth; x++) {
-        const px = (variantOffset.x + x) * zoom + 0.5;
-        ctx.moveTo(px, variantOffset.y * zoom);
-        ctx.lineTo(px, (variantOffset.y + gridHeight) * zoom);
-      }
-      for (let y = 0; y <= gridHeight; y++) {
-        const py = (variantOffset.y + y) * zoom + 0.5;
-        ctx.moveTo(variantOffset.x * zoom, py);
-        ctx.lineTo((variantOffset.x + gridWidth) * zoom, py);
-      }
-      ctx.stroke();
-
-      // Object bounds.
+    if (isEditingVariantResolved) {
+      // Object bounds — the dashed orange rectangle showing where the OBJECT
+      // is while a variant that may overhang it is being edited.
       ctx.strokeStyle = WARN_ORANGE_40;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.strokeRect(0, 0, objWidth * zoom, objHeight * zoom);
+      ctx.lineWidth = CHROME_STROKE;
+      ctx.setLineDash(OBJECT_BOUNDS_DASH);
+      ctx.strokeRect(0, 0, objWidth, objHeight);
       ctx.setLineDash([]);
 
       // The variant editing area.
       ctx.strokeStyle = ACCENT_VARIANT;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = CHROME_STROKE;
       ctx.strokeRect(
-        variantOffset.x * zoom,
-        variantOffset.y * zoom,
-        gridWidth * zoom,
-        gridHeight * zoom,
+        variantOffset.x,
+        variantOffset.y,
+        gridWidth,
+        gridHeight,
       );
-    } else {
-      const baseFrameIndex = obj.frames.findIndex((f) => f.id === frame.id);
-
-      for (const l of frame.layers) {
-        if (!l.visible) continue;
-
-        if (l.isVariant && l.variantGroupId) {
-          const vg = app.domain.variants?.find(
-            (g) => g.id === l.variantGroupId,
-          );
-          const variant = vg?.variants.find(
-            (v) => v.id === l.selectedVariantId,
-          );
-          const variantFrameIdx =
-            app.timelineUI.variantFrameIndices?.[l.variantGroupId] ?? 0;
-          const vFrame =
-            variant?.frames[variantFrameIdx % (variant?.frames.length || 1)];
-
-          if (variant && vFrame) {
-            const vOffset = resolveVariantOffset(l, variant, baseFrameIndex);
-
-            for (const vl of vFrame.layers) {
-              if (!vl.visible) continue;
-
-              for (let y = 0; y < variant.gridSize.height; y++) {
-                const row = vl.pixels[y];
-                if (!row) continue;
-
-                for (let x = 0; x < variant.gridSize.width; x++) {
-                  const pixel = getPixelColor(row[x]);
-                  if (pixel && pixel.a > 0) {
-                    const drawX = (x + vOffset.x) * zoom;
-                    const drawY = (y + vOffset.y) * zoom;
-                    if (
-                      drawX >= 0 &&
-                      drawX < canvasWidth &&
-                      drawY >= 0 &&
-                      drawY < canvasHeight
-                    ) {
-                      ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
-                      ctx.fillRect(drawX, drawY, zoom, zoom);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        } else {
-          const ldx = movesWithDrag(l) ? moveDx : 0;
-          const ldy = movesWithDrag(l) ? moveDy : 0;
-          for (let y = 0; y < gridHeight; y++) {
-            const row = l.pixels[y];
-            if (!row) continue;
-
-            for (let x = 0; x < gridWidth; x++) {
-              const pixel = getPixelColor(row[x]);
-              if (pixel && pixel.a > 0) {
-                const sx = x + ldx;
-                const sy = y + ldy;
-                if (sx < 0 || sx >= gridWidth || sy < 0 || sy >= gridHeight) {
-                  continue;
-                }
-                ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
-                ctx.fillRect(sx * zoom, sy * zoom, zoom, zoom);
-              }
-            }
-          }
-        }
-      }
-
-      if (previewPixels.length > 0) {
-        ctx.fillStyle = `rgba(${currentColor.r}, ${currentColor.g}, ${currentColor.b}, ${(currentColor.a / 255) * 0.6})`;
-        for (const { x, y } of previewPixels) {
-          if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
-            ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
-          }
-        }
-      }
-
-      const gridCanvas = ensureGridCanvas();
-      ctx.drawImage(gridCanvas, 0, 0);
     }
 
     const offsetX = isEditingVariantResolved ? variantOffset.x : 0;
@@ -1225,17 +1366,12 @@ export const CanvasContainer = observer(function CanvasContainer({
     ) {
       // Skipped above 20,000 cells — on the owner's real project a select-all
       // is 300,249 and painting it per frame would stall the drag.
-      if (selection.mask.size <= 20000) {
+      if (selection.mask.size <= SELECTION_FILL_CELL_LIMIT) {
         ctx.fillStyle = ACCENT_PRIMARY_14;
         for (const idx of selection.mask) {
           const x = idx % selection.width;
           const y = Math.floor(idx / selection.width);
-          ctx.fillRect(
-            (x + offsetX + dragDx) * zoom,
-            (y + offsetY + dragDy) * zoom,
-            zoom,
-            zoom,
-          );
+          ctx.fillRect(x + offsetX + dragDx, y + offsetY + dragDy, 1, 1);
         }
       }
     }
@@ -1254,12 +1390,12 @@ export const CanvasContainer = observer(function CanvasContainer({
         ? variantData?.variantFrame.layers[0]?.pixels
         : layer?.pixels;
 
-      if (srcPixels && selection.mask.size <= 20000) {
+      if (srcPixels && selection.mask.size <= SELECTION_FILL_CELL_LIMIT) {
         ctx.fillStyle = BLACK_12;
         for (const idx of selection.mask) {
           const x = idx % selection.width;
           const y = Math.floor(idx / selection.width);
-          ctx.fillRect((x + offsetX) * zoom, (y + offsetY) * zoom, zoom, zoom);
+          ctx.fillRect(x + offsetX, y + offsetY, 1, 1);
         }
 
         for (const idx of selection.mask) {
@@ -1277,87 +1413,47 @@ export const CanvasContainer = observer(function CanvasContainer({
           const pixel = getPixelColor(srcPixels[y]?.[x]);
           if (!pixel || pixel.a === 0) continue;
           ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
-          ctx.fillRect(
-            (destX + offsetX) * zoom,
-            (destY + offsetY) * zoom,
-            zoom,
-            zoom,
-          );
+          ctx.fillRect(destX + offsetX, destY + offsetY, 1, 1);
         }
       }
-    }
-
-    if (isLassoSelecting) {
-      drawLasso(ctx, lassoPoints, zoom, offsetX, offsetY);
-    }
-
-    const selBox = previewSelection || selection?.bounds;
-    if (selBox) {
-      drawMarchingAnts(ctx, selBox, zoom, offsetX, offsetY, dragDx, dragDy);
-    }
-
-    // The origin cross shows only while the origin tool is selected. It is
-    // object-space, so the Layer view of a VARIANT hides it (for a regular
-    // layer the grid is the object grid and it is correct as-is).
-    const originPos = obj.origin;
-    if (
-      originPos &&
-      currentTool === "origin" &&
-      !(layerMode && editingVariant)
-    ) {
-      drawOriginCross(
-        ctx,
-        originPos,
-        zoom,
-        tool.originColor ?? { r: 255, g: 50, b: 50, a: 255 },
-      );
     }
 
     if (isEditingVariantResolved) {
       ctx.restore();
     }
   }, [
-    app.domain,
-    app.timelineUI,
     frame,
     obj,
     layer,
+    cellWidth,
+    cellHeight,
     previewPixels,
     currentColor,
-    zoom,
     gridWidth,
     gridHeight,
     objWidth,
     objHeight,
-    canvasWidth,
-    canvasHeight,
-    ensureBgCanvas,
-    ensureGridCanvas,
     selection,
     previewSelection,
     isEditingVariantResolved,
     variantData,
     variantOffset,
-    layerFocusMode,
-    layerMode,
-    editingVariant,
     viewMinX,
     viewMinY,
-    viewMaxX,
-    viewMaxY,
-    currentTool,
-    tool.originColor,
     isDraggingSelection,
     selectionDragMode,
     pixelDragOffset.dx,
     pixelDragOffset.dy,
-    isDraggingPixels,
-    moveDragOffset.dx,
-    moveDragOffset.dy,
-    tool.moveAllLayers,
-    isLassoSelecting,
-    lassoPoints,
   ]);
+
+  /**
+   * The one entry point `useCanvasRender` drives, so the two halves stay in
+   * lockstep on a single animation frame.
+   */
+  const render = useCallback(() => {
+    renderLayers();
+    renderChrome();
+  }, [renderLayers, renderChrome]);
 
   /* ── the hover marker (concern #12) ────────────────────────────────────── */
   //
@@ -1365,8 +1461,10 @@ export const CanvasContainer = observer(function CanvasContainer({
   //  WHY THIS IS A SEPARATE CANVAS AND A SEPARATE SCHEDULER
   // ══════════════════════════════════════════════════════════════════════
   //
-  // `render` above repaints every visible cell of every visible layer with
-  // `fillRect`. An Apple Pencil emits hover samples continuously while the
+  // `render` above repaints every visible cell of every visible layer (it is
+  // per-layer and buffer-based as of plan 05 task 05, but it is still a full
+  // repaint until task 07 lands the dirty region). An Apple Pencil emits
+  // hover samples continuously while the
   // user's hand is merely NEAR the glass — before anything is drawn, and
   // whether or not it ever touches down. Feeding those samples into `render`
   // would re-rasterise the whole sprite at pointer rate for a hand that is not
@@ -1499,12 +1597,38 @@ export const CanvasContainer = observer(function CanvasContainer({
     gridHeight,
   ]);
 
+  /**
+   * The hover marker's FILL. ⚠️ Its OUTLINE is no longer painted here.
+   *
+   * `strokeHoverOutline` computes every edge as `left + zoom - 1`, which at
+   * 1:1 is a ZERO-LENGTH segment — and with `lineCap: "butt"` a zero-length
+   * segment renders NOTHING, with no error and no artifact (MASTER §4, R3).
+   * The outline is the SVG `hoverOutline` path (D5); this keeps the fill,
+   * which is a cell fill and safe at 1:1 (D6).
+   */
+  /**
+   * Place hover cells in the surface's coordinate space.
+   *
+   * Shared by the raster FILL below and the SVG `hoverOutline` further down,
+   * so the two halves of one marker cannot disagree about where it is —
+   * which they would the moment either grew its own copy of this offset.
+   */
+  const placeHoverCells = useCallback(
+    (cells: readonly { x: number; y: number }[]) => {
+      const offsetX = isEditingVariantResolved ? variantOffset.x - viewMinX : 0;
+      const offsetY = isEditingVariantResolved ? variantOffset.y - viewMinY : 0;
+      if (offsetX === 0 && offsetY === 0) return cells;
+      return cells.map((c) => ({ x: c.x + offsetX, y: c.y + offsetY }));
+    },
+    [isEditingVariantResolved, variantOffset, viewMinX, viewMinY],
+  );
+
   const renderHover = useCallback(() => {
     const canvas = hoverCanvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.clearRect(0, 0, cellWidth, cellHeight);
     const hoverCells = resolveHoverCells();
     if (hoverCells.length === 0) return;
 
@@ -1515,31 +1639,15 @@ export const CanvasContainer = observer(function CanvasContainer({
     // is drawn at the variant's offset within an expanded view, and a marker
     // painted at raw cell coordinates would sit that offset away from the
     // cells the stroke will actually hit.
-    const offsetX = isEditingVariantResolved ? variantOffset.x - viewMinX : 0;
-    const offsetY = isEditingVariantResolved ? variantOffset.y - viewMinY : 0;
-    const placed =
-      offsetX === 0 && offsetY === 0
-        ? hoverCells
-        : hoverCells.map((c) => ({ x: c.x + offsetX, y: c.y + offsetY }));
+    const placed = placeHoverCells(hoverCells);
 
-    // Buffer for the fill, strokes for the outline — the split
-    // `renderHoverMarker` documents. `createImageData` allocates per frame, as
-    // the lighting overlay does; the marker repaints only when the hovered
-    // CELL changes, so this is not a per-sample cost.
-    const buffer = ctx.createImageData(canvasWidth, canvasHeight);
-    paintHoverCells(buffer, placed, zoom);
+    // `createImageData` allocates per frame, as the lighting overlay does; the
+    // marker repaints only when the hovered CELL changes, so this is not a
+    // per-sample cost. `zoom: 1` — one cell, one device pixel.
+    const buffer = ctx.createImageData(cellWidth, cellHeight);
+    paintHoverCells(buffer, placed, CELL_SCALE);
     ctx.putImageData(buffer, 0, 0);
-    strokeHoverOutline(ctx, placed, zoom);
-  }, [
-    canvasWidth,
-    canvasHeight,
-    resolveHoverCells,
-    zoom,
-    isEditingVariantResolved,
-    variantOffset,
-    viewMinX,
-    viewMinY,
-  ]);
+  }, [cellWidth, cellHeight, resolveHoverCells, placeHoverCells]);
 
   // The scheduler repaints when any of `renderHover`'s inputs change — a tool
   // or brush-size switch, a zoom, a variant-edit toggle. Pointer movement does
@@ -1562,8 +1670,8 @@ export const CanvasContainer = observer(function CanvasContainer({
   //
   // Three separate decisions, each of which the alternative gets wrong:
   //
-  // 1. **Its own canvas.** The guides animate continuously; `render` above
-  //    repaints every visible cell of every visible layer with `fillRect`.
+  // 1. **Its own surface.** The guides animate continuously; `render` above
+  //    still repaints every visible cell of every visible layer.
   //    Routing an animation through it would re-rasterise a 300k-cell sprite
   //    ~12 times a second forever. Same argument as the hover marker's.
   //
@@ -1581,52 +1689,46 @@ export const CanvasContainer = observer(function CanvasContainer({
   //    calls `invalidate()`; React is never told anything happened.
   const reflectionPhaseRef = useRef(0);
 
-  const renderReflection = useCallback(() => {
-    const canvas = reflectionCanvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    if (reflectionLines.length === 0 && !reflectionDraft) return;
-
-    // The same view-space mapping `renderOverlay` uses: while a variant is
-    // being edited the grid is drawn inside an expanded view, so a grid
-    // coordinate has to lose `viewMin` before it is scaled by `zoom`. Lines
-    // are stored in EDITABLE-grid space, which in Layer mode is already the
-    // view — hence `isEditingVariantResolved`, not `editingVariant`.
-    const ox = isEditingVariantResolved ? viewMinX : 0;
-    const oy = isEditingVariantResolved ? viewMinY : 0;
-
-    const segments = reflectionSegments(
-      reflectionLines,
-      reflectionDraft,
-      zoom,
-      ox,
-      oy,
-    );
-    drawReflectionLines(ctx, segments, reflectionPhaseRef.current);
-  }, [
-    canvasWidth,
-    canvasHeight,
-    reflectionLines,
-    reflectionDraft,
-    zoom,
-    isEditingVariantResolved,
-    viewMinX,
-    viewMinY,
-  ]);
-
-  const { invalidate: invalidateReflection } = useCanvasRender(
-    renderReflection,
-    [renderReflection],
-  );
+  /**
+   * ⚠️ THE RASTER REFLECTION PAINTER IS RETIRED (plan 05, task 05).
+   *
+   * Task 04 mounted `reflectionGuides` — the SVG replacement (D5) — but could
+   * not remove the raster painter, because `drawReflectionLines` lived here
+   * and `CanvasContainer.tsx` was task 05's file: removing the canvas first
+   * would have left that painter writing into `null`. So both existed for one
+   * wave and the guides would have drawn TWICE — once raster and once vector.
+   *
+   * The raster pass is the one that goes, and it is not a coin toss which:
+   * `REFLECTION_DASH = 4` is documented screen-constant in
+   * `renderReflectionLines.ts`, and under the CSS transform a 4-unit dash is
+   * 4 × `combinedScale` screen px — 200 px at zoom 50. `vector-effect:
+   * non-scaling-stroke` on the SVG path restores exactly the invariant that
+   * painter's own comment claims (R2).
+   *
+   * What survives is the PHASE and the ticker: `reflectionPhaseRef` still
+   * advances at ~12 fps and still lives in a ref rather than state, for the
+   * reason above. What changed is where it lands — it is now the `dashOffset`
+   * ARGUMENT to `reflectionGuideOverlays`, which task 03 exposed as a
+   * parameter precisely so this decision belonged to a consumer. Driving it
+   * from React state instead would re-render this container 12 times a second
+   * forever, rebuilding `getToolContext`, the tool handlers and `pointer`
+   * mid-stroke: the 2026-08-28 "unable to slide and draw" regression.
+   *
+   * The counter that forces the re-render is a `useState`, NOT the phase
+   * itself: the phase is read through the ref at build time, so the state's
+   * VALUE is never used and only its change matters. That keeps the ~12 fps
+   * re-render confined to the guides' own path.
+   */
+  const [reflectionTick, setReflectionTick] = useState(0);
 
   // ⚠️ `active` is false whenever there is nothing to animate, so the rAF loop
   // does not exist at all in the common case — manual check 8 is exactly this
   // (delete every line, no rAF left in the Performance panel).
   useDashTicker(reflectionLines.length > 0 || Boolean(reflectionDraft), (p) => {
     reflectionPhaseRef.current = p;
-    invalidateReflection();
+    // Only the CHANGE matters — `reflectionGuides` below reads the phase off
+    // the ref. See the note above on why the phase itself is not state.
+    setReflectionTick((t) => t + 1);
   });
 
   /**
@@ -1692,10 +1794,12 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+    // ⚠️ 1:1 (plan 05). The buffer is `cellWidth × cellHeight` and the CSS
+    // transform magnifies it, so every coordinate below is in CELLS.
+    canvas.width = cellWidth;
+    canvas.height = cellHeight;
     ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.clearRect(0, 0, cellWidth, cellHeight);
 
     // In variant-edit mode the overlay shares the expanded view, so it draws
     // in view space (world − viewMin).
@@ -1709,16 +1813,16 @@ export const CanvasContainer = observer(function CanvasContainer({
       for (let x = 0; x < referenceImage.width; x++) {
         const pixel = row[x];
         if (pixel && pixel.a > 0) {
-          const drawX = (x + referenceOverlayOffset.x - ox) * zoom;
-          const drawY = (y + referenceOverlayOffset.y - oy) * zoom;
+          const drawX = x + referenceOverlayOffset.x - ox;
+          const drawY = y + referenceOverlayOffset.y - oy;
           if (
             drawX >= 0 &&
-            drawX < canvasWidth &&
+            drawX < cellWidth &&
             drawY >= 0 &&
-            drawY < canvasHeight
+            drawY < cellHeight
           ) {
             ctx.fillStyle = `rgba(${pixel.r}, ${pixel.g}, ${pixel.b}, ${pixel.a / 255})`;
-            ctx.fillRect(drawX, drawY, zoom, zoom);
+            ctx.fillRect(drawX, drawY, CELL_SCALE, CELL_SCALE);
           }
         }
       }
@@ -1726,22 +1830,21 @@ export const CanvasContainer = observer(function CanvasContainer({
     ctx.globalAlpha = 1;
 
     ctx.strokeStyle = WARN_ORANGE_60;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = CHROME_STROKE;
+    ctx.setLineDash(TRACE_BORDER_DASH);
     ctx.strokeRect(
-      (referenceOverlayOffset.x - ox) * zoom,
-      (referenceOverlayOffset.y - oy) * zoom,
-      referenceImage.width * zoom,
-      referenceImage.height * zoom,
+      referenceOverlayOffset.x - ox,
+      referenceOverlayOffset.y - oy,
+      referenceImage.width,
+      referenceImage.height,
     );
     ctx.setLineDash([]);
   }, [
     referenceImage,
     isReferenceTraceActive,
     layerMode,
-    canvasWidth,
-    canvasHeight,
-    zoom,
+    cellWidth,
+    cellHeight,
     referenceOverlayOffset,
     isEditingVariantResolved,
     viewMinX,
@@ -1781,14 +1884,15 @@ export const CanvasContainer = observer(function CanvasContainer({
       const ox = isEditingVariantResolved ? viewMinX : 0;
       const oy = isEditingVariantResolved ? viewMinY : 0;
 
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
+      // ⚠️ 1:1 (plan 05), for both this canvas and the scratch buffer.
+      canvas.width = cellWidth;
+      canvas.height = cellHeight;
       ctx.imageSmoothingEnabled = false;
-      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      ctx.clearRect(0, 0, cellWidth, cellHeight);
 
       const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = canvasWidth;
-      tempCanvas.height = canvasHeight;
+      tempCanvas.width = cellWidth;
+      tempCanvas.height = cellHeight;
       const tempCtx = tempCanvas.getContext("2d");
       if (!tempCtx) return;
 
@@ -1803,13 +1907,13 @@ export const CanvasContainer = observer(function CanvasContainer({
 
       // `createImageData` is already zero-filled — the original's explicit
       // transparent-fill loop was redundant.
-      const imageData = tempCtx.createImageData(canvasWidth, canvasHeight);
+      const imageData = tempCtx.createImageData(cellWidth, cellHeight);
 
       renderFrameOverlayBuffer(imageData, {
         layers: overlaySourceFrame.layers,
         refObjWidth,
         refObjHeight,
-        zoom,
+        zoom: CELL_SCALE,
         ox,
         oy,
         variants,
@@ -1824,24 +1928,23 @@ export const CanvasContainer = observer(function CanvasContainer({
 
       tempCtx.putImageData(imageData, 0, 0);
 
-      const drawX = (drawOffset.x - ox) * zoom;
-      const drawY = (drawOffset.y - oy) * zoom;
+      const drawX = drawOffset.x - ox;
+      const drawY = drawOffset.y - oy;
 
       ctx.globalAlpha = mode.opacity;
       ctx.drawImage(tempCanvas, drawX, drawY);
       ctx.globalAlpha = 1;
 
       ctx.strokeStyle = mode.borderColor;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = CHROME_STROKE;
       ctx.setLineDash([...mode.borderDash]);
-      ctx.strokeRect(drawX, drawY, refObjWidth * zoom, refObjHeight * zoom);
+      ctx.strokeRect(drawX, drawY, refObjWidth, refObjHeight);
       ctx.setLineDash([]);
     },
     [
       app.domain,
-      canvasWidth,
-      canvasHeight,
-      zoom,
+      cellWidth,
+      cellHeight,
       frameRefObj,
       isEditingVariantResolved,
       layerMode,
@@ -3081,6 +3184,212 @@ export const CanvasContainer = observer(function CanvasContainer({
         onClick: () => views.closeMode(renderMode),
       }
     : undefined;
+  /* ══════════════════════════════════════════════════════════════════════
+   *  THE SVG CHROME (D5) — the overlays that CANNOT survive at 1:1
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * The grid, the hover outline, the lasso, the marching ants and the origin
+   * cross are all SUB-CELL or SCREEN-CONSTANT geometry. Their canvas painters
+   * degenerate at 1:1, and — this is why the whole detour exists — five of
+   * the six degenerate SILENTLY (MASTER §4, risks R2 and R3):
+   *
+   *   grid          a 1px line every 1px: a flat wash over the whole canvas
+   *   hover outline every edge zero-length; with `lineCap: butt`, NOTHING
+   *   lasso         a 2px line with a `[3,3]` dash where a cell is 1px
+   *   ants          a 1px inset is one whole cell; `width - 2` inverts under 3
+   *   origin cross  a 12px constant becomes 12 × combinedScale on screen
+   *
+   * Task 03 emitted each as path DATA in cell space; task 04 mounted the SVG
+   * and gave every path `vector-effect: non-scaling-stroke`, which exempts the
+   * stroke WIDTH from the transform and gives these painters back exactly the
+   * screen-constant hairline their own comments always claimed. This is where
+   * the container finally feeds them.
+   *
+   * Cell FILLS stay on canvas (D6) — the hover fill, the selection mask, the
+   * drag preview, the trace overlays. They are safe at 1:1 and cheap.
+   */
+
+  /**
+   * The pixel grid.
+   *
+   * ⚠️ Two DIFFERENT grids, exactly as the raster version drew: outside
+   * variant-edit the whole surface is gridded from the origin; while a
+   * variant is being edited only the VARIANT EDIT AREA is, placed at
+   * `variantOffset` inside the expanded view. `gridOverlayPathData` covers
+   * the first case; the second needs the offset, which that function does not
+   * take, so the placed lines are emitted here — the same `cells + 1` lines
+   * per axis, in cell space, with no `+ 0.5` (SVG centres its own hairline).
+   *
+   * The COLOUR rule is not restated: `gridOverlayAttrs` owns it (black 8%
+   * light, white 5% dark), so there is one source for it and not two.
+   */
+  const gridPath = useMemo(() => {
+    const attrs = gridOverlayAttrs(lightGridMode);
+    if (!isEditingVariantResolved) {
+      return { d: gridOverlayPathData({ cellWidth, cellHeight }), attrs };
+    }
+    // View space: the variant's offset, less the view origin.
+    const ox = variantOffset.x - viewMinX;
+    const oy = variantOffset.y - viewMinY;
+    const parts: string[] = [];
+    for (let x = 0; x <= gridWidth; x++) {
+      parts.push(`M${ox + x} ${oy}L${ox + x} ${oy + gridHeight}`);
+    }
+    for (let y = 0; y <= gridHeight; y++) {
+      parts.push(`M${ox} ${oy + y}L${ox + gridWidth} ${oy + y}`);
+    }
+    return { d: parts.join(""), attrs };
+  }, [
+    lightGridMode,
+    isEditingVariantResolved,
+    cellWidth,
+    cellHeight,
+    gridWidth,
+    gridHeight,
+    variantOffset,
+    viewMinX,
+    viewMinY,
+  ]);
+
+  /**
+   * ⚠️ THE HOVER OUTLINE IS DELIBERATELY NOT WIRED HERE. Read this before
+   * "fixing" it.
+   *
+   * `strokeHoverOutline`'s raster half is gone — at 1:1 every edge is
+   * zero-length and renders nothing — and `CanvasSurface` already accepts the
+   * `hoverOutline` SVG prop (task 04) that replaces it. What is missing is
+   * the RENDER SIGNAL, and supplying one is not free.
+   *
+   * The hovered cell lives in `hoverPixelRef`, a REF, and that is
+   * load-bearing: `setHoverPixel` is called from `handleTouchMove`, so a
+   * `useState` there re-renders this container mid-gesture and rebuilds
+   * `getToolContext`, the tool handlers and `pointer` between the touches of
+   * a single slide. That is the measured 2026-08-28 "unable to slide and
+   * draw" regression, documented at `hoverPixelRef` above and again at
+   * `reflectionPhaseRef`. Feeding an SVG prop needs React to be told the ref
+   * moved, which is exactly the state write the ref exists to avoid.
+   *
+   * The reflection guides could take the vector path because they already
+   * had a ~12 fps ticker whose cost was known and bounded. The hover marker
+   * has a 120 Hz pointer stream behind it and no such budget, so the choice
+   * belongs with whoever owns the marker's scheduling — not to a render
+   * refactor. Until then the marker shows its FILL (raster, D6, correct at
+   * 1:1) with no outline. Recorded as this task's one deferred item.
+   */
+
+  /* The selection chrome's shared placement — identical to `renderChrome`'s. */
+  const selOffsetX = isEditingVariantResolved ? variantOffset.x - viewMinX : 0;
+  const selOffsetY = isEditingVariantResolved ? variantOffset.y - viewMinY : 0;
+  const selDragDx =
+    isDraggingSelection && selectionDragMode === "pixels"
+      ? pixelDragOffset.dx
+      : 0;
+  const selDragDy =
+    isDraggingSelection && selectionDragMode === "pixels"
+      ? pixelDragOffset.dy
+      : 0;
+
+  /** The lasso rubber band. */
+  const lasso = useMemo(
+    () =>
+      isLassoSelecting
+        ? lassoOverlay(lassoPoints, selOffsetX, selOffsetY)
+        : null,
+    [isLassoSelecting, lassoPoints, selOffsetX, selOffsetY],
+  );
+
+  /** The marching-ants selection box. */
+  const marchingAnts = useMemo(() => {
+    const selBox: SelectionBounds | null | undefined =
+      previewSelection || selection?.bounds;
+    if (!selBox) return null;
+    return marchingAntsOverlay(
+      selBox,
+      selOffsetX,
+      selOffsetY,
+      selDragDx,
+      selDragDy,
+    );
+  }, [
+    previewSelection,
+    selection,
+    selOffsetX,
+    selOffsetY,
+    selDragDx,
+    selDragDy,
+  ]);
+
+  /**
+   * The origin cross — shown only while the origin tool is selected.
+   *
+   * It is OBJECT-space, so the Layer view of a VARIANT hides it; for a
+   * regular layer the grid IS the object grid and it is correct as-is.
+   * Preserved verbatim.
+   *
+   * ⚠️ `CanvasSurface` counter-scales this one by `1 / combinedScale`
+   * (HANDOFF finding 1) — it is the only overlay whose GEOMETRY, not just its
+   * stroke, must stay screen-constant.
+   */
+  const originCross = useMemo(() => {
+    const originPos = obj?.origin;
+    if (
+      !originPos ||
+      currentTool !== "origin" ||
+      (layerMode && editingVariant)
+    ) {
+      return null;
+    }
+    const color = tool.originColor ?? DEFAULT_ORIGIN_COLOR;
+    // View space, as every other overlay: the cross is in OBJECT cells and
+    // the surface's origin is `viewMin` while a variant is being edited.
+    const placed = isEditingVariantResolved
+      ? { x: originPos.x - viewMinX, y: originPos.y - viewMinY }
+      : originPos;
+    return originCrossOverlay(
+      placed,
+      `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`,
+    );
+  }, [
+    obj?.origin,
+    currentTool,
+    layerMode,
+    editingVariant,
+    tool.originColor,
+    isEditingVariantResolved,
+    viewMinX,
+    viewMinY,
+  ]);
+
+  /**
+   * The reflection guides — the VECTOR replacement for the retired raster
+   * painter. The phase comes off the ref; `reflectionTick` is what makes this
+   * memo recompute. See the note where the raster painter used to be.
+   */
+  const reflectionGuides = useMemo(() => {
+    if (reflectionLines.length === 0 && !reflectionDraft) return null;
+    // Lines are stored in EDITABLE-grid space, which in Layer mode is already
+    // the view — hence `isEditingVariantResolved`, not `editingVariant`.
+    const ox = isEditingVariantResolved ? viewMinX : 0;
+    const oy = isEditingVariantResolved ? viewMinY : 0;
+    return reflectionGuideOverlays(
+      reflectionLines,
+      reflectionDraft,
+      ox,
+      oy,
+      reflectionPhaseRef.current,
+    );
+    // `reflectionPhaseRef` is a REF for the reason documented above; the tick
+    // is the change signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    reflectionLines,
+    reflectionDraft,
+    isEditingVariantResolved,
+    viewMinX,
+    viewMinY,
+    reflectionTick,
+  ]);
+
   const onNudgeOffset =
     !layerMode && editingVariant
       ? (dx: number, dy: number, allFrames: boolean) =>
@@ -3094,8 +3403,20 @@ export const CanvasContainer = observer(function CanvasContainer({
       frameOverlayCanvasRef={frameOverlayCanvasRef}
       frameTraceOverlayCanvasRef={frameTraceOverlayCanvasRef}
       hoverCanvasRef={hoverCanvasRef}
-      reflectionCanvasRef={reflectionCanvasRef}
       containerRef={containerRef}
+      // ⚠️ `reflectionCanvasRef` is DELIBERATELY NOT PASSED. `CanvasSurface`
+      // mounts that canvas unconditionally and the prop is optional, so the
+      // element still exists and simply stays blank — which is exactly what
+      // its own header describes for the absent-prop case. The raster painter
+      // that used to fill it is retired; `reflectionGuides` below is the
+      // vector replacement (D5). Passing it again would draw the guides
+      // twice, once wrong.
+      //
+      // ── ids only, never a layer object (R8) ────────────────────────────
+      layerIds={layerIds}
+      registerLayerCanvas={registerLayerCanvas}
+      layerOpacity={layerOpacity}
+      layerVisible={layerVisible}
       cellWidth={cellWidth}
       cellHeight={cellHeight}
       viewPanOffset={viewPanOffset}
@@ -3117,6 +3438,12 @@ export const CanvasContainer = observer(function CanvasContainer({
         !frameTraceActive
       }
       showFrameTraceOverlay={!layerMode && frameTraceActive}
+      // ── the SVG chrome (D5): the overlays that cannot survive at 1:1 ────
+      grid={gridPath}
+      lasso={lasso}
+      marchingAnts={marchingAnts}
+      originCross={originCross}
+      reflectionGuides={reflectionGuides}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
