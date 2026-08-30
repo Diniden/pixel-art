@@ -1,0 +1,64 @@
+/* block: toast (2026-08-30).
+
+   A brief announcement over the workspace. `--z-toast` was reserved in
+   `tokens.css` for exactly this and had no user until now.
+
+   ⚠️ `pointer-events: none` ON THE WHOLE BLOCK, and it is load-bearing rather
+   than cosmetic. The toast is centred over the canvas, which is the one
+   region of this app where a stray click costs the user actual work — a
+   dropped stroke, a mis-placed fill. It cannot be clicked, so it cannot
+   intercept anything. There is nothing on it TO click (see the component
+   header), so nothing is lost. */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  z-index: var(--z-toast);
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: toast-in var(--transition-fast) ease;
+}
+
+.toast--bottom {
+  bottom: var(--space-6);
+}
+
+.toast--top {
+  top: var(--space-6);
+}
+
+.toast__body {
+  max-width: min(420px, calc(100vw - var(--space-8)));
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  text-align: center;
+}
+
+/* A short rise, not a fade alone: the movement is what makes it read as
+   arriving rather than as something that was always there and just became
+   visible. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, var(--space-2));
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ⚠️ Respect a reduced-motion preference: the toast still appears and still
+   says what it says, it simply does not travel. */
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

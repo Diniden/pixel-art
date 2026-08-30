@@ -65,7 +65,6 @@ function regions(density: Density) {
     timeline: <StubRegion label="FrameTimeline" height={120} />,
     canvas: <StubCanvas />,
     canvasInfo: <StubRegion label="CanvasInfo" height={28} />,
-    layerColors: <StubRegion label="LayerColors" height={36} />,
     frameReferencePanel: (
       <StubFloatingPanel label="FrameReferencePanel" top={56} left={12} />
     ),
@@ -78,7 +77,7 @@ function regions(density: Density) {
 export const Empty: Story = {
   args: {
     ...regions("empty"),
-    focusMode: false,
+    hiddenRails: new Set<"left" | "right" | "bottom">(),
     frameReferencePanelVisible: true,
   },
 };
@@ -86,7 +85,7 @@ export const Empty: Story = {
 export const Typical: Story = {
   args: {
     ...regions("typical"),
-    focusMode: false,
+    hiddenRails: new Set<"left" | "right" | "bottom">(),
     frameReferencePanelVisible: true,
   },
 };
@@ -94,7 +93,7 @@ export const Typical: Story = {
 export const Dense: Story = {
   args: {
     ...regions("dense"),
-    focusMode: false,
+    hiddenRails: new Set<"left" | "right" | "bottom">(),
     frameReferencePanelVisible: true,
   },
 };
@@ -111,7 +110,7 @@ export const Dense: Story = {
 export const FocusMode: Story = {
   args: {
     ...regions("typical"),
-    focusMode: true,
+    hiddenRails: new Set<"left" | "right" | "bottom">(["left", "bottom"]),
     frameReferencePanelVisible: true,
   },
 };
@@ -128,7 +127,7 @@ export const FocusMode: Story = {
 export const FrameReferenceHidden: Story = {
   args: {
     ...regions("typical"),
-    focusMode: false,
+    hiddenRails: new Set<"left" | "right" | "bottom">(),
     frameReferencePanelVisible: false,
   },
 };

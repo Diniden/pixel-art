@@ -11,7 +11,7 @@
  * ## The point of having a SECOND layout is visible by comparison
  *
  * Open this beside `Layouts/PixelStudioLayout` and count the regions. Lighting
- * mode has **four fewer** — no `CanvasInfo`, no `LayerColors`, no
+ * mode has **three fewer** — no `CanvasInfo`, no
  * `FrameReferencePanel`, no `ReferenceImagePanel` — and one the pixel studio
  * does not have at all, the floating `LightingPreviewPanel`. That asymmetry
  * was measured off `App.tsx:190-216`, and it is why the two layouts were not
@@ -76,15 +76,15 @@ function regions(density: Density) {
 }
 
 export const Empty: Story = {
-  args: { ...regions("empty"), focusMode: false },
+  args: { ...regions("empty"), hiddenRails: new Set<"left" | "right" | "bottom">() },
 };
 
 export const Typical: Story = {
-  args: { ...regions("typical"), focusMode: false },
+  args: { ...regions("typical"), hiddenRails: new Set<"left" | "right" | "bottom">() },
 };
 
 export const Dense: Story = {
-  args: { ...regions("dense"), focusMode: false },
+  args: { ...regions("dense"), hiddenRails: new Set<"left" | "right" | "bottom">() },
 };
 
 /**
@@ -95,5 +95,5 @@ export const Dense: Story = {
  * inside the canvas area, which focus mode widens rather than removes.
  */
 export const FocusMode: Story = {
-  args: { ...regions("typical"), focusMode: true },
+  args: { ...regions("typical"), hiddenRails: new Set<"left" | "right" | "bottom">(["left", "bottom"]) },
 };

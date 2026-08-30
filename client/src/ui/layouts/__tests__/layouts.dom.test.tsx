@@ -34,6 +34,8 @@ import * as lightingStories from "../LightingStudioLayout/LightingStudioLayout.s
 import * as loadingStories from "../LoadingLayout/LoadingLayout.stories";
 import * as shellStories from "../../components/AppShell/AppShell.stories";
 import { AppShell } from "../../components/AppShell/AppShell";
+import { PixelStudioLayout } from "../PixelStudioLayout/PixelStudioLayout";
+import type { PixelStudioLayoutProps } from "../PixelStudioLayout/PixelStudioLayout";
 import {
   DEFAULT_RAIL_LAYOUT,
   flipBottomEdge,
@@ -85,6 +87,39 @@ describe("PixelStudioLayout — GATE 2: renders with NO store provider", () => {
     expect(focus.querySelector(".app__side-panel--right")).not.toBeNull();
   });
 
+  it("⭐ hides the RIGHT rail too — new in 2026-08-30's per-rail dismissal", () => {
+    // The right rail was un-hideable before: `focusMode` was one boolean and
+    // never touched it. It now has a × of its own, so the layout must be able
+    // to drop it — and `rightPanel` is a REQUIRED prop, so hiding it passes
+    // `null` rather than omitting it.
+    const { container } = render(
+      <PixelStudioLayout
+        {...(pixel.Typical.args as PixelStudioLayoutProps)}
+        hiddenRails={new Set(["right"] as const)}
+      />,
+    );
+    expect(container.querySelector(".app__side-panel--right")).toBeNull();
+    // ...and the other two are untouched.
+    expect(container.querySelector(".app__side-panel--left")).not.toBeNull();
+    expect(container.querySelector(".app__bottom")).not.toBeNull();
+  });
+
+  it("hides all three rails at once, leaving the canvas and toolbar", () => {
+    const { container } = render(
+      <PixelStudioLayout
+        {...(pixel.Typical.args as PixelStudioLayoutProps)}
+        hiddenRails={new Set(["left", "right", "bottom"] as const)}
+      />,
+    );
+    expect(container.querySelector(".app__side-panel--left")).toBeNull();
+    expect(container.querySelector(".app__side-panel--right")).toBeNull();
+    expect(container.querySelector(".app__bottom")).toBeNull();
+    // The canvas and the toolbar are not dismissable — the focus button that
+    // brings everything back lives on the toolbar.
+    expect(container.querySelector(".canvas-area")).not.toBeNull();
+    expect(container.querySelector(".app__toolbar-dock")).not.toBeNull();
+  });
+
   it("frameReferencePanelVisible=false drops that panel and nothing else", () => {
     // ⚠️ `within(container)`, not the bare queries: Testing Library's
     // top-level queries search `document.body`, and every `render()` in a
@@ -133,12 +168,17 @@ describe("LightingStudioLayout — GATE 2: renders with NO store provider", () =
     expect(focus.querySelector(".app__side-panel--right")).not.toBeNull();
   });
 
-  it("renders four FEWER regions than the pixel layout — the measured asymmetry", () => {
+  it("renders three FEWER regions than the pixel layout — the measured asymmetry", () => {
     const { container } = render(<lighting.Typical />);
     const { queryByText } = within(container);
-    // `App.tsx:190-216`: none of these four exists in lighting mode.
+    // `App.tsx:190-216`: none of these three exists in lighting mode.
+    //
+    // ⚠️ This was FOUR. `LayerColors` was the fourth, and it is retired — the
+    // strip is now the "Current Palette" row inside `PaletteManager`, so the
+    // PIXEL layout has no such region either and the asymmetry is gone rather
+    // than reversed. Asserting its absence here would pass for the wrong
+    // reason: it is absent from both layouts now.
     expect(queryByText("CanvasInfo")).toBeNull();
-    expect(queryByText("LayerColors")).toBeNull();
     expect(queryByText("FrameReferencePanel")).toBeNull();
     expect(queryByText("ReferenceImagePanel")).toBeNull();
   });
@@ -450,6 +490,119 @@ describe("AppShell — the rails are placed by the layout, not by their names", 
     expect(
       container.querySelector(".app__bottom [data-testid=ov-bottom]"),
     ).not.toBeNull();
+  });
+
+  it("⭐ puts the layout picker in the canvas STACK, clear of the toolbar", () => {
+    // The picker is the fourth scrim and the only one that is not per-rail.
+    // Like the rail scrims, it lives inside the region it dims — that is what
+    // makes it track the canvas through every rail arrangement with no
+    // measurement and no resize listener.
+    //
+    // ⚠️ THE STACK, NOT THE AREA (owner, 2026-08-30). The canvas AREA also
+    // holds the toolbar dock, so a scrim filling it covered the toolbar and
+    // its own layout overlay — the one control layout mode most needs
+    // reachable. The stack is the area minus the dock.
+    const { container } = render(
+      <AppShell {...base} canvasOverlay={<div data-testid="ov-canvas" />} />,
+    );
+    expect(
+      container.querySelector(".app__canvas-stack [data-testid=ov-canvas]"),
+    ).not.toBeNull();
+    // Never a child of the dock, and never the dock's sibling — either would
+    // put it back over the toolbar.
+    expect(
+      container.querySelector(".app__toolbar-dock [data-testid=ov-canvas]"),
+    ).toBeNull();
+  });
+
+  it("⭐ never puts the toolbar dock inside the picker's positioning parent", () => {
+    // ⚠️ THE REAL PROPERTY, and the reason this is not simply a `contains`
+    // check. The picker is `position: absolute; inset: 0`, so what it covers
+    // is decided by its nearest POSITIONED ANCESTOR, not by DOM containment.
+    // In the broken version the picker was a sibling of the dock and still
+    // covered it — every `contains` assertion passed while the toolbar sat
+    // underneath a scrim. So the thing to pin is that the dock is OUTSIDE
+    // that positioning parent, on all four edges.
+    for (const edge of ["top", "bottom", "left", "right"] as const) {
+      const { container } = render(
+        <AppShell
+          {...base}
+          layout={setToolbarEdge(DEFAULT_RAIL_LAYOUT, edge)}
+          railOverlays={{ toolbar: <div data-testid="ov-toolbar" /> }}
+          canvasOverlay={<div data-testid="ov-canvas" />}
+        />,
+      );
+      const picker = container.querySelector("[data-testid=ov-canvas]")!;
+      const dock = container.querySelector(".app__toolbar-dock")!;
+
+      // `app__canvas-stack` and `app__canvas-area` are the only positioned
+      // ancestors in play; the picker must resolve against the former.
+      const parent = picker.parentElement!;
+      expect(parent.className).toContain("app__canvas-stack");
+      expect(parent.contains(dock)).toBe(false);
+      // The dock and the picker's parent are siblings — which is exactly
+      // what keeps the toolbar clear of the scrim on every edge.
+      expect(dock.parentElement).toBe(parent.parentElement);
+    }
+  });
+
+  it("renders no canvas overlay when layout mode is off", () => {
+    // Absence is how the mode stays off — the same rule the rail scrims use.
+    const { container } = render(<AppShell {...base} />);
+    expect(container.querySelector(".layout-presets")).toBeNull();
+  });
+
+  it("⭐ renders each rail's dismiss button INSIDE that rail", () => {
+    // Like the scrims, the × lives in the rail it acts on, so it follows that
+    // rail through every slot change with no measurement.
+    const { container } = render(
+      <AppShell
+        {...base}
+        railDismiss={{
+          left: <button data-testid="x-left" />,
+          right: <button data-testid="x-right" />,
+          bottom: <button data-testid="x-bottom" />,
+        }}
+      />,
+    );
+    expect(
+      container.querySelector(".app__side-panel--left [data-testid=x-left]"),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".app__side-panel--right [data-testid=x-right]"),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".app__bottom [data-testid=x-bottom]"),
+    ).not.toBeNull();
+  });
+
+  it("⭐ keeps the dismiss button OUT of the scaled panel viewport", () => {
+    // Inside it, the rail's scale transform would resize the button too — a
+    // control whose hit target changes with an unrelated setting.
+    const { container } = render(
+      <AppShell {...base} railDismiss={{ left: <button data-testid="x" /> }} />,
+    );
+    expect(
+      container.querySelector(".app__panel-viewport [data-testid=x]"),
+    ).toBeNull();
+  });
+
+  it("gives a HIDDEN rail no dismiss button — there is nothing to hide", () => {
+    // Absence again: the button rides with the rail, so a rail that is not
+    // rendered cannot offer one.
+    const { container } = render(
+      <AppShell
+        {...base}
+        leftPanel={undefined}
+        bottomPanel={undefined}
+        railDismiss={{
+          left: <button data-testid="x-left" />,
+          bottom: <button data-testid="x-bottom" />,
+        }}
+      />,
+    );
+    expect(container.querySelector("[data-testid=x-left]")).toBeNull();
+    expect(container.querySelector("[data-testid=x-bottom]")).toBeNull();
   });
 
   it("gives a HIDDEN rail no overlay — focus mode needs no special case", () => {

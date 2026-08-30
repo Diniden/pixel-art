@@ -40,13 +40,19 @@
  * every child is the region stories' job, and re-verifying the whole screen is
  * the app's.
  *
- * ── Why `canvasInfo` / `layerColors` are not optional props ────────────────
+ * ── Why `canvasInfo` is not an optional prop ───────────────────────────────
  *
- * They are unconditional in pixel mode (`App.tsx:273-274` gates them on
+ * It is unconditional in pixel mode (`App.tsx:273` gated it on
  * `!isLightingMode`, which is always true here — the branch existed because
  * ONE component served both studios). Splitting the studios into two layouts
- * turns that runtime branch into a type-level one: pixel mode has these
- * regions, lighting mode does not have the props at all.
+ * turns that runtime branch into a type-level one: pixel mode has this
+ * region, lighting mode does not have the prop at all.
+ *
+ * ⚠️ `layerColors` WAS a second such region and is GONE. The "Layer Colors"
+ * strip is retired: its swatches are now the pinned "Current Palette" row of
+ * `PaletteManager`, inside the right rail's studio panel, so the layout has
+ * no region for them any more. Nothing replaced it here — the row below the
+ * canvas is simply one shorter.
  */
 import type { ReactNode, RefObject } from "react";
 import { AppShell } from "../../components/AppShell/AppShell";
@@ -62,7 +68,6 @@ export interface PixelStudioLayoutProps {
   timeline: ReactNode;
   canvas: ReactNode;
   canvasInfo: ReactNode;
-  layerColors: ReactNode;
   frameReferencePanel?: ReactNode;
   referenceImagePanel?: ReactNode;
 
@@ -74,8 +79,27 @@ export interface PixelStudioLayoutProps {
    */
   layout?: AppShellProps["layout"];
   railOverlays?: AppShellProps["railOverlays"];
-  /** `App.tsx:229` — hides the left sidebar AND the bottom timeline. */
-  focusMode: boolean;
+  /**
+   * The layout-mode picker over the canvas. Passed straight through like the
+   * two above — the layout neither reads it nor knows what it contains.
+   */
+  canvasOverlay?: AppShellProps["canvasOverlay"];
+  /** The per-rail × buttons, passed straight through to `AppShell`. */
+  railDismiss?: AppShellProps["railDismiss"];
+  /**
+   * Which rails are hidden, by rail NAME (2026-08-30).
+   *
+   * ⚠️ THIS REPLACED THE `focusMode` BOOLEAN, and the widening is the point.
+   * Focus mode used to be the only way a rail could be missing, so one flag
+   * covered it; now a rail can also be dismissed on its own, and the layout
+   * must not care which of the two happened. It asks one question per rail —
+   * "is this hidden" — and focus mode becomes just one of the callers that
+   * can answer yes.
+   *
+   * Absence still expresses hiding to `AppShell` (it has no `focusMode` prop
+   * and never learned one); this prop only decides which regions are passed.
+   */
+  hiddenRails?: ReadonlySet<"left" | "right" | "bottom">;
   /**
    * `App.tsx:261` — `uiState.frameReferencePanelVisible !== false`, i.e. the
    * panel is visible when the key is absent. The `!== false` default lives in
@@ -105,12 +129,13 @@ export function PixelStudioLayout({
   timeline,
   canvas,
   canvasInfo,
-  layerColors,
   frameReferencePanel,
   referenceImagePanel,
   layout,
   railOverlays,
-  focusMode,
+  canvasOverlay,
+  railDismiss,
+  hiddenRails,
   frameReferencePanelVisible,
   canvasAreaRef,
 }: PixelStudioLayoutProps) {
@@ -118,11 +143,13 @@ export function PixelStudioLayout({
     <AppShell
       layout={layout}
       railOverlays={railOverlays}
+      canvasOverlay={canvasOverlay}
+      railDismiss={railDismiss}
       header={header}
       toolbar={toolbar}
       canvasAreaRef={canvasAreaRef}
       leftPanel={
-        focusMode ? undefined : (
+        hiddenRails?.has("left") ? undefined : (
           <>
             {objectLibrary}
             {layerPanel}
@@ -130,18 +157,22 @@ export function PixelStudioLayout({
         )
       }
       rightPanel={
-        <>
-          {rightControls}
-          {studioPanel}
-        </>
+        /* ⚠️ `rightPanel` is REQUIRED by `AppShell` (the shell has always had
+           one), so hiding it passes `null` rather than omitting the prop —
+           `renderSide` filters on `!= null` and treats both the same. */
+        hiddenRails?.has("right") ? null : (
+          <>
+            {rightControls}
+            {studioPanel}
+          </>
+        )
       }
-      bottomPanel={focusMode ? undefined : timeline}
+      bottomPanel={hiddenRails?.has("bottom") ? undefined : timeline}
     >
       {canvas}
       {frameReferencePanelVisible ? frameReferencePanel : null}
       {referenceImagePanel}
       {canvasInfo}
-      {layerColors}
     </AppShell>
   );
 }

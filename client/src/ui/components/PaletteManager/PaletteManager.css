@@ -199,3 +199,130 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
+
+/* ── Current Palette ────────────────────────────────────────────────────────
+ *
+ * The pinned first row (`CurrentPalette.tsx`), which replaces the retired
+ * `LayerColors` strip under the workspace. It reuses the `palette-manager__`
+ * item/swatch chrome so it reads as one of the rows, and adds only what is
+ * genuinely its own: the accent that marks it as the LIVE row, the two scope
+ * toggles, the adjustment hint and the save button.
+ */
+
+.current-palette {
+  border: 1px solid var(--border-accent);
+}
+
+.current-palette__name {
+  font-weight: var(--weight-semibold);
+  color: var(--accent-primary);
+}
+
+/*
+ * ⚠️ THE SWATCH GRID MUST BE BOUNDED — this is what replaces the 64-colour cap.
+ *
+ * The cap was removed on the owner's instruction, so this row can now be
+ * handed every distinct colour in an object: hundreds, at "all layers, all
+ * frames". `.palette-manager__swatches` wraps but sets no height, so an
+ * uncapped list would grow the row until it pushed the colour picker and the
+ * real palettes off the bottom of the rail.
+ *
+ * Capping the HEIGHT and scrolling is the honest version of what the old
+ * `exceeded` flag was reaching for: it bounds the layout without ever hiding
+ * a colour. Only the swatch area scrolls — the toggles, the hint and the save
+ * button stay put, so the row's controls never scroll out of reach.
+ */
+.current-palette .palette-manager__swatches {
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: flex-start;
+}
+
+.current-palette__scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.current-palette__scope-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/*
+ * The "being recoloured" marker. `LayerColors` drew this with a warning ring
+ * and a ✎ badge; both are kept, retargeted at the shared swatch chrome.
+ *
+ * ⚠️ `overflow: hidden` on `.palette-manager__swatch` would clip a badge
+ * pinned outside the box, so this one sits INSIDE the top-right corner rather
+ * than overhanging it like the delete button on the real rows.
+ */
+.current-palette__swatch--adjusting {
+  border-color: var(--accent-warning);
+  box-shadow: var(--ring-warning-glow);
+  transform: scale(1.1);
+  z-index: var(--z-raised);
+}
+
+.current-palette__swatch--adjusting::after {
+  content: "✎";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  background: var(--accent-warning);
+  border-bottom-left-radius: var(--radius-xs);
+  font-size: var(--text-px-8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--black);
+  font-weight: var(--weight-bold);
+}
+
+.current-palette__hint {
+  font-size: var(--text-xs);
+  color: var(--accent-warning);
+  font-style: italic;
+  margin-bottom: var(--space-3);
+  line-height: var(--leading-snug);
+}
+
+.current-palette__empty {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-style: italic;
+  padding: var(--space-2) 0 var(--space-3);
+}
+
+.current-palette__actions {
+  justify-content: stretch;
+}
+
+.current-palette__save-btn {
+  flex: 1;
+  font-size: var(--text-xs);
+  padding: var(--space-1-5) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.current-palette__save-btn:hover:not(:disabled) {
+  background: var(--accent-primary);
+  color: var(--white);
+}
+
+.current-palette__save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

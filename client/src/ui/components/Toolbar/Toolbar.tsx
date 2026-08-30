@@ -39,6 +39,13 @@ import "./Toolbar.css";
 interface ToolbarProps {
   /** `uiState.studioMode === "lighting"` */
   isLightingMode: boolean;
+  /**
+   * Whether the focus button reads as ENGAGED — i.e. anything is hidden.
+   *
+   * ⚠️ Not "focus mode is on": a rail dismissed by its own × engages it too
+   * (owner, 2026-08-30), because this button is the way rails come back. The
+   * container passes the derived `focusModeEngaged`.
+   */
   isFocusMode: boolean;
   isLightGrid: boolean;
   isFrameReferenceVisible: boolean;
@@ -97,11 +104,20 @@ export function Toolbar({
       {/* Focus Mode Toggle */}
       <div className="toolbar__section toolbar__section--focus-mode">
         <div className="toolbar__group">
-          <Tooltip content="Focus Mode (`)">
+          {/* ⚠️ The label names what pressing it DOES, and the two are not
+              opposites: engaged, it restores every hidden rail (including
+              individually dismissed ones); un-engaged, it hides the two rails
+              focus mode has always hidden. */}
+          <Tooltip
+            content={
+              isFocusMode ? "Show all panels (`)" : "Focus Mode (`)"
+            }
+          >
             <button
               className={`toolbar__tool-btn ${isFocusMode ? "toolbar__tool-btn--active" : ""}`}
               onClick={onToggleFocusMode}
-              aria-label="Focus Mode"
+              aria-label={isFocusMode ? "Show all panels" : "Focus Mode"}
+              aria-pressed={isFocusMode}
             >
               <span className="toolbar__tool-icon">
                 <Icon icon={Maximize2} />

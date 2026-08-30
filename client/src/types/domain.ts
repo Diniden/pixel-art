@@ -133,6 +133,19 @@ export interface UIState {
   selectionBehavior?: SelectionBehavior;
   // Focus mode: hide side/bottom panels for distraction-free editing
   focusMode?: boolean;
+  /**
+   * Which rails the user has dismissed (2026-08-30), by rail name.
+   *
+   * OPTIONAL and conditionally emitted: absent until a rail is actually
+   * hidden, so an untouched project gains no key. WIDE `string[]` like the
+   * rest of this file — a file may name a rail this build does not know.
+   *
+   * ⚠️ It does NOT replace `focusMode`, which stays in the wire format
+   * unconditionally (it is part of the frozen key set). `focusMode` remains
+   * true exactly when the two classic focus rails are both hidden, so an
+   * older build reading a newer file still behaves sensibly.
+   */
+  hiddenRails?: string[];
   // Light grid mode: use a light background for the canvas grid instead of dark
   lightGridMode?: boolean;
   brushSize: number;
@@ -205,6 +218,19 @@ export interface UIState {
   // theme is deliberately NOT keyed that way — one theme per project, on
   // every device (owner decision).
   railLayouts?: { [deviceClass: string]: PersistedRailLayout };
+  /**
+   * The user's OWN saved layouts, keyed by device class like `railLayouts`
+   * (2026-08-30). Optional and, like the two keys above, absent until the
+   * user actually saves one — an untouched project gains no key, which is
+   * what keeps the corpus digests unchanged.
+   *
+   * Separate from `railLayouts` rather than a field inside it because the two
+   * answer different questions: `railLayouts` is "where are this device's
+   * rails right now", this is "which arrangements has the user kept". A
+   * device can have the second with none of the first, and losing one must
+   * not lose the other.
+   */
+  layoutPresets?: { [deviceClass: string]: PersistedLayoutPreset[] };
   theme?: string;
 
   /**
@@ -256,6 +282,23 @@ export interface PersistedRailLayout {
       includeAlpha?: boolean;
     };
   };
+}
+
+/**
+ * One layout the user saved and named, as persisted.
+ *
+ * WIDE types for the same reason `PersistedRailLayout` is wide: this is the
+ * wire format, and a file may carry a preset written by a newer build. The
+ * narrowing happens once, on hydrate.
+ *
+ * ⚠️ The `layout` is a full `PersistedRailLayout`, not a diff against a
+ * built-in. A preset must reproduce the same screen years later even if the
+ * built-in it happened to resemble has since been re-tuned.
+ */
+export interface PersistedLayoutPreset {
+  id: string;
+  name: string;
+  layout: PersistedRailLayout;
 }
 
 export type Tool =

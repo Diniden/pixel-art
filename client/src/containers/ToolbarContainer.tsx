@@ -48,7 +48,10 @@ export const ToolbarContainer = observer(function ToolbarContainer({
   return (
     <Toolbar
       isLightingMode={lightingUI.studioMode === "lighting"}
-      isFocusMode={viewport.focusMode}
+      // ⚠️ The DERIVED getter, not the persisted `focusMode` boolean. The
+      // button reads as engaged whenever ANY rail is hidden — including one
+      // dismissed by its own × — because it is the way to bring rails back.
+      isFocusMode={viewport.focusModeEngaged}
       isLightGrid={viewport.lightGridMode ?? false}
       isFrameReferenceVisible={viewport.panels.frameReference.visible ?? true}
       onSetStudioMode={(mode) => lightingUI.setStudioMode(mode)}

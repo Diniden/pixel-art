@@ -57,3 +57,40 @@ export const EmptyPalette: Story = {
 export const LargePalette: Story = {
   args: { palettes: [paletteLarge, paletteBasic] },
 };
+
+/**
+ * WITH THE PINNED "CURRENT PALETTE" ROW — the retired `LayerColors` strip.
+ *
+ * ⚠️ The row is drawn ONLY when `currentPalette` is supplied. Every story
+ * above omits it, which is the point: the prop is optional so this panel is
+ * still usable outside the pixel studio, and the many existing callers did not
+ * have to be rewritten for a row they do not exercise.
+ *
+ * `CurrentPalette.stories.tsx` exercises the row's own states; this story is
+ * about its PLACEMENT — it must sit above the real palettes, and opening a
+ * real row must collapse it (the list allows one open row, and the synthetic
+ * row shares that state).
+ */
+export const WithCurrentPalette: Story = {
+  args: {
+    currentPalette: {
+      hasLayer: true,
+      uniqueColorsData: {
+        colors: paletteBasic.colors,
+        count: paletteBasic.colors.length,
+      },
+      currentPickerColor: undefined,
+      colorAdjustment: false,
+      colorAdjustmentAllFrames: false,
+      colorAdjustmentAllLayers: false,
+      onExpandedChange: fn(),
+      allFramesMode: false,
+      onAllFramesModeChange: fn(),
+      allLayersMode: false,
+      onAllLayersModeChange: fn(),
+      onStartColorAdjustment: fn(),
+      onClearColorAdjustment: fn(),
+      onSaveAsPalette: fn(),
+    },
+  },
+};

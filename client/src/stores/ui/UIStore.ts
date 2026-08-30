@@ -112,6 +112,10 @@ import { LightingUIStore } from "./LightingUIStore";
 import { ToolUIStore } from "./ToolUIStore";
 import { ViewportUIStore } from "./ViewportUIStore";
 import { LayoutUIStore } from "./LayoutUIStore";
+import {
+  needsHiddenRailsKey,
+  serializeHiddenRails,
+} from "../../ui/layout/railVisibility";
 import type { SessionStore } from "../session/SessionStore";
 import type { ReferenceUIStore } from "./ReferenceUIStore";
 
@@ -497,6 +501,14 @@ export class UIStore {
       this.layout.toPersistedRailLayouts(),
     );
     /* 46 */ assign(persisted, "theme", this.layout.theme ?? undefined);
+    // Conditional for the same reason as the two above: `layoutPresets` is
+    // `{}` until the user saves a layout of their own, so an untouched
+    // project writes no such key and the corpus digests are unchanged.
+    /* 46b */ assign(
+      persisted,
+      "layoutPresets",
+      this.layout.toPersistedLayoutPresets(),
+    );
     // Conditional for the same reason as the two above: a project that has
     // never been pinch/wheel-zoomed must not gain the key.
     /* 47 */ assign(persisted, "viewZoom", viewport.viewZoom);
@@ -505,6 +517,31 @@ export class UIStore {
     // field stays `undefined` until `setEyedropperMode` runs, so `assign`
     // writes nothing and the corpus digests are untouched.
     /* 48 */ assign(persisted, "eyedropperMode", tool.eyedropperMode);
+    // ⚠️ CONDITIONAL, AND THE CONDITION IS NOT "anything is hidden".
+    //
+    // MEASURED 2026-08-30, against the real corpus: `backup-02-08-2026.json
+    // ::Base Unit-15-16-07.json` carries `focusMode: true`. Hydrating that
+    // expands the legacy boolean into the two rails it has always meant, so
+    // "is anything hidden" is TRUE for a file the user has never touched with
+    // this feature — and emitting on that added `hiddenRails` to one of the
+    // owner's real snapshots. The corpus gate caught it.
+    //
+    // The key is therefore emitted only when the hidden set says something
+    // `focusMode` ALONE CANNOT: the right rail is hidden (focus mode never
+    // touches it), or exactly one of the two classic rails is. Whenever the
+    // set is precisely what `focusMode` already encodes — empty, or both
+    // classic rails — slot 8 carries the whole truth and this key stays out
+    // of the file.
+    //
+    // `focusMode` (slot 8) is still emitted UNCONDITIONALLY above and is NOT
+    // replaced by this: it is part of the frozen key set.
+    /* 49 */ assign(
+      persisted,
+      "hiddenRails",
+      needsHiddenRailsKey(viewport.hiddenRails)
+        ? serializeHiddenRails(viewport.hiddenRails)
+        : undefined,
+    );
 
     // See the TYPE-vs-REALITY note above: `borderRadius` is declared required
     // but is genuinely absent from most real projects.

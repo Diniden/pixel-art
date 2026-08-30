@@ -1,6 +1,7 @@
 import type {
   BitDepth,
   EyedropperMode,
+  PersistedLayoutPreset,
   PersistedRailLayout,
   SelectionBehavior,
   SelectionMode,
@@ -89,6 +90,11 @@ export interface CompactUIState {
   selectionMode?: SelectionMode;
   selectionBehavior?: SelectionBehavior;
   focusMode?: boolean;
+  /**
+   * Dismissed rails (2026-08-30). Conditional: absent until a rail is
+   * hidden, so an untouched project's key set is unchanged.
+   */
+  hiddenRails?: string[];
   lightGridMode?: boolean;
   brushSize: number;
   bitDepth: BitDepth;
@@ -141,6 +147,12 @@ export interface CompactUIState {
   // changes something, so an untouched project's key set is unchanged (R3).
   // `railLayouts` is keyed by device class; `theme` is one per project.
   railLayouts?: { [deviceClass: string]: PersistedRailLayout };
+  /**
+   * The user's own saved layouts, keyed by device class (2026-08-30).
+   * Conditional for the same reason as `railLayouts`: absent until the user
+   * saves one, so an untouched project's key set is unchanged.
+   */
+  layoutPresets?: { [deviceClass: string]: PersistedLayoutPreset[] };
   theme?: string;
   /** Canvas view-transform scale. Conditional: absent until the user zooms. */
   viewZoom?: number;

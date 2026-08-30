@@ -63,10 +63,14 @@ export const LightingStudioContainer = observer(
       node: <LightingCanvasContainer renderMode={mode} />,
     }));
 
+    // See `PixelStudioContainer` for why the toast is a sibling rather than a
+    // layout prop: it is fixed over the window and belongs to no arrangement.
+    const { toast, ...layoutProps } = railLayout;
+
     return (
+      <>
       <LightingStudioLayout
-        {...railLayout}
-        focusMode={ui.viewport.focusMode}
+        {...layoutProps}
         header={<HeaderContainer />}
         toolbar={<ToolbarContainer />}
         objectLibrary={<ObjectLibraryContainer />}
@@ -88,6 +92,8 @@ export const LightingStudioContainer = observer(
         timeline={<FrameTimelineContainer />}
         canvas={<CanvasSplit panes={panes} />}
       />
+      {toast}
+      </>
     );
   },
 );

@@ -1,0 +1,527 @@
+/* blocks: layout-presets + layout-thumb (Layout mode presets, 2026-08-30).
+
+   Two blocks in one sheet because they are never used apart: the thumbnail
+   exists to fill a card, and a card is meaningless without one. Splitting
+   them would be two files that must be edited together.
+
+   The scrim follows `rail-overlay`'s rule exactly — `position: absolute;
+   inset: 0` against the region it dims (here `app__canvas-area`, which is
+   already `position: relative`), at --z-chrome so it covers the canvas while
+   staying under dropdowns, floating panels and modals. Same z-index as the
+   rail overlays because they are peers: four scrims, one per region, none
+   ever overlapping. */
+
+.layout-presets {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-chrome);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--overlay-70);
+  backdrop-filter: blur(2px);
+  animation: layout-presets-fade-in var(--transition-fast) ease;
+  /* ⚠️ `hidden`, NOT `auto`. The SCRIM must never scroll — it is pinned to
+     the canvas area and scrolling it would drag the panel out of the region
+     it is dimming. The scrolling belongs to the grid inside the panel, which
+     is the only part that can outgrow its space. */
+  overflow: hidden;
+}
+
+/* ⚠️ COLLAPSED — the default. No scrim, no blur, no dimming: while the grid
+   is closed the button is not covering anything the user needs, and dimming
+   the canvas anyway would make the per-rail controls read as unavailable
+   when they are the whole point of layout mode.
+
+   `pointer-events: none` on the container with `auto` back on the button is
+   what keeps the rest of the canvas live underneath — the container still
+   spans the region (that is how the button gets centred), so without this it
+   would swallow every click on the canvas behind it. */
+.layout-presets--collapsed {
+  background: none;
+  backdrop-filter: none;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.layout-presets__open-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.layout-presets__open-btn:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+@keyframes layout-presets-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PANEL CLAIMS ITS SPACE — 60% of the width, 90% of the height
+   ══════════════════════════════════════════════════════════════════════════
+
+   ⚠️ THE BUG THIS FIXES, because it is not obvious and it will come back if
+   these three declarations are trimmed.
+
+   The scrim is a flex container with `align-items: center`, so the panel is
+   a flex ITEM — and a flex item's default `align-self: center` makes it
+   shrink-wrap its content on the cross axis. The grid inside then resolved
+   its `100%` against that shrunk width instead of against the space
+   available, so `auto-fill` only ever fitted ONE column and the panel
+   squeezed to a single narrow strip whatever the canvas size. Measured on
+   both desktop and iPad.
+
+   `width` alone does not fix it either: a flex item's `width` is a starting
+   size that `flex-shrink` is free to undo. The fix is all three together —
+   the explicit sizes below, plus `flex: none` so the item is not shrunk past
+   them, so the grid finally has a real width to lay columns out in.
+
+   60% / 90% are the owner's proportions (2026-08-30): wide enough to hold
+   several columns, short of the full width so the canvas stays visible
+   behind it, and nearly full height because the cards are what the user came
+   to look at. */
+.layout-presets__panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 60%;
+  /* ⚠️ A FLOOR as well as a proportion. On a narrow canvas — an iPad in
+     portrait with both rails stacked on one side — 60% is a couple of
+     hundred pixels and no card fits. The floor wins there and the panel
+     simply uses what the canvas has (`max-width` caps it back). */
+  min-width: min(320px, 100%);
+  max-width: 100%;
+  /* ⚠️ A CAP, not a fixed height. The panel grows with its rows and stops at
+     90% of the canvas — a two-card list must not leave most of the panel as
+     empty space, and a long list must not run off the region. The grid below
+     is what scrolls once this cap is reached. */
+  max-height: 90%;
+  padding: var(--space-4);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Title, device caption, then the collapse chevron. */
+.layout-presets__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+
+.layout-presets__title {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* The chevron that closes the grid again, returning to the single button. */
+.layout-presets__collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.layout-presets__collapse:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+/* Which device class this shortlist belongs to. It is a caption, not a
+   control: the class is measured, never chosen.
+
+   `margin-left: auto` takes the head's slack so the collapse chevron stays
+   pinned right whatever the title's length — on the caption itself rather
+   than as a `__head __device` compound, which would both raise specificity
+   over the base rule and trip `no-descending-specificity`. */
+.layout-presets__device {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* ⚠️ `auto-fill` with a minimum, not a fixed column count. The canvas area is
+   whatever the rails leave it — narrow on a phone, wide on a desktop with
+   both rails stacked — and a fixed 3-up grid overflows the former and wastes
+   the latter. */
+/* ══════════════════════════════════════════════════════════════════════════
+   THE GRID — flex-wrap, as many columns as the width affords
+   ══════════════════════════════════════════════════════════════════════════
+
+   ⚠️ FLEX-WRAP, NOT `grid-template-columns` (owner, 2026-08-30). CSS grid's
+   `auto-fill` needs a definite track width to count columns against, and it
+   silently falls back to one column whenever that width resolves to
+   something small — which is exactly how this collapsed before. Flex wrap
+   asks a simpler question: lay cards out at their basis, and start a new row
+   when the next one does not fit. It cannot degenerate to one column while
+   there is room for two.
+
+   `--card-w` is the target width one card wants. Cards may grow past it to
+   share out a row's leftover space (`flex-grow: 1` below), so a row is
+   always flush rather than leaving a ragged gap at its right edge.
+
+   ⚠️ It SCROLLS VERTICALLY and never horizontally. `min-height: 0` is what
+   makes that work: without it this flex child refuses to shrink below its
+   content, the panel's `max-height` cap is silently ignored, and the rows
+   run off the bottom of the region instead of scrolling. */
+.layout-presets__grid {
+  --card-w: 150px;
+
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* ⚠️ 4 HIGH TO 5 WIDE (owner, 2026-08-30) — `aspect-ratio: 5 / 4`, which
+   reads width-first. The card is the shape, and its contents (thumbnail,
+   name) fit inside it rather than deciding it; that is what keeps every card
+   in a row the same height however long a preset's name runs.
+
+   `flex: 1 1 var(--card-w)` — grow to share a row's leftover width, shrink
+   when a row is tight, and start from the target width. The `max-width` stops
+   a lone card on the last row from stretching to the panel's full width and
+   towering over the row above it. */
+.layout-presets__card {
+  position: relative;
+  display: flex;
+  flex: 1 1 var(--card-w);
+  max-width: calc(var(--card-w) * 1.6);
+  aspect-ratio: 5 / 4;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.layout-presets__card--active {
+  border-color: var(--accent-primary);
+}
+
+.layout-presets__card--save {
+  border-style: dashed;
+}
+
+/* ⚠️ `min-height: 0` and `min-width: 0` — the card has a FIXED aspect ratio
+   now, so this button must be allowed to shrink inside it. Without them a
+   flex item refuses to go below its content's size, the name pushes the
+   thumbnail past the card's bottom edge, and the ratio is silently broken by
+   overflow. */
+.layout-presets__card-btn {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-2);
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+
+.layout-presets__card-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* `flex: none` so the name keeps its line inside a fixed-height card, and
+   the ellipsis so a long preset name truncates rather than wrapping to a
+   second line and stealing the thumbnail's room. */
+.layout-presets__name {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layout-presets__check {
+  color: var(--accent-primary);
+  flex: 0 0 auto;
+}
+
+/* ⚠️ NO `__desc` rule — a card shows a thumbnail and a name, nothing else
+   (owner, 2026-08-30). At ~140px wide there was no room for two more lines
+   of prose; the preset's description is the card's `title` tooltip instead. */
+
+/* The bin sits over the card's top-right corner rather than in its flow: the
+   card is one big button, and a second button inside that flow would be a
+   nested hit target competing for the same taps. */
+.layout-presets__delete {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.layout-presets__delete:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+/* ── The save card ──────────────────────────────────────────────────────── */
+
+.layout-presets__save-thumb {
+  position: relative;
+}
+
+/* The + badge over the current-arrangement thumbnail: the card previews what
+   pressing it captures, and the badge is what says "capture" rather than
+   "apply". */
+.layout-presets__save-badge {
+  position: absolute;
+  right: var(--space-1);
+  bottom: var(--space-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+  border-radius: 50%;
+}
+
+/* Same shrink rules as `__card-btn`: this is the other thing a card can
+   contain, and it lives inside the same fixed-ratio box. */
+.layout-presets__save-form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-2);
+}
+
+
+.layout-presets__input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.layout-presets__save-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.layout-presets__mini-btn {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.layout-presets__mini-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.layout-presets__mini-btn:hover:not(:disabled) {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   block: layout-thumb — the miniature shell inside a card
+   ══════════════════════════════════════════════════════════════════════════
+
+   It mirrors `AppShell.css`'s structure at 1/12 scale: a header strip, an
+   optional timeline above or below, and a main row of [left rails][canvas
+   area][right rails] where the canvas area itself docks a toolbar to one of
+   its four edges. Sizes are PERCENTAGES so one aspect-ratio box drives the
+   whole drawing — see the component header for why the rails' scale becomes
+   width here rather than a transform. */
+
+/* ⚠️ NO `aspect-ratio` HERE ANY MORE (2026-08-30). The CARD now carries the
+   ratio (5 / 4), and a thumbnail with a ratio of its own would fight it: the
+   two cannot both decide the height, and the loser overflows. The thumbnail
+   fills whatever box the card gives it — `min-height: 0` in the card rule
+   above is what lets it shrink into that box.
+
+   Used OUTSIDE a card — the Storybook composition, where there is no card to
+   supply a box — it needs a shape of its own: that is `--standalone` below,
+   an opt-in modifier rather than a `:not()` guess about its context. */
+.layout-thumb {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+/* A thumbnail with no card around it supplies its own shape. Matches the
+   card's ratio so the two compositions read alike. */
+.layout-thumb--standalone {
+  aspect-ratio: 5 / 4;
+}
+
+/* ⚠️ Inside a card the thumbnail takes whatever height the name leaves it.
+   A MODIFIER rather than a `__card-btn .layout-thumb` descendant rule: the
+   compound raises specificity above the base `.layout-thumb` block that
+   follows it in this sheet, which trips `no-descending-specificity`. Both
+   card contexts — the preset button and the save form — set it. */
+.layout-thumb--fill {
+  flex: 1;
+  min-height: 0;
+}
+
+.layout-thumb__header {
+  flex: 0 0 9%;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xs);
+}
+
+.layout-thumb__main {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-height: 0;
+}
+
+/* The two side rails, tinted differently so which one crossed the canvas is
+   readable — half of what a preset says. */
+.layout-thumb__rail {
+  flex: 0 0 auto;
+  border-radius: var(--radius-xs);
+}
+
+.layout-thumb__rail--a {
+  background: var(--accent-primary);
+  opacity: 0.55;
+}
+
+.layout-thumb__rail--b {
+  background: var(--text-muted);
+  opacity: 0.55;
+}
+
+.layout-thumb__bottom {
+  flex: 0 0 auto;
+  background: var(--text-muted);
+  opacity: 0.4;
+  border-radius: var(--radius-xs);
+}
+
+/* ⚠️ The toolbar dock, done exactly as `AppShell.css` does it: the canvas
+   area's `flex-direction` plus the toolbar's `order` place the strip on any
+   of the four edges, so the miniature cannot disagree with the shell about
+   which edge is which. */
+.layout-thumb__canvas-area {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.layout-thumb__canvas-area--toolbar-top {
+  flex-direction: column;
+}
+
+.layout-thumb__canvas-area--toolbar-bottom {
+  flex-direction: column-reverse;
+}
+
+.layout-thumb__canvas-area--toolbar-left {
+  flex-direction: row;
+}
+
+.layout-thumb__canvas-area--toolbar-right {
+  flex-direction: row-reverse;
+}
+
+/* The strip's thickness is its cross-axis size, which flips with the
+   direction above — hence a flex-basis rather than a width or a height. */
+.layout-thumb__toolbar {
+  flex: 0 0 11%;
+  background: var(--text-muted);
+  opacity: 0.5;
+  border-radius: var(--radius-xs);
+}
+
+.layout-thumb__toolbar--accent {
+  background: var(--accent-primary);
+  opacity: 0.35;
+}
+
+.layout-thumb__canvas {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-xs);
+}

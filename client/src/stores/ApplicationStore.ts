@@ -1232,7 +1232,11 @@ export class ApplicationStore {
    * the mode. A computed would re-run it on any tree change, and observing the
    * grids to know when to do so is the exact modelling error R2 forbids.
    */
-  startColorAdjustment(color: Color, allFrames: boolean): void {
+  startColorAdjustment(
+    color: Color,
+    allFrames: boolean,
+    allLayers = false,
+  ): void {
     const layer = this.currentLayer;
     const obj = this.currentObject;
     if (!layer || !obj) return;
@@ -1299,10 +1303,39 @@ export class ApplicationStore {
           affectedPixels: [], // pin 1 — the unused half of the union
           affectedPixelsByFrame,
         };
+      } else if (allLayers) {
+        // ⚠️ EVERY layer of the current variant frame — so this cannot use
+        // the flat `affectedPixels` payload, which addresses one layer only.
+        // It takes the same by-frame Map as the all-frames case, with the one
+        // synthetic key for the frame the editor is on. `adjustColor`'s
+        // variant branch already dispatches on the Map being present.
+        const affectedPixelsByFrame = new Map<
+          string,
+          Map<string, { x: number; y: number }[]>
+        >();
+        const frameIdx = variant.frames.indexOf(variantData.variantFrame);
+        const frameKey = `variant-frame-${frameIdx}`;
+        for (const vLayer of variantData.variantFrame.layers) {
+          const pixels = scan(vLayer.pixels, width, height);
+          if (pixels.length > 0) {
+            if (!affectedPixelsByFrame.has(frameKey)) {
+              affectedPixelsByFrame.set(frameKey, new Map());
+            }
+            affectedPixelsByFrame.get(frameKey)!.set(vLayer.id, pixels);
+          }
+        }
+        next = {
+          originalColor: color,
+          allFrames: false,
+          allLayers: true,
+          affectedPixels: [], // pin 1 — the unused half of the union
+          affectedPixelsByFrame,
+        };
       } else {
         next = {
           originalColor: color,
           allFrames: false,
+          allLayers: false,
           affectedPixels: scan(variantLayer.pixels, width, height),
         };
       }
@@ -1316,9 +1349,11 @@ export class ApplicationStore {
         >();
         for (const frame of obj.frames) {
           // pin 2 — `filter`, by NAME. Every same-named layer, not the first.
-          const matchingLayers = frame.layers.filter(
-            (l) => l.name === layer.name,
-          );
+          // `allLayers` is exactly "skip the name filter": every layer of the
+          // frame is in scope, which is what makes the two toggles orthogonal.
+          const matchingLayers = allLayers
+            ? frame.layers
+            : frame.layers.filter((l) => l.name === layer.name);
           for (const matchingLayer of matchingLayers) {
             const pixels = scan(matchingLayer.pixels, width, height);
             if (pixels.length > 0) {
@@ -1334,6 +1369,33 @@ export class ApplicationStore {
         next = {
           originalColor: color,
           allFrames: true,
+          allLayers,
+          affectedPixels: [], // pin 1
+          affectedPixelsByFrame,
+        };
+      } else if (allLayers) {
+        // ⚠️ EVERY layer of the current frame. Like the variant twin above
+        // this needs the by-frame Map rather than the flat list, because the
+        // flat payload addresses the SELECTED layer only. The key is the real
+        // `frame.id`, so `PixelStore.adjustColorAcross` resolves it normally.
+        const affectedPixelsByFrame = new Map<
+          string,
+          Map<string, { x: number; y: number }[]>
+        >();
+        const frame = this.currentFrame;
+        for (const frameLayer of frame?.layers ?? []) {
+          const pixels = scan(frameLayer.pixels, width, height);
+          if (pixels.length > 0) {
+            if (!affectedPixelsByFrame.has(frame!.id)) {
+              affectedPixelsByFrame.set(frame!.id, new Map());
+            }
+            affectedPixelsByFrame.get(frame!.id)!.set(frameLayer.id, pixels);
+          }
+        }
+        next = {
+          originalColor: color,
+          allFrames: false,
+          allLayers: true,
           affectedPixels: [], // pin 1
           affectedPixelsByFrame,
         };
@@ -1341,6 +1403,7 @@ export class ApplicationStore {
         next = {
           originalColor: color,
           allFrames: false,
+          allLayers: false,
           affectedPixels: scan(layer.pixels, width, height),
         };
       }
@@ -1457,7 +1520,20 @@ export class ApplicationStore {
     const options = { trackHistory };
     let written = 0;
 
-    const byFrame = state.allFrames ? state.affectedPixelsByFrame : undefined;
+    // ⚠️ DISPATCH ON THE PAYLOAD, NOT ON `allFrames`.
+    //
+    // This read `state.allFrames ? state.affectedPixelsByFrame : undefined`
+    // while all-frames was the ONLY way to produce a multi-layer snapshot.
+    // The `allLayers` axis breaks that equivalence: `allLayers && !allFrames`
+    // fills the Map with the current frame's layers, and the old test would
+    // have sent it down the flat-list branch, which addresses the SELECTED
+    // layer only — every other layer would silently keep its old colour while
+    // the swatch strip claimed the whole frame had been recoloured.
+    //
+    // Which payload is populated is the tagged union's real discriminant (pin
+    // 1: the two are disjoint, and the unused half is an empty array), so
+    // testing it directly is both correct and axis-agnostic.
+    const byFrame = state.affectedPixelsByFrame;
 
     if (this.isEditingVariant && layer.variantGroupId) {
       const variantId = layer.selectedVariantId;

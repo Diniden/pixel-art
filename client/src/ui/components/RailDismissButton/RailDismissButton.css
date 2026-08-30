@@ -1,0 +1,167 @@
+/* block: rail-handle (panel dismissal, 2026-08-30).
+
+   The rail's canvas-facing border, doubling as a drawer handle: click the
+   edge and the rail collapses. See the component header for why the border
+   rather than a corner button.
+
+   ⚠️ IT REPLACES THE RAIL'S OWN BORDER. `AppShell.css` suppresses its 1px
+   rule on any edge that has a handle (`--has-handle-*`), and this strip
+   supplies the line instead — 3px against the border's 1px, which is the
+   "2px thicker" the owner asked for. Leaving both in place would stack a
+   1px rule against a 3px strip and read as a double border.
+
+   z-index sits just under --z-chrome, where the layout-mode scrims live: the
+   scrim must cover the handle, or a rail could be collapsed from under its
+   own layout overlay. */
+
+.rail-handle {
+  position: absolute;
+  z-index: calc(var(--z-chrome) - 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  /* At rest it IS the border: same colour, no other furniture. */
+  background: var(--border-primary);
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+/* ⚠️ 3px — the rail's 1px border plus the 2px the owner asked for. Small
+   enough to read as a border, and the full length of the rail makes up for
+   the thinness as a hit target. */
+.rail-handle--left,
+.rail-handle--right {
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+
+.rail-handle--bottom,
+.rail-handle--top {
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+/* Each handle sits on the rail's CANVAS-FACING edge — the seam it closes
+   along. A rail placed left collapses leftward, so its handle is the strip
+   down its right side. */
+.rail-handle--left {
+  right: 0;
+}
+
+.rail-handle--right {
+  left: 0;
+}
+
+/* `--bottom` is a rail at the bottom of the shell: its inner edge is its TOP.
+   `--top` is the timeline flipped above the canvas, whose inner edge is its
+   bottom. */
+.rail-handle--bottom {
+  top: 0;
+}
+
+.rail-handle--top {
+  bottom: 0;
+}
+
+.rail-handle:hover {
+  background: var(--accent-primary);
+}
+
+/* Keyboard users get the same affordance the pointer gets. */
+.rail-handle:focus-visible {
+  background: var(--accent-primary);
+  outline: none;
+}
+
+/* ── The grip ─────────────────────────────────────────────────────────────
+
+   A rounded tab bulging out of the strip, carrying the chevron. Hidden until
+   hover: at rest the handle must read as the rail's border and nothing more,
+   so the affordance appears only once the pointer is on it. */
+.rail-handle__grip {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+/* A vertical rail's grip is a tall pill centred down the strip; a horizontal
+   rail's is a wide one centred along it. Both bulge toward the CANVAS, which
+   is the direction the click acts in. */
+.rail-handle--left .rail-handle__grip,
+.rail-handle--right .rail-handle__grip {
+  top: 50%;
+  width: 16px;
+  height: 44px;
+  margin-top: -22px;
+}
+
+.rail-handle--bottom .rail-handle__grip,
+.rail-handle--top .rail-handle__grip {
+  left: 50%;
+  width: 44px;
+  height: 16px;
+  margin-left: -22px;
+}
+
+.rail-handle--left .rail-handle__grip {
+  right: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.rail-handle--right .rail-handle__grip {
+  left: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.rail-handle--bottom .rail-handle__grip {
+  top: 0;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+
+.rail-handle--top .rail-handle__grip {
+  bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* ⚠️ The two reveal rules come LAST among the grip rules, after every
+   placement compound above. Stylelint's `no-descending-specificity` wants
+   equal-specificity selectors in source order, and these two must win the
+   `opacity` cascade over the base `__grip` block regardless. */
+.rail-handle:hover .rail-handle__grip {
+  opacity: 1;
+}
+
+.rail-handle:focus-visible .rail-handle__grip {
+  opacity: 1;
+}
+
+/* ⚠️ COARSE POINTERS GET THE GRIP PERMANENTLY. There is no hover on an iPad
+   (measured — see the owner's notes on Pencil hover), so a control that only
+   appears on hover is a control that never appears. The strip is also widened
+   to a usable touch target there. */
+@media (hover: none) {
+  .rail-handle--left,
+  .rail-handle--right {
+    width: 10px;
+  }
+
+  .rail-handle--bottom,
+  .rail-handle--top {
+    height: 10px;
+  }
+
+  .rail-handle__grip {
+    opacity: 1;
+  }
+}

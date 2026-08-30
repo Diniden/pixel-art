@@ -78,7 +78,14 @@ import {
   type DeviceClass,
 } from "../../ui/layout/deviceClass";
 import { isThemeId, type ThemeId } from "../../ui/theme/themes";
-import type { PersistedRailLayout } from "../../types";
+import {
+  applyPreset,
+  customPresetId,
+  isPresetActive,
+  presetsForDevice,
+  type LayoutPreset,
+} from "../../ui/layout/layoutPresets";
+import type { PersistedLayoutPreset, PersistedRailLayout } from "../../types";
 
 /**
  * Narrow a persisted layout — which carries WIDE `string` types, because a
@@ -184,6 +191,31 @@ function narrowOtherHand(
   return out;
 }
 
+/**
+ * Narrow the saved presets. Same field-by-field spirit as `narrowLayout`: an
+ * entry missing an id or a name is unusable in a keyed list and is DROPPED,
+ * but an entry whose `layout` is partial or unknown is kept — `narrowLayout`
+ * defaults the bad fields, so the user still gets the preset they named.
+ */
+function narrowPresets(
+  persisted: { [deviceClass: string]: PersistedLayoutPreset[] } | undefined,
+): { [deviceClass: string]: PersistedLayoutPreset[] } {
+  if (!persisted || typeof persisted !== "object") return {};
+  const out: { [deviceClass: string]: PersistedLayoutPreset[] } = {};
+  for (const [deviceClass, list] of Object.entries(persisted)) {
+    if (!Array.isArray(list)) continue;
+    const kept = list.filter(
+      (preset): preset is PersistedLayoutPreset =>
+        !!preset &&
+        typeof preset === "object" &&
+        typeof preset.id === "string" &&
+        typeof preset.name === "string",
+    );
+    if (kept.length > 0) out[deviceClass] = kept;
+  }
+  return out;
+}
+
 /** The store's `RailLayout` widened back to the persisted shape. */
 function widenLayout(layout: RailLayout): PersistedRailLayout {
   const widened: PersistedRailLayout = {
@@ -228,6 +260,13 @@ export class LayoutUIStore {
    */
   theme: ThemeId | null = null;
 
+  /**
+   * The user's own saved layouts, by device class, exactly as persisted.
+   * `observableRef` for the same reason `railLayouts` is: the record is
+   * replaced wholesale on every edit, so per-key proxies would buy nothing.
+   */
+  layoutPresets: { [deviceClass: string]: PersistedLayoutPreset[] } = {};
+
   /** Whether the layout overlay is showing. Session-only: never persisted. */
   layoutMode = false;
 
@@ -243,6 +282,7 @@ export class LayoutUIStore {
     this.deviceClass = deviceClass;
     makeObservable(this, {
       railLayouts: observableRef,
+      layoutPresets: observableRef,
       theme: observable,
       layoutMode: observable,
       otherHandSection: observable,
@@ -261,6 +301,9 @@ export class LayoutUIStore {
       stepToolbarSpread: action,
       scaleRail: action,
       resetLayout: action,
+      applyLayoutPreset: action,
+      saveCurrentAsPreset: action,
+      deleteLayoutPreset: action,
       hydrate: action,
     });
   }
@@ -396,6 +439,90 @@ export class LayoutUIStore {
     this.write(DEFAULT_RAIL_LAYOUT);
   }
 
+  /* ── Layout presets ───────────────────────────────────────────────────── */
+
+  /**
+   * The shortlist offered in layout mode: this device class's built-ins,
+   * then whatever the user has saved FOR THIS DEVICE CLASS.
+   *
+   * ⚠️ Keyed by device class throughout, exactly like `railLayouts` and for
+   * exactly the same reason: an arrangement that works held in one hand is
+   * not one that works with a mouse, so an iPad's saved layouts have no
+   * business appearing on a laptop. The custom ones come last so the
+   * built-ins keep stable positions as the user's list grows.
+   */
+  get availablePresets(): LayoutPreset[] {
+    const saved = this.layoutPresets[this.deviceClass] ?? [];
+    return [
+      ...presetsForDevice(this.deviceClass),
+      ...saved.map((preset) => ({
+        id: preset.id,
+        name: preset.name,
+        // Custom presets have no authored purpose line — the name is the
+        // user's own and is the whole description.
+        description: "Your saved layout.",
+        layout: narrowLayout(preset.layout),
+        custom: true,
+      })),
+    ];
+  }
+
+  /**
+   * The id of the preset the current arrangement matches, or `null`.
+   *
+   * FIRST match wins. A user can save a preset identical to a built-in, and
+   * marking both as current would show two ticks for one arrangement; the
+   * built-in is the one named in code, so it is the one that wins.
+   */
+  get activePresetId(): string | null {
+    const layout = this.layout;
+    return (
+      this.availablePresets.find((preset) => isPresetActive(layout, preset))
+        ?.id ?? null
+    );
+  }
+
+  /** Adopt a whole arrangement in one step. */
+  applyLayoutPreset(preset: LayoutPreset): void {
+    this.write(applyPreset(this.layout, preset));
+  }
+
+  /**
+   * Keep the current arrangement under a user-typed name.
+   *
+   * ⚠️ The layout is snapshotted through `widenLayout` HERE, not read lazily
+   * later: a preset is a record of how things were when it was saved, and a
+   * reference to the live layout would silently follow every subsequent
+   * change. `otherHand` is dropped by that widening for a preset — those
+   * positions are carried across a preset change, never dictated by one
+   * (see `applyPreset`).
+   */
+  saveCurrentAsPreset(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const saved = this.layoutPresets[this.deviceClass] ?? [];
+    const layout = widenLayout(this.layout);
+    delete layout.otherHand;
+    this.layoutPresets = {
+      ...this.layoutPresets,
+      [this.deviceClass]: [
+        ...saved,
+        { id: customPresetId(this.availablePresets), name: trimmed, layout },
+      ],
+    };
+  }
+
+  /**
+   * Forget one saved layout. Built-in ids are not in the persisted list, so
+   * passing one is a harmless no-op rather than something to guard against.
+   */
+  deleteLayoutPreset(id: string): void {
+    const saved = this.layoutPresets[this.deviceClass] ?? [];
+    const next = saved.filter((preset) => preset.id !== id);
+    if (next.length === saved.length) return;
+    this.layoutPresets = { ...this.layoutPresets, [this.deviceClass]: next };
+  }
+
   /**
    * Adopt a loaded project's chrome fields.
    *
@@ -406,9 +533,11 @@ export class LayoutUIStore {
    */
   hydrate(ui: {
     railLayouts?: { [deviceClass: string]: PersistedRailLayout };
+    layoutPresets?: { [deviceClass: string]: PersistedLayoutPreset[] };
     theme?: string;
   }): void {
     this.railLayouts = ui.railLayouts ?? {};
+    this.layoutPresets = narrowPresets(ui.layoutPresets);
     this.theme = isThemeId(ui.theme) ? ui.theme : null;
   }
 
@@ -422,6 +551,22 @@ export class LayoutUIStore {
   toPersistedRailLayouts():
     { [deviceClass: string]: PersistedRailLayout } | undefined {
     return this.hasStoredLayout ? this.railLayouts : undefined;
+  }
+
+  /**
+   * The saved presets for the builder. `undefined` until the user saves one,
+   * for the same R3 reason as `toPersistedRailLayouts` — a project nobody has
+   * saved a layout in must not gain the key.
+   *
+   * ⚠️ Every device class, not just this one: a desktop session saving must
+   * not drop the iPad's saved layouts.
+   */
+  toPersistedLayoutPresets():
+    { [deviceClass: string]: PersistedLayoutPreset[] } | undefined {
+    const anySaved = Object.values(this.layoutPresets).some(
+      (list) => list.length > 0,
+    );
+    return anySaved ? this.layoutPresets : undefined;
   }
 }
 

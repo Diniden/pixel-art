@@ -163,12 +163,28 @@ function fullyPopulatedProject(): Project {
     lightingPreviewPanelPosition: { topPercent: 50, leftPercent: 60 },
     lightingPreviewPanelMinimized: true,
     aiServiceUrl: "http://ai.local:9000",
+    // ⚠️ The right rail — a state `focusMode` cannot express, which is what
+    // makes the key appear at all.
+    hiddenRails: ["right"],
     railLayouts: {
       desktop: {
         left: { slot: "rightInner", scale: "large" },
         right: { slot: "leftOuter", scale: "compact" },
         bottom: { edge: "top", scale: "huge" },
       },
+    },
+    layoutPresets: {
+      desktop: [
+        {
+          id: "custom-1",
+          name: "My Layout",
+          layout: {
+            left: { slot: "rightInner", scale: "large" },
+            right: { slot: "rightOuter", scale: "large" },
+            bottom: { edge: "bottom", scale: "regular" },
+          },
+        },
+      ],
     },
     theme: "light-cozy",
     viewZoom: 2.5,
@@ -229,7 +245,16 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     // behaviour. Conditional like the three above — the store field is
     // `undefined` until the user picks a mode from the eyedropper's menu, so
     // no existing snapshot gains the key.
-    expect(declared).toHaveLength(48);
+    // +1 (2026-08-30): `layoutPresets`, the user's own saved rail
+    // arrangements, keyed by device class. Conditional like the four above —
+    // the store field is `{}` until the user saves a layout from the layout
+    // picker, so no existing snapshot gains the key.
+    // +1 (2026-08-30): `hiddenRails`, which rails the user has dismissed.
+    // Conditional, and on a STRICTER condition than the others — it is
+    // written only when the set says something `focusMode` cannot already
+    // encode, because a real corpus snapshot carries `focusMode: true` and
+    // would otherwise gain the key. See `needsHiddenRailsKey`.
+    expect(declared).toHaveLength(50);
 
     // A FULLY-POPULATED project, because 11 of the 44 keys are
     // conditionally present by design: the legacy `...project.uiState`
@@ -341,6 +366,141 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     expect(Object.keys(built).sort()).toEqual(
       Object.keys(legacyUIState(project)).sort(),
     );
+  });
+
+  it("⭐ hiddenRails stays OUT of a file that only has focusMode", () => {
+    // ⚠️ THE REGRESSION THIS PINS WAS REAL, and the corpus gate caught it:
+    // `backup-02-08-2026.json::Base Unit-15-16-07.json` carries
+    // `focusMode: true`. Hydrating expands that into the two classic rails,
+    // so a naive "emit when the set is non-empty" test wrote `hiddenRails`
+    // into one of the owner's real snapshots.
+    //
+    // `focusMode` alone can say two things — nothing hidden, and both classic
+    // rails hidden — and for those two the key must not appear.
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const ui = new UIStore({ session, selection });
+
+    runInAction(() => ui.viewport.hydrate({ focusMode: true }));
+    // The rails really are hidden...
+    expect(ui.viewport.focusModeEngaged).toBe(true);
+    expect(ui.viewport.isRailHidden("left")).toBe(true);
+    expect(ui.viewport.isRailHidden("bottom")).toBe(true);
+    // ...but the file gains no key, because slot 8 already says it.
+    expect("hiddenRails" in ui.toPersistedUIState()).toBe(false);
+
+    // Same for the empty set.
+    runInAction(() => ui.viewport.hydrate({ focusMode: false }));
+    expect("hiddenRails" in ui.toPersistedUIState()).toBe(false);
+  });
+
+  it("emits hiddenRails once a rail focusMode cannot express is hidden", () => {
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const ui = new UIStore({ session, selection });
+
+    // The right rail — classic focus mode never touched it.
+    runInAction(() => ui.viewport.setRailHidden("right", true));
+    const built = ui.toPersistedUIState();
+    expect(built.hiddenRails).toEqual(["right"]);
+    // ...and `focusMode` stays false, because the classic pair is not hidden.
+    expect(built.focusMode).toBe(false);
+  });
+
+  it("emits hiddenRails for ONE classic rail — a state the boolean loses", () => {
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const ui = new UIStore({ session, selection });
+
+    runInAction(() => ui.viewport.setRailHidden("bottom", true));
+    const built = ui.toPersistedUIState();
+    expect(built.hiddenRails).toEqual(["bottom"]);
+    expect(built.focusMode).toBe(false);
+  });
+
+  it("round-trips a dismissed set through hydrate", () => {
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const ui = new UIStore({ session, selection });
+
+    runInAction(() =>
+      ui.viewport.hydrate({ focusMode: false, hiddenRails: ["right", "bottom"] }),
+    );
+    expect(ui.toPersistedUIState().hiddenRails).toEqual(["right", "bottom"]);
+
+    // ⚠️ A file's explicit list WINS over the boolean it derives — a newer
+    // save is more specific than the flag it is compatible with.
+    runInAction(() =>
+      ui.viewport.hydrate({ focusMode: true, hiddenRails: ["right"] }),
+    );
+    expect(ui.viewport.isRailHidden("left")).toBe(false);
+    expect(ui.viewport.isRailHidden("right")).toBe(true);
+  });
+
+  it("⭐ layoutPresets is ABSENT until the user saves a layout", () => {
+    // The same corpus-protecting property, for the key added on 2026-08-30.
+    // A project whose owner has never pressed "Save current" in the layout
+    // picker emits no such key, so its digest is exactly what it was.
+    const project = createDefaultProject();
+    expect("layoutPresets" in project.uiState).toBe(false);
+
+    const built = hydratedStore(project).toPersistedUIState();
+    expect("layoutPresets" in built).toBe(false);
+    expect(Object.keys(built).sort()).toEqual(
+      Object.keys(legacyUIState(project)).sort(),
+    );
+  });
+
+  it("emits layoutPresets once one is saved, keyed by device class", () => {
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const layout = new LayoutUIStore("tablet");
+    const ui = new UIStore({ session, selection, layout });
+
+    runInAction(() => layout.saveCurrentAsPreset("Thumb grip"));
+    const built = ui.toPersistedUIState();
+
+    expect("layoutPresets" in built).toBe(true);
+    expect(built.layoutPresets?.tablet).toHaveLength(1);
+    expect(built.layoutPresets?.tablet[0].name).toBe("Thumb grip");
+    // Only THIS device's entry — an iPad's saved layouts are not a laptop's.
+    expect(Object.keys(built.layoutPresets!)).toEqual(["tablet"]);
+  });
+
+  it("preserves ANOTHER device's saved layouts when this device saves one", () => {
+    // Same reasoning as the `railLayouts` case below: a desktop session must
+    // not drop the presets an iPad saved into the same project.
+    const session = new SessionStore();
+    const selection = new SelectionMirror();
+    const layout = new LayoutUIStore("desktop");
+    const ui = new UIStore({ session, selection, layout });
+
+    runInAction(() => {
+      layout.hydrate({
+        layoutPresets: {
+          tablet: [
+            {
+              id: "custom-1",
+              name: "Left hand",
+              layout: {
+                left: { slot: "leftOuter", scale: "huge" },
+                right: { slot: "leftInner", scale: "huge" },
+                bottom: { edge: "bottom", scale: "large" },
+              },
+            },
+          ],
+        },
+      });
+      layout.saveCurrentAsPreset("Desk");
+    });
+
+    const built = ui.toPersistedUIState();
+    expect(Object.keys(built.layoutPresets!).sort()).toEqual([
+      "desktop",
+      "tablet",
+    ]);
+    expect(built.layoutPresets?.tablet[0].name).toBe("Left hand");
+    expect(built.layoutPresets?.desktop[0].name).toBe("Desk");
   });
 
   it("emits railLayouts once a rail actually moves, keyed by device class", () => {
