@@ -57,6 +57,25 @@ import type { Layer, PixelData } from "../../../types";
 
 /* ── the painting harness (what the container does, in miniature) ────────── */
 
+/**
+ * The combined scale the LAYOUT is magnified by — `zoom * viewZoom` in the app.
+ *
+ * ⚠️ It is no longer a multiplier inside the painters below (plan 05, task 02).
+ * Every `<canvas>` is 1:1 with the pixel data — `GRID.width x GRID.height`, not
+ * `GRID.width * ZOOM` — and this number reaches the DOM once, as
+ * `combinedScale` on `CanvasSurface`, where the GPU applies it. The painters
+ * therefore fill ONE device pixel per cell and `image-rendering: pixelated`
+ * keeps the upscale crisp.
+ *
+ * ⚠️ KNOWN AND EXPECTED, until plan-05 tasks 03 and 04 land: the SUB-CELL
+ * chrome in these stories degenerates at 1:1, exactly as `MASTER.md` §4
+ * predicts. The grid lines below now fall one per pixel column and read as a
+ * flat wash; the marching ants' `[4, 4]` dash spans four whole cells; the
+ * dashed variant/overlay borders are hairlines. That chrome is moving to inline
+ * SVG with `vector-effect: non-scaling-stroke` (D5), which is what gives it
+ * back the screen-constant stroke its painters always documented. The ARTWORK —
+ * the cell fills, which is what these stories exist to frame — is correct.
+ */
 const ZOOM = 12;
 
 /** The light/dark checkerboard, matching `ui/canvas/render/canvasBackground`. */
@@ -71,7 +90,7 @@ function paintBackground(
   for (let y = 0; y < cellsY; y++) {
     for (let x = 0; x < cellsX; x++) {
       ctx.fillStyle = (x + y) % 2 === 0 ? a : b;
-      ctx.fillRect(x * ZOOM, y * ZOOM, ZOOM, ZOOM);
+      ctx.fillRect(x, y, 1, 1);
     }
   }
 }
@@ -86,12 +105,12 @@ function strokeGridLines(
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let x = 0; x <= cellsX; x++) {
-    ctx.moveTo(x * ZOOM + 0.5, 0);
-    ctx.lineTo(x * ZOOM + 0.5, cellsY * ZOOM);
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, cellsY);
   }
   for (let y = 0; y <= cellsY; y++) {
-    ctx.moveTo(0, y * ZOOM + 0.5);
-    ctx.lineTo(cellsX * ZOOM, y * ZOOM + 0.5);
+    ctx.moveTo(0, y + 0.5);
+    ctx.lineTo(cellsX, y + 0.5);
   }
   ctx.stroke();
 }
@@ -115,7 +134,7 @@ function paintLayer(
       const color = cell?.color;
       if (!color || color.a === 0) continue;
       ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${(color.a / 255) * opacity})`;
-      ctx.fillRect((x + ox) * ZOOM, (y + oy) * ZOOM, ZOOM, ZOOM);
+      ctx.fillRect(x + ox, y + oy, 1, 1);
     }
   }
 }
@@ -207,10 +226,11 @@ function SurfaceHarness({
 
 /** Props shared by every story; each overrides what it is demonstrating. */
 const baseSurface: HarnessProps["surface"] = {
-  canvasWidth: GRID.width * ZOOM,
-  canvasHeight: GRID.height * ZOOM,
+  // 1:1 with the pixel data. `combinedScale` does the magnification.
+  cellWidth: GRID.width,
+  cellHeight: GRID.height,
   viewPanOffset: { x: 24, y: 24 },
-  viewZoom: 1,
+  combinedScale: ZOOM,
   cursor: "crosshair",
   showReferenceOverlay: false,
   showFrameOverlay: false,
@@ -286,13 +306,16 @@ export const VariantEdit: Story = {
   args: {
     surface: {
       ...baseSurface,
-      canvasWidth: VIEW_W * ZOOM,
-      canvasHeight: VIEW_H * ZOOM,
+      // The D1 conditional, in miniature: the canvas covers the UNION of the
+      // object and the offset variant, so a variant hanging off the left edge
+      // stays visible. Still 1:1 — the union is measured in cells.
+      cellWidth: VIEW_W,
+      cellHeight: VIEW_H,
     },
     paint: (ctx) => {
       paintBackground(ctx, VIEW_W, VIEW_H, false);
       ctx.save();
-      ctx.translate(-VIEW_MIN_X * ZOOM, -VIEW_MIN_Y * ZOOM);
+      ctx.translate(-VIEW_MIN_X, -VIEW_MIN_Y);
 
       // Regular layers dim to 0.5 while a variant is edited.
       for (const layer of heroFrame.layers) paintLayer(ctx, layer, 0, 0, 0.5);
@@ -305,19 +328,20 @@ export const VariantEdit: Story = {
         1,
       );
 
+      // Sub-cell chrome at 1:1 — hairlines until D5's SVG lands. See `ZOOM`.
       ctx.strokeStyle = "rgba(255, 171, 0, 0.4)";
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
-      ctx.strokeRect(0, 0, GRID.width * ZOOM, GRID.height * ZOOM);
+      ctx.strokeRect(0, 0, GRID.width, GRID.height);
       ctx.setLineDash([]);
 
       ctx.strokeStyle = "#8b5cf6";
       ctx.lineWidth = 2;
       ctx.strokeRect(
-        VARIANT_OFFSET.x * ZOOM,
-        VARIANT_OFFSET.y * ZOOM,
-        VARIANT_SIZE.width * ZOOM,
-        VARIANT_SIZE.height * ZOOM,
+        VARIANT_OFFSET.x,
+        VARIANT_OFFSET.y,
+        VARIANT_SIZE.width,
+        VARIANT_SIZE.height,
       );
       ctx.restore();
     },
@@ -345,33 +369,25 @@ export const SelectionActive: Story = {
 
       const box = { x: 3, y: 3, width: 8, height: 7 };
 
+      // The mask FILL is a cell fill and stays correct at 1:1 (D6).
       ctx.fillStyle = "rgba(0, 217, 255, 0.14)";
-      ctx.fillRect(
-        box.x * ZOOM,
-        box.y * ZOOM,
-        box.width * ZOOM,
-        box.height * ZOOM,
-      );
+      ctx.fillRect(box.x, box.y, box.width, box.height);
 
       // Marching ants: two offset dashes, matching
       // `ui/canvas/render/renderSelectionOverlay`.
+      //
+      // ⚠️ The `[4, 4]` dash now spans FOUR CELLS rather than four screen
+      // pixels, so the ants read as a coarse chase until D5's SVG replaces
+      // them. Kept, degenerate and visible, rather than deleted — the story's
+      // job is to show what the surface stacks, and hiding the regression
+      // would hide exactly what tasks 03/04 exist to fix.
       ctx.lineWidth = 1;
       ctx.strokeStyle = "#00d9ff";
       ctx.setLineDash([4, 4]);
-      ctx.strokeRect(
-        box.x * ZOOM + 0.5,
-        box.y * ZOOM + 0.5,
-        box.width * ZOOM,
-        box.height * ZOOM,
-      );
+      ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.width, box.height);
       ctx.strokeStyle = "#001018";
       ctx.lineDashOffset = 4;
-      ctx.strokeRect(
-        box.x * ZOOM + 0.5,
-        box.y * ZOOM + 0.5,
-        box.width * ZOOM,
-        box.height * ZOOM,
-      );
+      ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.width, box.height);
       ctx.setLineDash([]);
       ctx.lineDashOffset = 0;
     },
@@ -407,7 +423,7 @@ export const FrameOverlay: Story = {
       ctx.strokeStyle = "rgba(139, 92, 246, 0.7)";
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
-      ctx.strokeRect(2 * ZOOM, 1 * ZOOM, GRID.width * ZOOM, GRID.height * ZOOM);
+      ctx.strokeRect(2, 1, GRID.width, GRID.height);
       ctx.setLineDash([]);
     },
   },
@@ -473,8 +489,8 @@ export const ReflectionGuides: Story = {
       ];
       for (const [x1, y1, x2, y2] of segments) {
         ctx.beginPath();
-        ctx.moveTo(x1 * ZOOM, y1 * ZOOM);
-        ctx.lineTo(x2 * ZOOM, y2 * ZOOM);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
         ctx.setLineDash([4, 4]);
 
         ctx.lineWidth = 2;
