@@ -29,7 +29,7 @@
 // (`enforceActions: "always"` + the dev-only strictness flags) before any
 // observable in this tree is created.
 import "./configure";
-import { computed, makeObservable, runInAction } from "mobx";
+import { computed, makeObservable, reaction, runInAction } from "mobx";
 import { SessionStore } from "./session/SessionStore";
 import {
   AutoSaveController,
@@ -63,6 +63,7 @@ import { ReferenceUIStore } from "./ui/ReferenceUIStore";
 import { CanvasInteractionStore } from "./ui/CanvasInteractionStore";
 import { CanvasViewsUIStore } from "./ui/CanvasViewsUIStore";
 import { LightingViewsUIStore } from "./ui/LightingViewsUIStore";
+import { ReflectionUIStore } from "./ui/ReflectionUIStore";
 import { editorHistory } from "./history/editorHistory";
 import { createSnapshotCommand } from "./history/commands";
 import type { Command, SnapshotHost } from "./history/commands";
@@ -399,6 +400,23 @@ export class ApplicationStore {
    */
   readonly lightingViews: LightingViewsUIStore;
 
+  /**
+   * The reflection tool's guide lines and in-flight draft (reflection-tool
+   * task 03). Session-only: not in `toPersistedUIState()`, not in history,
+   * never schedules a save. No dependencies in either direction, like
+   * `canvasViews`.
+   *
+   * Lines outlive layer/frame/object switches and are cleared only when a
+   * DIFFERENT project is installed — see `disposeReflectionReaction` below.
+   */
+  readonly reflection: ReflectionUIStore;
+
+  /**
+   * Stops the `loadGeneration` → `reflection.clear()` reaction; run by
+   * {@link ApplicationStore.dispose}.
+   */
+  private readonly disposeReflectionReaction: () => void;
+
   readonly options: Readonly<{
     api: unknown;
     autoSaveEnabled: boolean;
@@ -506,6 +524,16 @@ export class ApplicationStore {
     this.canvasViews = new CanvasViewsUIStore();
     // Lighting-preview-split task 01: same reasoning as `canvasViews`.
     this.lightingViews = new LightingViewsUIStore();
+    // Reflection-tool task 03: same reasoning as `canvasViews`.
+    this.reflection = new ReflectionUIStore();
+    // Locked D6 — guides are cleared when a DIFFERENT project is installed.
+    // `DomainStore.loadGeneration` is bumped once per fresh install (init /
+    // load / create / switch / delete) and NOT by `adoptProject`, which also
+    // runs on snapshot undo/redo; hooking that would wipe the guides on undo.
+    this.disposeReflectionReaction = reaction(
+      () => this.domain.loadGeneration,
+      () => this.reflection.clear(),
+    );
     // ── task 38: the NATIVE sinks — the hosted `uiState` replaces Zustand ──
     //
     // During the bridge era these wrote the Zustand SOURCE and the bridge
@@ -1664,6 +1692,7 @@ export class ApplicationStore {
 
   dispose(): void {
     this.autoSave?.dispose();
+    this.disposeReflectionReaction();
     this.syncClient?.dispose();
     this.ui.dispose();
     this.referenceUI.dispose();
