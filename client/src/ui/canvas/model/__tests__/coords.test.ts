@@ -212,7 +212,94 @@ describe('screenToPixel — "origin" mode', () => {
   });
 });
 
-describe("the two modes are genuinely different rules", () => {
+describe('screenToPixel — "corner" mode', () => {
+  it("ROUNDS to the nearest cell corner, unlike pixel mode's floor", () => {
+    // 40 screen px per cell. 0..19 rounds to corner 0, 20..59 to corner 1.
+    expect(screenToPixel(0, 0, rect, geom(), "corner")).toEqual({ x: 0, y: 0 });
+    expect(screenToPixel(19, 19, rect, geom(), "corner")).toEqual({
+      x: 0,
+      y: 0,
+    });
+    expect(screenToPixel(21, 21, rect, geom(), "corner")).toEqual({
+      x: 1,
+      y: 1,
+    });
+    expect(screenToPixel(50, 90, rect, geom(), "corner")).toEqual({
+      x: 1,
+      y: 2,
+    });
+  });
+
+  it("reaches the FAR corner — the lattice is inclusive of gridWidth/Height", () => {
+    // "pixel" mode's last cell is 3; the corner lattice runs 0..4.
+    expect(screenToPixel(160, 160, rect, geom(), "corner")).toEqual({
+      x: 4,
+      y: 4,
+    });
+    expect(screenToPixel(145, 145, rect, geom(), "corner")).toEqual({
+      x: 4,
+      y: 4,
+    });
+  });
+
+  it("CLAMPS out-of-range points instead of returning null", () => {
+    // A drag past the edge must land ON the edge, not be swallowed.
+    expect(screenToPixel(-500, -500, rect, geom(), "corner")).toEqual({
+      x: 0,
+      y: 0,
+    });
+    expect(screenToPixel(9999, 9999, rect, geom(), "corner")).toEqual({
+      x: 4,
+      y: 4,
+    });
+    expect(screenToPixel(-40, 200, rect, geom(), "corner")).toEqual({
+      x: 0,
+      y: 4,
+    });
+  });
+
+  it("returns VARIANT-LOCAL corners while editing a variant", () => {
+    const variant = geom({
+      editingVariant: true,
+      gridWidth: 2,
+      gridHeight: 2,
+      variantOffset: { x: 1, y: 1 },
+      viewMinX: 0,
+      viewMinY: 0,
+      viewWidth: 4,
+      viewHeight: 4,
+    });
+    // Screen (40,40) is world corner (1,1), which is variant corner (0,0).
+    expect(screenToPixel(40, 40, rect, variant, "corner")).toEqual({
+      x: 0,
+      y: 0,
+    });
+    expect(screenToPixel(80, 80, rect, variant, "corner")).toEqual({
+      x: 1,
+      y: 1,
+    });
+    // World corner (3,3) is variant corner (2,2) — the far edge of a 2×2 grid.
+    expect(screenToPixel(120, 120, rect, variant, "corner")).toEqual({
+      x: 2,
+      y: 2,
+    });
+    // World (0,0) would be variant corner (-1,-1); it clamps to (0,0).
+    expect(screenToPixel(0, 0, rect, variant, "corner")).toEqual({
+      x: 0,
+      y: 0,
+    });
+  });
+
+  it("returns null for a degenerate rect", () => {
+    const dead = { left: 0, top: 0, width: 0, height: 0 };
+    expect(screenToPixel(10, 10, dead, geom(), "corner")).toBeNull();
+    expect(
+      screenToPixel(10, 10, { ...rect, width: 0 }, geom(), "corner"),
+    ).toBeNull();
+  });
+});
+
+describe("the three modes are genuinely different rules", () => {
   it("disagree on the same point: whole-cell floor vs half-cell round", () => {
     expect(screenToPixel(30, 30, rect, geom(), "pixel")).toEqual({
       x: 0,
