@@ -1,8 +1,8 @@
 # HANDOFF — Canvas rendering performance for large editing surfaces
 
-**Current position:** W3 DONE — W4 (task 05) next. Owner deferred ALL visual checks to one pass after W6.
+**Current position:** W4 DONE — W5 (task 06) next. Owner deferred ALL visual checks to one pass after W6.
 **Branch:** `feat/03-reflection-tool`
-**Last commit:** `72856b8`
+**Last commit:** `221b58f`
 
 Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 `feat/03-reflection-tool`, working tree clean.
@@ -14,7 +14,7 @@ Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 | W1 | 01 | DONE | 2026-08-30 | `cacfafe` | typecheck 0 · vitest **132 files / 2269 tests passed** · lint:boundaries OK (5/5) |
 | W2 | 02, 03 | **DONE** | 2026-08-30 | `5b2401d` `fd871c9` (03) · `cf4c7dd` `23ac19c` `c2963cf` (02) | typecheck 0 · vitest **134 files / 2330 passed** · lint 0 · boundaries 0 · `lint:css` exit 2 **pre-existing, see below** |
 | W3 | 04 | **DONE** | 2026-08-30 | `75d3cf7` `72856b8` | typecheck 0 · vitest **134 files / 2353 passed** · lint 0 · lint:css no new · boundaries 0 · storybook 0 · **8 visual checks deferred** |
-| W4 | 05 | TODO | | | |
+| W4 | 05 | **DONE** | 2026-08-30 | `82ae19a` `221b58f` | typecheck 0 · vitest **134 files / 2365 passed** · lint 0 · boundaries 0 · **10 visual checks owed, incl. R4** |
 | W5 | 06 | TODO | | | |
 | W6 | 07 | TODO | | | |
 | W7 | 08 | TODO | | | |
@@ -191,6 +191,85 @@ chromedriver). Still owed, including **the Landscapes KB-not-MB memory measureme
 headline claim of this task, entirely unmeasured.** Static substitutes that did pass:
 `coords.test.ts` 21/21 unmodified; the R1 wheel-pan test drives a real `WheelEvent` and
 asserts the clamp against full content size; the D1 variant-edit sizing test.
+
+## W4 DONE — coordinator-verified
+
+Commits `82ae19a`, `221b58f`. Exactly the 6 authorized files (1,900 insertions / 1,133
+deletions). `CanvasSurface.tsx` untouched.
+
+```
+typecheck        -> exit 0
+vitest run       -> Test Files  134 passed (134) · Tests  2365 passed (2365)   69.09s
+lint             -> 0 errors, 65 warnings          exit 0
+lint:boundaries  -> OK — all 5 boundary rules hold  exit 0
+```
+Test delta reconciles exactly: **−16** (`renderScene.test.ts`, deleted per D10) **+28** (new
+`CanvasContainer.dom.test.tsx` — the container had NO test file before). No pre-existing test
+changed status. Corpus digests unchanged. No lockfile.
+
+**Coordinator-verified claims** (each checked by hand, not taken on report):
+- Transitional alias **deleted** — `grep "const canvasWidth"` in the container returns
+  nothing, and no stale `* zoom` painting survives. **This is what un-clips the artwork.**
+- Raster reflection painter **retired** — the only `drawReflectionLines` /
+  `reflectionCanvasRef` hits left are comments explaining the removal (`:1696`, `:3407`).
+- `renderScene.ts` and its test **deleted** (D10); `VARIANT_EDIT_REGULAR_DIM = 0.5` and
+  `VARIANT_EDIT_OTHER_DIM = 0.7` preserved first in `canvasTokens.ts:130,132`.
+- **`pixelDirty` NOT consumed** — the only mention is a comment saying so. Correct: task 07.
+
+**Painting strategy: `ImageData` + `putImageData`.** Measured on the JS half at the
+Landscapes grid: `rgba()` string-building **1.40 ms** vs `ImageData` indices **0.51 ms** per
+full repaint — 2.7x, before counting the 57,344 `fillRect` calls the string path also makes.
+Notably this does **not** add to R4: `putImageData` replaces rather than composites, which is
+safe by construction since a pixel grid holds exactly one cell per (x,y) — which is why
+variant sub-layers each get their own canvas. R4 therefore comes purely from CSS-opacity
+stacking (D4), not from the buffer.
+
+### ⚠️ ONE FUNCTIONAL GAP — the hover marker has NO OUTLINE (fill only)
+
+Deliberate, documented at `CanvasContainer.tsx:3258-3273`, and **owed as follow-up work**.
+The raster half is gone (at 1:1 every edge is zero-length and renders nothing) and
+`CanvasSurface` accepts the `hoverOutline` prop, but it is not wired.
+
+**Why deferring was the right call:** the hovered cell lives in `hoverPixelRef`, a **ref**,
+and that is load-bearing. `setHoverPixel` is called from `handleTouchMove`, so a `useState`
+there re-renders the container mid-gesture — the **measured 2026-08-28 "unable to slide and
+draw" regression**. The reflection guides could take the vector path because they already had
+a bounded ~12 fps ticker; a 120 Hz pointer stream has no such budget. Trading a silent visual
+gap for a known gesture regression would have been the worse deal.
+
+**Net effect for the user: the hover marker shows its fill but no outline.** Not a blocker,
+but a real visual change that needs an owner decision (throttled state write? rAF-coalesced
+publish? accept fill-only?).
+
+### Task 05 deviations (accepted)
+
+1. **A synthetic `::background` layer id** in `layerIds` — the checkerboard must sit behind
+   the artwork and DOM order is z-order. It is one more *string*, so R8 is intact and
+   boundaries are green. **Task 06's CSS DIV removes it.**
+2. **Grid cache deleted; grid moved to the SVG `grid` prop** — at 1:1 `strokeGrid` is a flat
+   grey wash over the whole canvas (MASTER §4's first named silent failure), so keeping it
+   was not an option. The variant-edit grid is emitted in the container because
+   `gridOverlayPathData` takes no offset; the colour rule stays owned by `gridOverlayAttrs`.
+3. **Lasso, marching ants and origin cross moved to their SVG props** (same 1:1 degeneracy,
+   R3); their canvas painters were removed from the container.
+4. The hover-outline deferral above.
+
+⚠️ Deviations 2 and 3 mean **four overlays moved canvas→SVG in W4 rather than W5/W6**. Their
+failure mode is *silent* (render nothing, or a grey wash), which is exactly what a green test
+suite cannot rule out — **the post-W6 visual pass must look at the grid, lasso, marching ants
+and origin cross specifically.**
+
+### W4's 10 manual checks — ALL OWED, none claimed
+
+Statically supported: layer count/order/1:1 sizing, `display:none` targeting and stale-clear
+on hide, `layerOpacity` against D4's table in all three focus modes, onion-as-outline with a
+negative control (3x3 solid block → **8** cells onion vs **9** transparent), variant offset
+placement and view-union expansion, both split panes mounting with independent ref maps.
+
+**Check 5 — the R4 semi-transparent side-by-side — CANNOT be done without a browser and is
+the owner's sign-off evidence.** Also needing eyes: occlusion when drawing on a middle layer,
+move-tool preview, undo/redo leaving no stale pixels, swap/close and camera independence, and
+the Landscapes perf observation (only the 2.7x JS-half microbenchmark was measurable).
 
 ## W3 DONE — coordinator-verified
 
