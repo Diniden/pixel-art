@@ -8,8 +8,9 @@
  * `Canvas.tsx` was 3,062 lines with eleven responsibilities and **47 store
  * members in a single destructure** — the largest coupling site in the
  * application. Tasks 30, 31 and 32 took it apart. What survives here is the
- * markup: six `<canvas>` elements, the pan/zoom transform wrapper, and the
- * cursor. Roughly 15 props, every one a plain value or a callback.
+ * markup: the per-layer canvas stack, the raster overlays, the SVG chrome, the
+ * pan/zoom transform wrapper, and the cursor. Every prop is a plain value, an
+ * id, a ref or a callback.
  *
  * A component that took all 47 members as props would have had a ~52-prop
  * interface and would have been a purification in name only. That is precisely
@@ -18,14 +19,14 @@
  *
  * ── What "pure" means here, concretely ────────────────────────────────────
  *
- * No store, no MobX, no API, no `useContext`, no `observer()`. ESLint (task
- * 05) enforces every one of those against `src/ui/**`, and the rule is
+ * No store, no MobX, no API, no `useContext`, no `observer()`. ESLint (refresh
+ * task 05) enforces every one of those against `src/ui/**`, and the rule is
  * probe-verified rather than assumed — a `no-restricted-imports` rule that
  * matches nothing looks exactly like a rule that passes.
  *
- * The practical consequence is the story file next door: all six stories
- * mount this component with **no store provider at all**. That is the proof
- * the boundary holds, and it is task 32's second gate.
+ * The practical consequence is the story file next door: every story mounts
+ * this component with **no store provider at all**. That is the proof the
+ * boundary holds, and it is task 32's second gate.
  *
  * ── ⚠️ NO PIXEL GRID CROSSES THIS BOUNDARY ────────────────────────────────
  *
@@ -33,48 +34,113 @@
  * never may be. The owner's real project holds 300,249 cells; `layer.pixels`
  * is `observableRef` exactly so MobX never looks inside one (R2). Grids reach
  * the canvas through the imperative draw call the container drives from a
- * `reaction` on `pixelVersion` — through `canvasRef.current`, not through
- * React. A `PixelData[][]` prop here would defeat the whole arrangement and
- * present as "MobX is slow".
+ * `reaction` on `pixelVersion` — through a canvas element, not through React.
+ * A `PixelData[][]` prop here would defeat the whole arrangement and present
+ * as "MobX is slow".
+ *
+ * **This is the trap of the per-layer stack (plan 05, task 04, risk R8).** The
+ * stack needs one `<canvas>` per layer, and the obvious way to get that is to
+ * pass the layers in. It must not happen. What crosses instead is:
+ *
+ *   - `layerIds`            — `readonly string[]`, bottom → top. IDS ONLY.
+ *   - `registerLayerCanvas` — a callback the container stores refs through.
+ *   - `layerOpacity`        — `Record<string, number>`, a CSS opacity (D4).
+ *   - `layerVisible`        — `Record<string, boolean>`.
+ *
+ * Ids, numbers, booleans and callbacks. No domain object, in any shape, ever.
+ * ESLint's boundary rules see *imports*, not prop TYPES — a `layers: Layer[]`
+ * prop would pass `lint:boundaries` and still be the regression this file
+ * exists to prevent. That check is on the reviewer.
  *
  * This component therefore receives REFS and paints nothing itself. It is a
  * layout and an event surface.
  *
- * ── The six canvases, and which of them are conditionally mounted ────────
+ * ── The stack, top to bottom, inside `.canvas__frame` ─────────────────────
  *
- * 1. `canvasRef`                  the editable surface — always present, and
- *                                 the only one that takes pointer events.
- * 2. `overlayCanvasRef`           reference-image trace overlay.
- * 3. `frameOverlayCanvasRef`      onion-skin of another frame (#8).
- * 4. `frameTraceOverlayCanvasRef` the nudgeable frame-trace overlay (#9).
- * 5. `hoverCanvasRef`             the pencil/mouse hover marker.
- * 6. `reflectionCanvasRef`        the reflection tool's animated guide lines.
+ * DOM order IS z-order here, deliberately: every absolutely-positioned block
+ * shares `var(--z-canvas-overlay)`, so the LATER sibling wins. Do not reach
+ * for a higher numeric z-index — it is redundant here and a stylelint error.
  *
- * The reflection guides get their own always-mounted canvas for the same
- * reason the hover marker does, only more sharply: they ANIMATE. The dashes
- * crawl at ~12 fps for as long as any line exists, and routing that through
- * the main `render` would re-rasterise 300,249 cells several times a second
- * while the user is not even drawing. On a dedicated canvas each tick repaints
- * a handful of line segments and the artwork underneath is never touched. It
- * is mounted unconditionally (rather than behind a `hasReflectionLines` flag)
- * so the painter's `invalidate()` always has a context to draw into, exactly
- * as the hover marker's does.
+ *   SVG chrome            grid, brush/hover outlines, lasso, marching ants,
+ *                         origin cross, reflection guides — vectors (D5)
+ *   reflection canvas     the animated guides' raster surface (see below)
+ *   frame trace overlay   raster (D6)
+ *   frame overlay         raster (D6)
+ *   reference overlay     raster (D6)
+ *   hover canvas          raster — the hover/brush FILL only; the OUTLINE
+ *                         moved to the SVG above (D5/D6 split)
+ *   pointer surface       `canvasRef` — see below
+ *   layer canvases        one per layer, bottom → top
+ *   [background DIV]      task 06 — the slot is left empty on purpose
  *
- * The hover marker gets its OWN canvas rather than being drawn into the main
- * render pass, and that is a performance decision, not a tidiness one. The
- * main `render` in `CanvasContainer` repaints every visible cell of every
- * visible layer with `fillRect`; on the owner's real project that is a
- * six-figure loop. An Apple Pencil emits hover samples at the display's
- * refresh rate whether or not it ever touches down, so routing the marker
- * through that pass would re-rasterise the whole sprite continuously while the
- * user's hand merely moved NEAR the screen. On its own canvas the marker
- * repaints a few dozen cells and the artwork underneath is not touched.
+ * ── ⚠️ `canvasRef` IS THE POINTER SURFACE. DO NOT "OPTIMISE" IT AWAY ──────
  *
- * The three overlays mount only when active, and their mutual exclusions are
- * preserved verbatim from `Canvas.tsx:2012-2039`: the frame overlay hides
- * while EITHER trace mode is on, because two semi-transparent onion skins
- * stacked on one sprite are unreadable. Passing the flags in rather than
- * deriving them keeps that policy where the store data lives.
+ * It carries every pointer/touch handler AND it is the element
+ * `ui/canvas/model/coords.ts`'s `screenToPixel` measures with
+ * `getBoundingClientRect()` to turn a client coordinate into a cell. That
+ * mapping goes through the measured rect's RATIOS — never through `zoom` —
+ * precisely so the CSS transform is picked up for free.
+ *
+ * Once task 05 moves the artwork onto the per-layer canvases, this element may
+ * well end up with nothing painted into it at all. **It still must exist, at
+ * exactly `cellWidth × cellHeight`, and it must stay above the layer stack.**
+ * A future reader who deletes "the empty canvas" breaks BOTH input and every
+ * coordinate mapping in the editor, and does so silently — strokes simply land
+ * on the wrong cell, or nowhere.
+ *
+ * ── The raster overlays, and which of them are conditionally mounted ──────
+ *
+ * The hover marker gets its OWN canvas rather than a pass in the main render,
+ * and that is a performance decision, not a tidiness one. The main render in
+ * `CanvasContainer` repaints every visible cell of every visible layer; on the
+ * owner's real project that is a six-figure loop. An Apple Pencil emits hover
+ * samples at the display's refresh rate whether or not it ever touches down,
+ * so routing the marker through that pass would re-rasterise the whole sprite
+ * continuously while the user's hand merely moved NEAR the screen. On its own
+ * canvas the marker repaints a few dozen cells and the artwork is untouched.
+ * It keeps the FILL; its outline is now `hoverOutline` in the SVG.
+ *
+ * The reflection canvas is likewise always mounted so the dash ticker's
+ * `invalidate()` always has a context. It is still painted by
+ * `CanvasContainer`'s `renderReflection`; the SVG `reflectionGuides` prop is
+ * the vector replacement, and the canvas may be removed once the container
+ * stops drawing into it (task 05). Removing it from here first would leave
+ * that painter writing into `null`.
+ *
+ * The three trace/onion overlays mount only when active, and their mutual
+ * exclusions are preserved verbatim from `Canvas.tsx:2012-2039`: the frame
+ * overlay hides while EITHER trace mode is on, because two semi-transparent
+ * onion skins stacked on one sprite are unreadable. Passing the flags in
+ * rather than deriving them keeps that policy where the store data lives.
+ *
+ * ── ⚠️ THE ORIGIN CROSS IS THE ONE OVERLAY WITH A TRANSFORM OF ITS OWN ────
+ *
+ * `vector-effect: non-scaling-stroke` exempts a stroke's WIDTH from the
+ * transform. It does not exempt GEOMETRY. `ORIGIN_CROSS_SIZE = 12` emitted as
+ * 12 user units would render 600 screen px at zoom 50 — the original bug in
+ * new clothes. So `originCrossOverlay` returns the centre in CELL space plus
+ * arm length and radius in SCREEN px, and this component wraps them in
+ *
+ *     <g transform="translate(cx cy) scale(1 / combinedScale)">
+ *
+ * inside which one user unit is one screen pixel again. Every other overlay
+ * spreads straight onto a `<path>`; this one cannot. See
+ * `ui/canvas/svg/chromeOverlay.ts`'s header and `docs/05-canvas-perf/HANDOFF.md`
+ * finding 1.
+ *
+ * ── Layer count is unbounded ──────────────────────────────────────────────
+ *
+ * `LayerStore` caps nothing. Memory grows linearly in the layer count — at 1:1
+ * that is ~3 KB per layer for Base Unit and ~224 KB per layer for Landscapes,
+ * which is affordable, but it is linear and worth remembering before anyone
+ * adds a "hidden layers still get a canvas" behaviour.
+ *
+ * Canvases are keyed by `layer.id`, which is stable across add, delete and
+ * reorder (`types/domain.ts:25`; `LayerStore.moveLayer` and friends all
+ * preserve ids). React's keyed reconciliation therefore does the pooling: a
+ * reorder MOVES the DOM node rather than recreating it, so the painted bitmap
+ * survives. **Do not build a manual pool.** `registerLayerCanvas(id, null)`
+ * fires on unmount so the container can drop stale refs.
  */
 
 import type {
@@ -84,11 +150,21 @@ import type {
   RefObject,
   TouchEvent,
 } from "react";
+import type {
+  OriginCrossOverlay,
+  ReflectionGuideOverlay,
+  SvgPathSpec,
+} from "@/ui/canvas/svg/chromeOverlay";
 import "./CanvasSurface.css";
 
 export interface CanvasSurfaceProps {
   /* ── element refs (the imperative renderers' only handle) ──────────────── */
-  /** The editable surface. */
+  /**
+   * The POINTER SURFACE. See the header: it carries every input handler and is
+   * the element `screenToPixel` measures. It must stay mounted at
+   * `cellWidth × cellHeight` above the layer stack even if nothing paints into
+   * it once task 05 lands.
+   */
   canvasRef: RefObject<HTMLCanvasElement | null>;
   /** Reference-image trace overlay. */
   overlayCanvasRef: RefObject<HTMLCanvasElement | null>;
@@ -97,23 +173,28 @@ export interface CanvasSurfaceProps {
   /** Frame-trace overlay (#9). */
   frameTraceOverlayCanvasRef: RefObject<HTMLCanvasElement | null>;
   /**
-   * The hover marker's surface. See the header for why it is separate.
+   * The hover marker's FILL surface. See the header for why it is separate.
    *
    * Always mounted, unlike the three overlays above: hover can begin at any
    * moment without a mode being entered first, and mounting a canvas in
    * response to the first sample would drop that sample while React committed.
+   *
+   * ⚠️ Its OUTLINE moved to `hoverOutline` in the SVG chrome (D5) — at 1:1 the
+   * canvas painter's edges are zero-length and render nothing at all.
    */
   hoverCanvasRef: RefObject<HTMLCanvasElement | null>;
   /**
-   * The reflection tool's animated guide lines. See the header for why the
-   * dashes get a surface of their own rather than a pass in the main `render`.
+   * The reflection tool's animated guide lines, as a raster surface.
    *
    * ⚠️ OPTIONAL, deliberately (plan 03, locked decision D9). The canvas is
    * mounted unconditionally, but the PROP is not required, so this component
    * and `CanvasContainer` both compile before the container is taught to pass
-   * a ref. When it is absent the canvas still exists and simply stays blank —
-   * nothing paints into it. Do not tighten this to a required prop without
-   * checking every call site; there is no behavioural gain in doing so.
+   * a ref. When it is absent the canvas still exists and simply stays blank.
+   *
+   * ⚠️ SUPERSEDED BUT NOT YET UNUSED. `reflectionGuides` below is the vector
+   * replacement (D5). `CanvasContainer.renderReflection` still paints into this
+   * canvas, so it stays mounted until task 05 stops that painter. Do not remove
+   * it before then — the painter would be writing into `null`.
    */
   reflectionCanvasRef?: RefObject<HTMLCanvasElement | null>;
   /**
@@ -124,6 +205,43 @@ export interface CanvasSurfaceProps {
    * does not steal two-finger gestures for page scrolling.
    */
   containerRef: RefObject<HTMLDivElement | null>;
+
+  /* ── the layer stack (IDS ONLY — see the header) ───────────────────────── */
+  /**
+   * Layer ids, **bottom → top**, one `<canvas>` each.
+   *
+   * ⚠️ Ids. Never layer objects, never pixels, never a frame. The whole R8
+   * mitigation is that this is a `string[]`.
+   */
+  layerIds?: readonly string[];
+  /**
+   * Register (or, with `null`, unregister) a layer's canvas element by id.
+   *
+   * The container keeps the map and paints imperatively, exactly as it does
+   * today for the single surface. Called with the element on mount and with
+   * `null` on unmount, so stale refs can be dropped.
+   */
+  registerLayerCanvas?: (id: string, el: HTMLCanvasElement | null) => void;
+  /**
+   * Per-layer CSS `opacity`, keyed by layer id (D4). Missing id → 1.
+   *
+   * This is where `layerFocusMode`'s dimming lives now: `normal` → 1,
+   * `transparent` → 0.5, variant-other → 0.7, computed by the container from
+   * the constants in `ui/theme/canvasTokens`. It is a compositor property, not
+   * a per-cell alpha multiply in a six-figure loop.
+   *
+   * ⚠️ `onion` is NOT an opacity. It is an outline-only mode driven by
+   * `isOutlineCell`'s neighbour tests and stays a PAINT-time decision in the
+   * container. Do not try to express it here.
+   */
+  layerOpacity?: Readonly<Record<string, number>>;
+  /**
+   * Per-layer visibility, keyed by layer id. Missing id → visible.
+   *
+   * Applied as `display: none`, which keeps the element (and therefore its
+   * painted bitmap and its registered ref) alive across a toggle.
+   */
+  layerVisible?: Readonly<Record<string, boolean>>;
 
   /* ── dimensions ────────────────────────────────────────────────────────── */
   /**
@@ -164,6 +282,9 @@ export interface CanvasSurfaceProps {
    * per-pane gesture scale, and because they already multiplied, applying the
    * product here keeps the on-screen content box exactly the size every saved
    * `panOffset` was recorded against — so no project needs migrating.
+   *
+   * It is ALSO what the origin cross's counter-scale divides by. See the
+   * header.
    */
   combinedScale: number;
 
@@ -171,10 +292,52 @@ export interface CanvasSurfaceProps {
   /** A CSS `cursor` value. Resolved by the container from the active tool. */
   cursor: string;
 
-  /* ── which overlays are mounted ────────────────────────────────────────── */
+  /* ── which raster overlays are mounted ─────────────────────────────────── */
   showReferenceOverlay: boolean;
   showFrameOverlay: boolean;
   showFrameTraceOverlay: boolean;
+
+  /* ── the SVG chrome (D5) ───────────────────────────────────────────────── */
+  /**
+   * The pixel grid, from `ui/canvas/svg/gridOverlay`'s `gridOverlayPath`.
+   *
+   * Path DATA — a `d` string plus SVG attributes. That is a string and a bag
+   * of primitives, not a domain object, and it is O(grid perimeter) rather
+   * than O(cells): a 256×224 grid is 482 line segments in one `d`, not 57,344
+   * of anything.
+   */
+  grid?: SvgPathSpec | null;
+  /** The brush footprint's outline, from `brushOutlineOverlay`. */
+  brushOutline?: SvgPathSpec | null;
+  /**
+   * The hover marker's outer perimeter, from `hoverOutlineOverlay`.
+   *
+   * ⚠️ This is the overlay that rendered NOTHING after task 02 — at 1:1 every
+   * edge of `strokeHoverOutline` is zero-length and `lineCap: "butt"` draws
+   * none of them. Silent failure, no error. If it is invisible again, this is
+   * the first prop to check.
+   */
+  hoverOutline?: SvgPathSpec | null;
+  /** The lasso rubber band, from `lassoOverlay`. */
+  lasso?: SvgPathSpec | null;
+  /**
+   * The marching-ants selection box, from `marchingAntsOverlay`: the same
+   * rectangle stroked twice, half a dash period out of phase, which is what
+   * reads as motion.
+   */
+  marchingAnts?: { outer: SvgPathSpec; inner: SvgPathSpec } | null;
+  /**
+   * The origin cross, from `originCrossOverlay`.
+   *
+   * ⚠️ The only overlay that is NOT a path spec, and the only one this
+   * component applies a transform to. See the header.
+   */
+  originCross?: OriginCrossOverlay | null;
+  /**
+   * The reflection guides, from `reflectionGuideOverlays` — the vector
+   * replacement for `reflectionCanvasRef`'s raster surface.
+   */
+  reflectionGuides?: readonly ReflectionGuideOverlay[] | null;
 
   /* ── pointer events (the hooks' handlers, passed straight through) ─────── */
   onMouseDown: (e: MouseEvent<HTMLCanvasElement>) => void;
@@ -197,6 +360,23 @@ export interface CanvasSurfaceProps {
 /** `pointer-events: none` is also in CSS; kept inline as `Canvas.tsx` had it. */
 const OVERLAY_STYLE: CSSProperties = { pointerEvents: "none" };
 
+/** Nothing to draw. Rendering an empty `d` is legal but pointlessly noisy. */
+function hasPath(spec: SvgPathSpec | null | undefined): spec is SvgPathSpec {
+  return !!spec && spec.d.length > 0;
+}
+
+/**
+ * One stroked path from a task-03 overlay spec.
+ *
+ * The spec's `attrs` are already named as the SVG attributes they become
+ * (`stroke-width`, `vector-effect`, …) so they spread verbatim. That is why
+ * `ui/canvas/svg/` emits data instead of JSX: the geometry stays pure and
+ * testable, and the rendering stays here.
+ */
+function OverlayPath({ spec }: { spec: SvgPathSpec }) {
+  return <path d={spec.d} {...spec.attrs} />;
+}
+
 export function CanvasSurface({
   canvasRef,
   overlayCanvasRef,
@@ -205,6 +385,10 @@ export function CanvasSurface({
   hoverCanvasRef,
   reflectionCanvasRef,
   containerRef,
+  layerIds,
+  registerLayerCanvas,
+  layerOpacity,
+  layerVisible,
   cellWidth,
   cellHeight,
   viewPanOffset,
@@ -213,6 +397,13 @@ export function CanvasSurface({
   showReferenceOverlay,
   showFrameOverlay,
   showFrameTraceOverlay,
+  grid,
+  brushOutline,
+  hoverOutline,
+  lasso,
+  marchingAnts,
+  originCross,
+  reflectionGuides,
   onMouseDown,
   onMouseMove,
   onMouseUp,
@@ -222,6 +413,19 @@ export function CanvasSurface({
   onTouchEnd,
   viewControls,
 }: CanvasSurfaceProps) {
+  // The counter-scale for screen-constant decorations. Guarded because a zero
+  // or missing scale would emit `scale(Infinity)` and blank the whole overlay.
+  const inverseScale = combinedScale > 0 ? 1 / combinedScale : 1;
+
+  const hasSvgChrome =
+    hasPath(grid) ||
+    hasPath(brushOutline) ||
+    hasPath(hoverOutline) ||
+    hasPath(lasso) ||
+    !!marchingAnts ||
+    !!originCross ||
+    (reflectionGuides?.length ?? 0) > 0;
+
   return (
     <div className="canvas">
       <div className="canvas__viewport" ref={containerRef} tabIndex={0}>
@@ -239,6 +443,44 @@ export function CanvasSurface({
           }}
         >
           <div className="canvas__frame">
+            {/*
+              ── the background DIV's slot ───────────────────────────────────
+              TASK 06 builds the CSS checkerboard + grid DIV here, behind the
+              layer stack, on `--z-behind`. Deliberately EMPTY for now: the
+              checkerboard is still painted by the container's raster pass.
+            */}
+
+            {/*
+              ── the layer stack, bottom → top ───────────────────────────────
+              One 1:1 canvas per layer, keyed by `layer.id` so React's keyed
+              reconciliation MOVES nodes on reorder rather than recreating
+              them — that is the canvas pooling, and it is why no manual pool
+              exists. Below every overlay, by source order.
+            */}
+            <div className="canvas__layers" style={OVERLAY_STYLE}>
+              {layerIds?.map((id) => (
+                <canvas
+                  key={id}
+                  ref={(el) => registerLayerCanvas?.(id, el)}
+                  width={cellWidth}
+                  height={cellHeight}
+                  className="canvas__layer"
+                  data-layer-id={id}
+                  style={{
+                    // Missing id → fully opaque / visible: a layer the
+                    // container has not classified must never vanish.
+                    opacity: layerOpacity?.[id] ?? 1,
+                    display: layerVisible?.[id] === false ? "none" : "block",
+                  }}
+                />
+              ))}
+            </div>
+
+            {/*
+              ⚠️ THE POINTER SURFACE. Every handler and `getBoundingClientRect`
+              measurement goes through this element. It stays even if nothing
+              paints into it — see the header before deleting it.
+            */}
             <canvas
               ref={canvasRef}
               width={cellWidth}
@@ -257,6 +499,7 @@ export function CanvasSurface({
               onTouchEnd={onTouchEnd}
             />
 
+            {/* The hover marker's FILL. Its outline is in the SVG below. */}
             <canvas
               ref={hoverCanvasRef}
               width={cellWidth}
@@ -294,13 +537,11 @@ export function CanvasSurface({
             )}
 
             {/*
-              LAST in the frame, and that ordering is the whole point: these
-              siblings are absolutely positioned, so DOM order IS z-order.
-              The guides mark where every subsequent stroke will be mirrored,
-              which is useless information if the hover marker or a
-              semi-transparent trace/onion overlay can cover it. Mounted
-              unconditionally so the painter's `invalidate()` always has a
-              context, exactly as the hover marker is.
+              The reflection tool's RASTER guides. Superseded by the SVG
+              `reflectionGuides` below, but still painted by
+              `CanvasContainer.renderReflection`, so it stays mounted until
+              task 05 stops that painter. Mounted unconditionally so the dash
+              ticker's `invalidate()` always has a context.
             */}
             <canvas
               ref={reflectionCanvasRef}
@@ -309,6 +550,78 @@ export function CanvasSurface({
               className="canvas__overlay canvas__overlay--reflection"
               style={OVERLAY_STYLE}
             />
+
+            {/*
+              ── the SVG chrome (D5) ─────────────────────────────────────────
+              LAST in the frame, so it sits above every raster overlay by
+              source order. One SVG user unit = one grid cell, matching the
+              1:1 canvases; the element inherits `.canvas__layout`'s transform,
+              and `vector-effect: non-scaling-stroke` (set per-path by
+              `ui/canvas/svg/`) exempts the stroke WIDTHS from it. That pair is
+              what gives the grid, outlines, ants and guides back the
+              screen-constant hairline their canvas painters always documented
+              and which task 02 inverted.
+            */}
+            {hasSvgChrome && (
+              <svg
+                className="canvas__svg"
+                viewBox={`0 0 ${cellWidth} ${cellHeight}`}
+                width={cellWidth}
+                height={cellHeight}
+                style={OVERLAY_STYLE}
+                aria-hidden="true"
+                focusable="false"
+              >
+                {hasPath(grid) && (
+                  // The grid is the one path with a class of its own: it is
+                  // the only overlay a test or a devtools inspection needs to
+                  // pick out of the chrome by name.
+                  <path className="canvas__svg-grid" d={grid.d} {...grid.attrs} />
+                )}
+                {hasPath(brushOutline) && <OverlayPath spec={brushOutline} />}
+                {hasPath(hoverOutline) && <OverlayPath spec={hoverOutline} />}
+                {hasPath(lasso) && <OverlayPath spec={lasso} />}
+                {marchingAnts && hasPath(marchingAnts.outer) && (
+                  <>
+                    <OverlayPath spec={marchingAnts.outer} />
+                    <OverlayPath spec={marchingAnts.inner} />
+                  </>
+                )}
+                {reflectionGuides?.map((guide, i) => (
+                  // Index keys: the guides are a positional list rebuilt on
+                  // every phase tick and carry no identity of their own. There
+                  // is nothing to preserve across a reorder — these are
+                  // `<path>` elements with no state.
+                  <g key={i} className="canvas__svg-guide">
+                    <OverlayPath spec={guide.base} />
+                    <OverlayPath spec={guide.highlight} />
+                  </g>
+                ))}
+                {originCross && (
+                  /*
+                    ⚠️ THE COUNTER-SCALED GROUP. `non-scaling-stroke` exempts
+                    stroke WIDTH from the transform, not GEOMETRY — 12 user
+                    units would be 600 screen px at zoom 50. Translating to the
+                    centre in CELL space and then scaling by `1/combinedScale`
+                    makes one unit one SCREEN pixel inside this group, which is
+                    the space `armLength` and `radius` are already expressed
+                    in. HANDOFF finding 1; do not flatten this into a path.
+                  */
+                  <g
+                    className="canvas__svg-origin"
+                    transform={`translate(${originCross.centerX} ${originCross.centerY}) scale(${inverseScale})`}
+                  >
+                    <OverlayPath spec={originCross.arms} />
+                    <circle
+                      cx={originCross.circle.cx}
+                      cy={originCross.circle.cy}
+                      r={originCross.circle.r}
+                      {...originCross.circle.attrs}
+                    />
+                  </g>
+                )}
+              </svg>
+            )}
           </div>
         </div>
         {viewControls}

@@ -76,6 +76,93 @@
   cursor: crosshair;
 }
 
+/* The per-layer canvas stack (plan 05, task 04, decision D3).
+
+   One 1:1 `<canvas>` per layer lives in here, bottom → top in DOM order, and
+   the whole wrapper sits BELOW every overlay — again by source order, not by
+   z-index. `CanvasSurface` mounts it as the first child of `.canvas__frame`,
+   so it stacks under `.canvas__surface` (the pointer surface) and under all
+   the `.canvas__overlay` siblings that follow.
+
+   The placement is `.canvas__overlay`'s, including the 2px TRANSPARENT border
+   that compensates for `.canvas__surface`'s visible 2px one. That is not
+   cosmetic: a 2px drift puts a layer's artwork out of register with the
+   pointer surface that maps clicks to cells, so strokes land on the seam
+   between the wrong pixels. If that border ever changes, it changes here too.
+
+   No z-index. `.canvas__layers` has no `z-index` of its own on purpose — it
+   participates in normal source order beneath the overlays, which all share
+   `var(--z-canvas-overlay)`. Giving it a number would be redundant at best
+   and would invert the stack at worst. */
+.canvas__layers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+/* One layer's 1:1 canvas.
+
+   Stacked on top of each other inside `.canvas__layers`, so each is absolutely
+   positioned at the wrapper's origin — the wrapper already carries the 2px
+   border compensation, so these must NOT repeat it.
+
+   ⚠️ `image-rendering: pixelated` is LOAD-BEARING here, not belt-and-braces.
+   The backing store is `cellWidth x cellHeight` — one device pixel per sprite
+   pixel — and all magnification is the CSS transform on `.canvas__layout`.
+   Without this the browser bilinearly smooths a 24x32 bitmap up to 50x and
+   the artwork is a blur. Do not remove it. `crisp-edges` follows as the
+   Firefox spelling; the later declaration wins where both are understood. */
+.canvas__layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* The SVG chrome: grid, brush/hover outlines, lasso, marching ants, origin
+   cross and reflection guides (plan 05, decision D5).
+
+   Mounted LAST inside `.canvas__frame`, so it sits above every raster overlay
+   — source order again, and for the same reason the reflection canvas used
+   to: chrome that says where the next stroke lands is useless if a
+   semi-transparent onion skin can cover it.
+
+   Same absolute placement and same 2px transparent border as
+   `.canvas__overlay`, and for the sharper version of that reason: these are
+   VECTORS at one user unit per cell, so a 2px offset points every grid line
+   and every marching ant at the wrong seam between pixels.
+
+   `pointer-events: none` is doubled with an inline style, exactly as the
+   overlay canvases do it — the editable surface is the only element that may
+   take input, and an SVG stacked above everything would otherwise swallow
+   every stroke.
+
+   ⚠️ The `z-index` is the EXISTING `var(--z-canvas-overlay)`, the same one
+   every `.canvas__overlay` carries — NOT a new or higher number. It has to be
+   present rather than absent: without it this element would sit below the
+   overlay canvases despite coming after them, because a positioned element
+   with no z-index loses to one with `20`. With the SAME value the later
+   sibling wins, which is exactly the rule the `--reflection` comment below
+   spells out. A HIGHER number here would be both redundant and a stylelint
+   error, and there is no new token.
+
+   No `image-rendering`: it is meaningless on vector content. */
+.canvas__svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  overflow: visible;
+  z-index: var(--z-canvas-overlay);
+}
+
 /* Reference trace overlay canvases */
 .canvas__overlay {
   position: absolute;
