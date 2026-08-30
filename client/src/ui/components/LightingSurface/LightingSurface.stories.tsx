@@ -35,7 +35,9 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { fn } from "storybook/test";
 import { LightingSurface } from "./LightingSurface";
+import { CanvasViewControls } from "../CanvasViewControls/CanvasViewControls";
 import type { LightingSurfaceProps } from "./LightingSurface";
 import {
   backgroundTheme,
@@ -258,6 +260,40 @@ export const Zoomed: Story = {
 export const Empty: Story = {
   args: {
     surface: { ...baseSurface, empty: true },
+    source: normalSource,
+    light: false,
+  },
+};
+
+/**
+ * The `viewControls` slot, with the REAL `CanvasViewControls` cluster — the one
+ * the lighting studio will render once the workspace splits.
+ *
+ * This story is the positioning proof and the reason it uses the real component
+ * rather than a stub: the cluster is `position: absolute; left/bottom:
+ * var(--space-3)`, so it lands in the bottom-left of `.lighting-canvas__viewport`
+ * only because that element is now `position: relative`. `CanvasViewControls` is
+ * a pure `ui/` component, so importing it here costs no store.
+ *
+ * ⚠️ It is a child of the VIEWPORT, not of `.lighting-canvas__surface` — the
+ * transform lives on `__surface`, and controls placed there would pan and scale
+ * with the sprite. Compare with `Zoomed`: the cluster must not move.
+ */
+export const WithViewControls: Story = {
+  args: {
+    surface: {
+      ...baseSurface,
+      viewControls: (
+        <CanvasViewControls
+          onResetView={fn()}
+          modeButton={{
+            kind: "open",
+            label: "Open Preview view",
+            onClick: fn(),
+          }}
+        />
+      ),
+    },
     source: normalSource,
     light: false,
   },

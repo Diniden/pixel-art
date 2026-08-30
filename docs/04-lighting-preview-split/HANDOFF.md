@@ -1,8 +1,8 @@
 # HANDOFF — Lighting Preview Split
 
-**Current position:** W1 not started
-**Branch:** (set by /plan-go)
-**Last commit:** (set by /plan-go)
+**Current position:** W1 IN PROGRESS
+**Branch:** `feat/02-split-canvas-render-modes`
+**Last commit:** `4216879`
 
 Planned 2026-08-29 from `feat/02-split-canvas-render-modes` @ `fe06e86` with a clean tree (two
 untracked docs entries from a parallel planning session: `docs/plans/reflection-tool.md`,
@@ -12,7 +12,7 @@ untracked docs entries from a parallel planning session: `docs/plans/reflection-
 
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
-| W1 | 01, 02, 03, 04 | TODO | | | |
+| W1 | 01, 02, 03, 04 | IN PROGRESS | 2026-08-29 | | |
 | W2 | 05 | TODO | | | |
 | W3 | 06 | TODO | | | |
 

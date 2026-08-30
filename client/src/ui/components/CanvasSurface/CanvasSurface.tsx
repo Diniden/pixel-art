@@ -40,7 +40,7 @@
  * This component therefore receives REFS and paints nothing itself. It is a
  * layout and an event surface.
  *
- * ── The five canvases, and which of them are conditionally mounted ───────
+ * ── The six canvases, and which of them are conditionally mounted ────────
  *
  * 1. `canvasRef`                  the editable surface — always present, and
  *                                 the only one that takes pointer events.
@@ -48,6 +48,17 @@
  * 3. `frameOverlayCanvasRef`      onion-skin of another frame (#8).
  * 4. `frameTraceOverlayCanvasRef` the nudgeable frame-trace overlay (#9).
  * 5. `hoverCanvasRef`             the pencil/mouse hover marker.
+ * 6. `reflectionCanvasRef`        the reflection tool's animated guide lines.
+ *
+ * The reflection guides get their own always-mounted canvas for the same
+ * reason the hover marker does, only more sharply: they ANIMATE. The dashes
+ * crawl at ~12 fps for as long as any line exists, and routing that through
+ * the main `render` would re-rasterise 300,249 cells several times a second
+ * while the user is not even drawing. On a dedicated canvas each tick repaints
+ * a handful of line segments and the artwork underneath is never touched. It
+ * is mounted unconditionally (rather than behind a `hasReflectionLines` flag)
+ * so the painter's `invalidate()` always has a context to draw into, exactly
+ * as the hover marker's does.
  *
  * The hover marker gets its OWN canvas rather than being drawn into the main
  * render pass, and that is a performance decision, not a tidiness one. The

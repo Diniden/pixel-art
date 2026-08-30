@@ -40,10 +40,28 @@
  * fast lighting stroke writes — a behaviour change, not a refactor. Preserved
  * as-is and flagged in the task 33 report.
  *
+ * ── ONE STROKE = ONE UNDO ENTRY (plan 04 task 02) ─────────────────────────
+ *
+ * `paintNormals` / `paintHeights` each record their own history entry, so a
+ * 40-cell drag used to cost 40 presses of ⌘Z. The optional `onStrokeStart` /
+ * `onStrokeEnd` callbacks wrap a stroke in a history transaction, which
+ * buffers those per-move commands and collapses them into ONE
+ * `CompositeCommand` — the same invariant the pixel studio already holds
+ * (`stores/domain/PixelStore.ts:52-56`).
+ *
+ * They are CALLBACKS, not a store handle, because this file lives under `ui/`
+ * and may not import one. They are OPTIONAL, so the hook still works — and
+ * still tests — with no history at all.
+ *
+ * ⚠️ An open transaction that is never closed swallows every subsequent edit
+ * in the whole app (`PixelStore.ts:958-960`). Hence: the close is guarded so a
+ * double `endStroke` (mouse-up AND mouse-leave both fire it) closes once, and
+ * an unmount mid-stroke closes it too.
+ *
  * Pure: no store, no MobX, no API.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /** A whole-cell grid coordinate. */
 export interface PaintPoint {
@@ -70,6 +88,17 @@ export interface UseLightingPaintOptions {
    * gesture carried Shift, which the legacy handlers turned into a height of 0.
    */
   paintHeights: (cells: ReadonlyArray<PaintPoint>, erase: boolean) => void;
+  /**
+   * Open a history transaction for one stroke. Every paint call made between
+   * this and `onStrokeEnd` collapses into a SINGLE undo entry. Optional so the
+   * hook stays usable (and testable) without a history store.
+   *
+   * ⚠️ `ui/` may not import a store, so the transaction arrives as callbacks —
+   * the container supplies `history.beginTransaction` / `endTransaction`.
+   */
+  onStrokeStart?: (label: string) => void;
+  /** Close the transaction opened by `onStrokeStart`. Always called if it was. */
+  onStrokeEnd?: () => void;
 }
 
 export interface UseLightingPaintResult {
@@ -96,10 +125,45 @@ export function useLightingPaint({
   resolveBrushCells,
   paintNormals,
   paintHeights,
+  onStrokeStart,
+  onStrokeEnd,
 }: UseLightingPaintOptions): UseLightingPaintResult {
   // ⚠️ BOTH ARE REFS. See the header — this is W19 bug 2.
   const isPaintingRef = useRef(false);
   const lastPaintPixelRef = useRef<PaintPoint | null>(null);
+
+  // ⚠️ ALSO A REF, and for the same reason: nothing renders it, and a state
+  // write per gesture would reintroduce exactly the bug this file pins.
+  const strokeOpenRef = useRef(false);
+
+  // The unmount cleanup below must close whatever transaction is open at the
+  // time it runs, without re-subscribing on every render — a cleanup that
+  // re-ran on every `onStrokeEnd` identity change would fire MID-STROKE and
+  // close the transaction early. So the live closer is held in a ref, synced
+  // from an effect (writing a ref during render is a `react-hooks/refs`
+  // error), and the cleanup effect depends on nothing.
+  const onStrokeEndRef = useRef(onStrokeEnd);
+  useEffect(() => {
+    onStrokeEndRef.current = onStrokeEnd;
+  }, [onStrokeEnd]);
+
+  /**
+   * Close the open stroke transaction, at most once.
+   *
+   * ⚠️ Guarded because `endStroke` is invoked from BOTH `onMouseUp` and
+   * `onMouseLeave`, so a double close is routine. Two `endTransaction()` calls
+   * would be a no-op today, but the guard is the contract, not the accident.
+   */
+  const closeStroke = useCallback(() => {
+    if (!strokeOpenRef.current) return;
+    strokeOpenRef.current = false;
+    onStrokeEndRef.current?.();
+  }, []);
+
+  // ⚠️ CRITICAL: an unmount mid-stroke would otherwise strand an open
+  // transaction, and every subsequent edit in the app would buffer into it and
+  // vanish (`PixelStore.ts:958-960`). Empty deps: this runs on unmount only.
+  useEffect(() => closeStroke, [closeStroke]);
 
   // State, because the overlay renders from it.
   const [hoverPixel, setHoverPixel] = useState<PaintPoint | null>(null);
@@ -129,9 +193,33 @@ export function useLightingPaint({
       isPaintingRef.current = true;
       lastPaintPixelRef.current = cell;
       setHoverPixel(null);
+
+      // ⚠️ OPEN BEFORE THE FIRST `apply` — that first stamp must land inside
+      // the transaction, or a drag is two undo entries rather than one.
+      //
+      // Opened UNCONDITIONALLY, even when the brush resolves to no cells. The
+      // stroke itself starts regardless (`isPaintingRef` above is set before
+      // `apply`, verbatim legacy ordering), so an unconditional open is the
+      // only way begin/end stay symmetric. An empty transaction is free:
+      // `HistoryStore.endTransaction` commits nothing when no command buffered.
+      // The alternative — open lazily on the first successful paint — would
+      // leave `endStroke` guessing, which is how transactions get stranded.
+      //
+      // We must NOT open a second transaction while one of ours is in flight:
+      // `beginTransaction` COMMITS the outer one first (PixelStore.ts:948-961),
+      // which would cut a stroke in two. `beginStroke` twice without an
+      // intervening `endStroke` is not a gesture the container produces, but
+      // the guard makes it harmless.
+      if (!strokeOpenRef.current) {
+        strokeOpenRef.current = true;
+        onStrokeStart?.(
+          editMode === "height" ? "Paint heights" : "Paint normals",
+        );
+      }
+
       apply(cell, erase);
     },
-    [apply],
+    [apply, editMode, onStrokeStart],
   );
 
   const continueStroke = useCallback(
@@ -156,9 +244,12 @@ export function useLightingPaint({
   );
 
   const endStroke = useCallback(() => {
+    // Close FIRST: the transaction is the thing that must not be stranded, and
+    // clearing the other refs must not be able to skip it.
+    closeStroke();
     isPaintingRef.current = false;
     lastPaintPixelRef.current = null;
-  }, []);
+  }, [closeStroke]);
 
   return {
     hoverPixel,

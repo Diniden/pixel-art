@@ -62,6 +62,7 @@ import {
 import { ReferenceUIStore } from "./ui/ReferenceUIStore";
 import { CanvasInteractionStore } from "./ui/CanvasInteractionStore";
 import { CanvasViewsUIStore } from "./ui/CanvasViewsUIStore";
+import { LightingViewsUIStore } from "./ui/LightingViewsUIStore";
 import { editorHistory } from "./history/editorHistory";
 import { createSnapshotCommand } from "./history/commands";
 import type { Command, SnapshotHost } from "./history/commands";
@@ -390,6 +391,14 @@ export class ApplicationStore {
    */
   readonly canvasViews: CanvasViewsUIStore;
 
+  /**
+   * Which lighting render modes (Edit / Preview) are open, which is on the
+   * left, and an independent camera for EACH pane. Session-only — nothing
+   * persisted, nothing deep. No dependencies in either direction, like
+   * `canvasViews`.
+   */
+  readonly lightingViews: LightingViewsUIStore;
+
   readonly options: Readonly<{
     api: unknown;
     autoSaveEnabled: boolean;
@@ -495,6 +504,8 @@ export class ApplicationStore {
     this.canvasInteraction = new CanvasInteractionStore();
     // Split-canvas task 01: same reasoning as `canvasInteraction`.
     this.canvasViews = new CanvasViewsUIStore();
+    // Lighting-preview-split task 01: same reasoning as `canvasViews`.
+    this.lightingViews = new LightingViewsUIStore();
     // ── task 38: the NATIVE sinks — the hosted `uiState` replaces Zustand ──
     //
     // During the bridge era these wrote the Zustand SOURCE and the bridge

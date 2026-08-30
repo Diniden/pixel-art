@@ -48,6 +48,20 @@
  * `LightingCanvas.tsx:678-686` returned an "Select an object and frame" panel
  * when `project`, `frame` or `obj` was missing. Three store reads; one boolean
  * prop. The container decides, this component renders.
+ *
+ * ── The `viewControls` slot (2026-08-29, lighting preview split) ───────────
+ *
+ * `.lighting-canvas__viewport` is `position: relative` so it is the containing
+ * block for the floating control cluster passed as `viewControls`, which
+ * positions itself `absolute; left/bottom: var(--space-3)`. Without that, the
+ * cluster would resolve against `.lighting-canvas` and — once the lighting
+ * workspace splits into an Edit pane and a Preview pane — land over the wrong
+ * pane entirely. This mirrors `CanvasSurface`/`.canvas__viewport` exactly.
+ *
+ * ⚠️ THE CONTROLS GO IN THE VIEWPORT, NEVER IN `.lighting-canvas__surface`.
+ * That element carries the pan/zoom `transform`, so anything inside it is
+ * panned and scaled with the sprite. A control whose whole job is to rescue a
+ * lost view must not be reachable by the gesture that lost it.
  */
 
 import type { MouseEvent, RefObject, TouchEvent } from "react";
@@ -113,6 +127,15 @@ export interface LightingSurfaceProps {
    */
   previewPanel?: React.ReactNode;
 
+  /* ── the floating control cluster, injected as a child ─────────────────── */
+  /**
+   * Floating control cluster (reset view, mode/close buttons) drawn over this
+   * pane. Rendered as a direct child of `.lighting-canvas__viewport`, which is
+   * the containing block — so with a split region each pane's controls stay in
+   * their own pane. Not rendered in the `empty` state.
+   */
+  viewControls?: React.ReactNode;
+
   /* ── pointer events (the hook's handlers, passed straight through) ─────── */
   onMouseDown: (e: MouseEvent<HTMLCanvasElement>) => void;
   onMouseMove: (e: MouseEvent<HTMLCanvasElement>) => void;
@@ -138,6 +161,7 @@ export function LightingSurface({
   zoom,
   empty = false,
   previewPanel,
+  viewControls,
   onMouseDown,
   onMouseMove,
   onMouseUp,
@@ -197,6 +221,9 @@ export function LightingSurface({
               />
             </div>
           </div>
+          {/* Last child of the VIEWPORT, after `__surface`: paints above the
+              sprite, outside the pan/zoom transform. */}
+          {viewControls}
         </div>
       </div>
 

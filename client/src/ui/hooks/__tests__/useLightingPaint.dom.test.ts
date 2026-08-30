@@ -151,3 +151,150 @@ describe("useLightingPaint — the legacy behaviour, preserved verbatim", () => 
     expect(opts.paintNormals).not.toHaveBeenCalled();
   });
 });
+
+/* ══ ONE STROKE = ONE UNDO ENTRY (plan 04 task 02) ════════════════════════ */
+
+/**
+ * ⚠️ The invariant these pin is not "a callback fires". It is that the history
+ * transaction wrapping a stroke is opened exactly once and closed exactly
+ * once — because an open transaction that is never closed swallows every
+ * subsequent edit in the app (`PixelStore.ts:958-960`), and a second open
+ * while one is in flight COMMITS the outer one, cutting the stroke in two.
+ */
+describe("useLightingPaint — the stroke history transaction", () => {
+  it("a whole drag opens ONE transaction and closes it ONCE", () => {
+    const onStrokeStart = vi.fn();
+    const onStrokeEnd = vi.fn();
+    const opts = makeOptions({ onStrokeStart, onStrokeEnd });
+    const { result } = renderHook(() => useLightingPaint(opts));
+
+    act(() => result.current.beginStroke({ x: 0, y: 0 }, false));
+    act(() => result.current.continueStroke({ x: 1, y: 0 }, false));
+    act(() => result.current.continueStroke({ x: 2, y: 0 }, false));
+    act(() => result.current.continueStroke({ x: 3, y: 0 }, false));
+    act(() => result.current.endStroke());
+
+    expect(onStrokeStart).toHaveBeenCalledTimes(1);
+    expect(onStrokeStart).toHaveBeenCalledWith("Paint normals");
+    expect(onStrokeEnd).toHaveBeenCalledTimes(1);
+    // …and the four paints that the one transaction collapses.
+    expect(opts.paintNormals).toHaveBeenCalledTimes(4);
+  });
+
+  it("labels the transaction per edit mode", () => {
+    const onStrokeStart = vi.fn();
+    const { result } = renderHook(() =>
+      useLightingPaint(makeOptions({ editMode: "height", onStrokeStart })),
+    );
+
+    act(() => result.current.beginStroke({ x: 0, y: 0 }, false));
+
+    expect(onStrokeStart).toHaveBeenCalledWith("Paint heights");
+  });
+
+  it("🔧 a DOUBLE `endStroke` closes the transaction only once", () => {
+    // `endStroke` is wired to BOTH `onMouseUp` and `onMouseLeave`, so the pair
+    // firing back to back is routine, not pathological.
+    const onStrokeEnd = vi.fn();
+    const { result } = renderHook(() =>
+      useLightingPaint(makeOptions({ onStrokeEnd })),
+    );
+
+    act(() => result.current.beginStroke({ x: 0, y: 0 }, false));
+    act(() => result.current.endStroke());
+    act(() => result.current.endStroke());
+
+    expect(onStrokeEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("`endStroke` with no stroke in flight opens/closes nothing", () => {
+    const onStrokeEnd = vi.fn();
+    const { result } = renderHook(() =>
+      useLightingPaint(makeOptions({ onStrokeEnd })),
+    );
+
+    act(() => result.current.endStroke());
+
+    expect(onStrokeEnd).not.toHaveBeenCalled();
+  });
+
+  it("OBSERVED: a brush resolving to NO cells still opens AND closes one", () => {
+    // The choice is deliberate: `beginStroke` sets `isPaintingRef` BEFORE it
+    // resolves the brush (legacy ordering, pinned above), so a stroke really is
+    // in flight even when nothing paints. Opening unconditionally keeps
+    // begin/end symmetric; an empty transaction commits no entry, so it costs
+    // nothing. Opening lazily on the first successful paint would leave
+    // `endStroke` guessing whether to close — that is how one gets stranded.
+    const onStrokeStart = vi.fn();
+    const onStrokeEnd = vi.fn();
+    const opts = makeOptions({
+      resolveBrushCells: () => [],
+      onStrokeStart,
+      onStrokeEnd,
+    });
+    const { result } = renderHook(() => useLightingPaint(opts));
+
+    act(() => result.current.beginStroke({ x: 1, y: 1 }, false));
+    act(() => result.current.continueStroke({ x: 2, y: 2 }, false));
+    act(() => result.current.endStroke());
+
+    expect(onStrokeStart).toHaveBeenCalledTimes(1);
+    expect(onStrokeEnd).toHaveBeenCalledTimes(1);
+    expect(opts.paintNormals).not.toHaveBeenCalled();
+  });
+
+  it("🔧 UNMOUNTING mid-stroke closes the transaction", () => {
+    // Otherwise every later edit in the app buffers into the orphan and
+    // disappears — the failure `PixelStore.ts:958-960` warns about.
+    const onStrokeEnd = vi.fn();
+    const { result, unmount } = renderHook(() =>
+      useLightingPaint(makeOptions({ onStrokeEnd })),
+    );
+
+    act(() => result.current.beginStroke({ x: 0, y: 0 }, false));
+    expect(onStrokeEnd).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(onStrokeEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("unmounting with NO stroke in flight closes nothing", () => {
+    const onStrokeEnd = vi.fn();
+    const { unmount } = renderHook(() =>
+      useLightingPaint(makeOptions({ onStrokeEnd })),
+    );
+
+    unmount();
+
+    expect(onStrokeEnd).not.toHaveBeenCalled();
+  });
+
+  it("🔧 the callbacks do NOT reintroduce a render per painted pixel", () => {
+    // The zero-render pin at the top of this file, re-run WITH the transaction
+    // callbacks supplied — a `useState` for "is a transaction open" would fail
+    // here and nowhere else.
+    let renders = 0;
+    const opts = makeOptions({
+      onStrokeStart: vi.fn(),
+      onStrokeEnd: vi.fn(),
+    });
+    const { result } = renderHook(() => {
+      renders += 1;
+      return useLightingPaint(opts);
+    });
+
+    const afterMount = renders;
+
+    act(() => result.current.beginStroke({ x: 0, y: 0 }, false));
+    for (let i = 1; i < 50; i++) {
+      act(() => result.current.continueStroke({ x: i, y: 0 }, false));
+    }
+    act(() => result.current.endStroke());
+
+    expect(renders).toBe(afterMount);
+    expect(opts.paintNormals).toHaveBeenCalledTimes(50);
+    expect(opts.onStrokeStart).toHaveBeenCalledTimes(1);
+    expect(opts.onStrokeEnd).toHaveBeenCalledTimes(1);
+  });
+});

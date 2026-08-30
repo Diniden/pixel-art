@@ -307,6 +307,83 @@ describe("PixelStore.setNormalPixels / setHeightPixels", () => {
     expect(rig.layer().pixels[0][0].normal).toBe(0);
     expect(rig.layer().pixels[1][1].normal).toBe(0);
   });
+
+  /* ── ONE STROKE = ONE UNDO ENTRY (plan 04 task 02) ───────────────────── */
+
+  /**
+   * The STORE side of the lighting stroke contract. `useLightingPaint` calls
+   * `paintNormals` once per pointer move, so a drag is N `setNormalPixels`
+   * calls and — without a transaction — N undo entries. This is the assertion
+   * that a transaction really does collapse them; the hook's own tests only
+   * prove the callbacks fire.
+   */
+  it("🔧 three lighting writes inside ONE transaction = ONE undo entry", () => {
+    paint(rig, 2, 2);
+    const before = rig.history.entries.length;
+
+    // What the container does across a three-move drag.
+    runInAction(() => rig.history.beginTransaction("Paint normals"));
+    try {
+      rig.pixels.setNormalPixels([
+        { x: 0, y: 0, normal: { x: 1, y: 1, z: 200 } },
+      ]);
+      rig.pixels.setNormalPixels([
+        { x: 1, y: 1, normal: { x: 2, y: 2, z: 201 } },
+      ]);
+      rig.pixels.setNormalPixels([
+        { x: 2, y: 2, normal: { x: 3, y: 3, z: 202 } },
+      ]);
+    } finally {
+      // ⚠️ From a `finally`, always — a stranded transaction swallows every
+      // later edit (`PixelStore.ts:958-960`).
+      runInAction(() => rig.history.endTransaction());
+    }
+
+    // ONE entry for the whole stroke, not three.
+    expect(rig.history.entries).toHaveLength(before + 1);
+    expect(rig.layer().pixels[0][0].normal).toEqual({ x: 1, y: 1, z: 200 });
+    expect(rig.layer().pixels[1][1].normal).toEqual({ x: 2, y: 2, z: 201 });
+    expect(rig.layer().pixels[2][2].normal).toEqual({ x: 3, y: 3, z: 202 });
+
+    // …and ONE undo takes the whole stroke back. Without the transaction this
+    // would need three, and the first two cells would still be painted here.
+    runInAction(() => rig.history.undo());
+    expect(rig.layer().pixels[0][0].normal).toBe(0);
+    expect(rig.layer().pixels[1][1].normal).toBe(0);
+    expect(rig.layer().pixels[2][2].normal).toBe(0);
+    // The entry stays on the stack (undo moves the cursor, it does not pop —
+    // redo has to remain possible); the cursor is what stepped back by one.
+    expect(rig.history.entries).toHaveLength(before + 1);
+    expect(rig.history.index).toBe(before - 1);
+  });
+
+  it("🔧 the same holds for heights", () => {
+    const before = rig.history.entries.length;
+
+    runInAction(() => rig.history.beginTransaction("Paint heights"));
+    try {
+      rig.pixels.setHeightPixels([{ x: 0, y: 0, height: 10 }]);
+      rig.pixels.setHeightPixels([{ x: 1, y: 1, height: 20 }]);
+    } finally {
+      runInAction(() => rig.history.endTransaction());
+    }
+
+    expect(rig.history.entries).toHaveLength(before + 1);
+    runInAction(() => rig.history.undo());
+    expect(rig.layer().pixels[0][0].height).toBe(0);
+    expect(rig.layer().pixels[1][1].height).toBe(0);
+  });
+
+  it("an EMPTY stroke transaction records nothing at all", () => {
+    // What a press-and-release over transparent cells produces: the hook opens
+    // and closes a transaction unconditionally, and nothing buffered into it.
+    const before = rig.history.entries.length;
+
+    runInAction(() => rig.history.beginTransaction("Paint normals"));
+    runInAction(() => rig.history.endTransaction());
+
+    expect(rig.history.entries).toHaveLength(before);
+  });
 });
 
 /* ══ THE FLIPS ════════════════════════════════════════════════════════════ */

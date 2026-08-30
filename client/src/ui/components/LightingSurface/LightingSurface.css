@@ -6,7 +6,24 @@
    panel it styles.
 
    ⚠️ NO CLASS WAS RENAMED AND NO DECLARATION CHANGED. BEM conversion is tasks
-   20-22's work and is complete; this is a file split, byte-for-byte. */
+   20-22's work and is complete; this is a file split, byte-for-byte.
+
+   ── `.lighting-canvas__viewport` is a containing block (2026-08-29) ────────
+
+   One declaration has since been added: `position: relative` on
+   `.lighting-canvas__viewport`. `LightingSurface` gained a `viewControls` slot
+   rendered as a direct child of that element, and `canvas-view-controls`
+   positions itself `absolute; left/bottom: var(--space-3)`. Without a relative
+   viewport the cluster would resolve against `.lighting-canvas` and, once the
+   lighting workspace splits into an Edit pane and a Preview pane, sit over the
+   wrong pane. `.canvas__viewport` in `CanvasSurface.css` is relative for the
+   same reason.
+
+   ⚠️ CONTROLS GO IN `__viewport`, NEVER IN `.lighting-canvas__surface` —
+   `__surface` carries the pan/zoom `transform` (`will-change: transform`
+   below), so anything inside it is panned and scaled with the sprite. A
+   control that rescues a lost view must not be draggable off-screen by the
+   gesture that lost it. */
 
 .lighting-canvas {
   position: relative;
@@ -37,6 +54,7 @@
 }
 
 .lighting-canvas__viewport {
+  position: relative;
   display: flex;
   width: 100%;
   height: 100%;
