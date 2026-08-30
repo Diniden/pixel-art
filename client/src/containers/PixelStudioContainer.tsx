@@ -50,6 +50,19 @@
  * This container re-renders on the three layout-shaping fields it reads
  * (`focusMode`, `frameReferencePanelVisible`, `canvasInfoHidden`) plus its own
  * two `useState`s — not on a palette change, not on a pixel edit.
+ *
+ * ── The canvas region is a `CanvasSplit` of `CanvasContainer`s ─────────────
+ *
+ * `app.canvasViews.openModes` (left→right) is the fourth thing this container
+ * reads; it changes only on open / close / swap. One `CanvasContainer` is
+ * rendered per open mode, and the pane `key` IS the mode string: a swap is
+ * an array reorder with the same keys, so React moves the existing DOM nodes
+ * and neither canvas remounts (offscreen caches, native gesture listeners and
+ * each pane's camera all survive). Both panes get the same `referenceImage` /
+ * `overlayFrameIndex` props — the Layer pane ignores the overlays, but a
+ * uniform map is simpler than a branch. The split state itself is
+ * session-only (D3): nothing here is persisted, so a reload comes back to a
+ * single Full pane.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
@@ -62,6 +75,7 @@ import { RightSidebarTopControlsContainer } from "./RightSidebarTopControlsConta
 import { PixelStudioPanelContainer } from "./PixelStudioPanelContainer";
 import { FrameTimelineContainer } from "./FrameTimelineContainer";
 import { CanvasContainer } from "./CanvasContainer";
+import { CanvasSplit } from "../ui/components/CanvasSplit/CanvasSplit";
 import { CanvasInfoContainer } from "./CanvasInfoContainer";
 import { LayerColorsContainer } from "./LayerColorsContainer";
 import { FrameReferencePanelContainer } from "./FrameReferencePanelContainer";
@@ -139,6 +153,19 @@ export const PixelStudioContainer = observer(function PixelStudioContainer() {
     }
   }, [loadGeneration, hasProject, hasStoredReference, app]);
 
+  // One pane per open render mode; key = mode (see the header block).
+  const panes = app.canvasViews.openModes.map((mode) => ({
+    key: mode,
+    node: (
+      <CanvasContainer
+        renderMode={mode}
+        referenceImage={referenceImage}
+        onReferenceImageChange={handleReferenceImageChange}
+        overlayFrameIndex={overlayFrameIndex}
+      />
+    ),
+  }));
+
   return (
     <PixelStudioLayout
       {...railLayout}
@@ -173,13 +200,7 @@ export const PixelStudioContainer = observer(function PixelStudioContainer() {
         )
       }
       timeline={<FrameTimelineContainer />}
-      canvas={
-        <CanvasContainer
-          referenceImage={referenceImage}
-          onReferenceImageChange={handleReferenceImageChange}
-          overlayFrameIndex={overlayFrameIndex}
-        />
-      }
+      canvas={<CanvasSplit panes={panes} />}
       frameReferencePanel={
         <FrameReferencePanelContainer
           onOverlayChange={setOverlayFrameIndex}

@@ -136,7 +136,7 @@ export function CanvasInfo({
                 Offset: ({variantOffset.x}, {variantOffset.y})
               </span>
               <span className="canvas-info__separator">|</span>
-              <span>WASD to adjust offset</span>
+              <span>WASD / arrows to adjust offset</span>
             </>
           ) : (
             <>
