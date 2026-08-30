@@ -2,8 +2,8 @@
  * CanvasSurface stories — and the PROOF that the `ui/` boundary holds.
  *
  * ══════════════════════════════════════════════════════════════════════════
- *  🏁 GATE 2 OF REFRESH TASK 32: THESE SIX STORIES RENDER WITH NO STORE
- *  PROVIDER OF ANY KIND
+ *  🏁 GATE 2 OF REFRESH TASK 32: EVERY ONE OF THESE STORIES RENDERS WITH NO
+ *  STORE PROVIDER OF ANY KIND
  * ══════════════════════════════════════════════════════════════════════════
  *
  * There is no `StoreProvider` here, no `ApplicationStore`, no `installBridge`,
@@ -19,7 +19,7 @@
  *
  * ## How a pure canvas gets something to look at
  *
- * `CanvasSurface` paints NOTHING — it owns six `<canvas>` elements and hands
+ * `CanvasSurface` paints NOTHING — it owns the `<canvas>` elements and hands
  * their refs out, because grids may never cross the `ui/` boundary as props
  * (R2: the owner's real project is 300,249 cells). In the app, the imperative
  * draw is driven by `CanvasContainer`'s `reaction` on `pixelVersion`.
@@ -30,17 +30,27 @@
  * (`projectTypical`), never `Base Unit.json` — the owner's real 1.1 MB project
  * is migration-corpus data, not story data.
  *
- * ## The six states
+ * ⚠️ That arrangement is what makes the PER-LAYER stack storyable without
+ * breaking the rule it exists to protect. `LayerStack` below passes
+ * `layerIds` — plain strings — plus a `registerLayerCanvas` callback, and the
+ * harness paints the fixture layers through the elements that callback hands
+ * it. The layer OBJECTS never reach `CanvasSurface`; they stay in the harness,
+ * which is exactly where the container keeps them in the real app.
  *
- * | Story           | What it exercises                                      |
- * | --------------- | ------------------------------------------------------ |
- * | Default         | the plain editing surface; no overlay mounted           |
- * | VariantEdit     | the EXPANDED view — the union of object and variant     |
- * |                 | bounds — with the object outline and the variant frame  |
- * | SelectionActive | the marching-ants box and the mask fill                 |
- * | FrameOverlay    | the onion-skin overlay canvas mounted above the surface |
- * | LightGridMode   | the light checkerboard theme                            |
- * | ReflectionGuides| the SIXTH canvas: dotted mirror guides, stacked last    |
+ * ## The eight states
+ *
+ * | Story            | What it exercises                                       |
+ * | ---------------- | ------------------------------------------------------- |
+ * | Default          | the plain editing surface; no overlay mounted            |
+ * | VariantEdit      | the EXPANDED view — the union of object and variant      |
+ * |                  | bounds — with the object outline and the variant frame   |
+ * | SelectionActive  | the marching-ants box and the mask fill                  |
+ * | FrameOverlay     | the onion-skin overlay canvas mounted above the surface  |
+ * | LightGridMode    | the light checkerboard theme                             |
+ * | ReflectionGuides | the reflection guides, as SVG vectors, stacked last      |
+ * | **LayerStack**   | **one 1:1 canvas per layer at DIFFERING opacities (D4)** |
+ * | **SvgChrome**    | **every task-03 vector overlay at once, origin cross     |
+ * |                  | included — the counter-scaled group under a live scale** |
  *
  * ⚠️ `LightGridMode` is where task 02's `lightGridMode` round-trip fix first
  * becomes VISIBLE, and the task 32 spec nominates it as the manual
@@ -48,10 +58,20 @@
  * setting looks like; the persistence half still needs the running app (toggle,
  * wait for autosave, hard-reload) and is recorded as owed in the report.
  */
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CanvasSurface } from "./CanvasSurface";
 import type { CanvasSurfaceProps } from "./CanvasSurface";
+import { gridOverlayPath } from "@/ui/canvas/svg/gridOverlay";
+import {
+  brushOutlineOverlay,
+  hoverOutlineOverlay,
+  lassoOverlay,
+  marchingAntsOverlay,
+  originCrossOverlay,
+  reflectionGuideOverlays,
+} from "@/ui/canvas/svg/chromeOverlay";
+import { ORIGIN_CROSS_RED } from "@/ui/theme/canvasTokens";
 import { projectTypical } from "../../../fixtures";
 import type { Layer, PixelData } from "../../../types";
 
@@ -67,14 +87,18 @@ import type { Layer, PixelData } from "../../../types";
  * therefore fill ONE device pixel per cell and `image-rendering: pixelated`
  * keeps the upscale crisp.
  *
- * ⚠️ KNOWN AND EXPECTED, until plan-05 tasks 03 and 04 land: the SUB-CELL
- * chrome in these stories degenerates at 1:1, exactly as `MASTER.md` §4
- * predicts. The grid lines below now fall one per pixel column and read as a
- * flat wash; the marching ants' `[4, 4]` dash spans four whole cells; the
- * dashed variant/overlay borders are hairlines. That chrome is moving to inline
- * SVG with `vector-effect: non-scaling-stroke` (D5), which is what gives it
- * back the screen-constant stroke its painters always documented. The ARTWORK —
- * the cell fills, which is what these stories exist to frame — is correct.
+ * ⚠️ THE SUB-CELL CHROME HAS MOVED (plan 05, tasks 03 + 04). At 1:1 the canvas
+ * painters degenerate exactly as `MASTER.md` §4 predicted — grid lines fall one
+ * per pixel column and read as a flat wash, the marching ants' `[4, 4]` dash
+ * spans four whole CELLS, the hover outline's edges are zero-length and render
+ * NOTHING. All of it is now inline SVG with `vector-effect:
+ * non-scaling-stroke` (D5), which gives it back the screen-constant stroke its
+ * painters always documented. `SvgChrome` below shows the whole set.
+ *
+ * The raster `strokeGridLines` helper survives only where a story is
+ * deliberately showing the OLD path for contrast; the ARTWORK — the cell fills
+ * (D6), which is what these stories exist to frame — was always correct at
+ * 1:1.
  */
 const ZOOM = 12;
 
@@ -146,7 +170,10 @@ const GRID = projectTypical.objects[0].gridSize;
 type PaintFn = (ctx: CanvasRenderingContext2D) => void;
 
 interface HarnessProps {
-  /** Everything `CanvasSurface` needs except the seven refs. */
+  /**
+   * Everything `CanvasSurface` needs except the refs and the layer-ref
+   * registration callback — the harness owns those, as the container does.
+   */
   surface: Omit<
     CanvasSurfaceProps,
     | "canvasRef"
@@ -156,6 +183,7 @@ interface HarnessProps {
     | "hoverCanvasRef"
     | "reflectionCanvasRef"
     | "containerRef"
+    | "registerLayerCanvas"
   >;
   /** Draws the main surface. Runs once the refs are attached. */
   paint: PaintFn;
@@ -166,10 +194,20 @@ interface HarnessProps {
    *
    * Optional because most stories have no guides — but the canvas is mounted
    * either way (see `CanvasSurface`'s header), so a story that omits this
-   * still proves the sixth surface is present and transparent rather than
-   * covering the artwork.
+   * still proves the surface is present and transparent rather than covering
+   * the artwork.
    */
   paintReflection?: PaintFn;
+  /**
+   * Draws ONE layer's canvas, by layer id.
+   *
+   * ⚠️ This is the whole R8 arrangement in miniature. The harness knows the
+   * layer objects; `CanvasSurface` knows only their ids. The element arrives
+   * through `registerLayerCanvas`, the harness looks the layer up by id and
+   * paints it — which is exactly what `CanvasContainer` does, at scale, driven
+   * by a `reaction` on `pixelVersion`.
+   */
+  paintLayerCanvas?: (id: string, ctx: CanvasRenderingContext2D) => void;
 }
 
 /**
@@ -181,6 +219,7 @@ function SurfaceHarness({
   paint,
   paintOverlay,
   paintReflection,
+  paintLayerCanvas,
 }: HarnessProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -189,6 +228,32 @@ function SurfaceHarness({
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
   const reflectionCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * The container's layer-ref map, in miniature.
+   *
+   * A `Map<string, HTMLCanvasElement>` rather than React state: registering a
+   * ref must not schedule a render, exactly as in `CanvasContainer`. The
+   * `null` branch is what stops the map growing stale entries as layers are
+   * deleted or reordered — `CanvasSurface` calls it on unmount for precisely
+   * that reason.
+   */
+  const layerCanvases = useRef(new Map<string, HTMLCanvasElement>());
+
+  const registerLayerCanvas = useCallback(
+    (id: string, el: HTMLCanvasElement | null) => {
+      if (!el) {
+        layerCanvases.current.delete(id);
+        return;
+      }
+      layerCanvases.current.set(id, el);
+      const ctx = el.getContext("2d");
+      if (!ctx || !paintLayerCanvas) return;
+      ctx.imageSmoothingEnabled = false;
+      paintLayerCanvas(id, ctx);
+    },
+    [paintLayerCanvas],
+  );
 
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
@@ -219,6 +284,7 @@ function SurfaceHarness({
         hoverCanvasRef={hoverCanvasRef}
         reflectionCanvasRef={reflectionCanvasRef}
         containerRef={containerRef}
+        registerLayerCanvas={registerLayerCanvas}
       />
     </div>
   );
@@ -453,19 +519,24 @@ export const LightGridMode: Story = {
 /* ── 6. reflection guides ────────────────────────────────────────────────── */
 
 /**
- * The SIXTH canvas, carrying the reflection tool's guide lines.
+ * The reflection tool's guide lines — now as SVG VECTORS (plan 05, D5).
  *
- * ⚠️ What this story exists to show is the STACKING, not the artwork. The
- * guides are painted into a surface that is mounted last inside
- * `.canvas__frame`, so they sit above the hover marker and above both
- * semi-transparent trace overlays — a guide the user cannot see is a guide
- * that cannot be trusted, because it is the only indication of where the next
- * stroke will be mirrored.
+ * ⚠️ What this story exists to show is the STACKING, and that claim survived
+ * the move from raster to vector unchanged: the SVG mounts LAST inside
+ * `.canvas__frame`, so the guides sit above the hover marker and above both
+ * semi-transparent trace overlays. A guide the user cannot see is a guide that
+ * cannot be trusted — it is the only indication of where the next stroke will
+ * be mirrored.
  *
- * The dashes here are STATIC. In the app they crawl, driven by `useDashTicker`
- * (plan 03 task 04) repainting this canvas alone at ~12 fps; a story cannot
- * usefully assert an animation, and routing that tick anywhere near the main
- * `render` is precisely the mistake the separate canvas exists to prevent.
+ * ⚠️ Why they had to leave the canvas: `REFLECTION_DASH = 4` is documented as
+ * SCREEN-constant, and under the CSS `scale(combinedScale)` a 4px dash at
+ * `ZOOM = 12` became a 48px one. `vector-effect: non-scaling-stroke` — set by
+ * `reflectionGuideOverlays` itself — restores exactly the invariant the
+ * painter's own comment always claimed.
+ *
+ * The dashes here are STATIC: `dashOffset` is a plain parameter, so a story
+ * passes `0`. In the app `useDashTicker` advances it at ~12 fps and, because
+ * the phase lives in a ref, React is never told anything happened.
  *
  * The endpoints are on the integer CORNER lattice, not on cell centres — the
  * line falls *between* pixel columns, which is what "reflect between pixels"
@@ -473,38 +544,162 @@ export const LightGridMode: Story = {
  */
 export const ReflectionGuides: Story = {
   args: {
-    surface: baseSurface,
+    surface: {
+      ...baseSurface,
+      reflectionGuides: reflectionGuideOverlays(
+        [
+          { x1: GRID.width / 2, y1: 0, x2: GRID.width / 2, y2: GRID.height },
+          { x1: 0, y1: 0, x2: GRID.width, y2: GRID.height },
+        ],
+        null,
+        0,
+        0,
+        0,
+      ),
+    },
     paint: (ctx) => {
       paintBackground(ctx, GRID.width, GRID.height, false);
       for (const layer of heroFrame.layers) paintLayer(ctx, layer, 0, 0);
-      strokeGridLines(ctx, GRID.width, GRID.height, false);
     },
-    paintReflection: (ctx) => {
-      // A vertical guide down the middle and a diagonal one, both snapped to
-      // corners. Two-pass stroke (accent under, white over, opposite dash
-      // phase) matching `renderReflectionLines`' documented approach.
-      const segments: Array<[number, number, number, number]> = [
-        [GRID.width / 2, 0, GRID.width / 2, GRID.height],
-        [0, 0, GRID.width, GRID.height],
-      ];
-      for (const [x1, y1, x2, y2] of segments) {
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.setLineDash([4, 4]);
+  },
+};
 
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#8b5cf6";
-        ctx.lineDashOffset = 0;
-        ctx.stroke();
+/* ── 7. the per-layer canvas stack ───────────────────────────────────────── */
 
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineDashOffset = 4;
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
-      ctx.lineDashOffset = 0;
+/**
+ * ONE 1:1 `<canvas>` PER LAYER, at differing opacities (plan 05, D3 + D4).
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ THIS STORY IS THE R8 PROOF, AND IT PROVES IT BY WHAT IT PASSES
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * `CanvasSurface` receives `layerIds` — an array of STRINGS — plus a
+ * `registerLayerCanvas` callback and two `Record<string, number|boolean>`
+ * maps. It never sees a `Layer`. The harness holds the fixture layers, is
+ * handed each canvas element as it mounts, looks the layer up by id and paints
+ * it imperatively. That is precisely the arrangement `CanvasContainer` uses at
+ * scale, and it is why a 300,249-cell project can be edited without MobX ever
+ * looking inside a pixel grid.
+ *
+ * Three things this makes visible:
+ *
+ * 1. **Compositing is the browser's job now.** Each layer is its own 1:1
+ *    canvas; the stack is composited by the compositor, not by a JS loop that
+ *    walks every cell of every layer building an `rgba(...)` string per cell.
+ * 2. **Dimming is CSS `opacity` (D4)**, not a per-cell alpha multiply. The
+ *    third layer here sits at 0.5 — the `transparent` focus mode's value —
+ *    and the second at 0.7, the variant-edit "other layers" value. Toggling
+ *    either is a compositor property change, not a repaint.
+ *    ⚠️ `onion` is deliberately absent: it is an outline-only mode driven by
+ *    `isOutlineCell`'s neighbour tests and cannot be an opacity.
+ * 3. **Visibility is `display: none`**, which keeps the element — and so its
+ *    painted bitmap and its registered ref — alive across a toggle.
+ */
+export const LayerStack: Story = {
+  args: {
+    surface: {
+      ...baseSurface,
+      layerIds: heroFrame.layers.map((l) => l.id),
+      layerOpacity: Object.fromEntries(
+        heroFrame.layers.map((l, i) => [l.id, [1, 0.7, 0.5][i] ?? 1]),
+      ),
+      layerVisible: Object.fromEntries(
+        heroFrame.layers.map((l) => [l.id, l.visible]),
+      ),
+      grid: gridOverlayPath(
+        { cellWidth: GRID.width, cellHeight: GRID.height },
+        false,
+      ),
+    },
+    // The checkerboard still comes from the pointer surface until task 06
+    // builds the background DIV. The ARTWORK is on the layer canvases below.
+    paint: (ctx) => {
+      paintBackground(ctx, GRID.width, GRID.height, false);
+    },
+    paintLayerCanvas: (id, ctx) => {
+      const layer = heroFrame.layers.find((l) => l.id === id);
+      if (!layer) return;
+      // Opacity is NOT multiplied in here — that is the point of D4. It is a
+      // CSS property on the element, applied by the compositor.
+      paintLayer(ctx, layer, 0, 0, 1);
+    },
+  },
+};
+
+/* ── 8. the full SVG chrome ──────────────────────────────────────────────── */
+
+const CHROME_BRUSH = [
+  { x: 6, y: 4 },
+  { x: 7, y: 4 },
+  { x: 6, y: 5 },
+  { x: 7, y: 5 },
+];
+const CHROME_HOVER = [
+  { x: 14, y: 18 },
+  { x: 15, y: 18 },
+  { x: 14, y: 19 },
+];
+
+/**
+ * EVERY task-03 vector overlay at once — the visual regression net for D5.
+ *
+ * The grid, the brush outline, the hover outline, the lasso, the marching ants
+ * and the origin cross, all in the one `.canvas__svg` element, all under a
+ * live `scale(12)`. Three of these rendered NOTHING at all after task 02, and
+ * they did so silently:
+ *
+ * - `strokeHoverOutline`'s edges are zero-length at 1:1; with `lineCap: butt`
+ *   the canvas drew none of them. No error, no artifact — just an absent
+ *   marker. If the hover outline is missing here, that is the regression.
+ * - `strokeBrushOutlines` collapsed to `strokeRect(x, y, 0, 0)`.
+ * - `drawMarchingAnts`' inner rect was inset by one whole CELL and its
+ *   `width - 2` inverted for any selection under three cells.
+ *
+ * ⚠️ THE ORIGIN CROSS IS THE ONE TO WATCH, and it is the reason this story
+ * runs at `ZOOM = 12` rather than 1. `vector-effect: non-scaling-stroke`
+ * exempts stroke WIDTH from the transform but NOT geometry, so its 12px arms
+ * emitted as 12 user units would be 144 screen px here (and 600 at zoom 50).
+ * `CanvasSurface` places them in a `<g>` counter-scaled by `1/combinedScale`,
+ * inside which one unit is one screen pixel again. If the cross grows with the
+ * zoom, that wrapper is gone. See `HANDOFF.md` finding 1.
+ */
+export const SvgChrome: Story = {
+  args: {
+    surface: {
+      ...baseSurface,
+      grid: gridOverlayPath(
+        { cellWidth: GRID.width, cellHeight: GRID.height },
+        false,
+      ),
+      brushOutline: brushOutlineOverlay(CHROME_BRUSH),
+      hoverOutline: hoverOutlineOverlay(CHROME_HOVER),
+      lasso: lassoOverlay(
+        [
+          { x: 2, y: 12 },
+          { x: 6, y: 15 },
+          { x: 3, y: 20 },
+        ],
+        0,
+        0,
+      ),
+      marchingAnts: marchingAntsOverlay(
+        { x: 3, y: 3, width: 8, height: 7 },
+        0,
+        0,
+      ),
+      // Deliberately off the top-left corner, so the counter-scaled group's
+      // translate is visibly doing something.
+      originCross: originCrossOverlay(
+        { x: Math.round(GRID.width / 2), y: Math.round(GRID.height / 2) },
+        ORIGIN_CROSS_RED,
+      ),
+    },
+    paint: (ctx) => {
+      paintBackground(ctx, GRID.width, GRID.height, false);
+      for (const layer of heroFrame.layers) paintLayer(ctx, layer, 0, 0);
+      // The selection mask FILL stays raster (D6) — only the ants are vectors.
+      ctx.fillStyle = "rgba(0, 217, 255, 0.14)";
+      ctx.fillRect(3, 3, 8, 7);
     },
   },
 };

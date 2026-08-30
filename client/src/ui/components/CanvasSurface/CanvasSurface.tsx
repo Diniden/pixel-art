@@ -143,6 +143,7 @@
  * fires on unmount so the container can drop stale refs.
  */
 
+import { useMemo } from "react";
 import type {
   CSSProperties,
   MouseEvent,
@@ -366,6 +367,68 @@ function hasPath(spec: SvgPathSpec | null | undefined): spec is SvgPathSpec {
 }
 
 /**
+ * Stable, per-id `ref` callbacks for the layer canvases.
+ *
+ * ⚠️ NOT a micro-optimisation. React compares a ref callback by IDENTITY: a
+ * fresh `(el) => register(id, el)` closure on every render makes React detach
+ * the old one (calling `register(id, null)`) and attach the new one on EVERY
+ * re-render, even when the element itself never moved. That would fire a
+ * `null` through the container's ref map on every pan, zoom, cursor change
+ * and hover sample — a map the imperative painter reads from — and the
+ * pooling that keyed reconciliation buys at the DOM level would be thrown
+ * away again at the ref level. The `does not re-register an unchanged layer
+ * on reorder` test pins it.
+ *
+ * So the callbacks are memoised, one per id, and rebuilt only when the SET of
+ * ids changes or `registerLayerCanvas` changes identity. A REORDER does not
+ * rebuild them — the memo key is the ids joined in sorted order, so `[a,b,c]`
+ * and `[c,a,b]` hash the same and the existing closures survive, which is
+ * precisely the case the pooling proof cares about. Neither does an ordinary
+ * pan/zoom/cursor re-render, which is the case that happens at pointer rate.
+ *
+ * ⚠️ ADDING or DELETING a layer DOES rebuild every closure, so React detaches
+ * and reattaches the survivors: the container sees `(id, null)` then
+ * `(id, element)` for each, with the SAME element both times — no remount, no
+ * lost bitmap, and the map ends correct. That is a deliberate trade: an
+ * order-sensitive key would rebuild on every reorder instead, and a reorder
+ * can arrive from a drag. `unregisters a deleted layer and leaves the map
+ * correct` pins the end state rather than the call sequence, because the end
+ * state is the contract.
+ *
+ * ⚠️ The container must pass a `useCallback`-stable `registerLayerCanvas`. An
+ * inline arrow there rebuilds every closure on every render and reintroduces
+ * exactly the churn this exists to prevent.
+ *
+ * Built with `useMemo` and never mutated afterwards: an entry added to a
+ * cached `Map` during a later render is a write-after-render, which React's
+ * compiler rules reject and which is genuinely unsafe under concurrent
+ * rendering.
+ */
+function useLayerRefs(
+  layerIds: readonly string[] | undefined,
+  registerLayerCanvas:
+    | ((id: string, el: HTMLCanvasElement | null) => void)
+    | undefined,
+) {
+  // Order-insensitive, so a reorder is not a rebuild. `join` on sorted ids is
+  // enough: layer ids are opaque strings from `LayerStore`, and the only thing
+  // that must invalidate the map is an id appearing or disappearing.
+  const idKey = layerIds ? [...layerIds].sort().join("\u0000") : "";
+
+  return useMemo(() => {
+    const map = new Map<string, (el: HTMLCanvasElement | null) => void>();
+    for (const id of layerIds ?? []) {
+      if (map.has(id)) continue;
+      map.set(id, (el) => registerLayerCanvas?.(id, el));
+    }
+    return map;
+    // `idKey` stands in for `layerIds`: the array's identity changes on every
+    // reorder, its CONTENT is what may invalidate these closures.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idKey, registerLayerCanvas]);
+}
+
+/**
  * One stroked path from a task-03 overlay spec.
  *
  * The spec's `attrs` are already named as the SVG attributes they become
@@ -413,6 +476,8 @@ export function CanvasSurface({
   onTouchEnd,
   viewControls,
 }: CanvasSurfaceProps) {
+  const layerRefs = useLayerRefs(layerIds, registerLayerCanvas);
+
   // The counter-scale for screen-constant decorations. Guarded because a zero
   // or missing scale would emit `scale(Infinity)` and blank the whole overlay.
   const inverseScale = combinedScale > 0 ? 1 / combinedScale : 1;
@@ -461,7 +526,7 @@ export function CanvasSurface({
               {layerIds?.map((id) => (
                 <canvas
                   key={id}
-                  ref={(el) => registerLayerCanvas?.(id, el)}
+                  ref={layerRefs.get(id)}
                   width={cellWidth}
                   height={cellHeight}
                   className="canvas__layer"
