@@ -429,6 +429,21 @@ export const LightingCanvasContainer = observer(
       resolveBrushCells,
       paintNormals,
       paintHeights,
+      // ── ONE UNDO ENTRY PER STROKE (plan 04 task 02, owner's request) ─────
+      //
+      // Every `setNormalPixels` / `setHeightPixels` between these two calls
+      // buffers into one `CompositeCommand`, so a drag across ten cells is a
+      // single ⌘Z instead of ten. `ui/` may not import a store, so the
+      // transaction crosses the boundary as callbacks.
+      //
+      // ⚠️ NEVER in Preview mode — that pane paints nothing, and an open
+      // transaction it never closed would swallow every later edit in the app
+      // (`PixelStore.ts:948-961`). The hook guards the close and also closes
+      // on unmount; passing `undefined` here means it never opens one at all.
+      onStrokeStart: previewMode
+        ? undefined
+        : (label: string) => app.history.beginTransaction(label),
+      onStrokeEnd: previewMode ? undefined : () => app.history.endTransaction(),
     });
 
     /* ── coordinate mapping ──────────────────────────────────────────────── */
@@ -853,6 +868,34 @@ export const LightingCanvasContainer = observer(
       [invalidatePreview],
     );
 
+    /* ── per-pane view controls ──────────────────────────────────────────── */
+    //
+    // Mode button (open the other pane, or swap sides when both are open) above
+    // close (only when both are open) above reset — the same cluster the pixel
+    // studio grew in plan 02.
+    //
+    // ⚠️ NO `onNudgeOffset`. The variant-offset arrows are a pixel-studio
+    // feature; the lighting studio has never had them and this plan does not
+    // add them.
+    const otherMode: LightingRenderMode = previewMode ? "edit" : "preview";
+    const modeButton = views.bothOpen
+      ? {
+          kind: "swap" as const,
+          label: "Swap pane sides",
+          onClick: () => views.swap(),
+        }
+      : {
+          kind: "open" as const,
+          label: previewMode ? "Open Edit view" : "Open Preview view",
+          onClick: () => views.openMode(otherMode),
+        };
+    const onClose = views.bothOpen
+      ? {
+          label: previewMode ? "Close Preview view" : "Close Edit view",
+          onClick: () => views.closeMode(renderMode),
+        }
+      : undefined;
+
     const empty = !obj || !frame;
 
     return (
@@ -872,7 +915,13 @@ export const LightingCanvasContainer = observer(
         gridHeight={viewCellsY}
         zoom={zoom}
         empty={empty}
-        viewControls={<CanvasViewControls onResetView={handleResetView} />}
+        viewControls={
+          <CanvasViewControls
+            onResetView={handleResetView}
+            modeButton={modeButton}
+            onClose={onClose}
+          />
+        }
         // ⚠️ EDIT MODE ONLY. Two mounted copies would fight over the one
         // persisted panel position in `ViewportUIStore.panels.lightingPreview`.
         // Task 06 retires the floating panel entirely; until then Edit keeps it
