@@ -63,8 +63,23 @@
   touch-action: none;
 }
 
+/* ⚠️ `will-change: transform` IS LOAD-BEARING — DO NOT REMOVE IT.
+
+   It pins this transformed subtree to its own compositing layer, so its
+   rasterisation is decided here (by `image-rendering: pixelated` on the
+   canvases below) rather than by whatever else on the page is animating.
+   Without it, an infinite compositor animation elsewhere — the save-status
+   dot's `app-pulse`, for one — pushes this tree onto the GPU path and the
+   1:1 canvases get re-sampled with the compositor's default BILINEAR filter,
+   blurring the artwork for as long as that animation runs. See the same
+   comment on `.canvas__layout`, where this was diagnosed 2026-08-30.
+
+   This engine already had the pin, which is why only the pixel editor blurred.
+   `backface-visibility` is the WebKit spelling of the same hint and matters
+   because this editor also runs on iPad. */
 .lighting-canvas__surface {
   will-change: transform;
+  backface-visibility: hidden;
   width: 100%;
   height: 100%;
 }

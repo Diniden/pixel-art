@@ -50,12 +50,41 @@
     var(--bg-primary);
 }
 
+/* ⚠️ THE COMPOSITING PIN IS LOAD-BEARING — DO NOT REMOVE `will-change`.
+
+   Reported 2026-08-30: "everything (grid and pixels) all blurs while the
+   system is saving". The cause was NOT in this component. `.save-status-dot__
+   dot--pulsing::after` runs `animation: app-pulse 1s infinite` (an `opacity`
+   keyframe) for exactly as long as a save is in flight. An infinite compositor
+   animation promotes its subtree and pushes the surrounding document onto the
+   GPU compositing path — and there the canvases below, which carry the scale
+   transform but had no layer of their own, were re-sampled with the
+   compositor's default BILINEAR filter. `image-rendering: pixelated` is
+   honoured when the element rasterises itself; it does not survive being
+   re-sampled as part of somebody else's layer.
+
+   So the artwork blurred while saving and snapped back when the dot stopped.
+   Every canvas under here is 1:1 with pixel data and magnified up to 200x by
+   the transform below, so bilinear resampling is the difference between crisp
+   pixel art and mush.
+
+   `will-change: transform` gives this subtree its own layer unconditionally,
+   so its rasterisation is decided HERE — by `image-rendering: pixelated` on
+   the canvases — and never by whatever else on the page happens to be
+   animating. `backface-visibility: hidden` is the same hint for WebKit, which
+   matters because this editor also runs on iPad.
+
+   Fixing it here rather than by removing the dot's pulse is deliberate: the
+   canvas must stay sharp no matter what else animates, and any future
+   animation anywhere would otherwise reintroduce this. */
 .canvas__layout {
   position: relative;
   transition: none;
   display: flex;
   align-items: flex-start;
   gap: var(--space-6);
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .canvas__frame {

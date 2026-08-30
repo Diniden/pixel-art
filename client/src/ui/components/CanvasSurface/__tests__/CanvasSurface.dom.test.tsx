@@ -33,6 +33,7 @@
  * before the reorder and asserts they are the SAME OBJECTS afterwards. That is
  * the pooling proof, and nothing weaker is.
  */
+import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { composeStories } from "@storybook/react-vite";
@@ -763,5 +764,26 @@ describe("CanvasSurface — the SVG chrome mount (plan 05, D5)", () => {
     );
     expect(container.querySelectorAll(".canvas__svg-guide")).toHaveLength(2);
     expect(container.querySelectorAll(".canvas__svg path")).toHaveLength(4);
+  });
+
+  it("⭐ pins the transformed subtree to its own compositing layer, so the artwork cannot blur while something else on the page animates", () => {
+    // Reported 2026-08-30: "everything (grid and pixels) all blurs while the
+    // system is saving". `.save-status-dot__dot--pulsing::after` runs an
+    // infinite `opacity` keyframe for exactly as long as a save is in flight,
+    // which promotes the surrounding document onto the GPU compositing path.
+    // The canvases here carry the scale transform but had no layer of their
+    // own, so the compositor re-sampled them BILINEARLY — and
+    // `image-rendering: pixelated` does not survive being re-sampled as part
+    // of somebody else's layer. Every canvas below is 1:1 with pixel data and
+    // magnified up to 200x, so that is the difference between pixel art and
+    // mush.
+    //
+    // jsdom applies no author CSS, so this is asserted against the sheet —
+    // the same approach `Toast.dom.test.tsx` uses for `pointer-events: none`.
+    const css = readFileSync(
+      "src/ui/components/CanvasSurface/CanvasSurface.css",
+      "utf8",
+    );
+    expect(css).toMatch(/\.canvas__layout \{[^}]*will-change: transform/);
   });
 });
