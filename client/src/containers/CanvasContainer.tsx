@@ -2691,6 +2691,36 @@ export const CanvasContainer = observer(function CanvasContainer({
     camera,
   ]);
 
+  /* ── per-pane view controls (split-canvas task 05) ─────────────────────── */
+  //
+  // Mode button (open the other pane, or swap sides when both are open) above
+  // close (only when both are open) above reset; the Full pane adds the
+  // `← ↑ ↓ →` variant-offset arrows, which call the SAME undoable action WASD
+  // does — one history entry per press, shift = all frames.
+  const otherMode: CanvasRenderMode = layerMode ? "full" : "layer";
+  const modeButton = views.bothOpen
+    ? {
+        kind: "swap" as const,
+        label: "Swap pane sides",
+        onClick: () => views.swap(),
+      }
+    : {
+        kind: "open" as const,
+        label: layerMode ? "Open Full view" : "Open Layer view",
+        onClick: () => views.openMode(otherMode),
+      };
+  const onClose = views.bothOpen
+    ? {
+        label: layerMode ? "Close Layer view" : "Close Full view",
+        onClick: () => views.closeMode(renderMode),
+      }
+    : undefined;
+  const onNudgeOffset =
+    !layerMode && editingVariant
+      ? (dx: number, dy: number, allFrames: boolean) =>
+          actions.setVariantOffset(dx, dy, allFrames)
+      : undefined;
+
   return (
     <CanvasSurface
       canvasRef={canvasRef}
@@ -2723,7 +2753,14 @@ export const CanvasContainer = observer(function CanvasContainer({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      viewControls={<CanvasViewControls onResetView={handleResetView} />}
+      viewControls={
+        <CanvasViewControls
+          onResetView={handleResetView}
+          modeButton={modeButton}
+          onClose={onClose}
+          onNudgeOffset={onNudgeOffset}
+        />
+      }
     />
   );
 });
