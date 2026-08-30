@@ -1,8 +1,8 @@
 # HANDOFF — Canvas rendering performance for large editing surfaces
 
-**Current position:** W2 DONE (via owner-authorized follow-up) — W3 (task 04) next
+**Current position:** W3 DONE — W4 (task 05) next. Owner deferred ALL visual checks to one pass after W6.
 **Branch:** `feat/03-reflection-tool`
-**Last commit:** `c2963cf`
+**Last commit:** `72856b8`
 
 Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 `feat/03-reflection-tool`, working tree clean.
@@ -13,7 +13,7 @@ Planned against `5d76ce9` ("Checkpoint: Stable version before optimize"), branch
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01 | DONE | 2026-08-30 | `cacfafe` | typecheck 0 · vitest **132 files / 2269 tests passed** · lint:boundaries OK (5/5) |
 | W2 | 02, 03 | **DONE** | 2026-08-30 | `5b2401d` `fd871c9` (03) · `cf4c7dd` `23ac19c` `c2963cf` (02) | typecheck 0 · vitest **134 files / 2330 passed** · lint 0 · boundaries 0 · `lint:css` exit 2 **pre-existing, see below** |
-| W3 | 04 | TODO | | | |
+| W3 | 04 | **DONE** | 2026-08-30 | `75d3cf7` `72856b8` | typecheck 0 · vitest **134 files / 2353 passed** · lint 0 · lint:css no new · boundaries 0 · storybook 0 · **8 visual checks deferred** |
 | W4 | 05 | TODO | | | |
 | W5 | 06 | TODO | | | |
 | W6 | 07 | TODO | | | |
@@ -191,6 +191,74 @@ chromedriver). Still owed, including **the Landscapes KB-not-MB memory measureme
 headline claim of this task, entirely unmeasured.** Static substitutes that did pass:
 `coords.test.ts` 21/21 unmodified; the R1 wheel-pan test drives a real `WheelEvent` and
 asserts the clamp against full content size; the D1 variant-edit sizing test.
+
+## W3 DONE — coordinator-verified
+
+Commits `75d3cf7`, `72856b8`. Exactly the 4 authorized files (1,316 insertions / 145
+deletions); nothing under `ui/canvas/`, no container, no other file.
+
+```
+typecheck        -> exit 0
+vitest run       -> Test Files  134 passed (134) · Tests  2353 passed (2353)   68.88s
+lint             -> 0 errors, 65 warnings                        exit 0
+lint:css         -> same 2 pre-existing OtherHand.css errors; CanvasSurface.css CLEAN
+lint:boundaries  -> OK — all 5 boundary rules hold               exit 0
+build-storybook  -> built in 5.59s                               exit 0
+```
++23 tests, no pre-existing test changed status. Corpus digests unchanged. No lockfile.
+
+**R8 boundary verified by the coordinator, not taken on report** — ESLint sees imports, not
+prop types, so this check had to be done by hand. `CanvasSurface.tsx` imports only React
+types plus `OriginCrossOverlay`/`ReflectionGuideOverlay`/`SvgPathSpec` from
+`ui/canvas/svg/`. Props are `layerIds: readonly string[]`, `registerLayerCanvas(id, el|null)`,
+`Readonly<Record<string, number|boolean>>`, refs, primitives and callbacks. **No `pixels`,
+`layers`, `frame`, `Layer`, `PixelData` or any domain type anywhere in the interface.**
+
+**Origin cross** (task-03 finding 1) handled correctly: verified at `CanvasSurface.tsx:677` —
+`<g transform="translate(cx cy) scale(1/combinedScale)">` with the circle rendered inside.
+Pinned by a test asserting `scale(0.125)` at `combinedScale=8`, plus a guard that
+`combinedScale=0` degrades to `scale(1)` rather than `scale(Infinity)` (which would blank all
+chrome).
+
+### ⚠️ REFLECTION CANVAS KEPT — and TASK 05 must retire it
+
+The task file said "remove it if now unused". **It is still in use, so it was correctly
+kept.** Coordinator confirmed: `CanvasContainer.tsx:1585` still gets
+`reflectionCanvasRef.current`, clears it and calls `drawReflectionLines`. Removing the canvas
+would have left that painter writing into `null` — and `CanvasContainer.tsx` belongs to task
+05. `reflectionGuides` (SVG) is mounted alongside it as the D5 replacement.
+**Task 05 must stop that raster painter and then drop the canvas**, or the guides will be
+drawn twice — once raster (wrong at 1:1) and once vector.
+
+### Task 04 deviations (accepted)
+
+1. `.canvas__svg` carries `z-index: var(--z-canvas-overlay)` — **not a new value**, the same
+   token every `.canvas__overlay` uses. It must be *present*: a positioned element with no
+   z-index loses to one with a value regardless of DOM order. With equal values the later
+   sibling wins, which is the rule the file already documents. `.canvas__layers` has no
+   z-index and stacks purely by source order. `lint:css` clean on this file.
+2. **`useLayerRefs`, a memoised per-id ref-callback map** — found by the executor's own test.
+   The obvious `ref={(el) => register(id, el)}` is a fresh closure每 render, so React would
+   detach/reattach EVERY layer canvas on EVERY render, firing `(id, null)` through the
+   container's ref map on every pan frame, wheel tick and hover sample. That would discard at
+   the ref level exactly the pooling that keyed reconciliation buys at the DOM level. Memo is
+   keyed on the sorted id set, so reorder and pan/zoom do not rebuild it. Two tests pin it.
+3. React-Compiler rules reject the `useRef`-cache pattern ("Cannot access refs during
+   render"), which is why the memo was used; the eslint config has no
+   `react/no-array-index-key`, so an initial disable comment was itself an error and was
+   removed.
+4. One unregister test now asserts the container map's **end state** rather than an exact
+   call sequence (consequence of deviation 2).
+5. `ReflectionGuides` story converted from raster paint to the `reflectionGuides` SVG prop.
+
+### W3's 8 manual checks — ALL DEFERRED, none claimed
+
+Per owner instruction (verify once after W6). Statically supported: #7 (per-layer canvas
+count, order, dimensions, `display:none` targeting, and reorder-without-remount by element
+identity — all asserted in jsdom) and #5 (counter-scale transform asserted exactly).
+**Highest residual risk is #2, the hover outline** — its canvas failure mode was rendering
+*nothing* with no error, so only eyes can confirm it. #6's reflection *animation* is
+genuinely unverified: `dashOffset` is a parameter here and task 05 owns driving it.
 
 ## W2 task-03 findings that TASK 04 MUST READ
 
