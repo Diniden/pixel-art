@@ -341,6 +341,32 @@ describe("each layer's cells land on its own canvas and on no other", () => {
     ]);
   });
 
+  it("⭐ disables image smoothing on EVERY layer canvas, so the artwork's edges cannot blur", () => {
+    // Reported 2026-08-30: "blurry edges all the time ... these all should be
+    // using no antialiasing and have smoothing turned off".
+    //
+    // Every OVERLAY context in the container already set this, but the
+    // per-layer artwork canvases were created by plan 05 and did not — so the
+    // canvases actually holding the user's pixels were the blurry ones.
+    //
+    // This is a SEPARATE mechanism from `image-rendering: pixelated`: that
+    // governs how the browser scales the finished bitmap, this governs
+    // interpolation inside the 2D context. Both are required, and the stub
+    // defaults the flag to `true` exactly as a real context does, so this
+    // fails if the assignment is dropped.
+    load(
+      mkProject([
+        mkLayer("l-red", RED, [[0, 0]]),
+        mkLayer("l-green", GREEN, [[3, 1]]),
+      ]),
+    );
+    const { container } = mountCanvas();
+
+    for (const el of layerCanvases(container)) {
+      expect(contexts.get(el)?.imageSmoothingEnabled).toBe(false);
+    }
+  });
+
   it("⚠️ NO layer's cells appear on ANOTHER layer's canvas", () => {
     // The negative control, and the one assertion that separates "per-layer
     // rendering" from "the old composite, drawn N times". Before this task

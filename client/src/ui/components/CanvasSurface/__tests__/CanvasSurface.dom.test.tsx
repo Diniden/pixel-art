@@ -786,4 +786,27 @@ describe("CanvasSurface — the SVG chrome mount (plan 05, D5)", () => {
     );
     expect(css).toMatch(/\.canvas__layout \{[^}]*will-change: transform/);
   });
+
+  it("⭐ turns antialiasing off for the cell-aligned chrome, but leaves it ON for the origin cross and reflection guides", () => {
+    // Reported 2026-08-30: "blurry edges all the time ... no antialiasing".
+    // SVG antialiases by default, so the brush outline, hover outline, lasso
+    // and marching ants — axis-aligned rectangles sitting exactly on cell
+    // boundaries — drew soft grey half-covered pixels on every edge.
+    //
+    // The two exceptions are the point of this test. `crispEdges` on a
+    // diagonal or counter-scaled shape does not sharpen it, it makes it a
+    // staircase: the origin cross is sub-pixel geometry inside a
+    // `1/combinedScale` group (and a circle is nothing but curves), and the
+    // reflection guides are drawn at arbitrary angles. A future "make
+    // everything crisp" sweep that deletes the exception block would make
+    // those two visibly worse, so both halves are asserted.
+    const css = readFileSync(
+      "src/ui/components/CanvasSurface/CanvasSurface.css",
+      "utf8",
+    );
+    expect(css).toMatch(/\.canvas__svg \{[^}]*shape-rendering: crispEdges/);
+    expect(css).toMatch(
+      /\.canvas__svg-origin,\s*\.canvas__svg-guide \{[^}]*shape-rendering: geometricPrecision/,
+    );
+  });
 });

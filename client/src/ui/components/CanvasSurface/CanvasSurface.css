@@ -281,7 +281,23 @@
    spells out. A HIGHER number here would be both redundant and a stylelint
    error, and there is no new token.
 
-   No `image-rendering`: it is meaningless on vector content. */
+   No `image-rendering`: it is meaningless on vector content. The vector
+   equivalent is `shape-rendering`, set below.
+
+   ── ⚠️ `shape-rendering: crispEdges` — NO ANTIALIASING ON CELL-ALIGNED CHROME
+   Reported 2026-08-30: "blurry edges all the time ... these all should be
+   using no antialiasing and have smoothing turned off". SVG antialiases by
+   default, so the brush outline, hover outline, lasso and marching ants — all
+   axis-aligned rectangles sitting exactly on cell boundaries — were drawn with
+   soft grey half-covered pixels on every edge. On pixel art that reads as
+   blur, not as smoothing.
+
+   `crispEdges` turns antialiasing off and snaps edges to device pixels. The
+   grid already carried it as its own attribute; putting it on the parent
+   covers every cell-aligned overlay at once, including any added later.
+
+   Two children opt BACK IN below, deliberately — they are the only chrome that
+   is not cell-aligned. */
 .canvas__svg {
   position: absolute;
   top: 0;
@@ -291,6 +307,23 @@
   border-radius: var(--radius-sm);
   overflow: visible;
   z-index: var(--z-canvas-overlay);
+  shape-rendering: crispEdges;
+}
+
+/* ⚠️ THE TWO EXCEPTIONS — these MUST antialias.
+
+   `crispEdges` on a diagonal or counter-scaled shape does not sharpen it, it
+   makes it jagged: the renderer snaps each edge to whole device pixels, and a
+   line that is not axis-aligned becomes a visible staircase.
+
+   The origin cross lives inside a `1/combinedScale` group, so its arms and its
+   circle are sub-pixel geometry in the parent's space — a circle in particular
+   is nothing but curves. The reflection guides are drawn at arbitrary angles.
+   Neither sits on a cell boundary, so neither is what the "no antialiasing"
+   report was about; both want the default. */
+.canvas__svg-origin,
+.canvas__svg-guide {
+  shape-rendering: geometricPrecision;
 }
 
 /* Reference trace overlay canvases */

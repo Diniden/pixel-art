@@ -148,12 +148,22 @@
    `pointer-events: none`: the editable canvas is the only element that may
    take input, and an SVG stacked above everything would otherwise swallow
    every stroke. No `image-rendering` — it is meaningless on vector content. */
+/* ⚠️ `shape-rendering: crispEdges` — NO ANTIALIASING. Same reasoning as
+   `.canvas__svg`: SVG antialiases by default, so the grid and the brush
+   outline — both axis-aligned on cell boundaries — were drawn with soft grey
+   half-covered pixels on every edge, which on pixel art reads as blur.
+
+   Unlike the pixel editor's chrome this SVG holds only those two overlays,
+   both cell-aligned, so there is no counter-scaled or diagonal child that
+   needs to opt back in. If one is added, give it
+   `shape-rendering: geometricPrecision` as `.canvas__svg-origin` does. */
 .lighting-canvas__svg {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none;
   overflow: visible;
+  shape-rendering: crispEdges;
 }
 
 .lighting-canvas__info {

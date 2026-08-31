@@ -1359,6 +1359,21 @@ export const CanvasContainer = observer(function CanvasContainer({
         const ctx = canvas?.getContext("2d");
         if (!canvas || !ctx) continue;
 
+        // ⚠️ NEAREST-NEIGHBOUR, ALWAYS. Every overlay context in this file
+        // sets this; the per-layer artwork canvases were created by plan 05
+        // and did not, which blurred the artwork's EDGES at every zoom rather
+        // than only under the compositing path.
+        //
+        // This is a SEPARATE mechanism from `image-rendering: pixelated`,
+        // which governs how the browser scales the finished bitmap.
+        // `imageSmoothingEnabled` governs interpolation INSIDE the 2D context
+        // — `drawImage` and the `putImageData`-adjacent paths below — so the
+        // two are not alternatives and both are required. The default is
+        // `true`, and it resets whenever a context's backing store is
+        // resized, so it is set here on every acquisition rather than once at
+        // creation.
+        ctx.imageSmoothingEnabled = false;
+
         // ══════════════════════════════════════════════════════════════════
         //  ⚠️ THE GRID IS RE-READ FROM THE LIVE TREE, NOT TAKEN FROM THE PLAN
         // ══════════════════════════════════════════════════════════════════
@@ -2164,6 +2179,11 @@ export const CanvasContainer = observer(function CanvasContainer({
       tempCanvas.height = cellHeight;
       const tempCtx = tempCanvas.getContext("2d");
       if (!tempCtx) return;
+      // The scratch buffer is `drawImage`d into `ctx` at integer offsets, so
+      // nothing should interpolate — but a scratch canvas defaults to
+      // smoothing ON, and it is one `drawX` rounding change away from
+      // mattering. Set it to match every other context in this file.
+      tempCtx.imageSmoothingEnabled = false;
 
       const frameIndex = frameRefObj.frames.findIndex(
         (f) => f.id === overlaySourceFrame.id,
