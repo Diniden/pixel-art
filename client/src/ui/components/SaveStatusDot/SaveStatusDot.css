@@ -14,6 +14,41 @@
    announces itself. It is deliberately larger than the 8px indicator it
    replaces: it is now a tap target, and 8px is unhittable with a finger.
    The visible dot is drawn by ::after; the button itself is the hit area. */
+/* ⚠️ `contain` AND `isolation` ARE LOAD-BEARING — DO NOT REMOVE THEM.
+
+   This button holds the only infinite animation that can run while the pixel
+   canvas is on screen (`--pulsing`, below). Reported 2026-08-31: releasing a
+   zoom made the artwork blur for under a second — which is the 500 ms
+   auto-save debounce plus the save, i.e. exactly the window in which this dot
+   is orange and pulsing.
+
+   An animation with no containment makes the browser re-evaluate compositing
+   for the whole document, and the canvas — 1:1 with the pixel data and
+   magnified up to 200x by a CSS transform — gets re-rasterised through that
+   path and comes back bilinearly smoothed.
+
+   `will-change: opacity` on the `::after` alone was NOT enough: a pseudo
+   element does not give its host an isolated compositing context in the
+   header's flow. Containing the BUTTON does. It is a fixed 24x24 control, so
+   `layout paint` costs nothing and `isolation: isolate` keeps its stacking
+   context to itself.
+
+   ⚠️ `contain: paint` CLIPS TO THE BORDER BOX, so the glow must fit inside it.
+   Today it does, with room to spare: the `::after` dot is 10px centred in a
+   24px button, leaving 7px of slack on each side, and the glow is a 6px blur
+   with no offset and no spread. If the dot grows, the button shrinks, or the
+   glow gains offset/spread, re-check that sum — the glow will be clipped
+   rather than overflow, and it will look like the glow was deleted.
+
+   The popover is a SIBLING of this button, not a child, so paint containment
+   here cannot clip it.
+
+   ⚠️ DO NOT "FIX" THIS ON THE CANVAS. Pinning `.canvas__layout` with
+   `will-change: transform` is the intuitive move and it is WRONG — it makes
+   the browser rasterise the canvas subtree once at 1:1 and GPU-upscale that
+   bitmap, blurring permanently and worse the further you zoom. See the comment
+   on `.canvas__layout` in `CanvasSurface.css`. The canvas stays unpromoted;
+   animations elsewhere isolate themselves. */
 .save-status-dot__dot {
   display: flex;
   align-items: center;
@@ -25,6 +60,8 @@
   border: none;
   border-radius: var(--radius-full);
   cursor: pointer;
+  contain: layout paint;
+  isolation: isolate;
 }
 
 .save-status-dot__dot::after {
@@ -63,25 +100,10 @@
 
 /* Only the busy state animates — a resting header must be still.
 
-   ⚠️ `will-change: opacity` IS LOAD-BEARING — DO NOT REMOVE IT.
-
-   Reported 2026-08-30: "everything (grid and pixels) all blur while the system
-   is saving", i.e. for exactly as long as this animation runs. An infinite
-   compositor animation with no layer of its own makes the browser re-evaluate
-   compositing for the surrounding document, and the pixel canvas — which is
-   1:1 with the pixel data and magnified up to 200x by a CSS transform — got
-   re-rasterised through that path and came back bilinearly smoothed.
-
-   Confining the animation to its own layer keeps its repaints off everything
-   else. This is a 10px dot, so the layer costs nothing.
-
-   ⚠️ FIX IT HERE, NOT ON THE CANVAS. The intuitive fix is to pin
-   `.canvas__layout` with `will-change: transform` — that was tried and is
-   WRONG: it makes the browser rasterise the canvas subtree once at 1:1 and
-   GPU-upscale that bitmap, so the artwork blurs permanently and worse the
-   further you zoom. See the comment on `.canvas__layout` in
-   `CanvasSurface.css`. The canvas must stay unpromoted; animations elsewhere
-   must isolate themselves. */
+   `will-change: opacity` hints the animated property. It is NOT sufficient on
+   its own — see the containment on `.save-status-dot__dot` above, which is
+   what actually keeps this pulse from making the browser re-evaluate
+   compositing document-wide and blurring the pixel canvas. Both stay. */
 .save-status-dot__dot--pulsing::after {
   animation: app-pulse 1s ease-in-out infinite;
   will-change: opacity;

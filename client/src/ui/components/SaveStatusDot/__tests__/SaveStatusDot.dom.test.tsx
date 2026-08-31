@@ -7,6 +7,7 @@
  * covers `pending` AND `saving`, so orange always means exactly one thing:
  * not on disk yet.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SaveStatusDot } from "../SaveStatusDot";
@@ -117,5 +118,31 @@ describe("the detail popover", () => {
   it("names the state in the button's accessible label", () => {
     render(<SaveStatusDot status="saving" />);
     expect(screen.getByLabelText("Save status: Saving…")).toBeTruthy();
+  });
+  it("\u2b50 contains its pulse, so an in-flight save cannot blur the pixel canvas", () => {
+    // Reported 2026-08-31: releasing a zoom blurred the artwork for under a
+    // second — the 500 ms auto-save debounce plus the save, i.e. exactly the
+    // window in which this dot is orange and pulsing. This is the only
+    // infinite animation that can run while the canvas is on screen.
+    //
+    // Without containment the animation makes the browser re-evaluate
+    // compositing document-wide, and the canvas — 1:1 with the pixel data and
+    // magnified up to 200x by a CSS transform — comes back bilinearly
+    // smoothed. `will-change: opacity` on the `::after` was not enough: a
+    // pseudo element does not give its host an isolated compositing context.
+    //
+    // The fix belongs HERE and not on the canvas — promoting the canvas's own
+    // transformed element makes it rasterise once at 1:1 and GPU-upscale,
+    // blurring permanently and worse the further you zoom.
+    //
+    // jsdom applies no author CSS, so this is asserted against the sheet.
+    const css = readFileSync(
+      "src/ui/components/SaveStatusDot/SaveStatusDot.css",
+      "utf8",
+    );
+    const rule = /\.save-status-dot__dot \{[^}]*\}/.exec(css)?.[0] ?? "";
+    expect(rule).not.toBe("");
+    expect(rule).toMatch(/contain: layout paint/);
+    expect(rule).toMatch(/isolation: isolate/);
   });
 });
