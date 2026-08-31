@@ -766,17 +766,22 @@ describe("CanvasSurface — the SVG chrome mount (plan 05, D5)", () => {
     expect(container.querySelectorAll(".canvas__svg path")).toHaveLength(4);
   });
 
-  it("⭐ pins the transformed subtree to its own compositing layer, so the artwork cannot blur while something else on the page animates", () => {
-    // Reported 2026-08-30: "everything (grid and pixels) all blurs while the
-    // system is saving". `.save-status-dot__dot--pulsing::after` runs an
-    // infinite `opacity` keyframe for exactly as long as a save is in flight,
-    // which promotes the surrounding document onto the GPU compositing path.
-    // The canvases here carry the scale transform but had no layer of their
-    // own, so the compositor re-sampled them BILINEARLY — and
-    // `image-rendering: pixelated` does not survive being re-sampled as part
-    // of somebody else's layer. Every canvas below is 1:1 with pixel data and
-    // magnified up to 200x, so that is the difference between pixel art and
-    // mush.
+  it("⭐ NEVER promotes the transformed element to its own layer — that rasterises the subtree once at 1:1 and GPU-upscales it, blurring worse the further you zoom", () => {
+    // ⚠️ THIS TEST ASSERTS THE ABSENCE OF A FIX THAT WAS TRIED AND WAS WRONG.
+    //
+    // 2026-08-30 the artwork blurred while saving, and `will-change:
+    // transform` was added here to give this subtree a stable layer. It made
+    // the blur PERMANENT and zoom-dependent: `.canvas__layout` carries
+    // `scale(combinedScale)`, so promoting it makes the browser rasterise the
+    // whole subtree ONCE at 1:1 and then bilinearly stretch that single
+    // bitmap. The children's `image-rendering: pixelated` never gets a say,
+    // because they stop rasterising themselves and become texels in the
+    // parent's texture. Reported back as "gets blurrier the more you zoom in",
+    // which is the signature of exactly that.
+    //
+    // Leaving this element unpromoted is what keeps the artwork sharp: each
+    // `<canvas>` then rasterises at its own scale, where `pixelated` decides
+    // the filter. The save-time blur is fixed on the save indicator instead.
     //
     // jsdom applies no author CSS, so this is asserted against the sheet —
     // the same approach `Toast.dom.test.tsx` uses for `pointer-events: none`.
@@ -784,7 +789,11 @@ describe("CanvasSurface — the SVG chrome mount (plan 05, D5)", () => {
       "src/ui/components/CanvasSurface/CanvasSurface.css",
       "utf8",
     );
-    expect(css).toMatch(/\.canvas__layout \{[^}]*will-change: transform/);
+    const layoutRule = /\.canvas__layout \{[^}]*\}/.exec(css)?.[0] ?? "";
+    expect(layoutRule).not.toBe("");
+    expect(layoutRule).not.toMatch(/will-change/);
+    expect(layoutRule).not.toMatch(/backface-visibility/);
+    expect(layoutRule).not.toMatch(/translate[zZ]|translate3d/);
   });
 
   it("⭐ turns antialiasing off for the cell-aligned chrome, but leaves it ON for the origin cross and reflection guides", () => {

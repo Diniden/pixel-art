@@ -50,41 +50,32 @@
     var(--bg-primary);
 }
 
-/* ⚠️ THE COMPOSITING PIN IS LOAD-BEARING — DO NOT REMOVE `will-change`.
+/* ⚠️ DO NOT ADD `will-change: transform` OR ANY OTHER LAYER-PROMOTION HINT HERE.
 
-   Reported 2026-08-30: "everything (grid and pixels) all blurs while the
-   system is saving". The cause was NOT in this component. `.save-status-dot__
-   dot--pulsing::after` runs `animation: app-pulse 1s infinite` (an `opacity`
-   keyframe) for exactly as long as a save is in flight. An infinite compositor
-   animation promotes its subtree and pushes the surrounding document onto the
-   GPU compositing path — and there the canvases below, which carry the scale
-   transform but had no layer of their own, were re-sampled with the
-   compositor's default BILINEAR filter. `image-rendering: pixelated` is
-   honoured when the element rasterises itself; it does not survive being
-   re-sampled as part of somebody else's layer.
+   Tried 2026-08-30 to fix "everything blurs while saving", and it made the
+   blur PERMANENT and zoom-dependent. Recording why, because it is the
+   intuitive fix and someone will reach for it again.
 
-   So the artwork blurred while saving and snapped back when the dot stopped.
-   Every canvas under here is 1:1 with pixel data and magnified up to 200x by
-   the transform below, so bilinear resampling is the difference between crisp
-   pixel art and mush.
+   This element carries `scale(combinedScale)`. Promoting it to its own
+   compositing layer makes the browser rasterise the whole subtree ONCE at
+   1:1 and then GPU-scale that single bitmap — bilinearly. The children's
+   `image-rendering: pixelated` never gets a say, because they no longer
+   rasterise themselves; they are texels in the parent's texture. The higher
+   the zoom, the more that one low-resolution bitmap is stretched, which is
+   why the symptom was "gets blurrier the more you zoom in".
 
-   `will-change: transform` gives this subtree its own layer unconditionally,
-   so its rasterisation is decided HERE — by `image-rendering: pixelated` on
-   the canvases — and never by whatever else on the page happens to be
-   animating. `backface-visibility: hidden` is the same hint for WebKit, which
-   matters because this editor also runs on iPad.
+   Leaving this element unpromoted lets each `<canvas>` rasterise at its own
+   scale, where `image-rendering: pixelated` decides the filter. That is what
+   made the artwork sharp before any of this, and it is what keeps it sharp.
 
-   Fixing it here rather than by removing the dot's pulse is deliberate: the
-   canvas must stay sharp no matter what else animates, and any future
-   animation anywhere would otherwise reintroduce this. */
+   The save-time blur has the SAME root cause and is fixed on the save
+   indicator instead — see `SaveStatusDot.css`. */
 .canvas__layout {
   position: relative;
   transition: none;
   display: flex;
   align-items: flex-start;
   gap: var(--space-6);
-  will-change: transform;
-  backface-visibility: hidden;
 }
 
 .canvas__frame {

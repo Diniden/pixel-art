@@ -16,6 +16,7 @@
  * when the lit composite became a workspace pane, so this file is now the
  * whole of the lighting studio's `ui/` purity gate.
  */
+import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { composeStories } from "@storybook/react-vite";
@@ -294,5 +295,30 @@ describe("LightingSurface — the `viewControls` slot", () => {
     const { container } = render(<composed.Empty />);
     expect(container.querySelector(".canvas-view-controls")).toBeNull();
     expect(container.querySelector(".lighting-canvas__viewport")).toBeNull();
+  });
+
+  it("\u2b50 NEVER promotes the transformed element to its own layer \u2014 that GPU-upscales one 1:1 bitmap and blurs worse the further you zoom", () => {
+    // This element carries `scale(combinedScale)`. Promoting it makes the
+    // browser rasterise the subtree ONCE at 1:1 and bilinearly stretch that
+    // bitmap, so the child canvases' `image-rendering: pixelated` never
+    // applies \u2014 they stop rasterising themselves and become texels in the
+    // parent's texture.
+    //
+    // It DID carry `will-change: transform` from before plan 05, which was
+    // harmless while this element was sized `viewCells * zoom` (the bitmap was
+    // already at final resolution) and became a permanent blur once task 08
+    // made these canvases 1:1. Removed 2026-08-31; see the matching test and
+    // comment on `.canvas__layout`.
+    //
+    // jsdom applies no author CSS, so this is asserted against the sheet.
+    const css = readFileSync(
+      "src/ui/components/LightingSurface/LightingSurface.css",
+      "utf8",
+    );
+    const rule = /\.lighting-canvas__surface \{[^}]*\}/.exec(css)?.[0] ?? "";
+    expect(rule).not.toBe("");
+    expect(rule).not.toMatch(/will-change/);
+    expect(rule).not.toMatch(/backface-visibility/);
+    expect(rule).not.toMatch(/translate[zZ]|translate3d/);
   });
 });

@@ -61,9 +61,30 @@
   --save-dot-glow: var(--glow-danger-6);
 }
 
-/* Only the busy state animates — a resting header must be still. */
+/* Only the busy state animates — a resting header must be still.
+
+   ⚠️ `will-change: opacity` IS LOAD-BEARING — DO NOT REMOVE IT.
+
+   Reported 2026-08-30: "everything (grid and pixels) all blur while the system
+   is saving", i.e. for exactly as long as this animation runs. An infinite
+   compositor animation with no layer of its own makes the browser re-evaluate
+   compositing for the surrounding document, and the pixel canvas — which is
+   1:1 with the pixel data and magnified up to 200x by a CSS transform — got
+   re-rasterised through that path and came back bilinearly smoothed.
+
+   Confining the animation to its own layer keeps its repaints off everything
+   else. This is a 10px dot, so the layer costs nothing.
+
+   ⚠️ FIX IT HERE, NOT ON THE CANVAS. The intuitive fix is to pin
+   `.canvas__layout` with `will-change: transform` — that was tried and is
+   WRONG: it makes the browser rasterise the canvas subtree once at 1:1 and
+   GPU-upscale that bitmap, so the artwork blurs permanently and worse the
+   further you zoom. See the comment on `.canvas__layout` in
+   `CanvasSurface.css`. The canvas must stay unpromoted; animations elsewhere
+   must isolate themselves. */
 .save-status-dot__dot--pulsing::after {
   animation: app-pulse 1s ease-in-out infinite;
+  will-change: opacity;
 }
 
 /* The detail panel. Opened by CLICK, never hover: a hover tooltip is
