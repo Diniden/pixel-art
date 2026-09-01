@@ -23,6 +23,9 @@ import { Color } from "../../../types";
 // `ui/utils/colorMath.ts` (extracted verbatim — see that file's note on why
 // `prevHsl` must not be "simplified" away).
 import { hslToRgb, rgbToHsl } from "../../utils/colorMath";
+// ⚠️ The fix for the 2026-08-31 HSL drift/stuck report — see the comment
+// on `hsl` below, and the hook's own header for the measurements.
+import { useHslMirror } from "../../hooks/useHslMirror";
 import { OtherHandButton } from "../OtherHand/OtherHandButton";
 import "./ColorPicker.css";
 
@@ -56,29 +59,39 @@ export function ColorPicker({
     b: 0,
     a: 255,
   });
-  const [hsl, setHsl] = useState({ h: 0, s: 0, l: 0 });
+  /* ⚠️ HSL IS AUTHORITATIVE WHILE THE USER IS IN IT — see `useHslMirror`.
+     DO NOT re-derive `hsl` from `selectedColor` or from `localColor`.
+
+     Reported 2026-08-31: "I can slide an HSL metric back and forth and watch
+     the other values in H and L drift or move around. Things get really weird
+     if I zero out any of the values then it gets kind of stuck."
+
+     That was a `useEffect([selectedColor])` here which recomputed HSL from
+     RGB on EVERY store echo. Measured: dragging S at H=200 walked the hue
+     200 → 199 → 198 → 196, because at low saturation the RGB cube cannot
+     encode 360 distinct hues and each lossy echo fed the next. At S = 0 every
+     triple is a grey, a grey has no hue, and the blue came back as red —
+     unrecoverable, which is the "stuck".
+
+     The mirror keeps HSL as the source of truth and RGB as its OUTPUT, and
+     recognises the store's echo of its own colour so it never round-trips
+     through it. Other Hand Mode has always used this hook, which is exactly
+     why the owner reported those sliders "work great". */
+  const [hsl, setHsl] = useHslMirror(selectedColor ?? localColor);
   const [isDraggingSV, setIsDraggingSV] = useState(false);
   const [isDraggingHue, setIsDraggingHue] = useState(false);
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const historySaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasSavedInitialStateRef = useRef<boolean>(false);
-  // Store last known H and S values to preserve them when L is 0 or 100
-  const lastValidHsRef = useRef<{ h: number; s: number } | null>(null);
 
   const svCanvasRef = useRef<HTMLCanvasElement>(null);
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // `localColor` mirrors the store's colour for the RGB/hex readouts. The HSL
+  // half is NOT recomputed here — `useHslMirror` owns it, and re-deriving it
+  // from this echo is precisely the drift described above.
   useEffect(() => {
-    if (selectedColor) {
-      const c = selectedColor;
-      setLocalColor(c);
-      const newHsl = rgbToHsl(c.r, c.g, c.b, hsl);
-      setHsl(newHsl);
-      // Update last valid H and S if L is not 0 or 100
-      if (newHsl.l > 0 && newHsl.l < 100) {
-        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-      }
-    }
+    if (selectedColor) setLocalColor(selectedColor);
   }, [selectedColor]);
 
   // Draw the saturation/value gradient
@@ -225,24 +238,18 @@ export function ColorPicker({
     }
   }, [colorAdjustment, localColor, saveFinalStateToHistory]);
 
-  const updateColorFromHSL = (newHsl: { h: number; s: number; l: number }) => {
-    // Preserve H and S when L is 0 or 100
-    let finalHsl = { ...newHsl };
-    if (newHsl.l === 0 || newHsl.l === 100) {
-      // Use last valid H and S if available, otherwise keep current values
-      if (lastValidHsRef.current) {
-        finalHsl = { ...lastValidHsRef.current, l: newHsl.l };
-      } else {
-        // If we don't have a last valid value, preserve current H and S
-        finalHsl = { h: hsl.h, s: hsl.s, l: newHsl.l };
-      }
-    } else {
-      // Update last valid H and S when L is not 0 or 100
-      lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-    }
+  /* The HSL the user asked for is used VERBATIM.
 
-    setHsl(finalHsl);
-    const rgb = hslToRgb(finalHsl.h, finalHsl.s, finalHsl.l);
+     ⚠️ The old `lastValidHsRef` dance that used to live here — restoring H and
+     S from a remembered pair whenever L hit 0 or 100 — is GONE, and must not
+     come back. It was a patch over the resync that no longer exists: because
+     the mirror never re-derives HSL from RGB, H and S simply are not lost at
+     the singularities any more, and there is nothing to restore. It also only
+     ever covered L = 0/100, never S = 0, which is why zeroing saturation
+     trapped the hue at red. */
+  const updateColorFromHSL = (newHsl: { h: number; s: number; l: number }) => {
+    setHsl(newHsl);
+    const rgb = hslToRgb(newHsl.h, newHsl.s, newHsl.l);
     const newColor = { ...rgb, a: localColor.a };
     setLocalColor(newColor);
     // Only track history if not dragging a slider (for direct input changes)
@@ -256,12 +263,10 @@ export function ColorPicker({
     // Only track history if not dragging a slider (for direct input changes)
     applyColor(newColor, !isDraggingSlider);
     if (channel !== "a") {
-      const newHsl = rgbToHsl(newColor.r, newColor.g, newColor.b, hsl);
-      setHsl(newHsl);
-      // Update last valid H and S if L is not 0 or 100
-      if (newHsl.l > 0 && newHsl.l < 100) {
-        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-      }
+      // The user is editing RGB directly, so HSL follows it — with the current
+      // HSL as `prevHsl` so black and white keep their hue. This direction is
+      // not lossy in the same way: RGB is the input the user actually chose.
+      setHsl(rgbToHsl(newColor.r, newColor.g, newColor.b, hsl));
     }
   };
 
@@ -285,19 +290,27 @@ export function ColorPicker({
     const sHSL = l === 0 || l === 1 ? 0 : (v / 100 - l) / Math.min(l, 1 - l);
 
     const lPercent = Math.round(l * 100);
-    let finalHsl = { h: hsl.h, s: Math.round(sHSL * 100), l: lPercent };
 
-    // Preserve H and S when L is 0 or 100
-    if (lPercent === 0 || lPercent === 100) {
-      if (lastValidHsRef.current) {
-        finalHsl = { ...lastValidHsRef.current, l: lPercent };
-      } else {
-        finalHsl = { h: hsl.h, s: hsl.s, l: lPercent };
-      }
-    } else {
-      // Update last valid H and S when L is not 0 or 100
-      lastValidHsRef.current = { h: finalHsl.h, s: finalHsl.s };
-    }
+    /* ⚠️ AT THE SQUARE'S TOP AND BOTTOM EDGES, SATURATION IS HELD.
+       Hue already survives — it is never recomputed from RGB here, it is
+       carried straight through from `hsl.h`.
+
+       Saturation is different, and this is deliberate rather than an
+       oversight: at L = 0 (the black edge) and L = 100 (the white edge) the
+       HSV→HSL conversion above drives `sHSL` to 0 for EVERY x, so a drag along
+       either edge would silently reset the saturation the user had, and the
+       cursor would snap to the left of the square on the way back. Holding the
+       current S across those two rows keeps the cursor where the finger is.
+
+       This replaces a `lastValidHsRef` that remembered the last good H and S
+       pair. The ref is gone: with `useHslMirror` owning HSL, `hsl` IS the last
+       good value — nothing has overwritten it in between. */
+    const atExtreme = lPercent === 0 || lPercent === 100;
+    const finalHsl = {
+      h: hsl.h,
+      s: atExtreme ? hsl.s : Math.round(sHSL * 100),
+      l: lPercent,
+    };
 
     setHsl(finalHsl);
     const rgb = hslToRgb(finalHsl.h, finalHsl.s, finalHsl.l);
@@ -338,12 +351,7 @@ export function ColorPicker({
       const newColor = { r, g, b, a };
       setLocalColor(newColor);
       applyColor(newColor);
-      const newHsl = rgbToHsl(r, g, b, hsl);
-      setHsl(newHsl);
-      // Update last valid H and S if L is not 0 or 100
-      if (newHsl.l > 0 && newHsl.l < 100) {
-        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-      }
+      setHsl(rgbToHsl(r, g, b, hsl));
     }
   };
 
@@ -376,12 +384,7 @@ export function ColorPicker({
   const handleHistoryColorClick = (color: Color) => {
     setLocalColor(color);
     applyColor(color);
-    const newHsl = rgbToHsl(color.r, color.g, color.b, hsl);
-    setHsl(newHsl);
-    // Update last valid H and S if L is not 0 or 100
-    if (newHsl.l > 0 && newHsl.l < 100) {
-      lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-    }
+    setHsl(rgbToHsl(color.r, color.g, color.b, hsl));
   };
 
   return (
