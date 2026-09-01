@@ -16,6 +16,7 @@ import type { ReactNode } from "react";
 import { Tool } from "../../../types";
 import type { ReferenceImageData } from "../../../types/referenceImage";
 import { Icon } from "../../primitives/Icon/Icon";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import type { LucideIcon } from "lucide-react";
 import {
   Pencil,
@@ -40,7 +41,6 @@ import {
   Redo2,
 } from "lucide-react";
 import { classNames } from "../../classNames";
-import { useLongPress } from "../../hooks/useLongPress";
 import { EyedropperModeMenu } from "./EyedropperModeMenu";
 import type { EyedropperMode } from "../../../types";
 
@@ -125,13 +125,16 @@ const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
 ];
 
 /**
- * One tool button, with its own long-press timer.
+ * One tool button, wrapped in its own `Tooltip`.
  *
- * ⚠️ It is a COMPONENT rather than inline JSX because `useLongPress` is a
- * hook: thirteen tools need thirteen independent timers, and hooks cannot be
- * called inside a `.map()`. Inlining it would either share one timer across
- * every button (so pressing one tool assigns another) or break the rules of
- * hooks outright.
+ * ⚠️ It is a COMPONENT rather than inline JSX because it calls hooks —
+ * `useState` for the menu anchor, and `Tooltip` runs its own long-press timer
+ * per trigger. Thirteen tools need thirteen independent ones, and hooks cannot
+ * be called inside a `.map()`. Inlining would either share one timer across
+ * every button or break the rules of hooks outright.
+ *
+ * It used to own a `useLongPress` for slot-B assignment; that gesture is the
+ * tooltip's now (2026-08-31) — see the note on `secondary` below.
  */
 function ToolButton({
   tool,
@@ -171,9 +174,20 @@ function ToolButton({
    */
   children?: (anchor: HTMLButtonElement | null) => ReactNode;
 }) {
-  // The long press drives whichever action this button owns: the mode menu
-  // where one is supplied, the slot-B assignment everywhere else.
-  const longPress = useLongPress(secondaryAction ?? onSelectAlternate);
+  /* ⚠️ LONG-PRESS NO LONGER ASSIGNS THE SECOND SLOT — IT SHOWS THE TOOLTIP.
+     Changed 2026-08-31 at the owner's request: "Long hold on ipad should make
+     them show up and release should immediately dismiss ... All tools should
+     have tooltips that open on all platforms." Long-press is the only gesture
+     a touch device has for "tell me what this is", and it cannot mean two
+     things at once, so the tooltip won it and `useLongPress` is gone from here.
+
+     The secondary action keeps BOTH of its other routes, and `onDoubleClick`
+     below is now wired unconditionally rather than only where a
+     `secondaryAction` exists — otherwise removing the long press would have
+     left slot-B assignment reachable by right-click alone, which an iPad does
+     not have. Double-tap is also the gesture the Apple Pencil already uses for
+     this, so it is the one the owner's hand already knows. */
+  const secondary = secondaryAction ?? onSelectAlternate;
   // `useState`, not `useRef`: the menu has to RE-RENDER once the node exists,
   // and a ref assignment does not schedule one — the menu would mount with a
   // null anchor and never measure.
@@ -191,44 +205,37 @@ function ToolButton({
         isAlternate && "toolbar__tool-btn--alternate",
       )}
       onClick={() => {
-        // ⚠️ A completed long press is followed by a click. Without this
-        // guard the button would run the secondary action AND then select
-        // itself, so the gesture would appear to do the wrong thing.
-        if (longPress.didLongPress()) return;
+        // No long-press guard is needed any more: the hold shows a tooltip and
+        // performs no action, so the click that follows a hold is an ordinary
+        // selection and is exactly what the user meant.
         onSelect();
       }}
-      // Double-click is the second route to the secondary action, and the
-      // one a mouse user reaches for. It is wired ONLY where there is a
-      // secondary action: on every other tool a double-click is just two
-      // selections of the same tool, which is harmlessly idempotent.
-      //
-      // ⚠️ `onClick` still fires (twice) before this does — that is why the
-      // action must be safe to reach with the tool already selected. Opening
-      // a menu is; assigning slot B would not be, which is the other reason
-      // double-click is not wired to the slot-B path.
-      onDoubleClick={
-        secondaryAction
-          ? (e) => {
-              e.preventDefault();
-              secondaryAction();
-            }
-          : undefined
-      }
+      /* Double-tap / double-click is now the PRIMARY route to the secondary
+         action on every tool, not just those with a menu — see the note on
+         `secondary` above. It is what the Apple Pencil's own double-tap maps
+         to, so the gesture is already familiar.
+
+         ⚠️ `onClick` still fires (twice) before this does, so the action has
+         to be safe to reach with the tool already selected. Opening a menu is.
+         Assigning slot B is too: `onSelectAlternate` sets the slot rather than
+         toggling it, so running it after two selections of the same tool lands
+         on the same result. */
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        secondary();
+      }}
       // Right-click is the POINTER route to the same action — on a desktop
-      // there is no Pencil to double-tap and no reason to hold the mouse
-      // down for half a second. The two are complementary, not alternatives.
+      // there is no Pencil to double-tap. Complementary, not an alternative.
       onContextMenu={(e) => {
         e.preventDefault();
-        (secondaryAction ?? onSelectAlternate)();
+        secondary();
       }}
-      {...longPress.handlers}
-      title={
-        secondaryHint
-          ? `${tool.label} (${tool.hotkey}) — ${secondaryHint}`
-          : isAlternate
-            ? `${tool.label} (${tool.hotkey}) — second slot`
-            : `${tool.label} (${tool.hotkey}) — long-press or right-click for the second slot`
-      }
+      /* ⚠️ EXPLICIT, because `title` used to be the accessible name and is
+         gone. The visible content is an icon plus a bare hotkey letter, so
+         without this a screen reader would announce the button as "B" — and
+         `Tooltip`'s `aria-describedby` is a DESCRIPTION, which never
+         substitutes for a name. */
+      aria-label={`${tool.label} (${tool.hotkey})`}
     >
       <span className="toolbar__tool-icon">
         <Icon icon={tool.icon} />
@@ -237,11 +244,24 @@ function ToolButton({
     </button>
   );
 
+  /* The label every platform gets. `title=` used to carry this, and a `title`
+     is invisible on an iPad and unstyleable everywhere — which is why the
+     owner reported the tools had no tooltips there at all. `Tooltip` shows on
+     hover, on keyboard focus, and on a touch long-press.
+
+     The hint no longer mentions long-press: that gesture shows this bubble
+     now, and the secondary action is reached by double-tap or right-click. */
+  const hint = secondaryHint
+    ? `${tool.label} (${tool.hotkey}) — ${secondaryHint}`
+    : isAlternate
+      ? `${tool.label} (${tool.hotkey}) — second slot`
+      : `${tool.label} (${tool.hotkey}) — double-tap or right-click for the second slot`;
+
   // The menu portals itself out, so there is no wrapper and no change to the
   // toolbar's flex layout for the one tool that has one.
   return (
     <>
-      {button}
+      <Tooltip content={hint}>{button}</Tooltip>
       {children?.(anchor)}
     </>
   );
@@ -347,87 +367,100 @@ export function PixelStudioTools({
             control that appears only on one device is a control nobody
             discovers, and undo is useful with a mouse too. */}
         <div className="toolbar__group">
-          <button
-            className="toolbar__tool-btn toolbar__tool-btn--swap"
-            onClick={onSwapTools}
-            // The human LABEL, never the raw tool id — `flood-fill` and
-            // `pixel` are internal names and mean nothing to the user.
-            title={`Swap tools — ${alternateToolLabel} (Apple Pencil: double-tap)`}
-            aria-label={`Swap to ${alternateToolLabel}`}
+          {/* The human LABEL, never the raw tool id — `flood-fill` and
+              `pixel` are internal names and mean nothing to the user. */}
+          <Tooltip
+            content={`Swap tools — ${alternateToolLabel} (Apple Pencil: double-tap)`}
           >
-            <span className="toolbar__tool-icon">
-              <Icon icon={Repeat2} />
-            </span>
-          </button>
-          <button
-            className="toolbar__tool-btn"
-            onClick={onUndo}
-            disabled={!canUndo}
-            title="Undo (Cmd/Ctrl+Z)"
-            aria-label="Undo"
-          >
-            <span className="toolbar__tool-icon">
-              <Icon icon={Undo2} />
-            </span>
-          </button>
-          <button
-            className="toolbar__tool-btn"
-            onClick={onRedo}
-            disabled={!canRedo}
-            title="Redo (Cmd/Ctrl+Shift+Z)"
-            aria-label="Redo"
-          >
-            <span className="toolbar__tool-icon">
-              <Icon icon={Redo2} />
-            </span>
-          </button>
+            <button
+              className="toolbar__tool-btn toolbar__tool-btn--swap"
+              onClick={onSwapTools}
+              aria-label={`Swap to ${alternateToolLabel}`}
+            >
+              <span className="toolbar__tool-icon">
+                <Icon icon={Repeat2} />
+              </span>
+            </button>
+          </Tooltip>
+          <Tooltip content="Undo (Cmd/Ctrl+Z)">
+            <button
+              className="toolbar__tool-btn"
+              onClick={onUndo}
+              disabled={!canUndo}
+              aria-label="Undo"
+            >
+              <span className="toolbar__tool-icon">
+                <Icon icon={Undo2} />
+              </span>
+            </button>
+          </Tooltip>
+          <Tooltip content="Redo (Cmd/Ctrl+Shift+Z)">
+            <button
+              className="toolbar__tool-btn"
+              onClick={onRedo}
+              disabled={!canRedo}
+              aria-label="Redo"
+            >
+              <span className="toolbar__tool-icon">
+                <Icon icon={Redo2} />
+              </span>
+            </button>
+          </Tooltip>
         </div>
 
         <div className="toolbar__divider" />
 
         <div className="toolbar__group">
-          <button
-            className="toolbar__tool-btn"
-            onClick={() => onFlipHorizontal()}
-            title="Flip Horizontal"
-          >
-            <span className="toolbar__tool-icon">
-              <Icon icon={FlipHorizontal2} />
-            </span>
-          </button>
-          <button
-            className="toolbar__tool-btn"
-            onClick={() => onFlipVertical()}
-            title="Flip Vertical"
-          >
-            <span className="toolbar__tool-icon">
-              <Icon icon={FlipVertical2} />
-            </span>
-          </button>
+          <Tooltip content="Flip Horizontal">
+            <button
+              className="toolbar__tool-btn"
+              onClick={() => onFlipHorizontal()}
+              aria-label="Flip Horizontal"
+            >
+              <span className="toolbar__tool-icon">
+                <Icon icon={FlipHorizontal2} />
+              </span>
+            </button>
+          </Tooltip>
+          <Tooltip content="Flip Vertical">
+            <button
+              className="toolbar__tool-btn"
+              onClick={() => onFlipVertical()}
+              aria-label="Flip Vertical"
+            >
+              <span className="toolbar__tool-icon">
+                <Icon icon={FlipVertical2} />
+              </span>
+            </button>
+          </Tooltip>
         </div>
 
         <div className="toolbar__divider" />
 
         <div className="toolbar__group toolbar__group--reference">
-          <button
-            className={`toolbar__tool-btn ${hasReferenceImage ? "toolbar__tool-btn--has-reference" : ""}`}
-            onClick={() => setIsRefModalOpen(true)}
-            title="Add Reference Image"
-          >
-            <span className="toolbar__tool-icon">
-              <Icon icon={Camera} />
-            </span>
-          </button>
-          {hasReferenceImage && (
+          <Tooltip content="Add Reference Image">
             <button
-              className="toolbar__tool-btn toolbar__clear-reference-btn"
-              onClick={handleClearReference}
-              title="Clear Reference Image"
+              className={`toolbar__tool-btn ${hasReferenceImage ? "toolbar__tool-btn--has-reference" : ""}`}
+              onClick={() => setIsRefModalOpen(true)}
+              aria-label="Add Reference Image"
             >
               <span className="toolbar__tool-icon">
-                <Icon icon={X} />
+                <Icon icon={Camera} />
               </span>
             </button>
+          </Tooltip>
+          {hasReferenceImage && (
+            <Tooltip content="Clear Reference Image">
+              <button
+                className="toolbar__tool-btn toolbar__clear-reference-btn"
+                onClick={handleClearReference}
+                aria-label="Clear Reference Image"
+              >
+                <span className="toolbar__tool-icon">
+                  <Icon icon={X} />
+                </span>
+              </button>
+            </Tooltip>
           )}
         </div>
       </div>

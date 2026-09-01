@@ -17,6 +17,7 @@ import { useState, type ReactNode } from "react";
 import { Tool } from "../../../types";
 import { EdgeInterpolateModal } from "../EdgeInterpolateModal/EdgeInterpolateModal";
 import { Icon } from "../../primitives/Icon/Icon";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import type { LucideIcon } from "lucide-react";
 import { Sun, Wrench, Mountain } from "lucide-react";
 // Type-only: the COMPUTE moved to the container (R2 — it walks pixels), but
@@ -104,49 +105,55 @@ export function LightingStudioTools({
 
   return (
     <>
-      {/* Lighting data layer edit target */}
+      {/* Lighting data layer edit target.
+
+          ⚠️ The GROUP's `title="Lighting edit target"` is gone rather than
+          converted. A tooltip on the wrapper would fire from the same
+          long-press as the button inside it and stack two bubbles for one
+          gesture; each button already names itself, which is the information
+          that group label was carrying. */}
       <div className="toolbar__section toolbar__section--studio-mode">
-        <div
-          className="toolbar__studio-mode-toggle"
-          title="Lighting edit target"
-        >
-          <button
-            className={`toolbar__studio-mode-btn ${editMode === "normals" ? "toolbar__studio-mode-btn--active" : ""}`}
-            onClick={() => onEditModeChange("normals")}
-            aria-label="Edit Normals"
-            title="Edit Normals"
-          >
-            <span className="toolbar__tool-icon">
-              <Icon icon={Sun} />
-            </span>
-          </button>
-          <button
-            className={`toolbar__studio-mode-btn ${editMode === "height" ? "toolbar__studio-mode-btn--active" : ""}`}
-            onClick={() => onEditModeChange("height")}
-            aria-label="Edit Height Map"
-            title="Edit Height Map"
-          >
-            <span className="toolbar__tool-icon">
-              <Icon icon={Mountain} />
-            </span>
-          </button>
+        <div className="toolbar__studio-mode-toggle">
+          <Tooltip content="Edit Normals">
+            <button
+              className={`toolbar__studio-mode-btn ${editMode === "normals" ? "toolbar__studio-mode-btn--active" : ""}`}
+              onClick={() => onEditModeChange("normals")}
+              aria-label="Edit Normals"
+            >
+              <span className="toolbar__tool-icon">
+                <Icon icon={Sun} />
+              </span>
+            </button>
+          </Tooltip>
+          <Tooltip content="Edit Height Map">
+            <button
+              className={`toolbar__studio-mode-btn ${editMode === "height" ? "toolbar__studio-mode-btn--active" : ""}`}
+              onClick={() => onEditModeChange("height")}
+              aria-label="Edit Height Map"
+            >
+              <span className="toolbar__tool-icon">
+                <Icon icon={Mountain} />
+              </span>
+            </button>
+          </Tooltip>
         </div>
       </div>
 
       <div className="toolbar__section">
         <div className="toolbar__group">
           {lightingTools.map((tool) => (
-            <button
-              key={tool.id}
-              className={`toolbar__tool-btn ${selectedTool === tool.id ? "toolbar__tool-btn--active" : ""}`}
-              onClick={() => handleToolClick(tool.id)}
-              title={`${tool.label} (${tool.hotkey})`}
-            >
-              <span className="toolbar__tool-icon">
-                <Icon icon={tool.icon} />
-              </span>
-              <span className="toolbar__tool-hotkey">{tool.hotkey}</span>
-            </button>
+            <Tooltip key={tool.id} content={`${tool.label} (${tool.hotkey})`}>
+              <button
+                className={`toolbar__tool-btn ${selectedTool === tool.id ? "toolbar__tool-btn--active" : ""}`}
+                onClick={() => handleToolClick(tool.id)}
+                aria-label={`${tool.label} (${tool.hotkey})`}
+              >
+                <span className="toolbar__tool-icon">
+                  <Icon icon={tool.icon} />
+                </span>
+                <span className="toolbar__tool-hotkey">{tool.hotkey}</span>
+              </button>
+            </Tooltip>
           ))}
         </div>
       </div>
