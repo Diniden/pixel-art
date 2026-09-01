@@ -20,7 +20,6 @@
   justify-content: center;
   padding: var(--space-4);
   background: var(--overlay-70);
-  backdrop-filter: blur(2px);
   animation: layout-presets-fade-in var(--transition-fast) ease;
   /* ⚠️ `hidden`, NOT `auto`. The SCRIM must never scroll — it is pinned to
      the canvas area and scrolling it would drag the panel out of the region
@@ -29,10 +28,14 @@
   overflow: hidden;
 }
 
-/* ⚠️ COLLAPSED — the default. No scrim, no blur, no dimming: while the grid
-   is closed the button is not covering anything the user needs, and dimming
-   the canvas anyway would make the per-rail controls read as unavailable
-   when they are the whole point of layout mode.
+/* ⚠️ COLLAPSED — the default. No scrim, no dimming: while the grid is closed
+   the button is not covering anything the user needs, and dimming the canvas
+   anyway would make the per-rail controls read as unavailable when they are
+   the whole point of layout mode.
+
+   This rule used to reset `backdrop-filter` too. The expanded scrim no longer
+   sets one (blur effects were removed application-wide on 2026-08-31), so
+   there is nothing left to reset and the declaration went with it.
 
    `pointer-events: none` on the container with `auto` back on the button is
    what keeps the rest of the canvas live underneath — the container still
@@ -40,7 +43,6 @@
    would swallow every click on the canvas behind it. */
 .layout-presets--collapsed {
   background: none;
-  backdrop-filter: none;
   pointer-events: none;
   overflow: visible;
 }

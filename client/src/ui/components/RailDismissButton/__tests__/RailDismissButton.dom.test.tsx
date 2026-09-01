@@ -121,14 +121,27 @@ describe("the border-replacement contract", () => {
     expect(css).toMatch(/\.rail-handle:hover \{[^}]*background: var\(--accent-primary\)/);
   });
 
-  it("⭐ shows the grip permanently where there is NO hover", () => {
-    // Measured on the owner's iPad: there is no hover, so a control that only
-    // appears on hover never appears at all. The strip also widens to a
-    // usable touch target there.
-    expect(css).toContain("@media (hover: none)");
-    const coarse = css.slice(css.indexOf("@media (hover: none)"));
-    expect(coarse).toContain("opacity: 1");
-    expect(coarse).toMatch(/width: 10px/);
+  it("⭐ gives a COARSE pointer exactly the desktop handle — no override", () => {
+    // Changed 2026-08-31. This used to assert the opposite: an
+    // `@media (hover: none)` block widened the strips to 10px and pinned the
+    // grip visible, because an iPad has no hover. The owner asked for the iPad
+    // borders to match desktop thickness and for the arrows to be hidden, so
+    // that block is gone and there is no coarse-pointer branch left.
+    //
+    // Asserted rather than merely deleted: reintroducing a touch-only widening
+    // is the intuitive "fix" for the affordance this trade-off gives up, and
+    // it is the owner's call, not a later agent's.
+    const declarations = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(declarations).not.toContain("@media (hover: none)");
+    expect(declarations).not.toMatch(/width: 10px/);
+    expect(declarations).not.toMatch(/height: 10px/);
+
+    // The strips keep the single desktop thickness on both axes.
+    expect(declarations).toMatch(/width: 3px/);
+    expect(declarations).toMatch(/height: 3px/);
+
+    // And the grip stays hidden until hover / focus, everywhere.
+    expect(declarations).toMatch(/\.rail-handle__grip \{[^}]*opacity: 0/);
   });
 
   it("sits UNDER the layout-mode scrim", () => {

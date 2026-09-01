@@ -241,6 +241,7 @@ import {
   pinchTouches,
   touchesInContainer,
 } from "../ui/canvas/model/canvasTouchFilter";
+import { isTouchDevice } from "../ui/utils/pointerDevice";
 import { stampTrace } from "../ui/canvas/tools/traceSampler";
 import type { ToolContext } from "../ui/canvas/tools/toolHandlers";
 import type { StampPoint } from "../ui/canvas/tools/brushStamp";
@@ -491,6 +492,12 @@ export const CanvasContainer = observer(function CanvasContainer({
   const zoom = viewport.zoom;
   const panOffset = camera.panOffset;
   const lightGridMode = viewport.lightGridMode ?? false;
+  /* Pencil-only input (2026-08-31). Tri-state in the file: `undefined` means
+     the project says nothing, and the DEFAULT is then device-dependent — on
+     where there is a touch screen, off on a mouse-only desktop where no
+     contact ever reports as a stylus and this would disable drawing outright.
+     See `ui/utils/pointerDevice.ts`. */
+  const pencilOnly = viewport.pencilOnly ?? isTouchDevice();
   const layerFocusMode = viewport.layerFocusMode;
 
   const selection = app.selectionUI.selection;
@@ -836,7 +843,10 @@ export const CanvasContainer = observer(function CanvasContainer({
     setViewZoom,
     viewPanRef,
     scheduleCommitPan,
-    clampPanToViewport,
+    // ⚠️ `clampPanToViewport` is deliberately NOT taken here. Panning is
+    // unrestricted as of 2026-08-31 — see `handleTouchMove`. The hook still
+    // exports the helper, and it is still covered by its own tests, so an
+    // opt-in clamp remains possible without rebuilding it.
     // ⚠️ `beginPinch` / `updatePinch` / `endPinch` are deliberately NOT taken
     // here any more: the hook binds them itself, natively and non-passively,
     // on the viewport. `isPinching` is still read, to suppress drawing while
@@ -3021,11 +3031,11 @@ export const CanvasContainer = observer(function CanvasContainer({
     if (isPanning && lastPanPoint) {
       const dx = e.clientX - lastPanPoint.x;
       const dy = e.clientY - lastPanPoint.y;
-      const next = clampPanToViewport(
-        { x: viewPanRef.current.x + dx, y: viewPanRef.current.y + dy },
-        contentWidth * viewZoom,
-        contentHeight * viewZoom,
-      );
+      // ⚠️ DELIBERATELY UNCLAMPED — see `handleTouchMove`'s note below.
+      const next = {
+        x: viewPanRef.current.x + dx,
+        y: viewPanRef.current.y + dy,
+      };
       viewPanRef.current = next;
       setViewPanOffset(next);
       scheduleCommitPan();
@@ -3351,7 +3361,11 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
-    const touch = drawingTouch(startTouches);
+    // ⚠️ `pencilOnly` — a finger may pan and pinch here, but it may not paint.
+    // Only the two STROKE call sites pass it; the marker and pan lookups below
+    // deliberately do not, so a finger keeps moving the canvas and keeps
+    // showing where a Pencil would land.
+    const touch = drawingTouch(startTouches, pencilOnly);
     if (!touch) return;
 
     // ══════════════════════════════════════════════════════════════════════
@@ -3447,13 +3461,30 @@ export const CanvasContainer = observer(function CanvasContainer({
       const touch = panTouch;
       const dx = touch.clientX - lastPanPoint.x;
       const dy = touch.clientY - lastPanPoint.y;
-      const next = clampPanToViewport(
-        // ⚠️ MINUS, not plus — touch panning is inverted relative to the mouse
-        // (the content follows the finger). Verbatim from `Canvas.tsx:1876`.
-        { x: viewPanRef.current.x - dx, y: viewPanRef.current.y - dy },
-        contentWidth * viewZoom,
-        contentHeight * viewZoom,
-      );
+      // ⚠️ DELIBERATELY UNCLAMPED — DO NOT REINTRODUCE `clampPanToViewport`.
+      //
+      // Reported 2026-08-31: "our two finger panning and scrolling got messed
+      // up. It tries to lock the region into place now and doesn't allow
+      // complete freedom of panning."
+      //
+      // That was this clamp. It pinned the pan so the content's edges could
+      // never travel inside the viewport frame, and — the part that reads as
+      // "locked" — when the sprite is SMALLER than the viewport its min and max
+      // collapse to the same number, so panning did nothing at all. A small
+      // sprite simply could not be moved.
+      //
+      // The owner chose unrestricted panning (2026-08-31) over a
+      // keep-a-margin compromise, accepting that the artwork can be pushed
+      // fully off-screen. That is recoverable: the Reset View button in
+      // `CanvasViewControls` recentres at view zoom 1, which is the job its own
+      // header already describes as rescuing a lost view.
+      //
+      // ⚠️ MINUS, not plus — touch panning is inverted relative to the mouse
+      // (the content follows the finger). Verbatim from `Canvas.tsx:1876`.
+      const next = {
+        x: viewPanRef.current.x - dx,
+        y: viewPanRef.current.y - dy,
+      };
       viewPanRef.current = next;
       setViewPanOffset(next);
       scheduleCommitPan();
@@ -3465,7 +3496,10 @@ export const CanvasContainer = observer(function CanvasContainer({
     // moment a finger touched down anywhere in the viewport. `drawingTouch`
     // returns the stylus when there is one and a lone finger otherwise, so a
     // Pencil keeps drawing through any number of resting fingers.
-    const touch = drawingTouch(moveTouches);
+    // ⚠️ `pencilOnly` again — see the note at the stroke's start. A finger
+    // that is mid-drag simply produces no pixels rather than being treated as
+    // an absent contact.
+    const touch = drawingTouch(moveTouches, pencilOnly);
     if (!touch) return;
 
     // Before BOTH bails below — the `!coords` one (corner coords clamp; see

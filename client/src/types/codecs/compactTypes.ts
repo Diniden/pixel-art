@@ -96,6 +96,7 @@ export interface CompactUIState {
    */
   hiddenRails?: string[];
   lightGridMode?: boolean;
+  pencilOnly?: boolean;
   brushSize: number;
   bitDepth: BitDepth;
   shapeMode: ShapeMode;

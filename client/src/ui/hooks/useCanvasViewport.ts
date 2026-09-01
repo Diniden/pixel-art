@@ -26,13 +26,24 @@
  * when the debounce callback changed. That structure is kept verbatim rather
  * than "modernised" — it is load-bearing for gesture smoothness.
  *
- * ## The zoom anchor lock, and why pinch does not clamp
+ * ## The zoom anchor lock
  *
  * Both copies locked the zoom focal point for `ZOOM_ANCHOR_MS` after each step.
  * Without it, per-event re-derivation of the anchor makes a pinch jitter and
- * drift. Both copies also deliberately skip `clampPanToViewport` while zooming
- * (the comment "clamping fights the anchor and causes jitter/drift" is theirs).
- * Both behaviours are preserved exactly.
+ * drift. Preserved exactly.
+ *
+ * ## ⚠️ Panning is UNRESTRICTED (2026-08-31)
+ *
+ * `clampPanToViewport` is still exported and still tested, but NOTHING CALLS
+ * IT any more — not the wheel handler here, and not the mouse or two-finger
+ * pans in `CanvasContainer`. The owner reported that panning "tries to lock the
+ * region into place and doesn't allow complete freedom", which was that clamp:
+ * it stopped the content's edges from travelling inside the viewport frame,
+ * and pinned pan entirely when the sprite was smaller than the viewport
+ * (min and max collapse to the same number there). Unrestricted panning was
+ * chosen over a keep-a-margin compromise, with Reset View as the recovery for
+ * a view pushed off-screen. Pinch never clamped in the first place — the
+ * original comment, "clamping fights the anchor and causes jitter/drift".
  *
  * ## Purity
  *
@@ -348,20 +359,19 @@ export function useCanvasViewport({
         scheduleCommitPan();
       } else {
         e.preventDefault();
-        // The FULL on-screen size: `contentWidth` already carries the shared
-        // pixel scale (`cellWidth * zoom`), and the live view zoom rides on
-        // top. Clamping against anything smaller locks a large sprite in
-        // place — see `contentWidth`'s doc on the options interface.
-        const displayedW = state.contentWidth * state.viewZoom;
-        const displayedH = state.contentHeight * state.viewZoom;
-        const next = state.clampPanToViewport(
-          {
-            x: state.viewPanOffset.x - e.deltaX,
-            y: state.viewPanOffset.y - e.deltaY,
-          },
-          displayedW,
-          displayedH,
-        );
+        // ⚠️ DELIBERATELY UNCLAMPED — DO NOT REINTRODUCE `clampPanToViewport`.
+        //
+        // This is the wheel/trackpad SCROLL path, and on a trackpad a
+        // two-finger scroll arrives here rather than in the touch handler —
+        // so it is half of the 2026-08-31 report that panning "tries to lock
+        // the region into place". Freed with the touch and mouse pans in
+        // `CanvasContainer`, where the full reasoning lives; the owner chose
+        // unrestricted panning over a keep-a-margin compromise, with Reset
+        // View as the recovery for a view pushed off-screen.
+        const next = {
+          x: state.viewPanOffset.x - e.deltaX,
+          y: state.viewPanOffset.y - e.deltaY,
+        };
         viewPanRef.current = next;
         setViewPanOffsetState(next);
         scheduleCommitPan();

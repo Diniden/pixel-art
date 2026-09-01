@@ -35,11 +35,13 @@ describe("the colour mapping", () => {
     expect(dot(container).className).toContain("save-status-dot__dot--error");
   });
 
-  it("only the busy state pulses — a resting header stays still", () => {
-    const { container: busy } = render(<SaveStatusDot status="pending" />);
-    expect(dot(busy).className).toContain("--pulsing");
-
-    for (const status of ["idle", "saved", "error"] as const) {
+  it("\u2b50 NEVER pulses — the dot changes colour and nothing else", () => {
+    // Removed 2026-08-31 at the owner's request. Asserted rather than simply
+    // deleted because the pulse is easy to reintroduce and was the only
+    // infinite animation that could run while the pixel canvas was on screen;
+    // uncontained, it blurred the canvas for the length of every save. See the
+    // header comment in `SaveStatusDot.css`.
+    for (const status of ["idle", "saved", "pending", "saving", "error"] as const) {
       const { container } = render(<SaveStatusDot status={status} />);
       expect(dot(container).className).not.toContain("--pulsing");
     }
@@ -119,30 +121,17 @@ describe("the detail popover", () => {
     render(<SaveStatusDot status="saving" />);
     expect(screen.getByLabelText("Save status: Saving…")).toBeTruthy();
   });
-  it("\u2b50 contains its pulse, so an in-flight save cannot blur the pixel canvas", () => {
-    // Reported 2026-08-31: releasing a zoom blurred the artwork for under a
-    // second — the 500 ms auto-save debounce plus the save, i.e. exactly the
-    // window in which this dot is orange and pulsing. This is the only
-    // infinite animation that can run while the canvas is on screen.
-    //
-    // Without containment the animation makes the browser re-evaluate
-    // compositing document-wide, and the canvas — 1:1 with the pixel data and
-    // magnified up to 200x by a CSS transform — comes back bilinearly
-    // smoothed. `will-change: opacity` on the `::after` was not enough: a
-    // pseudo element does not give its host an isolated compositing context.
-    //
-    // The fix belongs HERE and not on the canvas — promoting the canvas's own
-    // transformed element makes it rasterise once at 1:1 and GPU-upscale,
-    // blurring permanently and worse the further you zoom.
-    //
-    // jsdom applies no author CSS, so this is asserted against the sheet.
+  it("\u2b50 declares no animation at all — nothing can blur the canvas", () => {
+    // The counterpart to the class assertion above, at the stylesheet level:
+    // jsdom applies no author CSS, so the only way to prove the pulse is gone
+    // is to read the sheet. Guards the whole file rather than one rule — any
+    // reintroduced `animation` here is the regression this pins.
     const css = readFileSync(
       "src/ui/components/SaveStatusDot/SaveStatusDot.css",
       "utf8",
     );
-    const rule = /\.save-status-dot__dot \{[^}]*\}/.exec(css)?.[0] ?? "";
-    expect(rule).not.toBe("");
-    expect(rule).toMatch(/contain: layout paint/);
-    expect(rule).toMatch(/isolation: isolate/);
+    const declarations = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(declarations).not.toMatch(/animation:/);
+    expect(declarations).not.toMatch(/--pulsing/);
   });
 });

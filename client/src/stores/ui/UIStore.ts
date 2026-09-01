@@ -433,6 +433,7 @@ export class UIStore {
     // have no such key, and the legacy spread does not invent one.
     /* 33 */ assign(persisted, "gaussianFill", tool.gaussianFill);
     /* 34 */ assign(persisted, "lightGridMode", viewport.lightGridMode);
+    /* 34a */ assign(persisted, "pencilOnly", viewport.pencilOnly);
     /* 35 */ assign(
       persisted,
       "layerSelectionCounter",

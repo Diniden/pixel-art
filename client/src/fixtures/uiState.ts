@@ -30,6 +30,7 @@ export function makeUIState(overrides: Partial<UIState> = {}): UIState {
     selectionBehavior: "movePixels",
     focusMode: false,
     lightGridMode: false,
+    pencilOnly: false,
     brushSize: 1,
     bitDepth: 8,
     shapeMode: "both",

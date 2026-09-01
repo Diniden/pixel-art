@@ -316,12 +316,17 @@ describe("R1: a saved panOffset still means the same position", () => {
     ).toEqual(farPan);
   });
 
-  it("⭐ wheel-panning clamps against the full content size, not the cells", () => {
-    // The `:339-340` fix, observed end-to-end. `contentWidth` (400) is smaller
-    // than the 800px viewport, so `clampPanToViewport`'s min/max collapse to
-    // [0, 400] — a wheel pan lands inside that range. Had the hook been handed
-    // `cellWidth` (40) the range would be [0, 760] and the same gesture would
-    // settle somewhere else entirely.
+  it("⭐ wheel-panning is UNRESTRICTED — no clamp, in either direction", () => {
+    // Changed 2026-08-31. This test used to assert that the wheel clamped
+    // against the full content size; panning is unrestricted now (the owner
+    // reported the clamp "tries to lock the region into place"), so it asserts
+    // the opposite. See the hook's header.
+    //
+    // ⚠️ The old assertion could not have caught this change: it panned to
+    // {50, 30}, which sat INSIDE the old clamp's [0, 400] range, so it passed
+    // with or without clamping. The second gesture below is the one that
+    // discriminates — it lands far outside that range, where the old code
+    // would have pinned it to the boundary.
     const el = makeContainer();
     const containerRef = { current: el };
     const { result } = renderHook(() =>
@@ -343,8 +348,37 @@ describe("R1: a saved panOffset still means the same position", () => {
       );
     });
 
-    // 0 - (-50) = 50, inside [min(0, 800-400), max(0, 800-400)] = [0, 400].
+    // 0 - (-50) = 50. Unremarkable on its own — it is inside the old range.
     expect(result.current.viewPanOffset.x).toBeCloseTo(50, 5);
     expect(result.current.viewPanOffset.y).toBeCloseTo(30, 5);
+
+    // The discriminating gesture. `contentWidth` is 400 in an 800px viewport,
+    // so the old clamp's range was [0, 400] on x and [0, 200] on y, and this
+    // would have been pinned to exactly those bounds. It must now travel the
+    // full distance instead.
+    act(() => {
+      el.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaX: -2000,
+          deltaY: -2000,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(result.current.viewPanOffset.x).toBeCloseTo(2050, 5);
+    expect(result.current.viewPanOffset.y).toBeCloseTo(2030, 5);
+
+    // And negative, past the other edge — the old clamp's floor was 0.
+    act(() => {
+      el.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaX: 5000,
+          deltaY: 5000,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(result.current.viewPanOffset.x).toBeCloseTo(-2950, 5);
+    expect(result.current.viewPanOffset.y).toBeCloseTo(-2970, 5);
   });
 });

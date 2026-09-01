@@ -395,11 +395,12 @@
   --glow-variant-16: 0 0 16px var(--accent-variant-30);
   --shadow-variant-lift: 0 4px 16px var(--accent-variant-40);
   --glow-danger-8-60: 0 0 8px var(--accent-danger-60);
-  /* The save-status dot's three glows (2026-08-28). One per state, because
-     the glow tracks the dot's colour and no single token could. */
-  --glow-success-6: 0 0 6px var(--accent-success);
-  --glow-warning-6: 0 0 6px var(--accent-warning);
-  --glow-danger-6: 0 0 6px var(--accent-danger);
+  /* ⚠️ The save-status dot's three glows (2026-08-28) were DELETED on
+     2026-08-31 — `--glow-success-6`, `--glow-warning-6`, `--glow-danger-6`.
+     The owner asked for the glow around the save state colour to go on all
+     platforms, which left all three without a single consumer. The dot now
+     carries colour alone. Recorded rather than silently dropped so the names
+     are not read as missing. */
   --ring-warning-glow:
     0 0 0 2px var(--accent-warning-40), 0 0 8px var(--accent-warning-60);
   --glow-warn-12: 0 0 12px var(--status-warn-40);

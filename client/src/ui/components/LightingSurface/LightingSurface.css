@@ -138,10 +138,11 @@
    transform and gives back the screen-constant hairline both painters
    documented as their intent.
 
-   No 2px border, unlike `CanvasSurface`'s `.canvas__svg` — that one offsets
-   itself to match `.canvas__surface`'s 2px accent border, and
-   `.lighting-canvas__edit-canvas` has none. A border here would point every
-   grid line at the wrong seam between pixels.
+   No border. `CanvasSurface`'s `.canvas__svg` used to carry a 2px transparent
+   one to offset itself against `.canvas__surface`'s 2px accent border; both
+   borders were removed on 2026-08-31, so neither sheet compensates for
+   anything now. A border here would point every grid line at the wrong seam
+   between pixels.
 
    `pointer-events: none`: the editable canvas is the only element that may
    take input, and an SVG stacked above everything would otherwise swallow

@@ -69,6 +69,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { observer } from "mobx-react-lite";
+import { isTouchDevice } from "../ui/utils/pointerDevice";
 import { flowResult } from "mobx";
 import { Header } from "../ui/components/Header/Header";
 import type { AiHealthStatus } from "../ui/components/AiConfigPopover/AiConfigPopover";
@@ -123,6 +124,7 @@ export const HeaderContainer = observer(function HeaderContainer() {
   // no click is involved in that path. Applying it only on click would leave
   // the DOM showing the previous project's theme.
   const layoutStore = app.ui.layout;
+  const viewport = app.ui.viewport;
   const deviceTheme = useState(loadStoredTheme)[0];
   const theme: ThemeId = layoutStore.theme ?? deviceTheme ?? DEFAULT_THEME;
 
@@ -214,6 +216,20 @@ export const HeaderContainer = observer(function HeaderContainer() {
       }}
       theme={theme}
       onThemeChange={handleThemeChange}
+      /* Pencil-only input (2026-08-31).
+
+         ⚠️ THE DEVICE DECIDES TWO THINGS HERE, and the store deliberately
+         decides neither. Whether the button exists at all (`isTouchDevice`),
+         and what the toggle means when the project file says nothing —
+         `pencilOnly` is tri-state on the wire, so `?? isTouchDevice()`
+         resolves it. Storing a `true` default instead would switch the mode on
+         for a mouse-only desktop, where no contact ever reports as a stylus
+         and drawing would stop working entirely. */
+      showPencilOnly={isTouchDevice()}
+      pencilOnly={viewport.pencilOnly ?? isTouchDevice()}
+      onTogglePencilOnly={() =>
+        viewport.setPencilOnly(!(viewport.pencilOnly ?? isTouchDevice()))
+      }
       layoutMode={layoutStore.layoutMode}
       onToggleLayoutMode={() => layoutStore.toggleLayoutMode()}
       onExport={() => exportApi.run(projectName)}

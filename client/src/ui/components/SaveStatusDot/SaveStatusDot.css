@@ -14,41 +14,6 @@
    announces itself. It is deliberately larger than the 8px indicator it
    replaces: it is now a tap target, and 8px is unhittable with a finger.
    The visible dot is drawn by ::after; the button itself is the hit area. */
-/* ⚠️ `contain` AND `isolation` ARE LOAD-BEARING — DO NOT REMOVE THEM.
-
-   This button holds the only infinite animation that can run while the pixel
-   canvas is on screen (`--pulsing`, below). Reported 2026-08-31: releasing a
-   zoom made the artwork blur for under a second — which is the 500 ms
-   auto-save debounce plus the save, i.e. exactly the window in which this dot
-   is orange and pulsing.
-
-   An animation with no containment makes the browser re-evaluate compositing
-   for the whole document, and the canvas — 1:1 with the pixel data and
-   magnified up to 200x by a CSS transform — gets re-rasterised through that
-   path and comes back bilinearly smoothed.
-
-   `will-change: opacity` on the `::after` alone was NOT enough: a pseudo
-   element does not give its host an isolated compositing context in the
-   header's flow. Containing the BUTTON does. It is a fixed 24x24 control, so
-   `layout paint` costs nothing and `isolation: isolate` keeps its stacking
-   context to itself.
-
-   ⚠️ `contain: paint` CLIPS TO THE BORDER BOX, so the glow must fit inside it.
-   Today it does, with room to spare: the `::after` dot is 10px centred in a
-   24px button, leaving 7px of slack on each side, and the glow is a 6px blur
-   with no offset and no spread. If the dot grows, the button shrinks, or the
-   glow gains offset/spread, re-check that sum — the glow will be clipped
-   rather than overflow, and it will look like the glow was deleted.
-
-   The popover is a SIBLING of this button, not a child, so paint containment
-   here cannot clip it.
-
-   ⚠️ DO NOT "FIX" THIS ON THE CANVAS. Pinning `.canvas__layout` with
-   `will-change: transform` is the intuitive move and it is WRONG — it makes
-   the browser rasterise the canvas subtree once at 1:1 and GPU-upscale that
-   bitmap, blurring permanently and worse the further you zoom. See the comment
-   on `.canvas__layout` in `CanvasSurface.css`. The canvas stays unpromoted;
-   animations elsewhere isolate themselves. */
 .save-status-dot__dot {
   display: flex;
   align-items: center;
@@ -60,8 +25,6 @@
   border: none;
   border-radius: var(--radius-full);
   cursor: pointer;
-  contain: layout paint;
-  isolation: isolate;
 }
 
 .save-status-dot__dot::after {
@@ -70,10 +33,14 @@
   height: 10px;
   border-radius: var(--radius-full);
   background: var(--save-dot-color);
-  /* The glow has to follow the STATE colour, so it comes from the same
-     per-state variable rather than a fixed token — one `--glow-*` token
-     could only ever match one of the three states. */
-  box-shadow: var(--save-dot-glow);
+  /* ⚠️ NO GLOW, ON ANY PLATFORM. Each state used to add its own coloured halo
+     here (`box-shadow: var(--save-dot-glow)`, one `--glow-*` token per state,
+     since a single token could not track the dot's colour). Removed
+     2026-08-31: "I want to see the glow around the save color state to be
+     removed on all platforms."
+
+     The dot now communicates purely through `--save-dot-color`, which is what
+     the three state rules below set and the only thing they set. */
   transition: background var(--transition-fast);
 }
 
@@ -85,30 +52,42 @@
    header — the user is asking "is my work safe", and both answer yes. */
 .save-status-dot__dot--ok {
   --save-dot-color: var(--accent-success);
-  --save-dot-glow: var(--glow-success-6);
 }
 
 .save-status-dot__dot--busy {
   --save-dot-color: var(--accent-warning);
-  --save-dot-glow: var(--glow-warning-6);
 }
 
 .save-status-dot__dot--error {
   --save-dot-color: var(--accent-danger);
-  --save-dot-glow: var(--glow-danger-6);
 }
 
-/* Only the busy state animates — a resting header must be still.
+/* ⚠️ NOTHING HERE MAY ANIMATE — THE DOT CHANGES COLOUR AND NOTHING ELSE.
 
-   `will-change: opacity` hints the animated property. It is NOT sufficient on
-   its own — see the containment on `.save-status-dot__dot` above, which is
-   what actually keeps this pulse from making the browser re-evaluate
-   compositing document-wide and blurring the pixel canvas. Both stay. */
-.save-status-dot__dot--pulsing::after {
-  animation: app-pulse 1s ease-in-out infinite;
-  will-change: opacity;
-}
+   The busy state used to run `animation: app-pulse 1s infinite` on the
+   `::after`. Removed 2026-08-31 at the owner's request: "remove the animation
+   of the save dot and just make it change colors without a pulse."
 
+   It is worth knowing WHY this is more than a style preference, because the
+   obvious way to bring a pulse back would reintroduce a real bug. This was the
+   only infinite animation that could run while the pixel canvas was on screen,
+   and an uncontained infinite animation makes the browser re-evaluate
+   compositing document-wide — the canvas is 1:1 with the pixel data and
+   magnified up to 200x by a CSS transform, so it came back bilinearly smoothed
+   for exactly as long as a save was in flight. Two rounds of fixes chased that
+   (`will-change: opacity` on the pseudo element, then `contain: layout paint`
+   plus `isolation: isolate` on the button); both are gone with the animation
+   they existed to contain, since there is now nothing to isolate.
+
+   If an animation is ever wanted here again, it needs its own containment —
+   and the fix belongs on THIS element, never on the canvas. Pinning
+   `.canvas__layout` with `will-change: transform` is the intuitive move and is
+   WRONG: it makes the canvas rasterise once at 1:1 and GPU-upscale that
+   bitmap, blurring permanently and worse the further you zoom. See the comment
+   on `.canvas__layout` in `CanvasSurface.css`.
+
+   The colour transition below is a `background` transition on a 10px dot, not
+   an animation: it runs once per state change and then stops. */
 /* The detail panel. Opened by CLICK, never hover: a hover tooltip is
    unreachable on the iPad this editor also runs on. */
 .save-status-dot__popover {

@@ -147,6 +147,7 @@ function fullyPopulatedProject(): Project {
     traceNudgeAmount: 50,
     focusMode: true,
     lightGridMode: true,
+    pencilOnly: true,
     canvasInfoHidden: true,
     objectLibraryViewMode: "grid",
     timelineThumbnailMode: true,
@@ -221,7 +222,7 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     expect(canonical(built)).toBe(canonical(legacy));
   });
 
-  it("enumerates ALL 44 CompactUIState fields — none may be silently dropped", () => {
+  it("enumerates ALL 45 CompactUIState fields — none may be silently dropped", () => {
     // Read the interface's own declared fields from source. A field added to
     // `CompactUIState` without a matching line in the builder fails HERE,
     // which is the whole reason the builder is explicit rather than a spread.
@@ -254,7 +255,8 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     // written only when the set says something `focusMode` cannot already
     // encode, because a real corpus snapshot carries `focusMode: true` and
     // would otherwise gain the key. See `needsHiddenRailsKey`.
-    expect(declared).toHaveLength(50);
+    // 51 after `pencilOnly` joined the wire format on 2026-08-31.
+    expect(declared).toHaveLength(51);
 
     // A FULLY-POPULATED project, because 11 of the 44 keys are
     // conditionally present by design: the legacy `...project.uiState`
@@ -630,4 +632,53 @@ describe("R3 — the builder against the real corpus", () => {
       }
     },
   );
+});
+
+/**
+ * Pencil-only input (2026-08-31) — the wire-format half.
+ *
+ * ⚠️ THE POINT OF THESE IS THE OWNER'S DATA. `pencilOnly` is tri-state so a
+ * project that has never used the toggle round-trips byte-identically; a plain
+ * `boolean` would add the key to all 149 real snapshots on their next save.
+ */
+describe("pencilOnly — absent stays absent", () => {
+  /** A bare store, built the way the other cases here build one. */
+  const bare = () =>
+    new UIStore({
+      session: new SessionStore(),
+      selection: new SelectionMirror(),
+      layout: new LayoutUIStore("desktop"),
+    });
+
+  it("⭐ is NOT emitted by a store that has never set it", () => {
+    const ui = bare();
+    expect("pencilOnly" in ui.toPersistedUIState()).toBe(false);
+  });
+
+  it("is emitted once set, in both directions", () => {
+    const ui = bare();
+
+    ui.viewport.setPencilOnly(true);
+    expect(ui.toPersistedUIState().pencilOnly).toBe(true);
+
+    ui.viewport.setPencilOnly(false);
+    // ⚠️ FALSE MUST STILL BE EMITTED. It is a real choice — "I turned this off
+    // on my iPad" — and dropping it would let the device default silently turn
+    // the mode back on at the next load.
+    expect(ui.toPersistedUIState().pencilOnly).toBe(false);
+  });
+
+  it("⭐ round-trips absence through a load", () => {
+    const ui = bare();
+    ui.viewport.hydrate({});
+    expect("pencilOnly" in ui.toPersistedUIState()).toBe(false);
+  });
+
+  it("round-trips a stored value through a load", () => {
+    for (const stored of [true, false]) {
+      const ui = bare();
+      ui.viewport.hydrate({ pencilOnly: stored });
+      expect(ui.toPersistedUIState().pencilOnly).toBe(stored);
+    }
+  });
 });

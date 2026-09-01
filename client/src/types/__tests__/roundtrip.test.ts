@@ -161,6 +161,7 @@ describe("R3 — UIState field census", () => {
     "panOffset",
     "pencilBrushMax",
     "pencilBrushShape",
+    "pencilOnly",
     "referenceImagePanelMinimized",
     "referenceImagePanelPosition",
     "selectedColor",

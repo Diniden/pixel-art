@@ -82,13 +82,28 @@
   position: relative;
 }
 
+/* ⚠️ NO BORDER, NO RADIUS, NO SHADOW — AND NOTHING MAY COMPENSATE FOR ONE.
+
+   Reported 2026-08-31: "the edit area has bizarre weird borders around it. I
+   don't want borders or chrome on the edit area". This element used to carry
+   `border: 2px solid var(--border-accent)`, `border-radius: var(--radius-sm)`
+   and `box-shadow: var(--shadow-canvas)` — and that shadow is three effects,
+   not one: a 1px dark ring, a large drop shadow, and a 40px accent glow. Read
+   together around the artwork they are the "weird borders".
+
+   Removing them is a FIVE-ELEMENT change, not a one-line one. `.canvas__
+   background`, `.canvas__layers`, `.canvas__svg` and `.canvas__overlay` are
+   absolutely positioned at this element's border-box origin, and each used to
+   carry `border: 2px solid transparent` PURELY to step over the 2px border
+   that lived here. With this border gone, any surviving compensation offsets
+   that overlay by 2px — the artwork, the grid, the marching ants and the
+   hover marker each pointing at a different seam between pixels. All four
+   were removed in the same change. If a border is ever reintroduced here, it
+   is reintroduced there too, or the canvas silently goes out of register. */
 .canvas__surface {
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border: 2px solid var(--border-accent);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-canvas);
   cursor: crosshair;
 }
 
@@ -145,12 +160,14 @@
    a new z-index is both redundant and a stylelint error.
 
    ── placement ────────────────────────────────────────────────────────────
-   The same absolute origin and the same 2px TRANSPARENT border as
-   `.canvas__layers` and `.canvas__overlay`, compensating for
-   `.canvas__surface`'s visible 2px one. A 2px drift here puts the checker
-   squares out of register with the artwork sitting on top of them, and the
-   misalignment reads as a rendering bug rather than as a border. If that
-   surface border changes, it changes here too.
+   The same absolute origin as `.canvas__layers` and `.canvas__overlay`, and
+   NO border. This element carried `2px solid transparent` until 2026-08-31,
+   purely to step over `.canvas__surface`'s visible 2px one; that border is
+   gone (see the `.canvas__surface` note above) and so is this compensation.
+   A 2px drift here puts the checker squares out of register with the artwork
+   sitting on top of them, and the misalignment reads as a rendering bug
+   rather than as a border. If a border ever returns to that surface, it
+   returns here too.
 
    ⚠️ THE GRID IS NOT DRAWN HERE. It is SVG (`.canvas__svg-grid`), where
    `vector-effect: non-scaling-stroke` keeps the hairline one SCREEN pixel at
@@ -160,8 +177,6 @@
   top: 0;
   left: 0;
   pointer-events: none;
-  border: 2px solid transparent;
-  border-radius: var(--radius-sm);
   z-index: var(--z-behind);
   background-color: var(--canvas-bg-base);
   background-image: conic-gradient(
@@ -205,11 +220,13 @@
    so it stacks under `.canvas__surface` (the pointer surface) and under all
    the `.canvas__overlay` siblings that follow.
 
-   The placement is `.canvas__overlay`'s, including the 2px TRANSPARENT border
-   that compensates for `.canvas__surface`'s visible 2px one. That is not
-   cosmetic: a 2px drift puts a layer's artwork out of register with the
+   The placement is `.canvas__overlay`'s, and like it this element carries NO
+   border. It held `2px solid transparent` until 2026-08-31 to compensate for
+   `.canvas__surface`'s visible 2px one, which is now gone. That alignment is
+   not cosmetic: a 2px drift puts a layer's artwork out of register with the
    pointer surface that maps clicks to cells, so strokes land on the seam
-   between the wrong pixels. If that border ever changes, it changes here too.
+   between the wrong pixels. If a border ever returns to that surface, it
+   returns here too.
 
    No z-index. `.canvas__layers` has no `z-index` of its own on purpose — it
    participates in normal source order beneath the overlays, which all share
@@ -220,15 +237,14 @@
   top: 0;
   left: 0;
   pointer-events: none;
-  border: 2px solid transparent;
-  border-radius: var(--radius-sm);
 }
 
 /* One layer's 1:1 canvas.
 
    Stacked on top of each other inside `.canvas__layers`, so each is absolutely
-   positioned at the wrapper's origin — the wrapper already carries the 2px
-   border compensation, so these must NOT repeat it.
+   positioned at the wrapper's origin. Neither the wrapper nor `.canvas__
+   surface` has a border any more, so there is nothing to compensate for and
+   nothing to repeat here.
 
    ⚠️ `image-rendering: pixelated` is LOAD-BEARING here, not belt-and-braces.
    The backing store is `cellWidth x cellHeight` — one device pixel per sprite
@@ -253,10 +269,12 @@
    to: chrome that says where the next stroke lands is useless if a
    semi-transparent onion skin can cover it.
 
-   Same absolute placement and same 2px transparent border as
-   `.canvas__overlay`, and for the sharper version of that reason: these are
-   VECTORS at one user unit per cell, so a 2px offset points every grid line
-   and every marching ant at the wrong seam between pixels.
+   Same absolute placement as `.canvas__overlay`, and like it no border — the
+   `2px solid transparent` both carried to clear `.canvas__surface`'s visible
+   one went with that border on 2026-08-31. Alignment matters here in the
+   sharper version of the usual way: these are VECTORS at one user unit per
+   cell, so a 2px offset points every grid line and every marching ant at the
+   wrong seam between pixels.
 
    `pointer-events: none` is doubled with an inline style, exactly as the
    overlay canvases do it — the editable surface is the only element that may
@@ -294,8 +312,6 @@
   top: 0;
   left: 0;
   pointer-events: none;
-  border: 2px solid transparent;
-  border-radius: var(--radius-sm);
   overflow: visible;
   z-index: var(--z-canvas-overlay);
   shape-rendering: crispEdges;
@@ -325,8 +341,6 @@
   pointer-events: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border: 2px solid transparent;
-  border-radius: var(--radius-sm);
   z-index: var(--z-canvas-overlay);
 }
 
@@ -338,23 +352,20 @@
 
    The `canvas__overlay--hover` modifier deliberately carries NO declarations
    of its own, so there is no rule for it here. Every property the marker
-   needs — the absolute placement, the pixelated scaling, the z-index, and the
-   2px transparent border that compensates for `.canvas__surface`'s visible
-   2px one — comes from `.canvas__overlay` above, and must keep coming from
-   there: if that surface border ever changes, the marker has to move WITH the
-   trace overlays rather than drifting 2px away from them. The class exists to
-   identify the marker canvas in the DOM and in tests. */
+   needs — the absolute placement, the pixelated scaling and the z-index —
+   comes from `.canvas__overlay` above, and must keep coming from there: if a
+   border is ever reintroduced anywhere in this stack, the marker has to move
+   WITH the trace overlays rather than drifting 2px away from them. The class
+   exists to identify the marker canvas in the DOM and in tests. */
 
 /* The reflection tool's animated guide lines.
 
    Like `--hover` above, the `canvas__overlay--reflection` modifier carries NO
    declarations of its own, and DELIBERATELY so — there is no rule for it here
-   and there should not be one. Absolute placement, pixelated scaling, the
-   z-index and the 2px transparent border that compensates for
-   `.canvas__surface`'s visible one all come from `.canvas__overlay`, and they
-   must keep coming from there: a guide that drifts 2px from the artwork points
-   at the wrong seam between pixels, which is the one thing this overlay exists
-   to get right.
+   and there should not be one. Absolute placement, pixelated scaling and the
+   z-index all come from `.canvas__overlay`, and they must keep coming from
+   there: a guide that drifts 2px from the artwork points at the wrong seam
+   between pixels, which is the one thing this overlay exists to get right.
 
    ⚠️ The guides sit above every other overlay, and that is SOURCE ORDER, not a
    z-index. `CanvasSurface` mounts this canvas last inside `.canvas__frame`;

@@ -27,7 +27,6 @@
   align-items: center;
   justify-content: center;
   z-index: var(--z-modal);
-  backdrop-filter: blur(2px);
 }
 
 .add-variant-modal__header {

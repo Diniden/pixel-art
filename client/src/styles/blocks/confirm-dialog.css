@@ -38,7 +38,6 @@
   position: fixed;
   inset: 0;
   background: var(--overlay-60);
-  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;

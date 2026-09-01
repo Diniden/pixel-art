@@ -111,6 +111,22 @@ export class ViewportUIStore implements CanvasCamera {
    * `lightGridMode ?? false`.
    */
   lightGridMode: boolean | undefined = undefined;
+  /**
+   * Pencil-only input (2026-08-31): only an Apple Pencil may edit pixels.
+   *
+   * ⚠️ TRI-STATE, for the same reason `lightGridMode` above is: `undefined`
+   * means "absent from the project file", and it must round-trip back out as
+   * absent so an untouched project's bytes do not move. Modelling it as a
+   * plain `boolean` would add the key to every project that has ever been
+   * saved, which is the wire-format drift R3 exists to prevent.
+   *
+   * ⚠️ THE DEFAULT IS NOT DECIDED HERE, and deliberately so. It is
+   * device-dependent — ON where there is a touch screen, meaningless on a
+   * mouse-only desktop — and a store may not read the DOM to find out. The
+   * container resolves it (see `HeaderContainer`), so this stays a faithful
+   * mirror of the file and nothing more.
+   */
+  pencilOnly: boolean | undefined = undefined;
   canvasInfoHidden: boolean | undefined = undefined;
   objectLibraryViewMode: "normal" | "small-rows" | "grid" = "normal";
   timelineThumbnailMode = false;
@@ -146,6 +162,7 @@ export class ViewportUIStore implements CanvasCamera {
       setRailHidden: action,
       showAllRails: action,
       lightGridMode: observable,
+      pencilOnly: observable,
       canvasInfoHidden: observable,
       objectLibraryViewMode: observable,
       timelineThumbnailMode: observable,
@@ -268,6 +285,15 @@ export class ViewportUIStore implements CanvasCamera {
     this.lightGridMode = !(this.lightGridMode ?? false);
   }
 
+  /**
+   * Pencil-only input. Takes the value explicitly rather than toggling: the
+   * caller knows the device default this is being flipped away from, and this
+   * store deliberately does not (see the field note).
+   */
+  setPencilOnly(on: boolean): void {
+    this.pencilOnly = on;
+  }
+
   setCanvasInfoHidden(hidden: boolean): void {
     this.canvasInfoHidden = hidden;
   }
@@ -318,6 +344,7 @@ export class ViewportUIStore implements CanvasCamera {
     /** Wide `string[]`: a file may name a rail this build does not know. */
     hiddenRails?: string[];
     lightGridMode?: boolean;
+    pencilOnly?: boolean;
     canvasInfoHidden?: boolean;
     objectLibraryViewMode?: "normal" | "small-rows" | "grid";
     timelineThumbnailMode?: boolean;
@@ -348,6 +375,8 @@ export class ViewportUIStore implements CanvasCamera {
     if (ui.focusMode !== undefined) this.focusMode = ui.focusMode;
     // Assigned unconditionally: absent must stay absent (see the field note).
     this.lightGridMode = ui.lightGridMode;
+    // Likewise — a project that never set it must not gain the key on save.
+    this.pencilOnly = ui.pencilOnly;
     if (ui.objectLibraryViewMode !== undefined) {
       this.objectLibraryViewMode = ui.objectLibraryViewMode;
     }

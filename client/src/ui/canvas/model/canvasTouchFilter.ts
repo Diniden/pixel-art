@@ -113,16 +113,47 @@ export function pinchTouches<T extends FilterableTouch>(
  * 1. **A stylus always wins.** If a Pencil is down it is the drawing contact,
  *    no matter how many fingers are also touching. This is the case that was
  *    broken: the fingers must not veto the Pencil.
- * 2. **Otherwise a single finger draws.** Finger drawing still works for users
- *    without a Pencil.
+ * 2. **Otherwise a single finger draws** — UNLESS `pencilOnly` is set, which
+ *    is rule 2's entire exception; see below. Finger drawing still works for
+ *    users without a Pencil.
  * 3. **Two or more fingers draw nothing** — that is a pinch, and the viewport
  *    listener owns it.
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  `pencilOnly` — PENCIL-ONLY INPUT (2026-08-31)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Requested: "In pencil mode, it will assume ALL drawing/edits to the pixel
+ * data can ONLY come from the pencil. Otherwise, if the button isn't selected,
+ * it will assume it is just touch mode and it will behave how it currently
+ * does with touch interactions working like normal."
+ *
+ * So `pencilOnly` deletes rule 2 and nothing else. A finger returns `null`
+ * here, which means it puts no pixel down — and that is the ONLY thing it
+ * means. Panning, pinching, and every button and slider are untouched, because
+ * none of them consults this function: {@link pinchTouches} decides zooming
+ * and it already ignores a stylus, while the rails are ordinary DOM. A hand
+ * resting on the glass is exactly what this is for.
+ *
+ * ⚠️ IT IS OFF BY DEFAULT HERE, and the default is resolved far away. The
+ * parameter defaults to `false` so every existing caller and every test keeps
+ * the historical behaviour verbatim; the device-dependent default (ON where
+ * there is a touch screen) is the container's business, not this pure
+ * function's.
+ *
+ * ⚠️ A browser that does not report `touchType` sees every contact as a
+ * finger, so `pencilOnly` there would disable drawing altogether. That is why
+ * the toggle is only OFFERED on touch devices — see `HeaderContainer`.
  */
 export function drawingTouch<T extends FilterableTouch>(
   touches: ReadonlyArray<T>,
+  pencilOnly = false,
 ): T | null {
   const stylus = touches.find(isStylus);
   if (stylus) return stylus;
+
+  // Pencil-only: a finger may pan and pinch, but it may not paint.
+  if (pencilOnly) return null;
 
   const fingers = touches.filter((t) => !isStylus(t));
   return fingers.length === 1 ? (fingers[0] ?? null) : null;

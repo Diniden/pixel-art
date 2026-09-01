@@ -33,6 +33,7 @@ import {
 import { Dropdown } from "../../primitives/Dropdown/Dropdown";
 import { SaveStatusDot } from "../SaveStatusDot/SaveStatusDot";
 import { Icon } from "../../primitives/Icon/Icon";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { THEMES, type ThemeId } from "../../theme/themes";
 import {
   Diamond,
@@ -40,6 +41,9 @@ import {
   FolderOpen,
   ExternalLink,
   PenLine,
+  // The Pencil-only toggle. `Pencil` is the stylus-shaped glyph — the request
+  // was specifically "a pencil icon".
+  Pencil as PencilIcon,
   LayoutDashboard as LayoutIcon,
 } from "lucide-react";
 import "./Header.css";
@@ -90,6 +94,23 @@ export interface HeaderProps {
   onThemeChange: (theme: ThemeId) => void;
 
   /**
+   * Pencil-only input (2026-08-31) — only an Apple Pencil may edit pixels.
+   *
+   * ⚠️ `showPencilOnly` GATES THE WHOLE CONTROL, and is false on a mouse-only
+   * desktop. The owner asked for "a button in the top bar to the left of the
+   * AI button" on the iPad; on a machine with no stylus the button would be
+   * dead furniture, and worse, switching it on there would disable drawing
+   * entirely (no contact ever reports as a stylus). The container decides —
+   * see `ui/utils/pointerDevice.ts`.
+   *
+   * `pencilOnly` arrives already resolved against the device default, so this
+   * component never sees the stored tri-state.
+   */
+  showPencilOnly: boolean;
+  pencilOnly: boolean;
+  onTogglePencilOnly: () => void;
+
+  /**
    * Layout mode — the scrim over each rail with its move/resize controls.
    * The button is a toggle and reads as pressed while the mode is on, so it
    * is obvious how to get back out of it.
@@ -126,6 +147,9 @@ export function Header({
   onSaveAiServiceUrl,
   theme,
   onThemeChange,
+  showPencilOnly,
+  pencilOnly,
+  onTogglePencilOnly,
   layoutMode,
   onToggleLayoutMode,
   onExport,
@@ -295,6 +319,31 @@ export function Header({
       </div>
 
       <div className="header__right">
+        {/* ⚠️ FIRST in `header__right`, i.e. to the LEFT of the AI button —
+            the position the owner asked for. Rendered only where a stylus is
+            possible; see `showPencilOnly` on the props. */}
+        {showPencilOnly ? (
+          <Tooltip
+            content={
+              pencilOnly
+                ? "Pencil only — a finger pans and zooms but does not draw"
+                : "Touch drawing — a finger draws as well as the Pencil"
+            }
+          >
+            <button
+              className={`header__pencil-btn ${
+                pencilOnly ? "header__pencil-btn--active" : ""
+              }`}
+              onClick={onTogglePencilOnly}
+              aria-pressed={pencilOnly}
+              aria-label="Pencil-only input"
+            >
+              <span className="header__pencil-icon">
+                <Icon icon={PencilIcon} size={14} />
+              </span>
+            </button>
+          </Tooltip>
+        ) : null}
         <AiConfigPopover
           isOpen={showAiConfig}
           onOpenChange={(open) => {

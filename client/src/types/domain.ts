@@ -148,6 +148,26 @@ export interface UIState {
   hiddenRails?: string[];
   // Light grid mode: use a light background for the canvas grid instead of dark
   lightGridMode?: boolean;
+  /**
+   * Pencil-only input (2026-08-31): only an Apple Pencil may edit pixels.
+   *
+   * When true, a FINGER cannot draw — it can still pan, pinch and operate
+   * every control, but it will not put a pixel down. That is the whole point:
+   * on an iPad the hand resting on the glass is not trying to paint. When
+   * false the canvas behaves as it always has and a single finger draws.
+   *
+   * ⚠️ OPTIONAL AND CONDITIONALLY EMITTED, exactly like `hiddenRails` above.
+   * An untouched project gains no key, so existing files round-trip
+   * byte-identically and the corpus snapshots do not move. `undefined` means
+   * "absent from the file"; readers collapse it at the read site.
+   *
+   * ⚠️ The DEFAULT for a fresh value is decided in the UI layer, not here,
+   * and it is device-dependent: a touch device defaults it ON, which is what
+   * the owner asked for ("selected by default"). Baking a default into the
+   * wire format would force it onto desktops that have no stylus at all and
+   * silently disable mouse drawing there.
+   */
+  pencilOnly?: boolean;
   brushSize: number;
   bitDepth: BitDepth;
   shapeMode: ShapeMode;

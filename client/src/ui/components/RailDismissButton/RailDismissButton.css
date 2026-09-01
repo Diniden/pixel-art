@@ -146,22 +146,21 @@
   opacity: 1;
 }
 
-/* ⚠️ COARSE POINTERS GET THE GRIP PERMANENTLY. There is no hover on an iPad
-   (measured — see the owner's notes on Pencil hover), so a control that only
-   appears on hover is a control that never appears. The strip is also widened
-   to a usable touch target there. */
-@media (hover: none) {
-  .rail-handle--left,
-  .rail-handle--right {
-    width: 10px;
-  }
+/* ⚠️ NO COARSE-POINTER OVERRIDE — THE IPAD GETS EXACTLY THE DESKTOP HANDLE.
 
-  .rail-handle--bottom,
-  .rail-handle--top {
-    height: 10px;
-  }
+   There WAS an `@media (hover: none)` block here that widened the strips from
+   3px to 10px and forced `.rail-handle__grip` permanently visible, on the
+   reasoning that a hover-only affordance never appears on a device with no
+   hover.
 
-  .rail-handle__grip {
-    opacity: 1;
-  }
-}
+   Removed 2026-08-31 at the owner's request: "the borders on ipad that
+   collapse the rails all need to be the same thickness as on desktop and
+   should also hide the arrow buttons." The 10px strips read as a thick border
+   rather than a rail edge, and the always-on chevrons were visual noise.
+
+   ⚠️ THE CONSEQUENCE, RECORDED DELIBERATELY. On a touch device there is now no
+   visible indication that the rail edge is interactive, and the target is the
+   3px strip — the full length of the rail, but 3px across. That is the
+   accepted trade: the owner asked for parity with desktop and for the arrows
+   gone, knowing the affordance goes with them. Do not "fix" this by
+   reintroducing a coarse-pointer branch without asking. */

@@ -28,6 +28,7 @@ import { useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { OtherHandSurface } from "../ui/components/OtherHand/OtherHandSurface";
 import { ColorModelExtras } from "../ui/components/OtherHand/ColorModelExtras";
+import { ColorPreview } from "../ui/components/OtherHand/ColorPreview";
 import type { ThumbWidgetSpec } from "../ui/components/OtherHand/thumbWidgets";
 import { hslToRgb } from "../ui/utils/colorMath";
 import { useStores } from "../stores/context";
@@ -115,14 +116,33 @@ const ColorSection = observer(function ColorSection() {
       onResetPositions={() => layout.resetOtherHandPositions(sectionKey)}
       onExit={() => layout.exitOtherHand()}
       extras={
-        <ColorModelExtras
-          model={model}
-          onModel={(m) => layout.setOtherHandColorModel(sectionKey, m)}
-          includeAlpha={includeAlpha}
-          onIncludeAlpha={(on) =>
-            layout.setOtherHandIncludeAlpha(sectionKey, on)
-          }
-        />
+        <>
+          {/* The composed colour, at the top of the rail. `color` is the
+              store's live selected colour — the same value `apply()` writes
+              — so the square tracks the sliders through both the plain and
+              the colour-ADJUSTMENT paths without re-deriving anything.
+              Alpha is passed only when the section is showing an alpha
+              slider; otherwise the preview would render the stored alpha of
+              a colour the user cannot currently change. */}
+          <ColorPreview
+            colors={[
+              {
+                r: color.r,
+                g: color.g,
+                b: color.b,
+                a: includeAlpha ? color.a : 255,
+              },
+            ]}
+          />
+          <ColorModelExtras
+            model={model}
+            onModel={(m) => layout.setOtherHandColorModel(sectionKey, m)}
+            includeAlpha={includeAlpha}
+            onIncludeAlpha={(on) =>
+              layout.setOtherHandIncludeAlpha(sectionKey, on)
+            }
+          />
+        </>
       }
     />
   );
@@ -202,10 +222,33 @@ const LightSection = observer(function LightSection() {
       onResetPositions={() => layout.resetOtherHandPositions(sectionKey)}
       onExit={() => layout.exitOtherHand()}
       extras={
-        <ColorModelExtras
-          model={model}
-          onModel={(m) => layout.setOtherHandColorModel(sectionKey, m)}
-        />
+        <>
+          {/* TWO squares here, labelled: this section's sliders drive the
+              light colour AND the ambient colour, and an unlabelled pair
+              would be a guess. Order matches the sliders below. Neither
+              colour carries a meaningful alpha (both are set with a: 255),
+              so both previews are opaque. */}
+          <ColorPreview
+            colors={[
+              {
+                r: lightingUI.lightColor.r,
+                g: lightingUI.lightColor.g,
+                b: lightingUI.lightColor.b,
+                label: "Light",
+              },
+              {
+                r: lightingUI.ambientColor.r,
+                g: lightingUI.ambientColor.g,
+                b: lightingUI.ambientColor.b,
+                label: "Amb",
+              },
+            ]}
+          />
+          <ColorModelExtras
+            model={model}
+            onModel={(m) => layout.setOtherHandColorModel(sectionKey, m)}
+          />
+        </>
       }
     />
   );
