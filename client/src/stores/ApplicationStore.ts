@@ -419,8 +419,12 @@ export class ApplicationStore {
   private readonly disposeReflectionReaction: () => void;
 
   /**
-   * The pose tool's 3D reference state — mesh, framing, rotation, light,
-   * colours, camera and pan (pose-tool task 02). Session-only: not in
+   * The pose tool's 3D reference state — mesh (a primitive, the whole
+   * mannequin, or one of its parts), rotation, light, outline width, camera
+   * and pan (pose-tool task 02; framing deleted 2026-09-03, MASTER E2 —
+   * a part is its own geometry now). ⚠️ The MODEL and OUTLINE colours are the
+   * app's own Fill/Edge slots on `ui.tool`, not pose state (E8/E9).
+   * Session-only: not in
    * `toPersistedUIState()`, not in history, never schedules a save. No
    * dependencies in either direction, like `reflection`.
    *
