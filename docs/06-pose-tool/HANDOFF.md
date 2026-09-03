@@ -1,8 +1,8 @@
 # HANDOFF — Pose tool
 
-**Current position:** W2 DONE — W3 next
+**Current position:** W3 DONE (task 08) — W4 next
 **Branch:** `feat/06-pose-tool`
-**Last commit:** `f4ef0de`
+**Last commit:** `2dcdd42`
 **Plan written:** 2026-09-02 · Planning baseline HEAD: `cd7a852`
 
 ## Wave ledger
@@ -11,7 +11,7 @@
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02, 03, 04, 05 | DONE | 2026-09-02 | `2073de6` | tsc 0 · eslint 0 err/65 warn · vitest 140 files 2571 tests · boundaries OK · stylelint 2 err · no lockfile |
 | W2 | 06, 07 | DONE | 2026-09-03 | `f4ef0de` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · no lockfile |
-| W3 | 08 | TODO | | | |
+| W3 | 08 | DONE | 2026-09-03 | `2dcdd42` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · build OK · no lockfile · **24 manual checks OWED** |
 | W4 | 09 | TODO | | | |
 | W5 | 10 | TODO | | | |
 
@@ -28,7 +28,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 05 | `PixelStore.setPixelCells()` | W1 | DONE | `2073de6` | `setPixelCells` additive, one history entry. Corpus digests unchanged. |
 | 06 | Meshes, camera, auto-fit, stamp math | W2 | DONE | `f4ef0de` | 133 tests. Fuzzed applyEulerXYZ vs three (2.2e-15). ⚠️ setCamera widening owed to 08. |
 | 07 | Pose rail section + orbs | W2 | DONE | `5193dfd` | 33 tests. One DirectionOrb used twice. Added a Clear-pose button. 9 manual checks owed. |
-| 08 | `CanvasContainer` integration | W3 | TODO | | |
+| 08 | `CanvasContainer` integration | W3 | DONE | `2dcdd42` | Own `useCanvasRender`; lazy engine + token guard; 3-pass stamp. **Depth fallback NOT needed.** 24 manual checks owed. |
 | 09 | Vendor the CC0 mannequin | W4 | TODO | | May legitimately end BLOCKED |
 | 10 | Full gate, QA, handoff | W5 | TODO | | |
 
@@ -117,9 +117,49 @@ never revert or commit someone else's work.
 - **2026-09-03 · W2 · coordinator.** **Task 08's `Touches` extended** to allow widening
   `setCamera`/`getCamera` in `poseEngine.ts`. See the authorised-scope-extension section.
 
+
+- **2026-09-03 · W3 · task 08.** The authorised `setCamera`/`getCamera` widening was taken,
+  as a **union** (`PoseEngineCamera = PerspectiveCamera | OrthographicCamera`) rather than
+  the bare `Camera` base class. `resize()` narrows on the perspective discriminant to refresh
+  the aspect ratio, and only a union makes that visible to the compiler. ⚠️ Both classes
+  declare only their OWN `is*Camera` flag, as the literal `true`, so a direct property read
+  does not compile on the union — the narrowing had to be written as
+  `"isPerspectiveCamera" in camera`, in the engine and in the container's fit effect.
+  `setPixelRatio(1)` was not touched.
+- **2026-09-03 · W3 · task 08.** **The engine is NOT disposed on tool deselect**, only on
+  unmount. The task text says "dispose on tool deselect and on unmount"; disposing on
+  deselect would build and destroy a WebGL context on every tool switch, which is manual
+  check 22's own leak scenario (20 switches against a browser cap of ~16) arriving from the
+  other direction. One idle context is held for the container's lifetime; it renders nothing
+  while inactive. Geometries and materials ARE disposed on every mesh change, through
+  `setObject3D`'s ownership transfer.
+- **2026-09-03 · W3 · task 08.** **The user's `zoom` is folded into the auto-fit's PADDING**
+  (`padding = 1 - (1 - 0.1) * zoom`) rather than applied as a separate camera scale, so
+  `fitCameraToMesh` stays the single owner of how big the model is. Verified headlessly:
+  zoom 1 gives exactly the D7 90% fill of the shorter axis on a 64x32 canvas; zoom 10 clamps
+  to padding 0 and still yields a finite frustum; zoom 0.1 gives 0.91, inside the fit's 0.95
+  ceiling.
+- **2026-09-03 · W3 · task 08.** **The pan is applied as a whole-image translation in the
+  PAINTER, not by moving the camera** — a camera pan would re-fit and re-rasterise, and the
+  drag exists to slide the picture the user is already looking at. It is rounded to whole
+  cells in the painter AND in the stamp, with the same `Math.round`, so the two cannot
+  disagree at a half-integer pan.
+- **2026-09-03 · W3 · task 08.** ⚠️ **A variant-edit offset bug was found and fixed during
+  self-review, before commit.** The stamp's offset must be `variantOffset`, NOT `viewMin`.
+  Derived from `placeHoverCells` (`canvasX = gridX + (variantOffset.x - viewMinX)`): the
+  painter puts texel (0,0) at canvas column `round(pan.x) - viewMinX`, so inverting gives a
+  GRID column of `round(pan.x) - variantOffset.x` — the `viewMin` terms cancel exactly, and
+  `setPixelCells` writes the VARIANT's own grid while one is being edited. The first draft
+  used `viewMin` and would have been wrong by `variantOffset - viewMin`, visible ONLY while
+  editing a variant.
+- **2026-09-03 · W3 · task 08.** `poseEngineTick` is a `useState` counter that ticks exactly
+  ONCE per engine, so the mesh/camera/light effects (which cannot run against a `null`
+  engine) get a chance to run after the async create resolves. It is not on any pointer path.
+
 ## Blocked items
 
-(none yet)
+(none — the authorised scope extension covered the only file task 08 needed beyond its
+`Touches`, and the depth-readback fallback was not required.)
 
 ## Manual check results
 
@@ -222,6 +262,115 @@ clears it, `dispose()` stops the reaction.)*
 Also unperformed by anyone: the full three-process `bun run dev` under mprocs. Each agent
 started only the Vite client (on a non-default port) to avoid seizing ports from siblings.
 All four confirmed the client serves HTTP 200 and transforms the new modules.
+
+### ⚠️ W3 — task 08's 24 manual checks: **ALL 24 ARE OWED, NONE WERE PERFORMED**
+
+**The executor had no browser and no automation driver.** Chrome, Safari and Firefox are
+installed on the machine, but neither Playwright nor Puppeteer is in `node_modules`, and
+installing one would have touched `client/package.json` (outside `Touches`) and risked a
+lockfile. jsdom has no WebGL, so the `dom` lane cannot exercise a single line of the GL path.
+
+**This matters more here than in W1/W2: these are the checks that exercise the GL pipeline
+for the first time.** Nothing below has been SEEN. Do not treat the green gate as evidence
+that the picture is right — the gate proves the code compiles, lints, tests and builds, and
+proves nothing whatsoever about what appears on screen.
+
+| # | Check | Status |
+| --- | --- | --- |
+| 1 | Cube/Sphere/Cylinder appear centred, ~90% of the shorter axis, with padding | **NOT PERFORMED** — but the fit maths was verified headlessly: on a 64x32 canvas the model's projected half-extent is exactly 0.9 of the frustum's shorter axis |
+| 2 | The render is visibly PIXELATED — hard blocky edges, no AA silhouette | **NOT PERFORMED.** Structurally: `antialias: false`, `samples: 0`, `NearestFilter` on both filters, target exactly `cellWidth x cellHeight`, `putImageData` at 1:1, `imageSmoothingEnabled = false` on every paint. Every known lever is set correctly; none was observed. |
+| 3 | Zoom the view — the model stays crisp and grid-aligned | **NOT PERFORMED.** The pan is rounded to whole cells in the painter, which is the alignment mechanism. |
+| 4 | Renders above every layer, below the ants / origin cross / reflection guides | **NOT PERFORMED.** DOM order verified statically in W1: pose overlay at `CanvasSurface.tsx:751`, reflection at `:769`, SVG chrome last. |
+| 5 | Light-orb drag moves the shading in real time, no lag | **NOT PERFORMED** |
+| 6 | Rotation-orb drag tumbles the model smoothly | **NOT PERFORMED** |
+| 7 | Each viewpoint button snaps correctly | **NOT PERFORMED.** ⚠️ See the gap noted below — the container does not read the viewpoint buttons directly; they write `pose.rotation`, which it does read. |
+| 8 | Each camera preset changes the projection; Iso reads as TRUE isometric | **NOT PERFORMED.** The preset's pitch/yaw/projection are read and passed to `fitCameraToMesh`; the iso pitch is `atan(1/√2)`, pinned by task 06's tests. |
+| 9 | Perspective ↔ Orthographic toggles visibly; zoom scales; FOV affects only perspective | **NOT PERFORMED.** ⚠️ Note: a PRESET overrides the store's `projection`, so the projection toggle is only visible on a preset whose projection matches — see the gap below. |
+| 10 | Light colour and model colour both change the render | **NOT PERFORMED** |
+| 11 | **Mouse**: drag pans; does not rotate; does not draw | **NOT PERFORMED.** Structurally guaranteed against drawing by `isGestureTool` + the empty `pose: {}` handler. |
+| 12 | **Touch**: the same drag works and does not scroll or draw | **NOT PERFORMED. This is the highest-risk unverified item** — the owner uses an iPad. The branches are placed before the `isGestureTool` bails in `handleTouchStart` and `handleTouchMove`, which is the documented failure mode, but placement was verified by reading, not by touching glass. |
+| 13 | Double-click stamps; **touch double-tap also stamps** | **NOT PERFORMED.** Detected explicitly (400 ms / 2 cells / a ref), never via `dblclick`. |
+| 14 | Stamped pixels land EXACTLY where the model was drawn — no offset | **NOT PERFORMED.** The painter and the stamp share one `Math.round(pan)`; the variant-edit term was derived from `placeHoverCells` and corrected pre-commit (see Deviations). **The non-variant path is the simple one and is most likely right; the VARIANT path is the one to check hardest.** |
+| 15 | ONE Ctrl+Z removes the whole stamp; one Ctrl+Y restores it | **NOT PERFORMED.** Guaranteed structurally by `setPixelCells`' single `commitCells`, which task 05 pinned with tests. |
+| 16 | With a selection active, the stamp is MASKED | **NOT PERFORMED.** `app.selectionUI.writeOptions` is passed; `setPixelCells` gates through `allows()`. |
+| 17 | In the lighting studio the stamped pixels carry sensible normals and heights | **NOT PERFORMED. Depth was NOT the fallback** — see the note below. The Y-negation convention is task 06's, untouched. |
+| 18 | Resize the object — the overlay resizes, stays 1:1, and the model RE-FITS | **NOT PERFORMED.** `cellWidth`/`cellHeight` are dependencies of both the resize effect and the fit effect. |
+| 19 | Pan then resize — the pan is preserved. Change mesh — the pan resets. | **NOT PERFORMED.** The fit effect neither reads nor writes the pan; `PoseUIStore.setMesh` resets it. |
+| 20 | Switch tools — the overlay disappears. Switch back — the pose is still there. | **NOT PERFORMED.** `poseActive` gates the painter; the store is untouched by a tool switch. |
+| 21 | Switch projects — the pose is cleared | **NOT PERFORMED.** Task 02's `loadGeneration` reaction; covered by its tests. |
+| 22 | **20 tool switches + 20 mesh changes, then no `Too many active WebGL contexts`** | **NOT PERFORMED. THIS IS THE LEAK CHECK AND IT IS THE MOST IMPORTANT ONE OWED.** By construction there is exactly ONE context per mount (created once, never disposed on deselect, disposed once on unmount), so 20 tool switches create 20 - 1 = 0 extra contexts. Mesh changes go through `setObject3D`, which disposes the outgoing geometry and materials. **Argued, not observed.** |
+| 23 | **StrictMode**: no doubled renderer, no doubled overlay, no console error | **NOT PERFORMED.** Guarded by the ref check, the `cancelled` flag and `poseTokenRef`; a create that loses the race disposes its own engine. **Argued, not observed.** |
+| 24 | Drawing performance with a large sprite is unchanged while pose is NOT selected | **NOT PERFORMED.** Structurally: nothing pose-related is in the main `render`'s dependencies, no engine is created until the tool is first selected, and the painter early-returns when `poseActive` is false. |
+
+**The wall-clock time of a full-canvas stamp was NOT measured** — it needs a running GL
+context on a real object. Task 10's QA sweep must take it.
+
+### Depth readback: the D8 fallback was **NOT** needed
+
+The obstacle D8 anticipated is real — `readRenderTargetPixels` is RGBA-only, so the depth
+ATTACHMENT cannot be read back directly. It is sidestepped rather than hit:
+`MeshDepthMaterial` with `BasicDepthPacking` writes `1 - ndcDepth` into RGB as luminance, so
+the engine's existing RGBA readback **is** the depth buffer, with **nearer = larger**. The
+fallback is still wired and still live: if the pass throws or returns the wrong size,
+`depth` is passed as `null`, every height becomes the `0` "no data" sentinel, and colour and
+normal still land.
+
+⚠️ **Untested against a real GPU.** The shader was read out of
+`three/src/renderers/shaders/ShaderLib/depth.glsl.js` at 0.185.1 and the mapping reasoned
+from it. **Manual check 17 is what confirms it**, and if the heights come back uniform or
+inverted, the depth pass is where to look first.
+
+### Gaps found in the plan while integrating (for task 10, not blockers)
+
+1. **The viewpoint buttons are not wired to anything task 08 owns.**
+   `POSE_VIEWPOINT_ROTATIONS` lives in `poseCamera.ts` and task 07's panel calls
+   `onSetRotation`, so a viewpoint click writes `pose.rotation` and the container picks it
+   up like any other rotation. Nothing is missing — but no code in the container references
+   the viewpoint table, so manual check 7 is really a check on task 07's wiring.
+2. **A camera PRESET overrides the store's `projection`.** D14 says a preset "sets projection
+   + angles", and the fit effect implements exactly that: `preset.projection ?? store
+   .projection`. The consequence is that the rail's Perspective/Orthographic toggle has no
+   visible effect while a preset whose projection differs is selected. That follows from D14
+   as written; flag it to the owner as a UX question rather than a bug.
+3. **In variant-edit mode the overlay spans the EXPANDED view while the stamp targets the
+   smaller variant grid.** Cells outside the variant are filtered by `setPixelCells`, so the
+   model stamps cropped to the variant — which is the right behaviour, but it means the
+   visible reference is larger than the stampable area. Worth a line in the QA notes.
+
+### Verification output — task 08, run by the executor at `2dcdd42`
+
+```
+bunx tsc --noEmit              exit 0, clean
+bunx eslint .                  ✖ 65 problems (0 errors, 65 warnings)
+bunx vitest run                Test Files 145 passed (145) · Tests 2737 passed (2737)
+bun run lint:boundaries        check-boundaries: OK — all 5 boundary rules hold.
+bunx stylelint "src/**/*.css"  ✖ 70 problems (2 errors, 68 warnings)
+bun run build                  ✓ built in 2.05s
+find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules   → empty
+git status --short -- '*__snapshots__*'                        → empty
+```
+
+Bundle, for task 10's before/after: main `788.56 kB / 229.14 kB gzip` (W1 recorded
+764.15 / 220.49 — the +24 kB is this task's container code). **`three` did NOT leak into the
+main bundle**: it is still its own `734.33 kB / 189.46 kB gzip` chunk, plus a 45.56 kB
+`GLTFLoader` chunk. Grepped the built main bundle to confirm — its single `WebGLRenderer`
+occurrence is `PoseEngine`'s own `new e.WebGLRenderer(...)` on the dynamically-imported
+namespace, not three's source. D2 is intact.
+
+**Boundary probe (negative control).** `bun run lint:boundaries` reporting OK is only
+meaningful if the rule can fail. Adding `import { PoseUIStore } from "@/stores/ui/PoseUIStore"`
+to `poseEngine.ts` produced `[ui-purity] ... imports stores/ or store/` and exit 1; the file
+was restored and the rule went back to OK. The rule fires.
+
+**Headless probes run and then deleted** (a test file is outside task 08's `Touches`): 8
+assertions over `depthToHeight`, `buildStampCells` and `fitCameraToMesh`, all passing —
+the zoom→padding fold, the 90%-of-the-shorter-axis fill on a non-square canvas, nearer =
+taller under the observed range, the `depth: null` fallback producing height 0 with colour
+and normal intact, the pan offset, and fresh per-cell `color`/`normal` objects.
+
+**Dev server**: `bunx vite` on port 5279 serves `/` 200 and transforms the modified
+`CanvasContainer.tsx` 200, with `poseCanvasRef` present in the transformed output. The full
+three-process `bun run dev` under mprocs was **not** run.
 
 ## ⚠️ AUTHORISED SCOPE EXTENSION FOR TASK 08 (coordinator, 2026-09-03)
 
