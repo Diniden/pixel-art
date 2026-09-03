@@ -1,6 +1,6 @@
 # HANDOFF — Pose tool refinements
 
-**Current position:** W1 DONE — W2 next
+**Current position:** W2 IN PROGRESS
 **Branch:** `feat/07-pose-refinements`
 **Last commit:** `774b0a2`
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `54d6501` (branch `feat/06-pose-tool`)
@@ -10,7 +10,7 @@
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02 | DONE | 2026-09-03 | `774b0a2` | tsc 0 · eslint 0 err/65 warn · vitest 145 files / 2755 tests pass · boundaries OK · no lockfile |
-| W2 | 03, 04 | TODO | | | |
+| W2 | 03, 04 | IN PROGRESS | 2026-09-03 | | |
 | W3 | 05 | TODO | | | |
 | W4 | 06 | TODO | | | |
 | W5 | 07 | TODO | | | |
@@ -23,8 +23,8 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | --- | --- | --- | --- | --- | --- |
 | 01 | Free zoom/pan + Fit seam | W1 | DONE | `86f456c` | `POSE_ZOOM_MAX` deleted; `fitGeneration`/`requestFit()` added. Cap only HALF fixed — see W2/W4 |
 | 02 | Smooth normals + tesselation | W1 | DONE | `774b0a2` | sphere 48×32, cyl radial 48, height segs 1 (measured); `POSE_MATERIAL_FLAT_SHADING=false` |
-| 03 | Panel: colours, Fit, edge slider | W2 | TODO | | |
-| 04 | Outline post-pass | W2 | TODO | | |
+| 03 | Panel: colours, Fit, edge slider | W2 | IN PROGRESS | | |
+| 04 | Outline post-pass | W2 | IN PROGRESS | | |
 | 05 | Mannequin part meshes; delete framing | W3 | TODO | | ⚠️ May legitimately leave `tsc` red |
 | 06 | Container integration | W4 | TODO | | Closes task 05's type hole |
 | 07 | Full gate, QA, handoff | W5 | TODO | | Likely ends `PARTIAL` |
