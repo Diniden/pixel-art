@@ -1,15 +1,15 @@
 # HANDOFF — Pose tool
 
-**Current position:** W1 not started
-**Branch:** (set by /plan-go — expected `feat/06-pose-tool`)
-**Last commit:** (set by /plan-go)
+**Current position:** W1 IN PROGRESS
+**Branch:** `feat/06-pose-tool`
+**Last commit:** `35d1644`
 **Plan written:** 2026-09-02 · Planning baseline HEAD: `cd7a852`
 
 ## Wave ledger
 
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
-| W1 | 01, 02, 03, 04, 05 | TODO | | | |
+| W1 | 01, 02, 03, 04, 05 | IN PROGRESS | 2026-09-02 | | |
 | W2 | 06, 07 | TODO | | | |
 | W3 | 08 | TODO | | | |
 | W4 | 09 | TODO | | | |
@@ -33,6 +33,17 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 10 | Full gate, QA, handoff | W5 | TODO | | |
 
 ## Known state at planning time (2026-09-02)
+
+✅ **RESOLVED 2026-09-02 by /plan-go, with owner sign-off.** The in-flight edge/fill colour
+split was complete and green (tsc 0 · eslint 0 errors · 2497/2497 tests · boundaries OK ·
+stylelint 2 errors · no lockfile), so it was committed on its own as `45e3c8a
+"feat(color): split the edge colour from the fill colour"`. The plan folder was then
+committed as `35d1644` on a fresh `feat/06-pose-tool` branched from it. **Executors get a
+clean tree — no `git add -p` hunk-staging is needed, and the four-shared-file risk is gone.**
+The four files are now at their post-split state; task 01 and 08 must read them as they are
+rather than as MASTER.md's line numbers describe (the line numbers may have shifted).
+
+The original warning, for the record:
 
 ⚠️ **The worktree was DIRTY when this plan was written.** 27 modified files and 1 untracked,
 an unrelated in-flight **edge/fill colour split** (`ToolUIStore.fillColor`, `colorTarget`,
@@ -58,7 +69,12 @@ never revert or commit someone else's work.
 
 ## Deviations
 
-(none yet)
+- **2026-09-02 · pre-W1 · owner-approved.** The plan assumed the dirty worktree might have to
+  be worked around with `git add -p`. Instead the unrelated edge/fill work was committed
+  first (`45e3c8a`) and the pose branch cut from it, so risk-register row 1 ("Dirty
+  worktree", High/High) **does not apply to this execution**. MASTER.md's stated line
+  numbers for `types/domain.ts`, `PixelStudioTools.tsx`, `UIStore.ts` and
+  `CanvasContainer.tsx` predate that commit — locate symbols by name, not by line.
 
 ## Blocked items
 
