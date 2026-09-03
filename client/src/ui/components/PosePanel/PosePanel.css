@@ -1,0 +1,240 @@
+/* blocks: pose-panel + direction-orb (pose-tool task 07, 2026-09-02).
+
+   The Pose tool's section inside the right rail, and the reusable drag orb it
+   uses twice (light direction, model rotation — MASTER D13).
+
+   `PixelStudioPanel` wraps the section in the standard `.panel` /
+   `panel__header--compact` / `panel__body--dense` card, exactly as it wraps
+   the reflection section, so this sheet styles only what is INSIDE that body.
+
+   Borrowed, deliberately, from `pixel-studio-panel`: the button rows copy the
+   `__shape-buttons` / `__shape-btn` skin (a tinted tray of flush segments),
+   which is the established idiom for a row of small toggles and the one the
+   task names. It is COPIED rather than reused because a `ui/` block may not
+   reach into another block's classes — that cross-component dependency is
+   what the BEM conversion removed.
+
+   Tokens only. No colour literals, no `!important`, and NO numeric `z-index`
+   (DOM order is z-order in this app, and a literal is a stylelint error).
+   Max two class compounds per selector. */
+
+.pose-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0 var(--space-1);
+}
+
+/* ── a labelled group ─────────────────────────────────────────────────────── */
+
+.pose-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pose-panel__group-label {
+  color: var(--text-tertiary);
+  font-size: var(--text-60);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── button rows ──────────────────────────────────────────────────────────
+
+   WRAPS, like the reflection preset row and for the same measured reason: six
+   framing labels ("Full", "Head", "Torso", "Arm", "Leg", "Hand") and five
+   camera presets do not fit the rail's width on one line at any theme scale,
+   and an equal-segment `flex: 1` row would squash them to ellipses. */
+.pose-panel__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-px);
+  padding: var(--space-px);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.pose-panel__btn {
+  flex: 1 1 auto;
+  padding: var(--space-1) var(--space-1-5);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+/* `:not(:disabled)` rather than a plain `:hover`: disabled buttons still take
+   pointer events (they must, to show their explanatory title), and a hover
+   highlight on a dead button reads as a bug. Same guard the reflection presets
+   use — stylelint's `no-descending-specificity` cannot see that the `:not()`
+   makes these non-overlapping, hence the existing 22 false positives. */
+.pose-panel__btn:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.pose-panel__btn--active {
+  background: var(--accent-primary-20);
+  color: var(--text-primary);
+}
+
+.pose-panel__btn:disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  /* 0.5 is the house disabled value (`blocks/btn.css:42`); `opacity` is not on
+     `.stylelintrc.json`'s strict-value list. */
+  opacity: 0.5;
+}
+
+/* ── the pair of orbs ─────────────────────────────────────────────────────── */
+
+.pose-panel__orbs {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  justify-content: space-around;
+}
+
+/* ── a colour swatch row ──────────────────────────────────────────────────── */
+
+.pose-panel__color-row {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.pose-panel__color-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pose-panel__color-input {
+  flex: none;
+  width: var(--space-8);
+  height: var(--space-5);
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* ── a slider row ─────────────────────────────────────────────────────────── */
+
+.pose-panel__slider-row {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.pose-panel__slider-label {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+}
+
+.pose-panel__slider {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.pose-panel__slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Monospace so the digits do not jitter the row's width as the value changes
+   — the same reason `__origin-position-value` uses it. */
+.pose-panel__slider-value {
+  flex: none;
+  min-width: var(--space-8);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  text-align: right;
+}
+
+.pose-panel__hint {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-65);
+  line-height: var(--leading-snug);
+}
+
+/* ══ block: direction-orb ═══════════════════════════════════════════════════
+
+   A flat SVG disc standing in for a sphere, with a draggable handle. Used
+   twice by `pose-panel` and reusable anywhere — it knows nothing about pose. */
+
+.direction-orb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  align-items: center;
+}
+
+/* ⚠️ `touch-action: none` IS THE TOUCH FIX, not a nicety. Without it the
+   browser claims a finger drag as a scroll gesture and the rail scrolls
+   instead of the orb turning — pointermove never reaches React. The owner
+   works on an iPad, so this line is load-bearing (MASTER D13). */
+.direction-orb__sphere {
+  width: var(--space-12);
+  height: var(--space-12);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-pill);
+  cursor: grab;
+  touch-action: none;
+}
+
+.direction-orb__sphere--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.direction-orb__globe {
+  fill: var(--bg-secondary);
+  stroke: var(--border-primary);
+  stroke-width: 1;
+}
+
+/* The two great circles that make the disc read as a sphere. `fill: none` so
+   they do not stack up into a solid, and non-scaling strokes are unnecessary
+   here because the viewBox is square and uniformly scaled. */
+.direction-orb__meridian,
+.direction-orb__equator {
+  fill: none;
+  stroke: var(--border-secondary);
+  stroke-width: 1;
+}
+
+.direction-orb__handle {
+  fill: var(--accent-primary);
+  stroke: var(--bg-primary);
+  stroke-width: 1.5;
+}
+
+/* Behind the sphere: hollow, so the two hemispheres are distinguishable. An
+   orthographic projection maps a direction and its mirror to the same disc
+   position, and without this the handle looks stuck at the far pole. */
+.direction-orb__handle--behind {
+  fill: var(--bg-primary);
+  stroke: var(--accent-primary);
+}
+
+.direction-orb__label {
+  color: var(--text-tertiary);
+  font-size: var(--text-60);
+}

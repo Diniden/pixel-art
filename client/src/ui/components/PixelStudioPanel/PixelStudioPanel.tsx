@@ -17,6 +17,10 @@ import {
   ReflectionLinesSection,
   type ReflectionLinesSectionProps,
 } from "./ReflectionLinesSection";
+import {
+  PoseSection,
+  type PoseSectionProps,
+} from "../PosePanel/PoseSection";
 import "./PixelStudioPanel.css";
 
 interface OriginColorPickerProps {
@@ -116,6 +120,19 @@ interface PixelStudioPanelProps {
    * drawn, even with `selectedTool === "reflection"`.
    */
   reflection?: ReflectionLinesSectionProps;
+  /**
+   * The Pose tool's controls, shown only while that tool is selected
+   * (pose-tool task 07).
+   *
+   * ⚠️ OPTIONAL, and grouped into ONE prop rather than spread as twenty-one.
+   * Same reasoning as `reflection?` above, and more forcefully: every existing
+   * caller and story of this panel predates the pose tool, and the section has
+   * eleven values and ten callbacks. Required props — or twenty-one — would
+   * break all of them at compile time for a section they never render. When it
+   * is absent the section is simply not drawn, even with
+   * `selectedTool === "pose"`.
+   */
+  pose?: PoseSectionProps;
 }
 
 export function PixelStudioPanel({
@@ -135,11 +152,13 @@ export function PixelStudioPanel({
   paletteManager,
   onOtherHand,
   reflection,
+  pose,
 }: PixelStudioPanelProps) {
   const showEraserControls = selectedTool === "eraser";
   const showPencilControls = selectedTool === "pixel";
   const showOriginControls = selectedTool === "origin";
   const showReflectionControls = selectedTool === "reflection" && !!reflection;
+  const showPoseControls = selectedTool === "pose" && !!pose;
   const maxOptions = [8, 16, 32, 64, 128] as const;
 
   return (
@@ -279,6 +298,19 @@ export function PixelStudioPanel({
           </div>
           <div className="panel__body panel__body--dense">
             <ReflectionLinesSection {...reflection} />
+          </div>
+        </div>
+      ) : null}
+      {showPoseControls && pose ? (
+        <div className="panel pixel-studio-panel__section">
+          <div className="panel__header panel__header--compact">
+            <span className="panel__title">Pose</span>
+            {onOtherHand ? (
+              <OtherHandButton onClick={onOtherHand} sectionLabel="Pose" />
+            ) : null}
+          </div>
+          <div className="panel__body panel__body--dense">
+            <PoseSection {...pose} />
           </div>
         </div>
       ) : null}

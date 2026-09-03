@@ -17,6 +17,14 @@
  * containers, and `ui/` may not import one (MobX would cross the purity
  * boundary transitively).
  *
+ * ⚠️ The POSE section (pose-tool task 07) is wired here too, and this is the
+ * ONLY place that may touch `app.pose` — `PoseSection` and `DirectionOrb` are
+ * pure `ui/` and hold no store. No second `observer()` was created: this one
+ * already existed and simply grew a prop, which is what the task asked for.
+ * The section's values are read straight off the store and its callbacks call
+ * the store's actions; no derivation is needed, because the store already
+ * clamps zoom and FOV and normalises the light direction on write.
+ *
  * ⚠️ The REFLECTION section's preset geometry is computed HERE, not in the
  * component (MASTER D10). `presetLines()` needs the editable grid's
  * dimensions, and `app.editableGrid` is a store read that `ui/` may not make.
@@ -47,6 +55,7 @@ export const PixelStudioPanelContainer = observer(
 
     const tool = ui.tool;
     const reflection = app.reflection;
+    const pose = app.pose;
 
     // `selectionDims` is `editableGrid?.dims` with the transcribed 32×32
     // floor, which is exactly the fallback presets want: with no resolvable
@@ -95,6 +104,41 @@ export const PixelStudioPanelContainer = observer(
             reflection.addLines(
               presetLines(preset, gridDims.width, gridDims.height, () => ""),
             ),
+        }}
+        pose={{
+          // Every field is read straight through. `rotation`, `lightDirection`,
+          // `lightColor`, `modelColor` are `observableRef` and replaced
+          // wholesale by their actions, so passing them by reference is safe:
+          // nothing downstream can mutate the store's held object, and identity
+          // changes exactly when the value does.
+          meshId: pose.meshId,
+          framing: pose.framing,
+          rotation: pose.rotation,
+          lightDirection: pose.lightDirection,
+          lightColor: pose.lightColor,
+          modelColor: pose.modelColor,
+          projection: pose.projection,
+          cameraPreset: pose.cameraPreset,
+          zoom: pose.zoom,
+          fov: pose.fov,
+          onSelectMesh: (meshId) => pose.setMesh(meshId),
+          onSelectFraming: (framing) => pose.setFraming(framing),
+          onSetRotation: (rotation) => pose.setRotation(rotation),
+          // The store NORMALISES on write, so the orb may emit whatever the
+          // drag produced and readers never have to renormalise.
+          onSetLightDirection: (direction) => pose.setLightDirection(direction),
+          onSetLightColor: (color) => pose.setLightColor(color),
+          onSetModelColor: (color) => pose.setModelColor(color),
+          onSetProjection: (projection) => pose.setProjection(projection),
+          // ⚠️ A preset stores only its ID (MASTER D14). Resolving it to angles
+          // is `poseCamera.ts`'s job in task 08's render, not the rail's —
+          // which is why nothing here reaches for `getCameraPreset()`.
+          onSelectCameraPreset: (preset) => pose.setCameraPreset(preset),
+          // Both are re-clamped by the store (0.1–10 and 10–120), so the
+          // slider's own bounds are a convenience, not the guarantee.
+          onSetZoom: (zoom) => pose.setZoom(zoom),
+          onSetFov: (fov) => pose.setFov(fov),
+          onClear: () => pose.clear(),
         }}
       />
     );
