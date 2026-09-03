@@ -64,6 +64,8 @@
  *   SVG chrome            grid, brush/hover outlines, lasso, marching ants,
  *                         origin cross, reflection guides — vectors (D5)
  *   reflection canvas     the animated guides' raster surface (see below)
+ *   pose canvas           the 3D reference solid's raster surface, blitted
+ *                         1:1 from an offscreen render target (plan 06, D10)
  *   frame trace overlay   raster (D6)
  *   frame overlay         raster (D6)
  *   reference overlay     raster (D6)
@@ -99,6 +101,14 @@
  * continuously while the user's hand merely moved NEAR the screen. On its own
  * canvas the marker repaints a few dozen cells and the artwork is untouched.
  * It keeps the FILL; its outline is now `hoverOutline` in the SVG.
+ *
+ * The pose canvas is always mounted for the same reason, and sits directly
+ * beneath the reflection canvas: above every layer and every trace overlay, so
+ * the 3D reference the user is drawing from is not buried under an onion skin,
+ * and below the SVG chrome, so the outline and marching ants that say where the
+ * next stroke lands are never covered BY that reference. Its ref prop is
+ * optional (plan 06, D10) purely so this file lands before its container
+ * wiring; unlike the reflection canvas it is genuinely painted into.
  *
  * The reflection canvas is likewise always mounted so the dash ticker's
  * `invalidate()` always has a context. It is still painted by
@@ -198,6 +208,31 @@ export interface CanvasSurfaceProps {
    * it before then — the painter would be writing into `null`.
    */
   reflectionCanvasRef?: RefObject<HTMLCanvasElement | null>;
+  /**
+   * The pose tool's 3D reference render, as a raster surface.
+   *
+   * The pose engine renders a solid into an offscreen WebGL target sized
+   * exactly `cellWidth x cellHeight` — one texel per art pixel — and blits the
+   * result here with `putImageData`. There is no scaling step anywhere in that
+   * path; the magnification is the same CSS transform every other canvas in
+   * this stack rides on, which is what makes the reference appear at the
+   * artwork's own resolution rather than as a smooth render shrunk down.
+   *
+   * ⚠️ OPTIONAL, deliberately (plan 06, locked decision D10) — for the same
+   * reason `reflectionCanvasRef` above is: the canvas is mounted
+   * unconditionally, but the PROP is not required, so this component, the
+   * stories, the DOM tests and `LightingCanvasContainer` all compile before
+   * `CanvasContainer` is taught to pass a ref (plan 06, task 08). When it is
+   * absent the canvas still exists and simply stays blank.
+   *
+   * ⚠️ UNLIKE `reflectionCanvasRef`, this one IS intended to be driven. The
+   * reflection raster painter was retired in favour of the SVG chrome and that
+   * canvas now mounts blank on purpose; pose is a genuine raster overlay — a
+   * per-pixel image with no vector equivalent — and task 08 will pass its ref
+   * and paint into it every frame of a light-orb drag. Do not "tidy" this into
+   * the same superseded category.
+   */
+  poseCanvasRef?: RefObject<HTMLCanvasElement | null>;
   /**
    * The scroll/gesture viewport.
    *
@@ -490,6 +525,7 @@ export function CanvasSurface({
   frameTraceOverlayCanvasRef,
   hoverCanvasRef,
   reflectionCanvasRef,
+  poseCanvasRef,
   containerRef,
   layerIds,
   registerLayerCanvas,
@@ -684,6 +720,40 @@ export function CanvasSurface({
                 className="canvas__overlay"
               />
             )}
+
+            {/*
+              ── the pose tool's 3D reference (plan 06, D10) ─────────────────
+              Its stacking position is the whole of this element's placement
+              contract: IMMEDIATELY BEFORE the reflection overlay, and so above
+              every layer canvas and every trace/onion overlay, but below the
+              reflection guides and below the SVG chrome. DOM order IS z-order
+              here — all of these share `var(--z-canvas-overlay)` and the later
+              sibling wins — so moving this line moves the overlay, and no
+              z-index may be added to say otherwise.
+
+              Above the traces because the reference solid is what the user is
+              drawing FROM and must not be buried under a semi-transparent
+              onion skin. Below the chrome because the brush outline, marching
+              ants and origin cross say where the next stroke LANDS, and those
+              must never be covered by a reference.
+
+              Mounted unconditionally, like the hover and reflection canvases:
+              its painter repaints through `useCanvasRender(...).invalidate()`
+              at pointer rate during an orb drag, and that needs a context to
+              already exist rather than one arriving a commit late.
+
+              1:1 with the pixel data, never `* combinedScale` — the render
+              target upstream is `cellWidth x cellHeight` for exactly this
+              reason, so the blit is a straight `putImageData` with no
+              resampling anywhere.
+            */}
+            <canvas
+              ref={poseCanvasRef}
+              width={cellWidth}
+              height={cellHeight}
+              className="canvas__overlay canvas__overlay--pose"
+              style={OVERLAY_STYLE}
+            />
 
             {/*
               The reflection tool's RASTER guides. Superseded by the SVG

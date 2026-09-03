@@ -73,6 +73,7 @@ const NAMES = [
   "ReflectionGuides",
   "LayerStack",
   "SvgChrome",
+  "PoseReference",
 ] as const;
 
 describe("CanvasSurface — GATE 2: renders with NO store provider", () => {
@@ -97,14 +98,16 @@ describe("CanvasSurface — GATE 2: renders with NO store provider", () => {
   }
 
   it("mounts the frame-overlay canvas only when asked to", () => {
-    // ⚠️ Counts the CONDITIONAL overlays only. TWO canvases also carry
-    // `.canvas__overlay` — the hover marker and the reflection guides — and
-    // take that class purely for its positioning, but both are mounted
-    // unconditionally. A bare `.canvas__overlay` count would therefore always
-    // be two higher and would stop measuring what this test is about.
+    // ⚠️ Counts the CONDITIONAL overlays only. THREE canvases also carry
+    // `.canvas__overlay` — the hover marker, the pose reference and the
+    // reflection guides — and take that class purely for its positioning, but
+    // all three are mounted unconditionally. A bare `.canvas__overlay` count
+    // would therefore always be three higher and would stop measuring what
+    // this test is about. Every unconditional overlay added to the stack must
+    // be excluded here, or this test silently stops being about anything.
     const conditional = (c: HTMLElement) =>
       c.querySelectorAll(
-        ".canvas__overlay:not(.canvas__overlay--hover):not(.canvas__overlay--reflection)",
+        ".canvas__overlay:not(.canvas__overlay--hover):not(.canvas__overlay--reflection):not(.canvas__overlay--pose)",
       ).length;
 
     const withOverlay = render(<composed.FrameOverlay />);
@@ -193,6 +196,205 @@ describe("CanvasSurface — GATE 2: renders with NO store provider", () => {
         ?.getAttribute("width"),
     );
     expect(variantW).toBeGreaterThan(gridW);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════ *
+ * Plan 06, task 04 — the pose reference overlay (decision D10)
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The pose overlay's contract is entirely about MOUNTING and PLACEMENT — it
+ * paints nothing of its own here, and nothing in this component paints into it
+ * at all (task 08 does, from `CanvasContainer`). So what is worth asserting is
+ * exactly the set of things a future edit could break silently:
+ *
+ * 1. It is ALWAYS mounted, not conditional on a `pose` flag. Its painter
+ *    repaints through `useCanvasRender(...).invalidate()` during an orb drag,
+ *    which needs a context to already exist; mounting it behind a flag would
+ *    drop the first frame of every drag and would do so intermittently.
+ * 2. It carries BOTH class names. `.canvas__overlay` is where every one of its
+ *    properties actually comes from — position, `pointer-events: none`, the
+ *    z-index, and `image-rendering: pixelated`. Dropping the base class in
+ *    favour of a self-sufficient `--pose` rule would leave the overlay
+ *    unpositioned and smoothed, and the modifier alone would still look right
+ *    in a grep.
+ * 3. Its backing store is 1:1 with the pixel data. The offscreen render target
+ *    upstream is `cellWidth x cellHeight`; a backing store multiplied by the
+ *    scale would force a resampling blit and turn the whole point of the
+ *    feature — a reference at the artwork's own resolution — into a smooth 3D
+ *    render sitting on hard-edged pixel art.
+ * 4. Its SIBLING ORDER. This is the load-bearing one and the reason a bare
+ *    "it exists" test would not be enough. DOM order IS z-order here: every
+ *    overlay shares `var(--z-canvas-overlay)`, so the later sibling wins and
+ *    there is no z-index anywhere to encode the intent. The ONLY expression of
+ *    "above the traces, below the guides and the chrome" in the entire
+ *    codebase is the position of one JSX element, which means a reorder is a
+ *    behavioural change that looks like a diff-shuffle. That is what this
+ *    asserts.
+ */
+describe("CanvasSurface — the pose reference overlay (plan 06, D10)", () => {
+  const poseNode = (c: HTMLElement) =>
+    c.querySelector<HTMLCanvasElement>(".canvas__overlay--pose");
+
+  /** Enough grid to make `hasSvgChrome` true, so the chrome actually mounts. */
+  const CHROME = {
+    d: "M0 0L0 32M1 0L1 32",
+    attrs: {
+      stroke: "rgba(0, 0, 0, 0.08)",
+      "stroke-width": 1,
+      "vector-effect": "non-scaling-stroke",
+      fill: "none",
+    },
+  } as const;
+
+  it("mounts the pose overlay unconditionally, with no pose props at all", () => {
+    // `baseProps()` passes no `poseCanvasRef` — the prop is optional so this
+    // file, the stories and `LightingCanvasContainer` all compile before task
+    // 08 wires the container. The CANVAS is mounted either way; only the ref
+    // is optional. If someone made the element conditional on the ref being
+    // present, this is the line that catches it.
+    const { container } = render(<CanvasSurface {...baseProps()} />);
+    expect(container.querySelectorAll(".canvas__overlay--pose")).toHaveLength(
+      1,
+    );
+  });
+
+  it("mounts it in every story, whether or not the story is about pose", () => {
+    // Unconditional means unconditional. `Default` mounts no overlays, no
+    // chrome and no layers.
+    for (const name of NAMES) {
+      const Story = composed[name];
+      const { container } = render(<Story />);
+      expect(container.querySelectorAll(".canvas__overlay--pose")).toHaveLength(
+        1,
+      );
+    }
+  });
+
+  it("carries BOTH the base class and the modifier", () => {
+    // The base class is not decoration. Every property this overlay has comes
+    // from `.canvas__overlay` — including `image-rendering: pixelated`, which
+    // is the whole feature — and the `--pose` rule in the CSS deliberately
+    // carries no declarations of its own at all.
+    const { container } = render(<CanvasSurface {...baseProps()} />);
+    const pose = poseNode(container)!;
+    expect(pose).not.toBeNull();
+    expect(pose.classList.contains("canvas__overlay")).toBe(true);
+    expect(pose.classList.contains("canvas__overlay--pose")).toBe(true);
+  });
+
+  it("sizes the backing store 1:1 with the pixel data, never by the scale", () => {
+    // `baseProps()` is 24x32 at SCALE 8. The attributes must be the cells, not
+    // 192x256 — the render target upstream is `cellWidth x cellHeight`, so a
+    // scaled backing store would mean a resampling blit.
+    const { container } = render(<CanvasSurface {...baseProps()} />);
+    const pose = poseNode(container)!;
+    expect(pose.getAttribute("width")).toBe("24");
+    expect(pose.getAttribute("height")).toBe("32");
+    expect(SCALE).toBeGreaterThan(1);
+  });
+
+  it("tracks a resize of the grid", () => {
+    // The object can be resized under the tool, and the overlay has to follow
+    // it. Resize notifies through `domainVersion`, not `pixelVersion`, so this
+    // is driven off the props directly rather than off a paint.
+    const { container, rerender } = render(
+      <CanvasSurface {...baseProps()} cellWidth={24} cellHeight={32} />,
+    );
+    expect(poseNode(container)!.getAttribute("width")).toBe("24");
+    rerender(<CanvasSurface {...baseProps()} cellWidth={40} cellHeight={16} />);
+    const pose = poseNode(container)!;
+    expect(pose.getAttribute("width")).toBe("40");
+    expect(pose.getAttribute("height")).toBe("16");
+  });
+
+  it("does not let the pose overlay swallow pointer events", () => {
+    // The pointer surface is the ONLY canvas that takes input, and the pose
+    // tool's own drag/double-click gestures are arbitrated there. An overlay
+    // stacked above the artwork that accepted events would intercept every
+    // stroke — and would break the very tool it belongs to first.
+    const { container } = render(<CanvasSurface {...baseProps()} />);
+    expect(poseNode(container)!.style.pointerEvents).toBe("none");
+  });
+
+  it("⭐ sits ABOVE the traces and BELOW the reflection guides and the SVG chrome", () => {
+    // ══════════════════════════════════════════════════════════════════════
+    //  THE Z-ORDER CONTRACT, AND THE ONLY PLACE IT IS WRITTEN DOWN EXECUTABLY
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // There is no z-index to assert. All of these share
+    // `var(--z-canvas-overlay)`, so the later sibling wins and the ordering is
+    // carried entirely by the source order of the JSX. A reorder therefore
+    // changes what the user sees while looking like a harmless shuffle in
+    // review — which is exactly the class of change a test has to catch.
+    //
+    // Both halves matter and they fail differently:
+    //   - BELOW the chrome: the brush outline, marching ants and origin cross
+    //     say where the next stroke lands. A reference covering them means the
+    //     user is drawing blind with the tool the reference is for.
+    //   - ABOVE the traces: the reference is the thing being drawn FROM. Under
+    //     a semi-transparent onion skin it is unreadable.
+    const { container } = render(
+      <CanvasSurface
+        {...baseProps()}
+        layerIds={["a"]}
+        showFrameTraceOverlay
+        grid={CHROME}
+      />,
+    );
+    const frame = container.querySelector(".canvas__frame")!;
+    const kids = Array.from(frame.children);
+    const at = (sel: string) => {
+      const el = container.querySelector(sel);
+      expect(el, `missing ${sel}`).not.toBeNull();
+      const i = kids.indexOf(el!);
+      expect(
+        i,
+        `${sel} is not a direct child of .canvas__frame`,
+      ).toBeGreaterThan(-1);
+      return i;
+    };
+
+    const layers = at(".canvas__layers");
+    const surface = at(".canvas__surface");
+    const hover = at(".canvas__overlay--hover");
+    // The frame-trace overlay is the only conditional overlay mounted here, so
+    // it is the bare `.canvas__overlay` with no modifier.
+    const trace = at(".canvas__overlay:not([class*='canvas__overlay--'])");
+    const pose = at(".canvas__overlay--pose");
+    const reflection = at(".canvas__overlay--reflection");
+    const svg = at(".canvas__svg");
+
+    // The full chain, in one assertion, so a partial reorder cannot slip
+    // through by satisfying a subset of pairwise checks.
+    expect([layers, surface, hover, trace, pose, reflection, svg]).toEqual(
+      [...[layers, surface, hover, trace, pose, reflection, svg]].sort(
+        (a, b) => a - b,
+      ),
+    );
+
+    // And the two adjacency claims the decision actually makes, named
+    // individually so a failure says WHICH half broke.
+    expect(trace, "pose must come AFTER the frame-trace overlay").toBeLessThan(
+      pose,
+    );
+    expect(
+      pose,
+      "pose must come IMMEDIATELY BEFORE the reflection overlay",
+    ).toBe(reflection - 1);
+    expect(reflection, "the SVG chrome stays last").toBeLessThan(svg);
+  });
+
+  it("attaches the optional ref when one is supplied", () => {
+    // Task 08 passes a real ref and paints through it. Nothing else in the
+    // component reads it, so this is the only proof the wiring is live.
+    const ref =
+      createRef<HTMLCanvasElement>() as RefObject<HTMLCanvasElement | null>;
+    const { container } = render(
+      <CanvasSurface {...baseProps()} poseCanvasRef={ref} />,
+    );
+    expect(ref.current).toBe(poseNode(container));
   });
 });
 

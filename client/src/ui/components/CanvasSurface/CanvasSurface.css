@@ -391,6 +391,37 @@
    WITH the trace overlays rather than drifting 2px away from them. The class
    exists to identify the marker canvas in the DOM and in tests. */
 
+/* The pose tool's 3D reference render (plan 06, D10).
+
+   Like `--hover` and `--reflection`, the `canvas__overlay--pose` modifier
+   carries NO declarations of its own, and deliberately so — there is no rule
+   for it here and there should not be one. Absolute placement, `pointer-events:
+   none`, the pixelated scaling and the z-index all come from `.canvas__overlay`
+   above, and they must keep coming from there. The class exists to identify the
+   canvas in the DOM and in tests.
+
+   ⚠️ `image-rendering: pixelated` is the load-bearing inherited property for
+   THIS overlay in particular. The whole feature is "render at the artwork's own
+   resolution and let the CSS transform magnify it": the offscreen WebGL target
+   is `cellWidth x cellHeight`, one texel per art pixel, and the blit is a
+   straight `putImageData`. If this canvas ever smoothed on the upscale the
+   reference would come out as a soft 3D render floating over hard-edged pixel
+   art — which is precisely the thing the pipeline was designed not to produce.
+   Do not add a local `image-rendering` to "make sure"; inherit it, so that a
+   change to the base rule can never leave this overlay behind.
+
+   ⚠️ It sits BELOW the reflection guides and the SVG chrome, and ABOVE every
+   layer and trace overlay, and that is SOURCE ORDER, not a z-index —
+   `CanvasSurface` mounts it immediately before the reflection canvas. All the
+   overlays share `var(--z-canvas-overlay)`, so the later sibling wins. Reaching
+   for a numeric z-index here would be both redundant and a stylelint error.
+
+   ⚠️ No `will-change: transform`, here or anywhere in this stack. Promotion
+   makes the subtree rasterise at 1:1 and then GPU-bilinear-scale, defeating
+   `pixelated` — a documented past regression (see the `.canvas__layout` note
+   above). A raster overlay repainted at pointer rate is exactly the element
+   someone will be tempted to promote. Do not. */
+
 /* The reflection tool's animated guide lines.
 
    Like `--hover` above, the `canvas__overlay--reflection` modifier carries NO

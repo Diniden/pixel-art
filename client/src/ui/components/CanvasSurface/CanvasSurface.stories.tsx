@@ -37,7 +37,7 @@
  * it. The layer OBJECTS never reach `CanvasSurface`; they stay in the harness,
  * which is exactly where the container keeps them in the real app.
  *
- * ## The eight states
+ * ## The nine states
  *
  * | Story            | What it exercises                                       |
  * | ---------------- | ------------------------------------------------------- |
@@ -51,6 +51,8 @@
  * | **LayerStack**   | **one 1:1 canvas per layer at DIFFERING opacities (D4)** |
  * | **SvgChrome**    | **every task-03 vector overlay at once, origin cross     |
  * |                  | included — the counter-scaled group under a live scale** |
+ * | **PoseReference**| **the pose tool's 3D reference on its own raster overlay |
+ * |                  | — sandwiched above a trace overlay, below the chrome**   |
  *
  * ⚠️ `LightGridMode` is where task 02's `lightGridMode` round-trip fix first
  * becomes VISIBLE, and the task 32 spec nominates it as the manual
@@ -182,6 +184,7 @@ interface HarnessProps {
     | "frameTraceOverlayCanvasRef"
     | "hoverCanvasRef"
     | "reflectionCanvasRef"
+    | "poseCanvasRef"
     | "containerRef"
     | "registerLayerCanvas"
   >;
@@ -198,6 +201,22 @@ interface HarnessProps {
    * the artwork.
    */
   paintReflection?: PaintFn;
+  /**
+   * Draws the pose tool's 3D reference canvas.
+   *
+   * ⚠️ Stands in for the WebGL blit, and stands in for it at the right level.
+   * In the app the pose engine renders into an offscreen target that is exactly
+   * `cellWidth x cellHeight` and `putImageData`s the result here — no scaling
+   * step at any point. A story cannot run WebGL in the Storybook/jsdom lanes,
+   * so it paints flat 1:1 cells instead, which reproduces the ONE property the
+   * story exists to show: the reference is chunky because it was authored at
+   * the artwork's resolution, not because it was smoothed down afterwards.
+   *
+   * Optional, like `paintReflection` — the canvas is mounted either way (see
+   * `CanvasSurface`'s header), so a story that omits this still proves the
+   * surface is present and transparent rather than covering the artwork.
+   */
+  paintPose?: PaintFn;
   /**
    * Draws ONE layer's canvas, by layer id.
    *
@@ -219,6 +238,7 @@ function SurfaceHarness({
   paint,
   paintOverlay,
   paintReflection,
+  paintPose,
   paintLayerCanvas,
 }: HarnessProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -227,6 +247,7 @@ function SurfaceHarness({
   const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
   const reflectionCanvasRef = useRef<HTMLCanvasElement>(null);
+  const poseCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -271,7 +292,15 @@ function SurfaceHarness({
       reflectionCtx.imageSmoothingEnabled = false;
       paintReflection(reflectionCtx);
     }
-  }, [paint, paintOverlay, paintReflection]);
+    const poseCtx = poseCanvasRef.current?.getContext("2d");
+    if (poseCtx && paintPose) {
+      // ⚠️ Re-disabled per context, not once at mount. Setting `canvas.width`
+      // clears the backing store AND resets `imageSmoothingEnabled` to `true`,
+      // and the pose canvas is resized by the container on every grid change.
+      poseCtx.imageSmoothingEnabled = false;
+      paintPose(poseCtx);
+    }
+  }, [paint, paintOverlay, paintReflection, paintPose]);
 
   return (
     <div style={{ height: "100%", display: "flex" }}>
@@ -283,6 +312,7 @@ function SurfaceHarness({
         frameTraceOverlayCanvasRef={frameTraceOverlayCanvasRef}
         hoverCanvasRef={hoverCanvasRef}
         reflectionCanvasRef={reflectionCanvasRef}
+        poseCanvasRef={poseCanvasRef}
         containerRef={containerRef}
         registerLayerCanvas={registerLayerCanvas}
       />
@@ -700,6 +730,103 @@ export const SvgChrome: Story = {
       // The selection mask FILL stays raster (D6) — only the ants are vectors.
       ctx.fillStyle = "rgba(0, 217, 255, 0.14)";
       ctx.fillRect(3, 3, 8, 7);
+    },
+  },
+};
+
+/* ── 9. the pose reference overlay ───────────────────────────────────────── */
+
+/**
+ * The pose tool's 3D reference solid, on its own always-mounted raster overlay
+ * (plan 06, decision D10).
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ WHAT THIS STORY EXISTS TO SHOW IS THE STACKING AND THE RESOLUTION
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * **Stacking.** The pose canvas mounts IMMEDIATELY BEFORE the reflection
+ * canvas inside `.canvas__frame`, which puts it above every layer and above
+ * both semi-transparent trace overlays, and below the reflection guides and
+ * the SVG chrome. That is source order and nothing else — every overlay here
+ * shares `var(--z-canvas-overlay)`, so the later sibling wins, and adding a
+ * numeric z-index would be redundant and a stylelint error. The story mounts a
+ * frame-trace overlay UNDER the pose render and the full SVG chrome OVER it,
+ * so both halves of that sandwich are visible at once rather than asserted in
+ * a comment: the reference covers the onion skin, the marching ants and the
+ * brush outline cover the reference.
+ *
+ * Getting either half backwards is a real failure, not a cosmetic one. A
+ * reference buried under an onion skin cannot be drawn from; a brush outline
+ * buried under a reference means the user cannot see where the next stroke
+ * lands while they are using the very tool the reference is for.
+ *
+ * **Resolution.** The blocky shading below is not a stylisation — it is the
+ * whole feature. In the app the pose engine renders into an offscreen WebGL
+ * target of exactly `cellWidth x cellHeight`, one texel per art pixel, and
+ * blits it here with `putImageData`; magnification is the single CSS transform
+ * on `.canvas__layout` plus `image-rendering: pixelated`. There is no
+ * downsample anywhere in that path, which is why the silhouette is hard-edged
+ * and every facet is a whole number of pixels. A story cannot open a WebGL
+ * context in the Storybook or jsdom lanes, so `paintPose` writes flat 1:1 cells
+ * directly — a stand-in for the blit that reproduces exactly that property.
+ *
+ * The shape is a crude lit sphere: a filled disc with three tone bands and a
+ * hard terminator, quantised to whole cells. It carries no alpha ramp, because
+ * the stamp (plan 06, D8) thresholds alpha at `>= 128` — a texel is stamped or
+ * it is not — and a reference that showed soft edges would misrepresent what a
+ * double-click is about to write into the layer.
+ */
+export const PoseReference: Story = {
+  args: {
+    surface: {
+      ...baseSurface,
+      // UNDER the pose render — proves the reference is not buried.
+      showFrameTraceOverlay: true,
+      // OVER it — proves the reference does not bury the chrome.
+      grid: gridOverlayPath(
+        { cellWidth: GRID.width, cellHeight: GRID.height },
+        false,
+      ),
+      brushOutline: brushOutlineOverlay(CHROME_BRUSH),
+    },
+    paint: (ctx) => {
+      paintBackground(ctx, GRID.width, GRID.height, false);
+      for (const layer of heroFrame.layers) paintLayer(ctx, layer, 0, 0);
+    },
+    // The trace overlay the pose render must sit above.
+    paintOverlay: (ctx) => {
+      ctx.fillStyle = "rgba(255, 0, 128, 0.35)";
+      ctx.fillRect(0, 0, GRID.width, GRID.height);
+    },
+    paintPose: (ctx) => {
+      // A lit sphere, quantised to whole cells. Cell-at-a-time on purpose:
+      // `arc()` + `fill()` would antialias the silhouette, which is the one
+      // thing this overlay must never show.
+      const cx = GRID.width / 2;
+      const cy = GRID.height / 2;
+      const r = Math.min(GRID.width, GRID.height) * 0.34;
+      // The key light, as a unit-ish direction — up and to the left, which is
+      // what the pose panel's light orb defaults to.
+      const lx = -0.55;
+      const ly = -0.66;
+      const lz = 0.51;
+      const BANDS = ["#3b4a63", "#7d8fae", "#cfd9ea"] as const;
+      for (let y = 0; y < GRID.height; y++) {
+        for (let x = 0; x < GRID.width; x++) {
+          // Sample the cell CENTRE, so the silhouette lands on cell
+          // boundaries rather than straddling them.
+          const dx = (x + 0.5 - cx) / r;
+          const dy = (y + 0.5 - cy) / r;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > 1) continue;
+          const dz = Math.sqrt(1 - d2);
+          const lambert = dx * lx + dy * ly + dz * lz;
+          // Three bands with a hard terminator — no gradient, no alpha ramp.
+          const band = lambert <= 0 ? 0 : lambert < 0.55 ? 1 : 2;
+          ctx.fillStyle = BANDS[band]!;
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
     },
   },
 };
