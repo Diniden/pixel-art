@@ -275,14 +275,15 @@ import {
   fitCameraToMesh,
   getCameraPreset,
 } from "../ui/canvas/pose/poseCamera";
+import type { PoseCameraParams } from "../ui/canvas/pose/poseCamera";
 import {
   UNIT_BOUNDS,
   applyMaterial,
   buildMesh,
-  getFramingBounds,
 } from "../ui/canvas/pose/poseMeshes";
+import { applyOutline } from "../ui/canvas/pose/poseOutline";
 import { buildStampCells } from "../ui/canvas/pose/poseStamp";
-import type { PoseStampCell } from "../ui/canvas/pose/poseTypes";
+import type { PoseColor, PoseStampCell } from "../ui/canvas/pose/poseTypes";
 import type { Object3D } from "three";
 
 /**
@@ -345,13 +346,91 @@ const POSE_DOUBLE_CLICK_CELLS = 2;
 const POSE_ALPHA_THRESHOLD = 128;
 
 /**
- * The auto-fit's padding at zoom 1: 10% total, so the model fills 90% of the
+ * The auto-fit's padding: 10% total, so the fitted model fills 90% of the
  * shorter canvas axis (D7).
  *
- * The user's zoom is folded into this rather than applied as a separate camera
- * scale — see the fit effect for why the framing has exactly one owner.
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ ZOOM IS NO LONGER FOLDED INTO THIS. THAT FOLD WAS THE BUG (MASTER E12)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Pose-tool task 08 passed `padding: 1 - (1 - 0.1) * zoom` so that the fit
+ * stayed the single owner of the framing. It reads plausibly and it is the
+ * owner's headline complaint, because that expression is only a zoom over a
+ * *narrow* interval and turns into nonsense outside it:
+ *
+ *   - `fitCameraToMesh` clamps padding to `[0, 0.95)`, so every zoom at or
+ *     above `1 / 0.9 ≈ 1.111` produced padding `<= 0` — clamped to exactly 0.
+ *     **Every zoom from 1.12 upward framed identically.** Deleting
+ *     `POSE_ZOOM_MAX` could not help: the ceiling was arithmetic, not a clamp,
+ *     and it sat an order of magnitude below the old cap of 10.
+ *   - Below 1 it is not linear either: `padding = 1 - 0.9z` makes the model
+ *     `(1 - padding) = 0.9z` of the frame, so it happened to behave, but only
+ *     by coincidence of the same constant appearing twice.
+ *   - And a *fit* re-derived the padding from the zoom every time, so pressing
+ *     **Fit to canvas** while zoomed could never do anything but re-apply the
+ *     zoom it was supposed to be independent of.
+ *
+ * Zoom is now a free multiplier applied to the fitted frustum AFTER the fit
+ * (see `scaleCameraParams`), and this constant is a constant again.
  */
 const DEFAULT_POSE_FIT_PADDING = 0.1;
+
+/**
+ * Apply a free zoom multiplier to an already-fitted camera (MASTER E12).
+ *
+ * The fit decides the frame; zoom scales it. `zoom > 1` means "draw the model
+ * bigger", which means a **smaller** frustum, hence the division — and there
+ * is no ceiling: at zoom 1000 the orthographic box is a thousandth of the
+ * fitted one and the model overflows the canvas enormously, which is exactly
+ * what the owner asked for.
+ *
+ * ⚠️ It scales the FRUSTUM, never the model or the camera distance:
+ *
+ *  - Orthographic framing is `left/right/top/bottom` and nothing else, so a
+ *    dolly would change only the clipping, not the size. Scaling the box is
+ *    the only thing that works, and it leaves `near`/`far` — which the fit
+ *    sized to bracket the geometry — untouched.
+ *  - For perspective, scaling `fov` the same way keeps the two projections
+ *    behaving identically under the same slider. `tan` is used rather than the
+ *    angle directly because screen size is proportional to `tan(fov/2)`, not
+ *    to the angle; halving the angle does NOT double the model. The result is
+ *    clamped to a legal FOV, which is a degeneracy guard and not a zoom cap:
+ *    at the 179° end the model is vanishingly small and at the 1e-4° end it is
+ *    ~10^6× the fitted size, both far outside anything usable.
+ *
+ * Returns a NEW object; `params` is not mutated.
+ */
+function scaleCameraParams(
+  params: PoseCameraParams,
+  zoom: number,
+): PoseCameraParams {
+  // A non-finite or non-positive zoom is the store's job to reject
+  // (`sanitizeZoom`), but the render path must not produce NaN matrices if one
+  // ever reaches it by another route.
+  if (!Number.isFinite(zoom) || zoom <= 0 || zoom === 1) return params;
+
+  if (params.projection === "orthographic" && params.orthographic) {
+    const o = params.orthographic;
+    return {
+      ...params,
+      orthographic: {
+        left: o.left / zoom,
+        right: o.right / zoom,
+        top: o.top / zoom,
+        bottom: o.bottom / zoom,
+      },
+    };
+  }
+
+  if (params.perspective) {
+    const halfRadians = (params.perspective.fov * Math.PI) / 360;
+    const scaledHalf = Math.atan(Math.tan(halfRadians) / zoom);
+    const fov = Math.min(179, Math.max(1e-4, (scaledHalf * 360) / Math.PI));
+    return { ...params, perspective: { ...params.perspective, fov } };
+  }
+
+  return params;
+}
 
 function isGestureTool(tool: string): boolean {
   return (
@@ -640,7 +719,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   // container to its VALUE (or its identity) and a rail change re-renders us.
   //
   // ⚠️ That re-render is correct for DISCRETE changes (mesh, preset,
-  // projection, framing) and acceptable for the continuous ones (the two orb
+  // projection, outline width) and acceptable for the continuous ones (the two orb
   // drags, the zoom slider) ONLY because the pose render path is cheap: the
   // effects below hand the new value to the engine and call the POSE
   // scheduler's `invalidate()`. Nothing pose-related may ever appear in the
@@ -653,15 +732,63 @@ export const CanvasContainer = observer(function CanvasContainer({
   // the painter reads the ref; see `posePanRef`.
   const pose = app.pose;
   const poseMeshId = pose.meshId;
-  const poseFraming = pose.framing;
   const poseRotation = pose.rotation;
   const poseLightDirection = pose.lightDirection;
   const poseLightColor = pose.lightColor;
-  const poseModelColor = pose.modelColor;
   const poseProjection = pose.projection;
   const poseCameraPreset = pose.cameraPreset;
   const poseZoom = pose.zoom;
   const poseFov = pose.fov;
+  const poseEdgeWidth = pose.edgeWidth;
+  /**
+   * The fit REQUEST counter (MASTER E14). Read here so the fit effect below
+   * takes it as a dependency: `requestFit()` mutates nothing else, so the
+   * counter changing IS the whole event, and a monotonic counter (never reset,
+   * not even by `clear()`) means two presses are two fits.
+   */
+  const poseFitGeneration = pose.fitGeneration;
+
+  /**
+   * The model's and outline's colours are the APP's Fill and Edge slots
+   * (MASTER E8/E9), NOT `pose.modelColor` — the owner asked to drive them from
+   * the picker they already use.
+   *
+   * ⚠️ `fillColor` is `fillColorOrSelected`, already resolved above: `fillColor`
+   * is tri-state and `undefined` on every project saved before the split, so
+   * the fallback is what keeps the model from rendering with no colour at all.
+   * **Never seed a default** — that would add a key to all 151 corpus
+   * snapshots (E8).
+   *
+   * Converted to `PoseColor` here, at the container boundary, rather than
+   * handing a pure module a live `observableRef` value or importing the domain
+   * `Color` into one. Both are the same four numbers, so this is an explicit
+   * conversion and not a cast.
+   *
+   * ⚠️ `useMemo` on the four CHANNELS, not on the store object. The effects
+   * below take these as dependencies, and a fresh literal every render would
+   * re-materialise the mesh on every unrelated re-render of this 5,300-line
+   * container. Keying on the channels means the identity changes exactly when
+   * the colour does — the same guarantee `observableRef` gives the fields that
+   * do live on the pose store.
+   */
+  const poseModelColor = useMemo<PoseColor>(
+    () => ({
+      r: fillColor.r,
+      g: fillColor.g,
+      b: fillColor.b,
+      a: fillColor.a,
+    }),
+    [fillColor.r, fillColor.g, fillColor.b, fillColor.a],
+  );
+  const poseEdgeColor = useMemo<PoseColor>(
+    () => ({
+      r: currentColor.r,
+      g: currentColor.g,
+      b: currentColor.b,
+      a: currentColor.a,
+    }),
+    [currentColor.r, currentColor.g, currentColor.b, currentColor.a],
+  );
 
   /**
    * Whether the pose overlay should paint at all.
@@ -2361,6 +2488,46 @@ export const CanvasContainer = observer(function CanvasContainer({
     const frame = engine.render();
     if (frame.length !== cellWidth * cellHeight * 4) return;
 
+    /* ── the outline post-pass (MASTER E3/E4/E5/E6) ────────────────────────
+     *
+     * ⚠️ **AT 1:1, ON THE READ-BACK BUFFER, EXACTLY ONCE PER FRAME.**
+     *
+     *  - **1:1** — the buffer is `cellWidth × cellHeight` (D5), one texel per
+     *    art pixel, so `outlineWidth` is whole ART pixels and the border is
+     *    hard-edged with no fringing. There is no scaling anywhere on this
+     *    path and there must never be one.
+     *  - **EXACTLY ONCE** — `applyOutline` is deliberately NOT idempotent: it
+     *    writes at alpha 255, so a second pass reads its own outline as model
+     *    and rings it again (width 1 twice == width 2 once, measured by task
+     *    04). Safe here because `engine.render()` hands back a buffer freshly
+     *    read from the render target every frame. If a caller ever caches an
+     *    outlined frame, this call must move or the slider silently gains a
+     *    notch.
+     *  - **SKIPPED AT WIDTH 0** — the off state (E4) costs one comparison per
+     *    frame rather than a full `w*h` silhouette scan.
+     *  - **DISPLAY ONLY, never stamped** (MASTER E7) — see `poseStamp`, which
+     *    takes its own uncoloured read-back and never sees this write.
+     *
+     * ⚠️ It touches ONLY the colour read-back. The depth and normal passes in
+     * `poseStamp` render their own frames with their own materials and are
+     * unreachable from here, so the outline cannot perturb the depth-derived
+     * heights — which matters because that path was reasoned from three's
+     * shader source and has never been run on a GPU (plan 06 §7).
+     */
+    if (poseEdgeWidth > 0) {
+      applyOutline(
+        frame,
+        cellWidth,
+        cellHeight,
+        poseEdgeWidth,
+        poseEdgeColor,
+        // Explicit rather than defaulted, so the coupling to the stamp's own
+        // `>= 128` (D8/E6) is visible at the call site: the outline must trace
+        // the same silhouette the stamp commits.
+        { alphaThreshold: POSE_ALPHA_THRESHOLD },
+      );
+    }
+
     // ⚠️ `putImageData` ONLY, at 1:1, and never a scaling `drawImage` (D5).
     // `Uint8ClampedArray` over the SAME buffer, not a copy: `ImageData`
     // demands that view type and the engine's array is already the right
@@ -2397,7 +2564,16 @@ export const CanvasContainer = observer(function CanvasContainer({
     const py = Math.round(pan.y) - oy;
 
     ctx.putImageData(image, px, py);
-  }, [poseActive, cellWidth, cellHeight, isEditingVariantResolved, viewMinX, viewMinY]);
+  }, [
+    poseActive,
+    cellWidth,
+    cellHeight,
+    isEditingVariantResolved,
+    viewMinX,
+    viewMinY,
+    poseEdgeWidth,
+    poseEdgeColor,
+  ]);
 
   /**
    * The pose overlay's OWN scheduler (D11).
@@ -2594,8 +2770,30 @@ export const CanvasContainer = observer(function CanvasContainer({
   /* ── auto-fit (D7) ─────────────────────────────────────────────────────── */
 
   /**
-   * Re-frame the model. Runs on mesh, framing, projection, preset, rotation,
-   * zoom, FOV **and `cellWidth`/`cellHeight`** change.
+   * Re-frame the model. Runs on mesh, projection, preset, rotation, zoom, FOV,
+   * **`cellWidth`/`cellHeight`** and **`fitGeneration`** change.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ ZOOM IS APPLIED AFTER THE FIT, NOT FOLDED INTO IT (MASTER E12)
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * This is the owner's headline complaint and the fix is the two-step shape
+   * below: `fitCameraToMesh` frames the model at a FIXED
+   * {@link DEFAULT_POSE_FIT_PADDING}, and then {@link scaleCameraParams}
+   * multiplies the resulting frustum by the free zoom. See that constant's
+   * header for exactly how the old fold capped out at zoom ≈ 1.12.
+   *
+   * ⚠️ **A FIT NEVER RESETS ZOOM OR PAN** (E15). Neither is written here — the
+   * zoom is read and re-applied, and the pan is not touched at all — so
+   * pressing **Fit to canvas** re-frames at the current rotation, projection,
+   * preset and zoom, and pressing it twice is idempotent. Only
+   * `PoseUIStore.setMesh` resets the pan.
+   *
+   * ⚠️ **`fitGeneration` IS A DEPENDENCY ON PURPOSE.** `requestFit()` mutates
+   * nothing else, so without it the button would be a no-op: every other
+   * dependency is unchanged by definition when the owner asks to re-frame at
+   * the *current* settings. The counter is monotonic and `clear()` never
+   * rewinds it, so it can only ever move forward — one fit per press.
    *
    * ⚠️ THE RESIZE PATH IS THE `cellWidth`/`cellHeight` DEPENDENCY, and that is
    * the whole answer to "respond to the object being resized". A grid resize
@@ -2625,11 +2823,14 @@ export const CanvasContainer = observer(function CanvasContainer({
     const preset = getCameraPreset(poseCameraPreset);
     const projection = preset?.projection ?? poseProjection;
 
-    const params = fitCameraToMesh({
-      // Primitives are normalised into the unit box and only ever use
-      // `"full"`; the mannequin's body-part buttons are sub-boxes of the
-      // same box (D4), so ONE call covers both.
-      bounds: getFramingBounds(poseFraming, UNIT_BOUNDS),
+    // ── step 1: FIT, at a fixed padding and the CURRENT rotation ────────
+    //
+    // Every mesh — primitive, whole mannequin, or a single part — is
+    // normalised into the unit box by `poseMeshes.ts` before it reaches the
+    // scene, so one bounds value covers all of them. (Framing's sub-boxes are
+    // gone: a part is its own geometry now, not a crop of the whole figure.)
+    const fitted = fitCameraToMesh({
+      bounds: UNIT_BOUNDS,
       canvasWidth: cellWidth,
       canvasHeight: cellHeight,
       projection,
@@ -2637,13 +2838,11 @@ export const CanvasContainer = observer(function CanvasContainer({
       fov: poseFov,
       pitch: preset?.pitch ?? 0,
       yaw: preset?.yaw ?? 0,
-      // ⚠️ Zoom is folded into the PADDING, not applied as a camera scale.
-      // A larger zoom means less padding means a bigger model, and expressing
-      // it this way keeps `fitCameraToMesh` the single owner of the framing —
-      // an independent scale multiplier would be a second place that decides
-      // how big the model is, and the two would drift.
-      padding: 1 - (1 - DEFAULT_POSE_FIT_PADDING) * poseZoom,
+      padding: DEFAULT_POSE_FIT_PADDING,
     });
+
+    // ── step 2: ZOOM, as a free multiplier over the fitted frame ────────
+    const params = scaleCameraParams(fitted, poseZoom);
 
     // Rebuild the camera only on a genuine projection change.
     const current = poseCameraRef.current;
@@ -2670,7 +2869,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   }, [
     poseEngineTick,
     poseMeshId,
-    poseFraming,
+    poseFitGeneration,
     poseProjection,
     poseCameraPreset,
     poseRotation,
@@ -2809,6 +3008,40 @@ export const CanvasContainer = observer(function CanvasContainer({
    * category as `moveLayerPixels` and the lighting studio, which are
    * excluded for the same reason. `app.selectionUI.writeOptions` is passed so
    * an active selection still masks it (manual check 16).
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THE OUTLINE IS **NOT** STAMPED — DISPLAY ONLY (MASTER E7)
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * The decision, taken here and recorded in the plan's HANDOFF where it was
+   * left open. `renderPose` runs `applyOutline` on the buffer it blits to the
+   * overlay; this function takes its OWN `engine.render()` read-back and never
+   * calls it, so `buildStampCells` reads the pre-outline silhouette.
+   *
+   * Why display-only:
+   *
+   *  - **An outline pixel has no surface.** Every cell this writes carries a
+   *    colour, a NORMAL and a HEIGHT, and the outline is a 2D dilation of a
+   *    silhouette — there is no geometry under it, so there is no normal to
+   *    encode and no depth to normalise. Stamping it would mean inventing
+   *    both, and any invention (copy the nearest model normal? face the
+   *    viewer? height 0 = "no data"?) is a lie the lighting studio would then
+   *    shade as if it were real.
+   *  - **`height: 0` is the project's "no data" sentinel**, so the only
+   *    honest height for an outline pixel is the one that means "not part of
+   *    the model" — at which point the cell is a bare colour with a fabricated
+   *    normal, which is worse than not writing it.
+   *  - **The owner asked for a reference affordance.** The outline exists to
+   *    make the silhouette readable against the artwork underneath while
+   *    tracing it; the artwork's own edge is something they draw.
+   *  - **It stays reversible.** Nothing is lost: the outline is one
+   *    `applyOutline` call away, and a future "stamp the outline too" option
+   *    can be added without unpicking anything. Committing edge pixels with
+   *    invented normals into 151 real projects could not be undone as easily.
+   *
+   * ⚠️ If this is ever reversed, the normal and height channels for outline
+   * pixels must be DEFINED, not defaulted, and E6's shared `>= 128` threshold
+   * keeps the two silhouettes in step.
    */
   const poseStamp = useCallback(() => {
     const engine = poseEngineRef.current;

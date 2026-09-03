@@ -12,8 +12,8 @@
  *
  * | Group        | Controls                                        | Source                |
  * | ------------ | ----------------------------------------------- | --------------------- |
- * | Model        | Cube · Sphere · Cylinder · Mannequin             | `meshId`              |
- * | Framing      | Full · Head · Torso · Arm · Leg · Hand           | `framing`             |
+ * | Model        | Cube · Sphere · Cylinder                        | `meshId`              |
+ * | Mannequin    | Full · Head · Torso · Arm · Leg · Hand           | `meshId`              |
  * | Rotation     | orb + Front/Back/Left/Right/Top/Bottom/¾         | `rotation`            |
  * | Light        | orb + light tint presets                         | `lightDirection/Color`|
  * | Colours      | Fill swatch · Edge swatch (the APP's picker)     | `ui.tool` (E8/E9/E10) |
@@ -68,9 +68,9 @@ import {
   POSE_VIEWPOINT_ORDER,
   POSE_VIEWPOINT_ROTATIONS,
 } from "../../canvas/pose/poseCamera";
+import { MANNEQUIN_PART_ORDER } from "../../canvas/pose/poseMeshes";
 import type {
   PoseColor,
-  PoseFraming,
   PoseMeshId,
   PoseProjection,
   PoseCameraPreset,
@@ -107,8 +107,6 @@ export const POSE_ZOOM_SLIDER_MAX = 40;
 export interface PoseSectionProps {
   /** The loaded reference solid, or `null` for "no model". */
   meshId: PoseMeshId | null;
-  /** Which region the camera frames. Only meaningful for the mannequin. */
-  framing: PoseFraming;
   /** Model orientation, euler radians. */
   rotation: PoseVector;
   /** Key-light direction, a unit-ish vector. */
@@ -144,8 +142,13 @@ export interface PoseSectionProps {
   /** Field of view in degrees. The store clamps it to 10–120. */
   fov: number;
 
+  /**
+   * Load a reference solid — a primitive, the whole mannequin, or one of its
+   * parts. ⚠️ **The part buttons route through THIS**, not a separate framing
+   * callback: a part is its own geometry now (MASTER E1/E2), so picking Head
+   * is picking a mesh in exactly the way picking Cube is.
+   */
   onSelectMesh: (meshId: PoseMeshId) => void;
-  onSelectFraming: (framing: PoseFraming) => void;
   onSetRotation: (rotation: PoseVector) => void;
   onSetLightDirection: (direction: PoseVector) => void;
   onSetLightColor: (color: PoseColor) => void;
@@ -171,20 +174,33 @@ export interface PoseSectionProps {
  * imported from `poseCamera.ts`, which owns the angles.
  */
 
+/** The three constructed primitives (MASTER D1). */
 const MESHES: readonly { id: PoseMeshId; label: string }[] = [
   { id: "cube", label: "Cube" },
   { id: "sphere", label: "Sphere" },
   { id: "cylinder", label: "Cylinder" },
-  { id: "mannequin", label: "Mannequin" },
 ];
 
-const FRAMINGS: readonly { id: PoseFraming; label: string }[] = [
-  { id: "full", label: "Full" },
-  { id: "head", label: "Head" },
-  { id: "torso", label: "Torso" },
-  { id: "arm", label: "Arm" },
-  { id: "leg", label: "Leg" },
-  { id: "hand", label: "Hand" },
+/**
+ * The mannequin row: the whole figure, then each part (MASTER E1/E2).
+ *
+ * ⚠️ **These load a MESH, not a framing.** The old Framing row pointed the
+ * camera at a slice of the whole figure, so pressing Head still rendered — and
+ * lit, and stamped — the entire body. Each id here is real sub-geometry built
+ * by `poseMeshes.ts`, re-centred and auto-fitted like a primitive, so the row
+ * is never disabled and there is nothing for a primitive to "not have".
+ *
+ * ⚠️ **`"mannequin"` IS Full.** The label is "Full" because that is what the
+ * button does next to five parts; the id is the whole-figure mesh id, and the
+ * order is `MANNEQUIN_PART_ORDER` so the rail cannot drift from the geometry.
+ * The old framing's `"full"` has no counterpart in `PoseMeshId` at all.
+ */
+const MANNEQUIN_PARTS: readonly { id: PoseMeshId; label: string }[] = [
+  { id: "mannequin", label: "Full" },
+  ...MANNEQUIN_PART_ORDER.map((id) => ({
+    id: id as PoseMeshId,
+    label: id.charAt(0).toUpperCase() + id.slice(1),
+  })),
 ];
 
 const PROJECTIONS: readonly { id: PoseProjection; label: string }[] = [
@@ -230,7 +246,6 @@ function sameColor(a: PoseColor, b: PoseColor): boolean {
 
 export function PoseSection({
   meshId,
-  framing,
   rotation,
   lightDirection,
   lightColor,
@@ -243,7 +258,6 @@ export function PoseSection({
   zoom,
   fov,
   onSelectMesh,
-  onSelectFraming,
   onSetRotation,
   onSetLightDirection,
   onSetLightColor,
@@ -258,9 +272,6 @@ export function PoseSection({
   onClear,
 }: PoseSectionProps) {
   const hasMesh = meshId !== null;
-  /* MASTER D4 — framing frames a REGION of the unrigged mannequin. A cube has
-     no head, so the row is disabled rather than removed (see the header). */
-  const framingEnabled = meshId === "mannequin";
   /* An orthographic camera has no field of view. */
   const fovEnabled = projection === "perspective";
   /* Rounded because the store holds a number and a fractional width has no
@@ -295,20 +306,25 @@ export function PoseSection({
         )}
       </div>
 
+      {/* ── Mannequin ───────────────────────────────────────────────────────
+          MASTER E1/E2. These REPLACE the Framing row: each button loads that
+          piece as its own mesh, alone and centred, rather than aiming the
+          camera at a region of the whole figure. They therefore route through
+          `onSelectMesh` and are never disabled — every id is loadable from any
+          state, exactly like Cube. */}
       <div className="pose-panel__group">
-        <span className="pose-panel__group-label">Framing</span>
+        <span className="pose-panel__group-label">Mannequin</span>
         <div className="pose-panel__buttons">
-          {FRAMINGS.map(({ id, label }) => (
+          {MANNEQUIN_PARTS.map(({ id, label }) => (
             <button
               key={id}
               type="button"
-              className={btn(framing === id)}
-              onClick={() => onSelectFraming(id)}
-              disabled={!framingEnabled}
+              className={btn(meshId === id)}
+              onClick={() => onSelectMesh(id)}
               title={
-                framingEnabled
-                  ? `Frame the ${label.toLowerCase()}`
-                  : "Framing regions apply to the mannequin only"
+                id === "mannequin"
+                  ? "Load the whole mannequin"
+                  : `Load the ${label.toLowerCase()} on its own`
               }
             >
               {label}

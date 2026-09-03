@@ -49,7 +49,6 @@
  * The component therefore emits only the preset NAME and this container turns
  * it into lines.
  */
-import { useState } from "react";
 import { observer } from "mobx-react-lite";
 import { PixelStudioPanel } from "../ui/components/PixelStudioPanel/PixelStudioPanel";
 import {
@@ -87,34 +86,10 @@ function toPoseColor(color: {
   return { r: color.r, g: color.g, b: color.b, a: color.a };
 }
 
-/**
- * 🚧 **TEMPORARY — task 06 (W4) replaces this whole constant and the
- * `useState` below with `pose.edgeWidth` / `pose.setEdgeWidth(...)`.**
- *
- * The outline's thickness belongs on `PoseUIStore`, and task 06 owns that file
- * (`edgeWidth` + `setEdgeWidth`, per MASTER §8). Task 03 owns only the rail, so
- * it ships the pure half — the `edgeWidth` prop and the `onSetEdgeWidth`
- * callback — over a container-local `useState` so the control is live and
- * testable now. It is deliberately NOT persisted and NOT shared with the
- * renderer: while this placeholder stands, dragging the slider moves the
- * number and nothing else draws an outline.
- *
- * Default 0 = "no outline" (MASTER E4, the 0-means-off form task 03 chose), so
- * the tool behaves exactly as it did before the outline existed until the
- * owner asks for one. **Task 06 must keep 0 as the store's default** or the
- * outline appears unbidden on every existing project.
- */
-const PLACEHOLDER_EDGE_WIDTH = 0;
-
 export const PixelStudioPanelContainer = observer(
   function PixelStudioPanelContainer() {
     const app = useStores();
     const { domain, ui } = app;
-
-    /* 🚧 TEMPORARY — see `PLACEHOLDER_EDGE_WIDTH`. Declared BEFORE the early
-       return below, because hooks may not sit after a conditional exit. Task
-       06 deletes both lines when `pose.edgeWidth` lands. */
-    const [edgeWidth, setEdgeWidth] = useState(PLACEHOLDER_EDGE_WIDTH);
 
     // Transcribed from the component's pre-purification `if (!project) return null`.
     if (!domain.hasProject) return null;
@@ -178,7 +153,6 @@ export const PixelStudioPanelContainer = observer(
           // can mutate the store's held object, and identity changes exactly
           // when the value does.
           meshId: pose.meshId,
-          framing: pose.framing,
           rotation: pose.rotation,
           lightDirection: pose.lightDirection,
           lightColor: pose.lightColor,
@@ -192,14 +166,17 @@ export const PixelStudioPanelContainer = observer(
           edgeColor: toPoseColor(tool.selectedColor),
           // So the rail can mark whichever swatch the picker is pointed at.
           colorTarget: tool.colorTarget,
-          // 🚧 TEMPORARY — task 06 swaps this for `pose.edgeWidth`.
-          edgeWidth,
+          // Whole pixels, 0–4, 0 = off (MASTER E4). Session state on the pose
+          // store like everything else here — never persisted (D6).
+          edgeWidth: pose.edgeWidth,
           projection: pose.projection,
           cameraPreset: pose.cameraPreset,
           zoom: pose.zoom,
           fov: pose.fov,
+          // ⚠️ The mannequin PART buttons come through here too (MASTER
+          // E1/E2). A part is real sub-geometry now, so "load the head" is a
+          // mesh selection; there is no `onSelectFraming` any more.
           onSelectMesh: (meshId) => pose.setMesh(meshId),
-          onSelectFraming: (framing) => pose.setFraming(framing),
           onSetRotation: (rotation) => pose.setRotation(rotation),
           // The store NORMALISES on write, so the orb may emit whatever the
           // drag produced and readers never have to renormalise.
@@ -215,11 +192,9 @@ export const PixelStudioPanelContainer = observer(
           // model or outline colour.
           onEditModelColor: () => tool.setColorTarget("fill"),
           onEditEdgeColor: () => tool.setColorTarget("edge"),
-          // 🚧 TEMPORARY — task 06 swaps this for `pose.setEdgeWidth(width)`.
-          // Rounded here as well as in the rail: the store field task 06 adds
-          // holds whole pixels, and this placeholder must not accustom anyone
-          // to a fractional one.
-          onSetEdgeWidth: (width) => setEdgeWidth(Math.round(width)),
+          // The store rounds and clamps to 0–4 itself, so the rail may emit
+          // whatever its slider produced.
+          onSetEdgeWidth: (width) => pose.setEdgeWidth(width),
           onSetProjection: (projection) => pose.setProjection(projection),
           // ⚠️ A preset stores only its ID (MASTER D14). Resolving it to angles
           // is `poseCamera.ts`'s job in the render, not the rail's — which is

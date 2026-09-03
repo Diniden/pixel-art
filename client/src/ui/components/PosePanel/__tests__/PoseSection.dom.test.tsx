@@ -5,9 +5,11 @@
  *
  * What is pinned:
  *  - each mesh button calls `onSelectMesh` with its own id, not its index.
- *  - framing is DISABLED for a primitive and ENABLED for the mannequin —
- *    MASTER D4, and the reason it is disabled rather than hidden is that the
- *    row must not vanish and shuffle the rail.
+ *  - the mannequin PART buttons (MASTER E1/E2) replace the old Framing row:
+ *    they route through `onSelectMesh`, they are never disabled, and `Full`
+ *    emits `"mannequin"`. Their labels and order are read from
+ *    `poseMeshes.ts`'s `MANNEQUIN_PART_ORDER`, so a re-declared copy in the
+ *    rail would fail here rather than drift from the geometry.
  *  - the FOV slider is disabled in orthographic and live in perspective.
  *  - each camera preset button calls `onSelectCameraPreset` with its id.
  *  - each viewpoint button calls `onSetRotation` with the angles FROM
@@ -43,6 +45,7 @@ import {
   POSE_VIEWPOINT_ORDER,
   POSE_VIEWPOINT_ROTATIONS,
 } from "../../../canvas/pose/poseCamera";
+import { MANNEQUIN_PART_ORDER } from "../../../canvas/pose/poseMeshes";
 
 const composed = composeStories(stories);
 
@@ -129,7 +132,7 @@ describe("PoseSection — mounts every story with no provider", () => {
       ),
     ).toEqual([
       "Model",
-      "Framing",
+      "Mannequin",
       "Rotation & light",
       "Colours",
       "Outline",
@@ -155,7 +158,9 @@ describe("PoseSection — mounts every story with no provider", () => {
 });
 
 describe("PoseSection — the mesh buttons", () => {
-  it("offers the four reference solids and fires each own id", () => {
+  it("offers the three primitives and fires each own id", () => {
+    // ⚠️ Three, not four: `"mannequin"` moved to the Mannequin row below, as
+    // its **Full** button, next to the five parts it now sits with.
     const { container } = render(<composed.NoMesh />);
     const onSelectMesh = composed.NoMesh.args.onSelectMesh;
     const meshRow = buttons(container, "Model");
@@ -164,15 +169,13 @@ describe("PoseSection — the mesh buttons", () => {
       "Cube",
       "Sphere",
       "Cylinder",
-      "Mannequin",
     ]);
 
-    const ids = ["cube", "sphere", "cylinder", "mannequin"];
+    const ids = ["cube", "sphere", "cylinder"];
     meshRow.forEach((button, index) => {
       fireEvent.click(button);
       expect(onSelectMesh).toHaveBeenLastCalledWith(ids[index]);
     });
-    expect(onSelectMesh).toHaveBeenCalledTimes(4);
   });
 
   it("marks the loaded mesh active and no other", () => {
@@ -184,12 +187,27 @@ describe("PoseSection — the mesh buttons", () => {
   });
 });
 
-describe("PoseSection — framing is mannequin-only (MASTER D4)", () => {
-  it("disables every framing button for a primitive, without hiding them", () => {
+/* ── the mannequin part buttons (MASTER E1/E2) ─────────────────────────────
+ *
+ * These REPLACED the Framing row. The distinction the tests pin is not
+ * cosmetic: framing aimed the camera at a slice of the whole figure, so it was
+ * meaningless on a primitive and the row had to be DISABLED for one. A part is
+ * its own geometry now, so every button is loadable from any state and they
+ * all route through `onSelectMesh` — there is no `onSelectFraming` prop left.
+ */
+describe("PoseSection — the mannequin part buttons", () => {
+  it("offers Full plus the five parts, in poseMeshes' own order", () => {
     const { container } = render(<composed.Primitive />);
-    const framingRow = buttons(container, "Framing");
+    const partRow = buttons(container, "Mannequin");
 
-    expect(framingRow.map((b) => b.textContent)).toEqual([
+    // ⚠️ The anti-drift check, the same device the viewpoint test uses: the
+    // expectation is derived from the SAME table the component imports, so a
+    // re-declared copy in the rail would disagree with the geometry loudly.
+    expect(partRow.map((b) => b.textContent)).toEqual([
+      "Full",
+      ...MANNEQUIN_PART_ORDER.map((id) => id.charAt(0).toUpperCase() + id.slice(1)),
+    ]);
+    expect(partRow.map((b) => b.textContent)).toEqual([
       "Full",
       "Head",
       "Torso",
@@ -197,36 +215,55 @@ describe("PoseSection — framing is mannequin-only (MASTER D4)", () => {
       "Leg",
       "Hand",
     ]);
-    for (const button of framingRow) expect(button.disabled).toBe(true);
   });
 
-  it("disables them with no mesh at all", () => {
-    const { container } = render(<composed.NoMesh />);
-    for (const button of buttons(container, "Framing")) {
-      expect(button.disabled).toBe(true);
+  it("is NEVER disabled — a part is a mesh, not a crop of one", () => {
+    // The old Framing row was disabled for a primitive and with no mesh at
+    // all, because there was nothing to frame. This is the regression pin for
+    // that behaviour being gone.
+    for (const Story of [composed.NoMesh, composed.Primitive, composed.Orthographic]) {
+      const { container } = render(<Story />);
+      for (const button of buttons(container, "Mannequin")) {
+        expect(button.disabled).toBe(false);
+      }
     }
   });
 
-  it("enables them for the mannequin and fires each own id", () => {
+  it("each part button loads that MESH — onSelectMesh, not a framing", () => {
     const { container } = render(<composed.Mannequin />);
-    const onSelectFraming = composed.Mannequin.args.onSelectFraming;
-    const framingRow = buttons(container, "Framing");
+    const onSelectMesh = composed.Mannequin.args.onSelectMesh;
+    const partRow = buttons(container, "Mannequin");
 
-    for (const button of framingRow) expect(button.disabled).toBe(false);
-
-    const ids = ["full", "head", "torso", "arm", "leg", "hand"];
-    framingRow.forEach((button, index) => {
+    // ⚠️ `"mannequin"` for Full — the whole figure's mesh id. The deleted
+    // framing union's `"full"` has no counterpart in `PoseMeshId`, and
+    // emitting it here would be an id no loader can build.
+    const ids = ["mannequin", ...MANNEQUIN_PART_ORDER];
+    partRow.forEach((button, index) => {
       fireEvent.click(button);
-      expect(onSelectFraming).toHaveBeenLastCalledWith(ids[index]);
+      expect(onSelectMesh).toHaveBeenLastCalledWith(ids[index]);
     });
   });
 
-  it("marks the selected region active", () => {
+  it("marks the loaded part active, and leaves the primitive row cold", () => {
+    // The Mannequin story loads `meshId: "head"` — a part on its own.
     const { container } = render(<composed.Mannequin />);
-    const active = buttons(container, "Framing").filter((b) =>
-      b.className.includes("pose-panel__btn--active"),
-    );
-    expect(active.map((b) => b.textContent)).toEqual(["Head"]);
+    expect(
+      buttons(container, "Mannequin")
+        .filter((b) => b.className.includes("pose-panel__btn--active"))
+        .map((b) => b.textContent),
+    ).toEqual(["Head"]);
+    expect(
+      buttons(container, "Model").filter((b) =>
+        b.className.includes("pose-panel__btn--active"),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("the rail no longer offers a framing callback at all", () => {
+    // E2 — deleted, not deprecated. A prop left behind would let a caller
+    // wire the old behaviour back in without a compile error.
+    expect(Object.keys(composed.Primitive.args)).not.toContain("onSelectFraming");
+    expect(Object.keys(composed.Primitive.args)).not.toContain("framing");
   });
 });
 
