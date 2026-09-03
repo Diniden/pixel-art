@@ -98,15 +98,32 @@ export const CYLINDER_HEIGHT_SEGMENTS = 1;
  * the head and `y: 0` the soles. `x` is left-right (`0.5` is the centreline)
  * and `z` is front-back.
  *
- * ⚠️ **APPROXIMATIONS, TUNED BY EYE from standard human proportions** — head
- * ≈ the top 12%, torso ≈ 40–72%, and so on, on the 7.5-head canon. They are
- * deliberately a little generous, because a region that crops a limb looks
- * broken while one with a bit of slack merely looks like a wider shot.
+ * ✅ **MEASURED against the real asset (task 09, 2026-09-03)**, not estimated.
+ * The vendored `mannequin.gltf` was parsed and its vertex buffer decoded, and
+ * each region below is the actual bounding box of that body part's vertices,
+ * expressed as a fraction of the whole mesh's bounds, plus a small margin.
+ * See `client/public/models/LICENSE.md` for the mesh's raw dimensions.
  *
- * **Task 09 must re-tune these against the real asset** once `mannequin.gltf`
- * is on disk and its actual proportions and rest pose can be measured. Until
- * then they are the best guess available, and every one of them is a fraction
- * so re-tuning is a data edit and not a code change.
+ * ⚠️ **The asset is in a T-POSE, and that changed almost every region.** The
+ * earlier estimates assumed a relaxed figure with the arms hanging at the
+ * sides, so `arm` and `hand` were placed low and to the side — where this mesh
+ * has nothing but empty space. The arms are in fact a horizontal bar at
+ * shoulder height (y 0.76–0.81) reaching the full width of the mesh, and the
+ * hands are at the far outer ends of it. The T-pose also makes the mesh nearly
+ * as wide as it is tall (1.52 × 1.71), so the figure's own torso is much
+ * narrower relative to the total width than a hanging-arms figure would be —
+ * which is why `torso` and `leg` are far tighter in x than the estimates.
+ *
+ * How the numbers were derived: vertices were segmented into parts using the
+ * mesh's own structure — the crotch split (two disjoint x-clusters below
+ * y 0.47), the neck pinch (|x| collapses to < 0.06 at y 0.84), and the arm bar
+ * (|x| > 0.25, which only occurs at y 0.76–0.81) — then each part's min/max was
+ * normalised against the full bounds. A margin of 5–10% of the part's own span
+ * is added so a region reads as a framed shot rather than a tight crop.
+ *
+ * Note these stack with `fitCameraToMesh`'s own 10% padding (MASTER D7); the
+ * margin here is a second, smaller one that keeps a thin region such as `hand`
+ * off the edge of the frame.
  *
  * `"full"` is exactly the whole box, which is what a primitive always uses.
  */
@@ -117,47 +134,57 @@ export const MANNEQUIN_REGIONS: Record<PoseFraming, PoseMeshBounds> = {
     max: { x: 1, y: 1, z: 1 },
   },
   /**
-   * Head: the top ~12% of the figure, narrow in x. Widened to the middle 40%
-   * of the width so the shot is a portrait rather than a tight crop on the
-   * skull.
+   * Head: measured y 0.864–1.000, x 0.452–0.548 — the crown down to the neck
+   * pinch. Genuinely narrow: the head is under 10% of this T-posed mesh's
+   * total width, so framing it needs a much tighter x than a hanging-arms
+   * figure would.
    */
   head: {
-    min: { x: 0.3, y: 0.86, z: 0 },
-    max: { x: 0.7, y: 1, z: 1 },
+    min: { x: 0.443, y: 0.856, z: 0 },
+    max: { x: 0.557, y: 1, z: 1 },
   },
   /**
-   * Torso: shoulders down to hips, roughly 40–72% of the height. Full width,
-   * because the shoulders are the figure's widest point.
+   * Torso: measured y 0.472–0.839, x 0.343–0.657 — shoulders down to the
+   * crotch split. The x span is the torso column only; the arms are excluded
+   * deliberately, because including them would make this identical to `full`
+   * on a T-pose.
    */
   torso: {
-    min: { x: 0.1, y: 0.4, z: 0 },
-    max: { x: 0.9, y: 0.72, z: 1 },
+    min: { x: 0.325, y: 0.454, z: 0 },
+    max: { x: 0.675, y: 0.858, z: 1 },
   },
   /**
-   * Arm: one arm, shoulder to wrist. Taken on the figure's LEFT side as the
-   * viewer sees it (low x), spanning shoulder height down to about hip level,
-   * which is where a relaxed arm's wrist falls.
+   * Arm: measured y 0.761–0.812, x 0.642–1.000 — the figure's outstretched
+   * RIGHT arm as the model faces us, from where it leaves the shoulder out to
+   * the fingertips. A wide, short region, because a T-posed arm is horizontal.
    */
   arm: {
-    min: { x: 0, y: 0.4, z: 0 },
-    max: { x: 0.3, y: 0.75, z: 1 },
+    min: { x: 0.624, y: 0.744, z: 0 },
+    max: { x: 1, y: 0.83, z: 1 },
   },
   /**
-   * Leg: hip to foot — the bottom ~42%. One leg's worth of width, on the same
-   * side as `arm` so switching between the two does not jump across the body.
+   * Leg: measured y 0.000–0.480, x 0.517–0.629 — the sole up to the crotch,
+   * one leg's width, taken on the same side as `arm` so switching between the
+   * two does not jump across the body.
+   *
+   * The top is left at the measured crotch (0.48) rather than padded upward:
+   * the margin is only there to avoid a tight crop, and above the crotch there
+   * is no leg to crop — padding into the torso would just frame the hips. It
+   * also keeps the leg strictly in the bottom half of the figure, which the
+   * region invariants assert.
    */
   leg: {
-    min: { x: 0.2, y: 0, z: 0 },
-    max: { x: 0.5, y: 0.42, z: 1 },
+    min: { x: 0.493, y: 0, z: 0 },
+    max: { x: 0.653, y: 0.48, z: 1 },
   },
   /**
-   * Hand: the smallest region, at the end of the `arm` span. A tight box
-   * around where a relaxed hand sits — the one most likely to need re-tuning
-   * in task 09, because it has the least slack.
+   * Hand: measured y 0.775–0.796, x 0.879–1.000 — the outer end of the `arm`
+   * bar. The smallest and thinnest region by a wide margin, so it carries the
+   * largest relative margin (10%) to keep it off the edge of the frame.
    */
   hand: {
-    min: { x: 0, y: 0.38, z: 0 },
-    max: { x: 0.18, y: 0.5, z: 1 },
+    min: { x: 0.867, y: 0.762, z: 0 },
+    max: { x: 1, y: 0.808, z: 1 },
   },
 };
 
@@ -207,20 +234,26 @@ export const POSE_FRAMING_ORDER: readonly PoseFraming[] = [
   "hand",
 ];
 
-/* ── the mannequin loading seam (task 09 supplies the asset) ──────────────── */
+/* ── the mannequin loading path (asset vendored by task 09) ──────────────── */
 
 /**
- * Where task 09 will vendor the CC0 mannequin (MASTER D3).
+ * The vendored CC0 mannequin (MASTER D3), served statically by Vite from
+ * `client/public/models/mannequin.gltf`.
  *
- * ⚠️ **This task does NOT download it.** The constant exists so the path is
- * declared in exactly one place and task 09 has an obvious target; until that
- * task lands, fetching this URL 404s and {@link loadMannequin} rejects.
+ * ✅ **The asset is present** as of task 09 (2026-09-03): "Prototyping
+ * Mannequin" by burning_barb, CC0 1.0 Universal, 380,956 bytes, 9,636 tris,
+ * unrigged, self-contained (its buffer is an embedded data URI, so there are
+ * no `.bin` or texture sidecars to 404).
+ *
+ * Provenance, checksums and the licence re-verification are recorded in
+ * `client/public/models/LICENSE.md`. {@link loadMannequin} still rejects
+ * cleanly if the file is removed.
  */
 export const MANNEQUIN_URL = "/models/mannequin.gltf";
 
 /**
- * Thrown when the mannequin cannot be loaded — most often because task 09 has
- * not vendored it yet.
+ * Thrown when the mannequin cannot be loaded — the asset file missing or
+ * unreadable, or the loader itself failing to import.
  *
  * A distinct class rather than a bare `Error` so the caller can tell "the
  * asset is missing, fall back to a primitive and grey the button out" apart
@@ -249,10 +282,10 @@ export class MannequinUnavailableError extends Error {
 /**
  * Load the mannequin asset, or reject with {@link MannequinUnavailableError}.
  *
- * ⚠️ **This is a SEAM, deliberately.** Task 09 owns the asset; this task's job
- * is to make the mannequin button's absence a **runtime condition rather than
- * a compile error**, so the primitives ship whether or not task 09 succeeds
- * (it is explicitly allowed to end BLOCKED).
+ * ⚠️ **Every failure is a runtime condition, never a compile error.** The
+ * asset is vendored (task 09) but a deployment could still be missing it, so
+ * the primitives must keep working when this rejects — the caller falls back
+ * rather than the tool breaking.
  *
  * `GLTFLoader` lives in `three/examples/jsm/`, which is a separate entry point
  * from the main `three` namespace, so it gets its own dynamic import. That is
@@ -287,7 +320,7 @@ export async function loadMannequin(
     scene = gltf.scene;
   } catch (cause) {
     throw new MannequinUnavailableError(
-      `the mannequin asset at ${url} could not be loaded — task 09 vendors it`,
+      `the mannequin asset at ${url} could not be loaded`,
       { cause },
     );
   }

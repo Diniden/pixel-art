@@ -186,14 +186,20 @@ describe("getFramingBounds", () => {
     expect(getFramingBounds("head")).toEqual(getFramingBounds("head", UNIT_BOUNDS));
   });
 
+  // ⚠️ These assert the MAPPING ARITHMETIC, not the region values themselves.
+  // Expectations are derived from MANNEQUIN_REGIONS rather than hardcoded, so
+  // that re-tuning a region against the real mesh (task 09 did exactly that,
+  // and the T-pose moved almost every one) cannot break a test whose subject
+  // is the fraction→world-space transform. The region VALUES are pinned by the
+  // invariant tests above instead.
   it("maps a normalised region onto the unit box", () => {
+    const region = MANNEQUIN_REGIONS.head;
     const head = getFramingBounds("head");
-    // head.y spans 0.86..1 of a box running -0.5..0.5, i.e. 0.36..0.5.
-    expect(head.min.y).toBeCloseTo(0.36, 10);
-    expect(head.max.y).toBeCloseTo(0.5, 10);
-    // x spans 0.3..0.7 → -0.2..0.2.
-    expect(head.min.x).toBeCloseTo(-0.2, 10);
-    expect(head.max.x).toBeCloseTo(0.2, 10);
+    // The unit box runs -0.5..0.5, so a fraction f maps to f - 0.5.
+    expect(head.min.y).toBeCloseTo(region.min.y - 0.5, 10);
+    expect(head.max.y).toBeCloseTo(region.max.y - 0.5, 10);
+    expect(head.min.x).toBeCloseTo(region.min.x - 0.5, 10);
+    expect(head.max.x).toBeCloseTo(region.max.x - 0.5, 10);
   });
 
   it("maps onto an ARBITRARY mesh box, not just the unit one", () => {
@@ -201,11 +207,15 @@ describe("getFramingBounds", () => {
       min: { x: 0, y: 0, z: 0 },
       max: { x: 10, y: 100, z: 4 },
     };
+    const region = MANNEQUIN_REGIONS.head;
     const head = getFramingBounds("head", meshBounds);
-    expect(head.min.y).toBeCloseTo(86, 10);
-    expect(head.max.y).toBeCloseTo(100, 10);
-    expect(head.min.x).toBeCloseTo(3, 10);
-    expect(head.max.x).toBeCloseTo(7, 10);
+    // Spans are 10 / 100 / 4 from an origin of 0, so a fraction f maps to
+    // f * span — a different scale factor per axis, which is the point.
+    expect(head.min.y).toBeCloseTo(region.min.y * 100, 10);
+    expect(head.max.y).toBeCloseTo(region.max.y * 100, 10);
+    expect(head.min.x).toBeCloseTo(region.min.x * 10, 10);
+    expect(head.max.x).toBeCloseTo(region.max.x * 10, 10);
+    // z is full-depth for every region, so it survives unchanged.
     expect(head.min.z).toBe(0);
     expect(head.max.z).toBe(4);
   });
@@ -260,7 +270,7 @@ describe("getFramingBounds", () => {
 /* ══ the mannequin loading seam (task 09 supplies the asset) ═════════════ */
 
 describe("loadMannequin", () => {
-  it("points at the path task 09 will vendor to", () => {
+  it("points at the vendored asset path", () => {
     expect(MANNEQUIN_URL).toBe("/models/mannequin.gltf");
   });
 
