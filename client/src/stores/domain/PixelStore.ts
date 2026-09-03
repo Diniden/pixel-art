@@ -107,6 +107,24 @@ export interface PixelWrite {
 }
 
 /**
+ * One cell's FULL contents — colour, normal and height together.
+ *
+ * The input of {@link PixelStore.setPixelCells}, the only action that writes
+ * all three members of a cell in a single commit. Unlike {@link PixelWrite}
+ * (colour only) and the lighting writes (normal-only / height-only, and only
+ * where a colour already exists), every member here is authoritative: the
+ * resulting cell is exactly `{ color, normal, height }`, whatever was there
+ * before.
+ */
+export interface PixelCellWrite {
+  x: number;
+  y: number;
+  color: Color | 0;
+  normal: Normal | 0;
+  height: number;
+}
+
+/**
  * How `PixelStore` publishes a committed tree to the bridge-era Zustand
  * mirror. Injected for the same reason `DomainMutator` injects one: the
  * domain layer may not import the legacy store.
@@ -794,6 +812,99 @@ export class PixelStore {
       target,
       layer,
       "Draw",
+      patches,
+      options.trackHistory ?? true,
+    );
+  }
+
+  /**
+   * Write many cells' COLOUR, NORMAL AND HEIGHT together, as ONE history
+   * entry. The pose tool's stamp is its first caller, but nothing here is
+   * pose-specific.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ NO COLOUR GUARD — AND THAT IS THE POINT OF THIS ACTION
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * {@link setNormalPixels} and {@link setHeightPixels} route through
+   * `collectLightingPatches`, which SKIPS any cell whose colour is `0` — "a
+   * normal may only exist where paint does". That guard is right for them:
+   * they replace ONE member of a cell that must already have been painted by
+   * a different, earlier commit.
+   *
+   * It would be wrong here. This action writes the colour in the SAME patch
+   * as the normal and the height, so the paint is arriving, not missing. A
+   * caller stamping onto previously-transparent cells — the normal case —
+   * would otherwise have every one of its cells silently dropped. Do not
+   * "restore" the guard for symmetry; the asymmetry is deliberate.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * Why the action exists at all: none of the three older bulk writes can
+   * express an atomic three-channel write. `setPixels` writes colour only,
+   * and chaining it with the two lighting writes both trips the colour guard
+   * above and produces THREE undo entries for one user gesture.
+   *
+   * Everything else matches {@link setPixels} exactly:
+   *
+   *  - an empty list is a complete no-op — no history, no bump, no save;
+   *  - out-of-bounds cells are FILTERED, not clamped and not thrown on;
+   *  - the edit mask is honoured through the same {@link allows} gate;
+   *  - the LAST write to a repeated cell wins, and only ONE patch is
+   *    recorded for it, so undo restores the true pre-batch value rather
+   *    than an intermediate one;
+   *  - there is NO same-value early return. `setPixel` (singular) has one;
+   *    `setPixels` deliberately does not, and neither does this — a
+   *    redundant batch still records an entry.
+   *
+   * It commits through the shared {@link commitCells}, so a whole stamp is
+   * one grid replacement, ONE history entry, one `publishAndBump` and one
+   * `publishDirty`. It is NOT routed through `commitLighting`, whose
+   * empty-patch-list-still-saves asymmetry is pinned legacy behaviour of the
+   * lighting paths alone.
+   */
+  setPixelCells(
+    cells: readonly PixelCellWrite[],
+    options: PixelWriteOptions = {},
+  ): void {
+    if (cells.length === 0) return;
+    const resolved = this.resolveTarget(options.variantFrameIndex);
+    if (!resolved) return;
+    const { target, layer, width, height } = resolved;
+
+    const patches: PixelPatch[] = [];
+    // Later writes to the same cell win, and only ONE patch is recorded for
+    // it — the same de-duplication `setPixels` does, for the same reason.
+    const seen = new Map<number, number>();
+    for (const cell of cells) {
+      const { x, y } = cell;
+      if (x < 0 || x >= width || y < 0 || y >= height) continue;
+      if (!this.allows(x, y, width, height, options)) continue;
+
+      const after: PixelData = {
+        color: cell.color,
+        normal: cell.normal,
+        height: cell.height,
+      };
+      const key = y * width + x;
+      const already = seen.get(key);
+      if (already !== undefined) {
+        patches[already].after = after;
+        continue;
+      }
+      seen.set(key, patches.length);
+      patches.push({
+        x,
+        y,
+        before: copyCell(layer.pixels[y]?.[x]),
+        after,
+      });
+    }
+
+    this.commitCells(
+      target,
+      layer,
+      "Stamp pose",
       patches,
       options.trackHistory ?? true,
     );
