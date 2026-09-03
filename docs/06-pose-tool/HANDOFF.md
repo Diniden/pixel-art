@@ -1,8 +1,8 @@
 # HANDOFF — Pose tool
 
-**Current position:** W1 DONE — W2 next
+**Current position:** W2 DONE — W3 next
 **Branch:** `feat/06-pose-tool`
-**Last commit:** `2073de6`
+**Last commit:** `f4ef0de`
 **Plan written:** 2026-09-02 · Planning baseline HEAD: `cd7a852`
 
 ## Wave ledger
@@ -10,7 +10,7 @@
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02, 03, 04, 05 | DONE | 2026-09-02 | `2073de6` | tsc 0 · eslint 0 err/65 warn · vitest 140 files 2571 tests · boundaries OK · stylelint 2 err · no lockfile |
-| W2 | 06, 07 | TODO | | | |
+| W2 | 06, 07 | DONE | 2026-09-03 | `f4ef0de` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · no lockfile |
 | W3 | 08 | TODO | | | |
 | W4 | 09 | TODO | | | |
 | W5 | 10 | TODO | | | |
@@ -26,8 +26,8 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 03 | three.js + engine skeleton | W1 | DONE | `14ee191` | three 0.185.1 / @types 0.185.4, both exact. Lazy chunk proven: 734 kB split. |
 | 04 | Pose overlay canvas | W1 | DONE | `bc27135` | Overlay before reflection (754 < 769). CSS comment-only. Negative control run. |
 | 05 | `PixelStore.setPixelCells()` | W1 | DONE | `2073de6` | `setPixelCells` additive, one history entry. Corpus digests unchanged. |
-| 06 | Meshes, camera, auto-fit, stamp math | W2 | TODO | | |
-| 07 | Pose rail section + orbs | W2 | TODO | | |
+| 06 | Meshes, camera, auto-fit, stamp math | W2 | DONE | `f4ef0de` | 133 tests. Fuzzed applyEulerXYZ vs three (2.2e-15). ⚠️ setCamera widening owed to 08. |
+| 07 | Pose rail section + orbs | W2 | DONE | `5193dfd` | 33 tests. One DirectionOrb used twice. Added a Clear-pose button. 9 manual checks owed. |
 | 08 | `CanvasContainer` integration | W3 | TODO | | |
 | 09 | Vendor the CC0 mannequin | W4 | TODO | | May legitimately end BLOCKED |
 | 10 | Full gate, QA, handoff | W5 | TODO | | |
@@ -96,6 +96,26 @@ never revert or commit someone else's work.
   action only. Flagged that `after` does not deep-copy caller objects (see Notes).
 - **2026-09-02 · W1 · coordinator.** MASTER.md's stylelint baseline named the wrong files.
   Corrected in place: the 2 errors are `OtherHand.css:338`/`:359`.
+- **2026-09-03 · W2 · task 06.** Its own first draft had three bugs, all caught by testing
+  against the real library rather than by reasoning: `applyEulerXYZ` composed the rotations
+  in the wrong order (three's "XYZ" is `Rz·Ry·Rx`); all four side/top/bottom viewpoint
+  rotations were sign-inverted; and `-0` leaked into normals because `(128,128,128)` decodes
+  to `0.00392`, not `0`, so an exact-zero guard never fired. Also fixed a `far <= near`
+  inversion for a point-sized bounding box. Worth recording because it is evidence the
+  fuzzing was load-bearing, not decoration.
+- **2026-09-03 · W2 · task 06.** `MannequinUnavailableError` sets `cause` as an own field
+  rather than `super(message, { cause })` — the project targets **ES2020**, whose `Error`
+  type takes no options argument. Same observable shape; no compiler-target change.
+- **2026-09-03 · W2 · task 07.** Three orb maths helpers were made module-private:
+  exporting them tripped `react-refresh/only-export-components` as 3 eslint **errors**.
+  They are exercised through the rendered DOM.
+- **2026-09-03 · W2 · task 07.** `DirectionOrb` gained a `mode` prop beyond the stated
+  surface (the two orbs carry different value kinds), and a **Clear pose** button was added
+  that is not in the task's control table — without it there is no way to unload a mesh,
+  since `onSelectMesh` cannot pass `null`. Coordinator verified it is a plain callback to
+  the store's existing `clear()`.
+- **2026-09-03 · W2 · coordinator.** **Task 08's `Touches` extended** to allow widening
+  `setCamera`/`getCamera` in `poseEngine.ts`. See the authorised-scope-extension section.
 
 ## Blocked items
 
@@ -125,6 +145,50 @@ comment text explaining the prohibition); `three` and `@types/three` pinned bare
 `^`/`~`; the only `from "three"` is an `import type` (erased at build — D2's lazy loading
 is intact, and task 03's probe build measured the 734 kB chunk separately); pose overlay at
 `CanvasSurface.tsx:754`, reflection at `:769`, so DOM order satisfies D10.
+
+### W2 — verified by the coordinator, 2026-09-03
+
+Gate run by the coordinator against the settled tree at `f4ef0de`. **Task 07 reported a tsc
+error and 2 test failures in task 06's files; those were mid-write and are GONE from the
+settled tree** — this is why the coordinator's gate, not a subagent's, is the one recorded:
+
+```
+bunx tsc --noEmit              exit 0
+bunx eslint .                  ✖ 65 problems (0 errors, 65 warnings)
+bunx vitest run                Test Files 145 passed (145) · Tests 2737 passed (2737)
+bun run lint:boundaries        check-boundaries: OK — all 5 boundary rules hold.
+bunx stylelint "src/**/*.css"  ✖ 70 problems (2 errors, 68 warnings)   ← 2 errors = the gate's bar
+find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules   → empty
+```
+
+Stylelint warnings moved 67 → 68 (`PosePanel.css:88`, a known-benign
+`no-descending-specificity` false positive on a `:hover:not(:disabled)` / `:disabled` pair).
+**The gate's bar is the ERROR count and it is still exactly 2.**
+
+Coordinator spot-checks, all passing: 14 changed files, all inside the two `Touches` lists
+(no scope creep); no `stores/`/`mobx`/`services/`/`api` import under `ui/canvas/pose/` or
+`ui/components/PosePanel/`; no `observer()` in the pure components (the one grep hit is
+comment text); the Clear-pose button is a plain `onClear` callback wired to the store's
+existing `pose.clear()` in the container, mirroring reflection's `onClearAll` — no new
+behaviour invented.
+
+### ⚠️ Manual checks OWED to the owner — W2 (nobody has performed these)
+
+All 9 of task 07's manual checks are unperformed — no subagent had a browser or a device:
+
+13. Select Pose in the running app — the rail shows the Pose section; Pencil/Eraser swap it out.
+14. Every button and slider reachable; active styling correct.
+15. **Drag both orbs with a mouse**, including moving the cursor off the orb mid-drag
+    (the `setPointerCapture` contract). *Unit-covered by a spy, never observed live.*
+16. **Drag both orbs by TOUCH — the rail must not scroll.** This is the `touch-action: none`
+    line. jsdom cannot exercise it at all, and given the owner's iPad this is **the single
+    most important unverified behaviour in W2.**
+17. Framing disabled for primitives / enabled for the mannequin; FOV disabled in orthographic.
+18. Clicking a viewpoint button visibly moves the rotation orb's handle.
+19. Colour inputs change their swatches.
+20. Switch projects — the section resets (proves task 02's `clear()` reaction end to end).
+21. Rail layout at narrow width; the section scrolls if it overflows. *The stories mount at
+    the rail's real 240 px, so this is reviewable in Storybook.*
 
 ### ⚠️ Manual checks OWED to the owner — W1 (nobody has performed these)
 
@@ -159,9 +223,45 @@ Also unperformed by anyone: the full three-process `bun run dev` under mprocs. E
 started only the Vite client (on a non-default port) to avoid seizing ports from siblings.
 All four confirmed the client serves HTTP 200 and transforms the new modules.
 
+## ⚠️ AUTHORISED SCOPE EXTENSION FOR TASK 08 (coordinator, 2026-09-03)
+
+**Task 08's `Touches` says `CanvasContainer.tsx` only. It is hereby extended to include
+`client/src/ui/canvas/pose/poseEngine.ts`, for one specific one-line change and nothing else.**
+
+Why: `PoseEngine.setCamera()` / `getCamera()` are typed `PerspectiveCamera` (task 03), but
+D14 makes **four of the five camera presets ORTHOGRAPHIC**. `OrthographicCamera` is not
+assignable to `PerspectiveCamera` in `@types/three`. Task 06 verified this, could not fix it
+(the file was outside its `Touches`), and worked around it so nothing is blocked:
+`fitCameraToMesh()` returns plain numbers and `applyCameraParams()` takes a structural
+`PoseCameraLike` that both camera classes satisfy.
+
+Without this extension task 08 would have to stop and report BLOCKED under rule 8 for a
+change that is trivial and fully understood. **Widen `setCamera`/`getCamera` to `Camera`
+(or a union). Change nothing else in that file** — in particular `setPixelRatio(1)` stays.
+
 ## Notes for the next session
 
-**Carry into W2 (tasks 06 and 07):**
+**Carry into W3 (task 08):**
+
+- **The `setCamera` widening above is authorised** — read that section before you start.
+- **Pass FRESH `color`/`normal` objects per cell to `setPixelCells`.** Task 05's `after`
+  cell does not deep-copy (consistent with `setPixels`); a caller that mutates a `Normal`
+  after passing it in would corrupt the recorded patch.
+- **Do not "fix" `setPixelRatio(1)`** in the engine — a HiDPI ratio would silently
+  supersample the 1:1 render target and defeat D5.
+- **The normal convention is settled and verified** (task 06): the project is **Y-DOWN**,
+  three's `MeshNormalMaterial` is Y-UP, **so the decode negates Y**. Confirmed against
+  `NormalPicker.tsx:227-228`, `lightingRenderer.ts:299` and `flipGridVertical`. Byte scales
+  are 127 for x/y and 255 for z, matching `edgeInterpolate.ts`. Height is 1–255 with **0 as
+  the "no data" sentinel**, nearer = taller, mirroring `normalCompute.ts:269`.
+- **`applyEulerXYZ` is fuzzed against real three** over 2000 cases (worst deviation
+  2.2e-15). Three's "XYZ" euler is the matrix `Rz·Ry·Rx` — do not "simplify" it.
+- Task 07 added a **Clear pose** button wired to `pose.clear()`; `onSelectMesh` cannot pass
+  `null`, so this is the only way to unload a mesh from the UI.
+- `DirectionOrb` takes a **`mode="direction"|"euler"`** prop — the two orbs carry genuinely
+  different value kinds (unit vector vs euler radians), and euler mode preserves `z` roll.
+
+**Carried from W1 (tasks 06 and 07):**
 
 - **Task 03 added `setCamera()`/`getCamera()`** to `PoseEngine` beyond the task's stated
   surface, specifically so task 06 can install its camera without reaching into a private
