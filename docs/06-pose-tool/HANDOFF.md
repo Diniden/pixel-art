@@ -1,8 +1,10 @@
 # HANDOFF — Pose tool
 
-**Current position:** W3 DONE (task 08) — W4 next
+**Current position:** ✅ **ALL WAVES LANDED — W5 (task 10) DONE.** The plan is code-complete
+and the full root gate is green. ⚠️ **30 manual checks remain OWED to the owner** — see
+[Priority checks for the owner](#7--priority-checks-for-the-owner--the-one-consolidated-list).
 **Branch:** `feat/06-pose-tool`
-**Last commit:** `2dcdd42`
+**Last commit:** `62df16a` (+ this task's docs commit)
 **Plan written:** 2026-09-02 · Planning baseline HEAD: `cd7a852`
 
 ## Wave ledger
@@ -13,7 +15,7 @@
 | W2 | 06, 07 | DONE | 2026-09-03 | `f4ef0de` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · no lockfile |
 | W3 | 08 | DONE | 2026-09-03 | `2dcdd42` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · build OK · no lockfile · **24 manual checks OWED** |
 | W4 | 09 | DONE | 2026-09-03 | `16e1645` | **NOT blocked** — CC0 re-verified, asset vendored. tsc 0 · eslint 0 err · vitest 145/2737 · boundaries OK · stylelint 2 err · no lockfile |
-| W5 | 10 | TODO | | | |
+| W5 | 10 | **DONE** | 2026-09-03 | _this commit_ | `bun run verify` **exit 0** · storybook build 0 · boundaries OK · stylelint 2 err · no lockfile · snapshots untouched · `bun run dev` all 3 procs UP · **30 manual checks owed** |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
@@ -30,7 +32,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 07 | Pose rail section + orbs | W2 | DONE | `5193dfd` | 33 tests. One DirectionOrb used twice. Added a Clear-pose button. 9 manual checks owed. |
 | 08 | `CanvasContainer` integration | W3 | DONE | `2dcdd42` | Own `useCanvasRender`; lazy engine + token guard; 3-pass stamp. **Depth fallback NOT needed.** 24 manual checks owed. |
 | 09 | Vendor the CC0 mannequin | W4 | DONE | `16e1645` | CC0 re-verified 2026-09-03. **Mesh is a T-POSE** — old arm/hand regions framed 0 vertices. 6 manual checks owed. |
-| 10 | Full gate, QA, handoff | W5 | TODO | | |
+| 10 | Full gate, QA, handoff | W5 | **PARTIAL** | _this commit_ | Gate fully green and `bun run dev` verified live on all 3 ports. **QA sweep is PARTIAL by necessity: 0 of the 30 visual/gesture/GL checks could be performed headlessly.** No behaviour changed; no formatting fix was needed. |
 
 ## Known state at planning time (2026-09-02)
 
@@ -214,6 +216,8 @@ behaviour invented.
 
 ### ⚠️ Manual checks OWED to the owner — W2 (nobody has performed these)
 
+> **SUPERSEDED by [§7 Priority checks for the owner](#7--priority-checks-for-the-owner--the-one-consolidated-list).** Kept for provenance; work from the consolidated list.
+
 All 9 of task 07's manual checks are unperformed — no subagent had a browser or a device:
 
 13. Select Pose in the running app — the rail shows the Pose section; Pencil/Eraser swap it out.
@@ -231,6 +235,8 @@ All 9 of task 07's manual checks are unperformed — no subagent had a browser o
     the rail's real 240 px, so this is reviewable in Storybook.*
 
 ### ⚠️ Manual checks OWED to the owner — W1 (nobody has performed these)
+
+> **SUPERSEDED by §7.** Kept for provenance.
 
 No subagent had a browser. Every check below needs the owner at the running app. None
 block W2, but **task 10's QA sweep must cover them.**
@@ -297,6 +303,8 @@ Coordinator spot-checks of the decisions a green gate cannot catch:
 - **The D8 fallback is wired** as a clean path (`depth: null` → height 0), not a crash.
 
 ### ⚠️ W3 — task 08's 24 manual checks: **ALL 24 ARE OWED, NONE WERE PERFORMED**
+
+> **SUPERSEDED by §7.** Kept for provenance — the per-check structural reasoning below is still the best record of *why* each is believed correct.
 
 **The executor had no browser and no automation driver.** Chrome, Safari and Firefox are
 installed on the machine, but neither Playwright nor Puppeteer is in `node_modules`, and
@@ -462,6 +470,8 @@ The coordinator put two questions to the owner directly. Both are answered:
 
 ### ⚠️ Manual checks OWED — W4 (6 more; nobody has performed these)
 
+> **SUPERSEDED by §7.** Kept for provenance.
+
 25. The Mannequin button loads a visible human figure, pixelated like the primitives.
 26. **Each of the six framing buttons frames the right region on screen** — Full / Head /
     Torso / Arm / Leg / Hand. *The regions are proven numerically against real vertex data,
@@ -546,3 +556,376 @@ change that is trivial and fully understood. **Widen `setCamera`/`getCamera` to 
   (those are warnings). The count of 2 is what matters and is unchanged.
 - **Bundle numbers for task 10:** main bundle 764.15 kB / 220.49 kB gzip, unchanged by W1.
   The three chunk is 734.33 kB / 189.46 kB gzip and loads only on first engine use.
+
+---
+
+# W5 — Task 10: full gate, QA sweep and close-out (2026-09-03)
+
+Run by the task-10 executor against the settled tree at `62df16a`, worktree **clean**.
+
+## 1. The real root gate — `bun run verify` → **exit 0**
+
+The house rule is to paste the real output, so this is the actual terminal text, elided only
+where a 172,000-line log repeats itself.
+
+```
+$ bun run verify
+$ bun run typecheck && bun run lint && bun run format:check && bun run test && bun run build
+
+$ bun run --cwd client typecheck && bun run --cwd server typecheck
+$ tsc --noEmit          (client — clean, no output)
+$ tsc --noEmit          (server — clean, no output)
+
+$ bun run --cwd client lint && bun run --cwd server lint
+$ eslint .
+✖ 65 problems (0 errors, 65 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+$ eslint .              (server — clean, no output)
+
+$ bunx prettier --check "*.{json,md,yaml,yml}" "client/*.{ts,js,json}" "server/*.{ts,js,json}" "client/src/types/**/*.{ts,tsx}"
+Checking formatting...
+All matched files use Prettier code style!
+
+$ bun run --cwd client test
+$ vitest run
+ Test Files  145 passed (145)
+      Tests  2737 passed (2737)
+   Duration  68.36s
+
+$ cd client && bun run build
+$ tsc --noEmit && vite build
+vite v7.3.6 building client environment for production...
+✓ 2040 modules transformed.
+dist/index.html                         0.76 kB │ gzip:   0.42 kB
+dist/assets/index-BwAp3nuY.css        217.15 kB │ gzip:  27.55 kB
+dist/assets/GLTFLoader--NCVAYW2.js     45.56 kB │ gzip:  13.70 kB
+dist/assets/three.module-PDSP0dbZ.js  734.33 kB │ gzip: 189.46 kB
+dist/assets/index-DM9IbQGG.js         788.56 kB │ gzip: 229.15 kB
+✓ built in 2.06s
+
+=== VERIFY EXIT CODE: 0 ===
+```
+
+**`format:check` PASSED with no changes needed** — no file this plan touched required
+reformatting, so **no formatting commit was made and nothing was reformatted.** (Note the
+root `format:check` glob only covers `*.{json,md,yaml,yml}`, `client/*`, `server/*` and
+`client/src/types/**` — most of this plan's new files under `client/src/ui/` and
+`client/src/stores/` are outside that glob by the project's existing configuration. That is
+the repo's pre-existing scope, not something this task narrowed.)
+
+## 2. The individual client gates
+
+```
+$ bun run lint:boundaries
+check-boundaries: OK — all 5 boundary rules hold.
+
+$ bunx stylelint "src/**/*.css"                    exit 2 (its normal error-present code)
+src/ui/components/OtherHand/OtherHand.css
+  338:3  ✖  Use a design token from src/styles/tokens.css (task 12)  scale-unlimited/declaration-strict-value
+  359:3  ✖  Use a design token from src/styles/tokens.css (task 12)  scale-unlimited/declaration-strict-value
+✖ 70 problems (2 errors, 68 warnings)
+                        ← EXACTLY 2 ERRORS, both pre-existing in OtherHand.css. ✓
+
+$ bun run build-storybook                          exit 0
+storybook-static/assets/PoseSection.stories-DSc2ufNM.js   16.33 kB │ gzip: 4.52 kB
+storybook-static/assets/CanvasSurface.stories-BhpL2Hh-.js 44.40 kB │ gzip: 14.07 kB
+✓ built in 5.79s
+info => Output directory: client/storybook-static
+                        (storybook-static is gitignored; removed after the run)
+```
+
+`tsc`, `eslint` and `vitest` are not repeated here — the root gate above runs the identical
+commands and its real output is pasted in full.
+
+## 3. Data-safety invariants — all hold
+
+```
+$ find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules
+                                                   → EMPTY ✓
+$ git status --short -- '*__snapshots__*' '*.snap'
+                                                   → EMPTY ✓  (never ran `vitest -u`)
+$ git status --short
+                                                   → EMPTY ✓  (tree clean, nothing stray)
+```
+
+The lockfile sweep was **repeated after every `bunx` invocation** in this task (stylelint,
+prettier, storybook, the baseline vite build) and after the throwaway git worktree used for
+the before-bundle measurement. It came back empty every time.
+
+**Corpus and migration snapshots pass UNCHANGED.** From the real vitest run above:
+
+```
+✓ |unit| src/types/__tests__/migrations.test.ts (68 tests) 67816ms
+   ✓ corpus golden digests — the real regression gate > backup-01-31-2026.json: the migration pipeline is a no-op and the result digest is frozen
+   ✓ … 7 more backup files, each digest-frozen and round-trip stable …
+   ✓ corpus golden digests — the real regression gate > the corpus carries exactly 149 backup snapshots plus 2 standalone projects
+   ✓ corpus golden digests — the real regression gate > base-unit.json: round-trip stability holds for every snapshot in the file
+```
+
+**`toPersistedUIState()` gained no key — the wire format is unchanged (D6).** Verified two
+ways rather than by reading:
+
+```
+$ git diff --stat 35d1644..HEAD -- client/src/stores/ui/UIStore.ts
+                                                   → EMPTY: this plan never touched the file
+$ grep -in 'pose' client/src/stores/ui/UIStore.ts
+                                                   → only `dispose`/`propose` substrings; no pose key
+```
+
+The 151 corpus digests are byte-identical, which is the same fact from the other direction.
+
+## 4. Bundle cost — measured before **and** after
+
+The "before" number was measured for real, not quoted: a throwaway git worktree at the
+plan's branch point `35d1644` was built with the same vite, with `node_modules` symlinked so
+no install (and no lockfile) could occur, then removed.
+
+| Chunk | Before (`35d1644`) | After (`62df16a`) | Δ |
+| --- | --- | --- | --- |
+| **main entry** `index-*.js` | **761.35 kB / 219.71 kB gzip** | **788.56 kB / 229.15 kB gzip** | **+27.21 kB / +9.44 kB gzip** |
+| CSS `index-*.css` | 214.30 kB / 27.20 kB gzip | 217.15 kB / 27.55 kB gzip | +2.85 kB / +0.35 kB gzip |
+| `three.module-*.js` | — (absent) | **734.33 kB / 189.46 kB gzip** | separate lazy chunk |
+| `GLTFLoader-*.js` | — (absent) | **45.56 kB / 13.70 kB gzip** | separate lazy chunk |
+
+- **W1's recorded 764.15 / 220.49 no longer reproduces exactly** (a real build now gives
+  761.35 / 219.71 at the branch point). The difference is ~3 kB and is a measurement
+  artefact of *which* commit was called "before", not a regression. The **after** figure
+  788.56 / 229.15 matches task 08's record exactly.
+- **The three chunk is unchanged at 734.33 kB / 189.46 kB gzip**, and `GLTFLoader` is
+  unchanged at 45.56 kB / 13.70 kB gzip. Both **still separate**, exactly as W1 and W4
+  recorded. The risk-register row "three bundle weight inflates the main bundle" is
+  **closed**: the main bundle grew by 27 kB of the plan's own container/store/panel code,
+  not by three.
+- **three has NOT leaked into the main bundle — grepped the built artefact to prove it.**
+  Distinctive three-internal identifiers in `dist/assets/index-DM9IbQGG.js`:
+  `BufferGeometry` **0**, `THREE.WebGLProgram` **0**, `WebGLRenderer` 1, `WebGLRenderTarget`
+  1, `MeshNormalMaterial` 1, `PerspectiveCamera` 4. Each surviving hit was read in context
+  and every one is a **property access on the dynamically-imported namespace**, not inlined
+  library source:
+
+  ```
+  this.renderer = new e.WebGLRenderer({antialias:!1, …})          ← `e` = the imported ns
+  this.target   = new this.three.WebGLRenderTarget(s,r,{minFilter:this.three.NearestFilter…})
+  Ee = new F.MeshNormalMaterial({flatShading:!0, side:F.DoubleSide})
+  this.camera   = new e.PerspectiveCamera(45,1,.1,1e3)
+  return Gb ??= zx(()=>import("./three.module-PDSP0dbZ.js"),[])   ← the split point itself
+  ```
+
+  Positive control, same strings in the three chunk: `WebGLRenderer` 39, `BufferGeometry`
+  26, `PerspectiveCamera` 7, `MeshNormalMaterial` 6. **D2 is intact.**
+
+## 5. `bun run dev` — all three processes came up ✓
+
+This was the one task expected to attempt the real launch, and it did.
+
+⚠️ **One honest complication, recorded because it affected the method.** A pre-existing
+mprocs session of the owner's, **2 days 15 hours old**, was already holding port 3001 and had
+gone unresponsive (`curl /api/projects` → no response). Rather than kill the owner's
+processes, the three `mprocs.yaml` commands were launched directly and individually — the
+same three commands mprocs itself runs (`bun run dev:client`, `bun run dev:server`,
+`bun run ai`). A first attempt at `mprocs` under a pty did start (it entered the alternate
+screen buffer) but a TUI cannot be read from a non-interactive shell, so the direct launch is
+what produced observable evidence. **All three then bound their real default ports** — the
+stale holder had released 3001 by then — and all three answered live HTTP:
+
+```
+=== ALL THREE PROCESSES — live HTTP probes ===
+-- 1. client (vite, 5173) --      / HTTP 200
+-- 2. server (express, 3001) --   /api/projects HTTP 200
+-- 3. ai-service (uvicorn, 8100) -- /health HTTP 200
+   {"status":"ok","mode":"proxy","remote_configured":false}
+
+=== listening ports ===
+   bun       34221  *:3001
+   node      34224  *:5173
+   python3.1 34253  *:8100
+```
+
+Their own startup banners:
+
+```
+client:  VITE v7.3.6  ready in 114 ms   ➜  Local: http://localhost:5173/
+server:  🎨 Pixel Art server running on http://localhost:3001
+         🔌 Sync websocket listening on /ws
+         📡 Advertising _pixelart._tcp on port 5173 for the iPad companion
+ai:      INFO: Application startup complete.
+         INFO: Uvicorn running on http://0.0.0.0:8100 (Press CTRL+C to quit)
+```
+
+And the pose feature's own modules were served and transformed by the **real** dev client
+with no error in the vite log:
+
+```
+/                                      HTTP 200
+src/ui/canvas/pose/poseEngine.ts       HTTP 200
+src/ui/canvas/pose/poseCamera.ts       HTTP 200
+src/ui/canvas/pose/poseStamp.ts        HTTP 200
+src/ui/canvas/pose/poseMeshes.ts       HTTP 200
+src/containers/CanvasContainer.tsx     HTTP 200
+src/ui/components/PosePanel/PoseSection.tsx   HTTP 200
+src/ui/components/PosePanel/DirectionOrb.tsx  HTTP 200
+/models/mannequin.gltf                 HTTP 200, size=380956   ← matches task 09's checksum size
+```
+
+All three processes were then shut down cleanly; no listener of mine remains and the repo is
+clean. **`bun run dev` is not broken by this plan.**
+
+## 6. ⚠️ The QA sweep — what was actually verified, and what was not
+
+**Read this before reading the table.** The task file lists a 29-item QA script.
+**0 of its visual, gesture and GL items were performed.** This executor had no browser
+automation, no device, and jsdom has no WebGL — the same wall every earlier agent hit. What
+*could* be done headlessly was done: the structural claims underlying the checks were
+**re-verified independently from the built artefact and the source**, rather than taken from
+the previous agents' reports. That is evidence about the *code*, and it is **not** evidence
+about the *picture*. A green gate proves the code compiles, lints, tests and builds; it
+proves nothing whatsoever about what appears on screen.
+
+Every claim below marked ✅ was re-derived by this task. Everything marked ❌ is owed.
+
+| # | QA item | Result |
+| --- | --- | --- |
+| 1 | Hard, blocky, aliased edges at artwork resolution | ❌ **NOT TESTED.** ✅ *Levers re-verified in source:* `antialias: false` (`poseEngine.ts:239`), `samples: 0` (`:325`), `NearestFilter` on **both** min and mag (`:319-320`), `setPixelRatio(1)` (`:246`). |
+| 2 | Stays crisp at every zoom, grid-aligned | ❌ **NOT TESTED.** ✅ Pan is `Math.round`ed in the painter (`CanvasContainer.tsx:2395-2397`); magnification is the existing CSS transform, not a blit. |
+| 3 | 32×32 grid reads as genuinely chunky/useful | ❌ **NOT TESTED.** Aesthetic judgement — only the owner can make it. |
+| 4 | 256×224 grid renders 1:1 without stretching | ❌ **NOT TESTED.** ✅ Target is allocated at exactly `cellWidth × cellHeight`; `putImageData` only, **no `drawImage` anywhere on the pose path** (grepped the whole pose region — 0 hits outside a prohibition comment). |
+| 5 | Every mesh auto-centres with visible padding | ❌ **NOT TESTED.** ✅ Task 08 verified headlessly that a 64×32 canvas fills exactly 0.9 of the shorter axis. |
+| 6 | Non-square grids fit the limiting axis without clipping | ❌ **NOT TESTED.** Same fit maths as 5. |
+| 7 | A 45°-rotated model does not clip at the frame edges | ❌ **NOT TESTED.** ⚠️ The fit uses the mesh's bounding **sphere** for placement — rotation-invariant in principle, but nobody has watched a tumbling model at the frame edge. |
+| 8 | Every rail control changes the render as expected | ❌ **NOT TESTED** — all 13 controls. Unit tests prove each emits its callback; nothing proves the render responds. |
+| 9 | Mouse drag pans; does not draw; does not rotate | ❌ **NOT TESTED.** ✅ Not-drawing is structural: `pose` is in `isGestureTool` (`:356`) and its handler table entry is empty `pose: {}`. |
+| 10 | ⚠️ **Touch** drag pans; rail does not scroll; canvas does not draw | ❌ **NOT TESTED — HIGHEST RISK.** ✅ Ordering re-verified by line number this task: in `handleTouchStart` the pose branch is at **`:4657`**, the `isGestureTool` bail at **`:4683`**; in `handleTouchMove` `posePointerMove(...)` is at **`:4797`**, the bail at **`:4836`**. The branch really is ahead of the bail on both paths. Placement verified by reading, never by touching glass. |
+| 11 | Double-click stamps; ⚠️ **double-tap** stamps | ❌ **NOT TESTED.** ✅ Detected explicitly (400 ms / 2 cells / a ref), never via the unreliable `dblclick`. |
+| 12 | Stamped pixels land exactly where the model appeared | ❌ **NOT TESTED.** ✅ **The variant-edit algebra was re-derived independently this task and it checks out.** The painter puts texel `tx` at canvas column `round(pan.x) − viewMinX + tx` (`:2387-2396`); `placeHoverCells` gives `canvasX = gridX + (variantOffset.x − viewMinX)`; equating them yields `gridX = round(pan.x) − variantOffset.x + tx` — the `viewMin` terms cancel, and the code uses `variantOffset` (`:2954-2955`), which is correct. **The non-variant path is the simple one; the variant path is the one to check hardest.** |
+| 13 | ⚠️ One undo removes the whole stamp; one redo restores | ❌ **NOT TESTED.** ✅ Structural: one `commitCells`, pinned by task 05's tests. |
+| 14 | A selection masks the stamp | ❌ **NOT TESTED.** ✅ `writeOptions` passed; `setPixelCells` gates via `allows()`. |
+| 15 | ⚠️ Normals correct in the lighting studio's lit preview | ❌ **NOT TESTED.** ⚠️ **Depth fallback was NOT used** — see the depth caveat below; this is the check that confirms it. |
+| 16 | Wall-clock time of a full-canvas stamp on the largest object | ❌ **NOT MEASURED.** Needs a live GL context. Still owed. |
+| 17 | ⚠️ ~20 tool switches + 20 mesh changes → no WebGL context warnings | ❌ **NOT TESTED — HIGHEST RISK.** ✅ Re-verified structurally: creation is guarded by `if (poseEngineRef.current) return;` (`:2447`), so switches create **0** extra contexts; the engine is disposed only on unmount (`:2497`). Argued, not observed. |
+| 18 | ⚠️ StrictMode: no doubled renderer/overlay, no mount errors | ❌ **NOT TESTED — HIGH RISK.** ✅ Three guards confirmed in source: the ref check (`:2447`), a `cancelled` flag (`:2449/:2478`), and a create that loses the race disposing its own engine (`:2456-2459`). Argued, not observed. |
+| 19 | Switching projects clears the pose | ❌ **NOT TESTED.** ✅ Task 02's `loadGeneration` reaction, covered by tests. |
+| 20 | Resize resizes the overlay and re-fits; pan survives resize, resets on mesh change | ❌ **NOT TESTED.** ✅ `cellWidth`/`cellHeight` are deps of both effects; the fit effect neither reads nor writes the pan. |
+| 21 | All other tools behave as before | ❌ **NOT TESTED** interactively. ✅ 2737/2737 tests pass and no existing tool's code path was modified. |
+| 22 | ⚠️ The **reflection** tool still mirrors and draws its guides | ❌ **NOT TESTED.** ✅ Reflection's overlay still follows pose in DOM order (`:769` after `:754`), and its module is untouched by this plan. |
+| 23 | Lighting studio opens; normal/height tools work; preview renders | ❌ **NOT TESTED.** ✅ `LightingCanvasContainer` untouched (D16). |
+| 24 | Onion skin / frame trace / reference overlays render in the right order | ❌ **NOT TESTED.** ✅ DOM order re-verified this task (see 25). |
+| 25 | ⚠️ Ants, origin cross, reflection guides render **above** the artwork | ❌ **NOT TESTED.** ✅ Re-verified by line number: hover `:692` → **pose `:754`** → reflection `:769` → SVG chrome `:785`. Pose is above the layers and below all chrome, exactly as D10 requires. No numeric `z-index` was added (every `z-index` in the file is a token; the `will-change` greps are prohibition comments). |
+| 26 | Undo/redo across a mixed session; autosave still fires | ❌ **NOT TESTED.** |
+| 27 | Split canvas still works and does **not** get the pose overlay | ❌ **NOT TESTED.** ✅ Correct by construction — the overlay lives only in `CanvasSurface` (D16). |
+| 28 | Export still produces correct output | ❌ **NOT TESTED** interactively. ✅ Server typechecks; `server/src/export/` untouched; corpus digests unchanged. |
+| 29 | ⚠️ Drawing performance unchanged **while pose is not selected** | ❌ **NOT TESTED.** ✅ Re-verified this task: the main `render` callback contains **no** reference to anything pose (grepped its whole body — 0 hits), no engine is created until the tool is first selected, and the painter early-returns on `!poseActive`. |
+
+**Score: 0 of 29 QA items observed. 18 of 29 had their underlying structural claim
+independently re-verified from source or the built bundle by this task.** The distinction
+matters and should not be blurred.
+
+## 7. ⚠️ PRIORITY CHECKS FOR THE OWNER — the one consolidated list
+
+All 30 owed checks from W1–W4, plus the QA script, deduplicated and **ordered by risk**.
+This is the single list to work through at the keyboard; the per-wave lists above are
+superseded by it and kept only for provenance.
+
+**Nobody has performed any of these.** No agent in this plan had a browser, a GPU, or a
+device. The entire GL path, every gesture, and every visual claim is unobserved.
+
+### 🔴 Tier 1 — highest risk. If something is broken, it is most likely here.
+
+| # | Check | Why it is top of the list |
+| --- | --- | --- |
+| **1** | **Select Pose, then switch tools ~20× and change meshes ~20×. Watch the console for `Too many active WebGL contexts`.** | The leak check. Browsers cap contexts at ~16; exhausting them crashes the tab. Argued safe (one context per mount, never disposed on deselect) but **never run**. |
+| **2** | **In StrictMode (dev), select Pose: exactly one renderer, one overlay, no mount/unmount error in the console.** | Double-mount is the classic way the "one context" guarantee above silently becomes two. |
+| **3** | **On the iPad: drag on the canvas with a finger — the model pans, the rail does NOT scroll, and nothing draws.** | The owner's primary device. The gesture branch sits ahead of the `isGestureTool` bail on both touch paths, verified by line number — but verified by *reading*, not by touching glass. |
+| **4** | **On the iPad: double-tap the model — it stamps.** | Detected as 400 ms / 2 cells in a ref, deliberately not `dblclick`. Timing thresholds are exactly the sort of thing that feels wrong only in the hand. |
+| **5** | **Enter variant-edit mode, pan, then stamp. Do the stamped pixels land exactly under the model?** | A `variantOffset`-vs-`viewMin` bug was found and fixed pre-commit here. The algebra re-checks out (see QA 12), but this path is off by `variantOffset − viewMin` if the derivation is wrong, and it is **invisible everywhere except inside a variant**. |
+| **6** | **Stamp, then open the lighting studio: do the stamped pixels shade like the 3D model did?** Heights sensible, not uniform or inverted? | The depth-derived heights were reasoned from three's `depth.glsl.js` shader source and **never run on a GPU**. If heights come back uniform or inverted, the depth pass is the first place to look. |
+
+### 🟠 Tier 2 — the feature's whole point. Judge whether it is actually useful.
+
+| # | Check |
+| --- | --- |
+| 7 | The model renders with **hard, blocky, aliased edges** — no smooth silhouette, no gradient banding from a downscale. **This is the feature; if it looks smooth, it failed.** |
+| 8 | It stays crisp and grid-aligned at **every canvas zoom level**. |
+| 9 | On a small grid (32×32) it reads as genuinely chunky and useful as drawing reference. On a large grid (256×224) it still renders 1:1 without stretching. |
+| 10 | Every mesh auto-centres with visible padding on load; non-square grids fit the limiting axis without clipping. |
+| 11 | A **45°-rotated** model does not clip at the frame edges. |
+| 12 | Mouse: drag pans, does not rotate, does not draw. Double-click stamps. |
+| 13 | **One** Ctrl+Z removes the whole stamp; one Ctrl+Y restores it. |
+| 14 | With a selection active, the stamp is masked to it. |
+| 15 | **Time a full-canvas stamp on the largest object you have** and note the wall clock. Never measured. |
+
+### 🟡 Tier 3 — every rail control, one pass
+
+| # | Check |
+| --- | --- |
+| 16 | Selecting Pose swaps the rail to the Pose section; Pencil/Eraser swap it back. |
+| 17 | Cube / Sphere / Cylinder / **Mannequin** each load and appear pixelated. |
+| 18 | **Each of the six framing buttons frames the right region** — Full / Head / Torso / Arm / Leg / Hand. ⚠️ The mesh is a **T-pose**; task 09 re-tuned these regions against real vertex data after the originals framed 0 vertices. Numerically proven, never seen. |
+| 19 | **Drag both orbs with a mouse**, including moving the cursor off the orb mid-drag (the `setPointerCapture` contract). |
+| 20 | **Drag both orbs by TOUCH — the rail must not scroll.** The `touch-action: none` line; jsdom cannot exercise it at all. |
+| 21 | Each viewpoint button (Front/Back/Left/Right/Top/Bottom/3-4) snaps the model **and** visibly moves the rotation orb's handle. |
+| 22 | Each camera preset changes the projection; **Iso reads as true isometric**. |
+| 23 | Perspective ↔ Orthographic toggles visibly; zoom scales; FOV affects perspective only and is disabled in orthographic. |
+| 24 | Light colour and model colour both change the render; swatches update. Framing is disabled for primitives, enabled for the mannequin. |
+| 25 | Light-orb drag moves the shading in real time with no visible lag; rotation-orb drag tumbles smoothly. |
+| 26 | The **Clear pose** button unloads the mesh (it is the only way to — `onSelectMesh` cannot pass `null`). |
+| 27 | Rail layout at narrow width; the section scrolls if it overflows. *(Reviewable in Storybook — the stories mount at the rail's real 240 px.)* |
+
+### 🟢 Tier 4 — regressions: nothing else may have changed
+
+| # | Check |
+| --- | --- |
+| 28 | **No visual change anywhere in the pixel studio while Pose is NOT selected.** The overlay is always mounted; any difference means the canvas stack was disturbed. |
+| 29 | Pencil, eraser, both fills, line, rectangle, ellipse, move, selection, eyedropper, origin all behave as before. **Reflection still mirrors and its guides still draw.** Marching ants, origin cross and reflection guides still render **above** the artwork. |
+| 30 | Lighting studio opens and its tools work; onion skin / frame trace / reference overlays still layer correctly; undo/redo across a mixed session is normal and autosave fires; split canvas works (and correctly does **not** get the pose overlay); export output is correct; **drawing performance on a large sprite is unchanged while pose is not selected**; switching projects clears the pose; resizing the object resizes the overlay and re-fits, with pan surviving a resize and resetting on a mesh change. |
+
+## 8. Notes to surface, not to fix
+
+1. **D14: a camera preset overrides the store's `projection`.** Consequence: the rail's
+   Perspective/Orthographic toggle has no visible effect while a preset with a different
+   projection is selected. **The owner has decided (2026-09-03) to KEEP this as-is** and
+   revisit after using the tool on real work. It is a deliberate decision, not a defect —
+   recorded here only so it is not mistaken for a bug during the QA pass.
+2. **In variant-edit mode the overlay spans the expanded view while the stamp targets the
+   smaller variant grid.** Cells outside the variant are filtered by `setPixelCells`, so the
+   model stamps cropped: **the visible reference is larger than the stampable area.** Correct
+   per the plan, likely surprising in use.
+3. **Viewpoint buttons reach the container only via `pose.rotation`** — no container code
+   references the viewpoint table, so check 21 is really a task-07 wiring check.
+4. **The mannequin is a T-pose**, not arms-at-sides. Framing regions were re-tuned to match.
+
+## 9. Bugs and gaps found by this task
+
+**No new bug was found, and no application code was changed.** Everything this task
+re-derived independently — the D10 DOM order, the D12 touch-branch placement on both paths,
+the D5 pixelation levers, the D11 render isolation, the variant-edit stamp algebra, the
+StrictMode guards, and the three-in-the-main-bundle grep — **agreed with what the earlier
+waves reported.** The previous agents' claims held up under independent re-checking.
+
+Two honest gaps in this task's own coverage, neither a code defect:
+
+- **`bun run dev` was verified by launching the three `mprocs.yaml` commands individually**
+  rather than through the mprocs TUI, which cannot be read from a non-interactive shell. All
+  three bound their real ports and answered live HTTP. The mprocs *wrapper* itself is
+  therefore inferred, not observed; the three processes it supervises are observed.
+- **The root `format:check` glob does not cover most of this plan's new files**
+  (`client/src/ui/**`, `client/src/stores/**` are outside it). `format:check` passed, but it
+  passed on a narrower set than "everything this plan wrote". That is the repo's existing
+  configuration and was left alone — flagged rather than silently widened.
+
+## 10. Definition of done — honest status
+
+- [x] `bun run verify` exits **0**; real output pasted above.
+- [x] Every individual client gate run and recorded (boundaries, stylelint, storybook; tsc /
+      eslint / vitest via the root gate).
+- [x] Stylelint **exactly 2** errors; **no lockfile**; **no snapshot modified**; **no
+      `toPersistedUIState()` key added**.
+- [x] Bundle sizes recorded before **and** after; three confirmed in a separate lazy chunk
+      and **proven absent from the main bundle by grep**.
+- [x] `bun run dev` starts all three processes (see the caveat in §9).
+- [x] All 29 QA items have a recorded result — **all honestly "not tested" for the
+      observable behaviour**, 18 with their structural claim independently re-verified.
+- [x] Every wave's status, commits, deviations and BLOCKED items recorded (no blocked items).
+- [x] A single consolidated, risk-ordered "Priority checks for the owner" list (§7).
+- [ ] ⚠️ **The 30 manual checks themselves — CANNOT be closed by any agent in this plan.**
+      This is why task 10 is **PARTIAL**, not DONE. The plan is code-complete and
+      gate-green; it is **not** verified as working software until a human runs §7.
