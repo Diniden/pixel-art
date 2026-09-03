@@ -100,7 +100,33 @@
    hover marker each pointing at a different seam between pixels. All four
    were removed in the same change. If a border is ever reintroduced here, it
    is reintroduced there too, or the canvas silently goes out of register. */
+/* ⚠️ POSITIONED, AND THAT IS LOAD-BEARING — DO NOT MAKE THIS STATIC AGAIN.
+   This element was `position: static` with no z-index, while `.canvas__layers`
+   beside it is `position: absolute`. CSS paints positioned elements ABOVE
+   in-flow ones regardless of source order, so the layer canvases painted OVER
+   the pointer surface and buried everything `renderChrome` draws into it —
+   the in-flight shape preview most visibly, which read as rendering
+   underneath the artwork (owner report, 2026-09-01).
+
+   The stack comment in `CanvasSurface.tsx` says "DOM order IS z-order here".
+   That is true only AMONG THE POSITIONED SIBLINGS; this element was the one
+   exception and silently sat below them all. Giving it the same
+   `--z-canvas-overlay` its siblings carry puts it back in that single
+   comparison, where source order decides — above the layers, below the
+   overlays that follow it.
+
+   ⚠️ `relative`, NOT `absolute`. This canvas is the only IN-FLOW element in
+   `.canvas__frame`, and the frame has no size of its own — every sibling is
+   absolutely positioned at its origin, so it is THIS element's layout box that
+   gives the frame its width and height (and, through it, the pan/zoom
+   transform its extent). Taking it out of flow collapses the frame to 0×0 and
+   the whole editor with it. `relative` makes the element positioned — which is
+   all the z-index needs — while leaving its box in flow, and with no offsets
+   it does not move by a pixel, so the register with the layer canvases the
+   note below cares about is untouched. */
 .canvas__surface {
+  position: relative;
+  z-index: var(--z-canvas-overlay);
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
@@ -231,7 +257,14 @@
    No z-index. `.canvas__layers` has no `z-index` of its own on purpose — it
    participates in normal source order beneath the overlays, which all share
    `var(--z-canvas-overlay)`. Giving it a number would be redundant at best
-   and would invert the stack at worst. */
+   and would invert the stack at worst.
+
+   ⚠️ The claim above that this "stacks under `.canvas__surface`" was FALSE
+   until 2026-09-01 and is only true now. This element is positioned and that
+   one was not, so paint order put the layers on top and hid the chrome drawn
+   into the pointer surface. `.canvas__surface` now carries
+   `position: relative` + `--z-canvas-overlay` for exactly that reason; see its
+   rule. If either changes, this sentence goes back to being a lie. */
 .canvas__layers {
   position: absolute;
   top: 0;

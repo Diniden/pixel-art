@@ -258,13 +258,16 @@ export function CurrentPalette({
                       }}
                       onClick={() => handleSwatchClick(color)}
                       onDoubleClick={() => handleSwatchDoubleClick(color)}
+                      /* ⚠️ The hex, and the ADJUSTING state when it applies —
+                         no gesture instructions. The "tap to pick, double-tap
+                         to ..." text was removed 2026-09-01 at the owner's
+                         request, along with the toolbar's. Both gestures still
+                         work; they are simply no longer advertised. */
                       title={`#${color.r.toString(16).padStart(2, "0")}${color.g
                         .toString(16)
                         .padStart(2, "0")}${color.b
                         .toString(16)
-                        .padStart(2, "0")} — tap to pick, double-tap to ${
-                        isSelected ? "stop adjusting" : "recolor every use"
-                      }`}
+                        .padStart(2, "0")}${isSelected ? " — adjusting" : ""}`}
                     >
                       <div className="palette-manager__swatch-bg"></div>
                     </button>

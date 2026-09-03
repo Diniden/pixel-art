@@ -87,6 +87,15 @@ export interface CompactUIState {
   selectedLayerId: string | null;
   selectedTool: Tool;
   selectedColor: number; // hex number
+  /**
+   * The FILL colour, as a hex number (2026-09-01).
+   *
+   * ⚠️ Conditional, like `hiddenRails` above: absent until the user picks a
+   * fill colour distinct from the edge colour, so an untouched project's key
+   * set — and therefore its corpus digest — is unchanged. Readers fall back to
+   * `selectedColor` (`ToolUIStore.fillColorOrSelected`).
+   */
+  fillColor?: number;
   selectionMode?: SelectionMode;
   selectionBehavior?: SelectionBehavior;
   focusMode?: boolean;

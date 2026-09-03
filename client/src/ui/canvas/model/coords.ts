@@ -77,7 +77,7 @@ export interface CanvasViewGeometry {
   viewHeight: number;
 }
 
-export type SnapMode = "pixel" | "origin" | "corner";
+export type SnapMode = "pixel" | "pixel-unbounded" | "origin" | "corner";
 
 /**
  * Map a client (screen) coordinate to a grid coordinate.
@@ -107,7 +107,18 @@ export function screenToPixel(
     viewHeight,
   } = geom;
 
-  if (mode === "pixel") {
+  /* `"pixel-unbounded"` shares EVERY line of `"pixel"`'s mapping and differs
+     only in the last step: it returns the cell it computed, however far
+     outside the grid that lands, where `"pixel"` returns `null`.
+     
+     ⚠️ UNBOUNDED, NOT CLAMPED. A shape drag has to keep tracking the real
+     pointer once it leaves the canvas: the user is sizing a circle against the
+     cursor and does not need the whole shape to fit on the stage (owner,
+     2026-09-01). Clamping to the border instead PINS the shape's corner at the
+     edge, so dragging further out stops changing it — which reads as the drag
+     having died. Off-grid cells are dropped when the shape is committed, not
+     when it is aimed. */
+  if (mode === "pixel" || mode === "pixel-unbounded") {
     let x: number;
     let y: number;
 
@@ -124,6 +135,8 @@ export function screenToPixel(
       x = Math.floor(((clientX - rect.left) / rect.width) * gridWidth);
       y = Math.floor(((clientY - rect.top) / rect.height) * gridHeight);
     }
+
+    if (mode === "pixel-unbounded") return { x, y };
 
     if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return null;
     return { x, y };

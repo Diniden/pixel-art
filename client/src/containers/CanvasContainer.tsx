@@ -181,6 +181,8 @@ import {
   ACCENT_VARIANT,
   BLACK_12,
   PREVIEW_ALPHA,
+  PREVIEW_RING,
+  PREVIEW_RING_WIDTH,
   VARIANT_EDIT_OTHER_DIM,
   VARIANT_EDIT_REGULAR_DIM,
   WARN_ORANGE_40,
@@ -197,6 +199,7 @@ import type { ReferenceImageData } from "../types/referenceImage";
 import {
   getLinePixels,
   getRectanglePixels,
+  getShapeOutlineKeys,
   getEllipsePixels,
   floodFill,
   gaussianFloodFill,
@@ -480,7 +483,23 @@ export const CanvasContainer = observer(function CanvasContainer({
   const interaction = app.canvasInteraction;
 
   const currentTool = tool.selectedTool;
+  /**
+   * The EDGE colour — pencil, eraser-as-colour, line, and a shape's outline.
+   *
+   * ⚠️ ONE OF A PAIR since 2026-09-01. Anything that floods an AREA (the two
+   * fills, and a shape's interior) uses `fillColor` below instead. When
+   * picking which to use, ask what the pixels ARE, not which tool made them:
+   * a rectangle in "both" mode writes with BOTH.
+   */
   const currentColor = tool.selectedColor;
+  /**
+   * The FILL colour — bucket, gaussian fill, and a shape's interior.
+   *
+   * Falls back to the edge colour (`fillColorOrSelected`), so a project saved
+   * before the split — which has no `fillColor` key — keeps behaving as it
+   * did, with one colour driving both roles.
+   */
+  const fillColor = tool.fillColorOrSelected;
   const brushSize = tool.brushSize;
   const pencilBrushShape = tool.pencilBrushShape;
   const eraserShape = tool.eraserShape;
@@ -883,6 +902,38 @@ export const CanvasContainer = observer(function CanvasContainer({
         canvas.getBoundingClientRect(),
         coordGeomRef.current,
         "pixel",
+      );
+    },
+    [coordGeomRef],
+  );
+
+  /**
+   * Grid coords that keep going OUTSIDE the grid instead of returning `null`.
+   *
+   * ⚠️ For the shape tools' in-flight drag ONLY, and deliberately UNCLAMPED.
+   * A line/rectangle/ellipse drag must keep tracking the real pointer once it
+   * leaves the canvas — the user is sizing the shape against the cursor and
+   * does not need all of it to fit on the stage. Clamping to the border would
+   * pin the shape's far corner at the edge, so dragging further out would stop
+   * changing it and the drag would read as dead.
+   *
+   * Off-grid cells cost nothing: `setPixels` filters out-of-bounds cells at
+   * commit (see `PixelStore`), so the shape lands cropped to the canvas, which
+   * is exactly what aiming past the edge means.
+   *
+   * Painting tools keep using `getPixelCoords`, whose `null` is what stops a
+   * brush from smearing along the border while the pointer is outside.
+   */
+  const getUnboundedPixelCoords = useCallback(
+    (clientX: number, clientY: number): Point | null => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      return screenToPixel(
+        clientX,
+        clientY,
+        canvas.getBoundingClientRect(),
+        coordGeomRef.current,
+        "pixel-unbounded",
       );
     },
     [coordGeomRef],
@@ -1595,16 +1646,103 @@ export const CanvasContainer = observer(function CanvasContainer({
       ctx.translate(-viewMinX, -viewMinY);
     }
 
-    // The in-flight brush preview. Bounds-tested in GRID space, drawn in
-    // world space — the variant offset is applied after the test.
+    /* The in-flight preview. Bounds-tested in GRID space, drawn in world
+       space — the variant offset is applied after the test.
+
+       ⚠️ IT MUST READ OVER ARTWORK, NOT BLEND INTO IT. This used to paint the
+       whole preview at `PREVIEW_ALPHA` in the tool's own colour, which is
+       nearly invisible wherever the shape crosses pixels of a similar colour
+       — the operation looked like it was drawing UNDERNEATH the existing art
+       (owner report, 2026-09-01). The surface canvas is already above the
+       layer stack, so this was never a stacking-order problem; it was alpha.
+
+       Two changes fix it: the affected cells are painted OPAQUE in the colour
+       they will actually commit to, and the shape's silhouette is ringed in a
+       contrasting outline so its extent is legible even against artwork the
+       same colour as the preview.
+
+       The per-pixel colour also makes the preview honest about the edge/fill
+       split — a `"both"` rectangle previews in both colours, exactly as it
+       will land. */
     if (previewPixels.length > 0) {
       const pox = isEditingVariantResolved ? variantOffset.x : 0;
       const poy = isEditingVariantResolved ? variantOffset.y : 0;
-      ctx.fillStyle = `rgba(${currentColor.r}, ${currentColor.g}, ${currentColor.b}, ${(currentColor.a / 255) * PREVIEW_ALPHA})`;
-      for (const { x, y } of previewPixels) {
-        if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
-          ctx.fillRect(x + pox, y + poy, 1, 1);
+
+      // Which cells take the edge colour; `null` outside a "both" shape, where
+      // one colour covers the whole preview. Mirrors `finishDrawingStroke`.
+      const previewOutlineKeys =
+        isShapeTool(currentTool) &&
+        shapeMode === "both" &&
+        drawStartPoint &&
+        lastShapeAimRef.current
+          ? getShapeOutlineKeys(
+              currentTool as "line" | "rectangle" | "ellipse",
+              drawStartPoint as Point,
+              lastShapeAimRef.current,
+              borderRadius,
+            )
+          : null;
+
+      const soleColor = isShapeTool(currentTool)
+        ? shapeMode === "fill"
+          ? fillColor
+          : currentColor
+        : currentColor;
+
+      const visible = previewPixels.filter(
+        ({ x, y }) => x >= 0 && x < gridWidth && y >= 0 && y < gridHeight,
+      );
+
+      /* ⚠️ ONLY THE SHAPE TOOLS GO OPAQUE. The brush preview keeps
+         `PREVIEW_ALPHA`: it tracks the cursor one dab at a time and is drawn
+         where the user is already looking, so its translucency reads as
+         "not committed yet" rather than as an occlusion problem. A shape spans
+         the artwork and must be legible over all of it. */
+      const previewAlpha = isShapeTool(currentTool) ? 1 : PREVIEW_ALPHA;
+
+      for (const { x, y } of visible) {
+        const c = previewOutlineKeys
+          ? previewOutlineKeys.has(`${x},${y}`)
+            ? currentColor
+            : fillColor
+          : soleColor;
+        // `c.a` still honours a deliberately translucent colour.
+        ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${(c.a / 255) * previewAlpha})`;
+        ctx.fillRect(x + pox, y + poy, 1, 1);
+      }
+
+      /* The silhouette ring — SHAPES ONLY, for the same reason the opacity is.
+         Drawn as the outer edges of the affected cells (a cell contributes an
+         edge wherever its neighbour is NOT part of the preview), so it traces
+         the operation's true extent, holes included, rather than a bounding
+         box. Hairline width in CELL space, because the whole surface is
+         magnified by the CSS transform. */
+      if (isShapeTool(currentTool)) {
+        const inPreview = new Set(visible.map(({ x, y }) => `${x},${y}`));
+        ctx.strokeStyle = PREVIEW_RING;
+        ctx.lineWidth = PREVIEW_RING_WIDTH;
+        ctx.beginPath();
+        for (const { x, y } of visible) {
+          const gx = x + pox;
+          const gy = y + poy;
+          if (!inPreview.has(`${x},${y - 1}`)) {
+            ctx.moveTo(gx, gy);
+            ctx.lineTo(gx + 1, gy);
+          }
+          if (!inPreview.has(`${x},${y + 1}`)) {
+            ctx.moveTo(gx, gy + 1);
+            ctx.lineTo(gx + 1, gy + 1);
+          }
+          if (!inPreview.has(`${x - 1},${y}`)) {
+            ctx.moveTo(gx, gy);
+            ctx.lineTo(gx, gy + 1);
+          }
+          if (!inPreview.has(`${x + 1},${y}`)) {
+            ctx.moveTo(gx + 1, gy);
+            ctx.lineTo(gx + 1, gy + 1);
+          }
         }
+        ctx.stroke();
       }
     }
 
@@ -1711,6 +1849,17 @@ export const CanvasContainer = observer(function CanvasContainer({
     cellHeight,
     previewPixels,
     currentColor,
+    // Read by the shape preview: it paints each cell the colour it will
+    // COMMIT to, so the edge/fill pair and the shape settings that decide
+    // which cell is which all have to invalidate this painter. Omitting them
+    // renders the preview with whatever they were on the last unrelated
+    // change — visibly wrong the moment the mode or a colour is switched
+    // mid-drag.
+    fillColor,
+    currentTool,
+    shapeMode,
+    borderRadius,
+    drawStartPoint,
     gridWidth,
     gridHeight,
     objWidth,
@@ -1828,7 +1977,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       phase: "start" | "move" | "end",
       locate: () => Point | null,
     ) => {
-      switch (markerAction({ device, phase, isDrawing })) {
+      switch (markerAction({ device, phase, isDrawing, tool: currentTool })) {
         case "track":
           setHoverPixel(locate());
           break;
@@ -1839,7 +1988,7 @@ export const CanvasContainer = observer(function CanvasContainer({
           break;
       }
     },
-    [isDrawing, setHoverPixel],
+    [isDrawing, setHoverPixel, currentTool],
   );
 
   /**
@@ -2738,13 +2887,14 @@ export const CanvasContainer = observer(function CanvasContainer({
       floodFillAt: (p) => {
         const grid = editableGrid();
         if (!grid) return [];
+        // The bucket FLOODS AN AREA, so it is a fill — not an edge.
         return floodFill(
           grid,
           p.x,
           p.y,
           gridWidth,
           gridHeight,
-          currentColor,
+          fillColor,
         ) as never;
       },
       gaussianFillAt: (p) => {
@@ -2759,7 +2909,7 @@ export const CanvasContainer = observer(function CanvasContainer({
           gridHeight,
           gaussian.smoothing,
           gaussian.radius,
-          currentColor,
+          fillColor,
         ) as never;
       },
       squarePixelsAt: (p) =>
@@ -3056,6 +3206,44 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    /* ⚠️ A SHAPE DRAG KEEPS TRACKING INSTEAD OF BAILING, and it must come
+       BEFORE the `!coords` early return. Dragging a line/rectangle/ellipse
+       past the edge keeps sizing it against the real pointer — the shape does
+       not have to fit on the stage — and the part that lands off-grid is
+       dropped by `setPixels` at commit. The old shared bail cleared the
+       preview instead, so the shape vanished the moment the pointer left the
+       canvas. Only tools that PAINT continuously need the `null`, which is
+       what stops a brush smearing along the border. */
+    if (isDrawing && drawStartPoint && isShapeTool(currentTool)) {
+      const aim = getUnboundedPixelCoords(e.clientX, e.clientY);
+      if (aim) {
+        /* ⚠️ THIS BRANCH OWNS THE SHAPE PREVIEW — on-canvas as well as off.
+           `getUnboundedPixelCoords` answers everywhere, so this returns before
+           `pointer.continueStroke` for every sample of a shape drag, and
+           `toolHandlers`' line/rectangle/ellipse `onMove` entries no longer
+           run on this path. They are kept because the TOUCH path and the tool
+           table's exhaustiveness check both still reference them, and because
+           a handler that exists but is bypassed is less dangerous than a hole
+           in the table.
+
+           The preview cannot live in `toolHandlers`: that receives coords from
+           `getCoords`, which is the `null`-returning `getPixelCoords`, so it
+           cannot express an off-grid aim — and it has nowhere to record
+           `lastShapeAimRef`, which the commit needs to tell outline from fill.
+           Same generators, same `shapeMode`/`borderRadius`. */
+        const from = drawStartPoint as Point;
+        lastShapeAimRef.current = aim as Point;
+        actions.setPreviewPixels(
+          currentTool === "line"
+            ? getLinePixels(from, aim)
+            : currentTool === "rectangle"
+              ? getRectanglePixels(from, aim, shapeMode, borderRadius)
+              : getEllipsePixels(from, aim, shapeMode),
+        );
+        return;
+      }
+    }
+
     const coords = getPixelCoords(e.clientX, e.clientY);
     if (!coords) {
       // Leaving the drawable area mid-drag must not "bridge" a long gap when
@@ -3167,6 +3355,31 @@ export const CanvasContainer = observer(function CanvasContainer({
    * The move tool's release: commit the previewed offset as ONE shift.
    * Shared by the mouse and touch paths so both clip exactly once.
    */
+  /**
+   * Where the current shape drag is AIMED — the point the preview was last
+   * generated against, in grid space and possibly outside the grid.
+   *
+   * ⚠️ A ref, not state: it is written on every pointer move and read only at
+   * commit, so making it reactive would re-render the canvas on each sample
+   * for a value nothing displays. `finishDrawingStroke` needs it to ask the
+   * generator which pixels are the OUTLINE, and `previewPixels` alone cannot
+   * answer that — it is a flat list with no record of which role each pixel
+   * played.
+   */
+  const lastShapeAimRef = useRef<Point | null>(null);
+
+  /**
+   * The three drag-to-draw shape tools.
+   *
+   * ⚠️ These END ONLY ON A GENUINE RELEASE. Leaving the canvas, leaving the
+   * window, or an iPad touch that slides off the screen edge must NOT commit
+   * the shape — the drag is bound to the POINTER, not to the element's
+   * geometry (owner report, 2026-09-01). See `handleMouseLeave` and
+   * `handleTouchEnd`.
+   */
+  const isShapeTool = (tool: string) =>
+    tool === "line" || tool === "rectangle" || tool === "ellipse";
+
   const finishMoveDrag = () => {
     const { dx, dy } = moveDragOffset;
     if (dx !== 0 || dy !== 0) actions.moveLayerPixels(dx, dy);
@@ -3187,17 +3400,38 @@ export const CanvasContainer = observer(function CanvasContainer({
    * lift (2026-08-29). One release routine means one set of tools that work.
    */
   const finishDrawingStroke = () => {
-    if (
-      previewPixels.length > 0 &&
-      (currentTool === "line" ||
-        currentTool === "rectangle" ||
-        currentTool === "ellipse")
-    ) {
+    if (previewPixels.length > 0 && isShapeTool(currentTool)) {
+      /* ⚠️ TWO COLOURS, decided PER PIXEL — see `currentColor`/`fillColor`.
+         In `"both"` mode a shape's edge and its interior are different roles
+         and take different colours, so the commit cannot use one colour for
+         the whole preview. In the single modes the question does not arise:
+         `"outline"` is all edge and `"fill"` is all interior, so each takes
+         the slot that shares its name.
+
+         The outline set is asked of the SAME generator that drew the preview
+         (`getShapeOutlineKeys`) rather than re-derived, so the two can never
+         disagree and leave a seam. */
+      const outlineKeys =
+        shapeMode === "both" && drawStartPoint && lastShapeAimRef.current
+          ? getShapeOutlineKeys(
+              currentTool as "line" | "rectangle" | "ellipse",
+              drawStartPoint as Point,
+              lastShapeAimRef.current,
+              borderRadius,
+            )
+          : null;
+
       actions.setPixels(
         previewPixels.map((p) => ({
           x: p.x,
           y: p.y,
-          color: currentColor as Color,
+          color: (outlineKeys
+            ? outlineKeys.has(`${p.x},${p.y}`)
+              ? currentColor
+              : fillColor
+            : shapeMode === "fill"
+              ? fillColor
+              : currentColor) as Color,
         })),
       );
     }
@@ -3206,23 +3440,35 @@ export const CanvasContainer = observer(function CanvasContainer({
     actions.endDrawing();
   };
 
+  /**
+   * The pointer LEFT the canvas — which is not the end of anything.
+   *
+   * ⚠️ THIS IS NO LONGER `handleMouseUp`. It used to be bound directly to
+   * `onMouseLeave`, so dragging a line/rectangle/ellipse off the canvas
+   * COMMITTED it mid-drag (owner report, 2026-09-01). A gesture ends when the
+   * button is released, never because the pointer crossed a border.
+   *
+   * The marker still clears — the cursor really has gone — but every gesture
+   * stays open. Leaving during a shape drag keeps previewing against the
+   * real pointer position (see `handleMouseMove`); the release that ends it is
+   * caught by the window-level listener below, wherever it happens.
+   */
+  const handleMouseLeave = () => {
+    applyMarker("mouse", "end", () => null);
+  };
+
   const handleMouseUp = () => {
     lastStrokePixelRef.current = null;
 
-    // ⚠️ This handler is bound to BOTH `onMouseUp` and `onMouseLeave` (see the
-    // `CanvasSurface` call site). Clearing the marker here is therefore what
-    // removes it when the pointer leaves the canvas — without it, the marker
-    // would stay frozen at the last cell touched, reading as a stuck cursor.
-    // On a genuine mouse-up the next move re-establishes it immediately.
+    // Clearing the marker here covers the ordinary case; `handleMouseLeave`
+    // covers the pointer leaving without a release.
     applyMarker("mouse", "end", () => null);
 
-    // ⚠️ This handler is `onMouseLeave` as well, so leaving the canvas mid-drag
-    // COMMITS the guide at its last position rather than abandoning it. That is
-    // the deliberate choice: the corner lattice is clamped, so the last update
-    // already sits on the grid border, which is where a user dragging off the
-    // edge means to put the line. `commitDraft` is a no-op with no draft and
-    // rejects a degenerate (never-moved) one on its own, so a plain click
-    // leaves nothing behind — and it always clears the draft either way.
+    // A real release, so the guide commits at its last position — the corner
+    // lattice is clamped, so that already sits on the grid border, which is
+    // where a user dragging off the edge means to put the line. `commitDraft`
+    // is a no-op with no draft and rejects a degenerate (never-moved) one on
+    // its own, so a plain click leaves nothing behind.
     if (currentTool === "reflection") {
       app.reflection.commitDraft();
       return;
@@ -3277,6 +3523,78 @@ export const CanvasContainer = observer(function CanvasContainer({
     if (!isDrawing || !drawStartPoint) return;
     finishDrawingStroke();
   };
+
+  /**
+   * The release that ends a stroke, wherever in the document it happens.
+   *
+   * ⚠️ THE COUNTERPART TO NOT ENDING ON `onMouseLeave`. Now that leaving the
+   * canvas keeps the gesture open, the mouse-up that finally ends it may land
+   * anywhere — over a rail, over the page chrome, or outside the window
+   * entirely. Without this the stroke would stay open and the next click would
+   * extend it, which is the failure the old `onMouseLeave` binding was there
+   * to prevent. This fixes it the right way round: end on the RELEASE, not on
+   * the border crossing.
+   *
+   * Bound to `window` so a release outside the viewport still arrives, and
+   * kept in a ref so the listener is attached once rather than re-bound on
+   * every render — `handleMouseUp` closes over a dozen pieces of state and is
+   * a new function each time.
+   */
+  const mouseUpRef = useRef(handleMouseUp);
+  mouseUpRef.current = handleMouseUp;
+
+  /**
+   * Keep SIZING a shape while the cursor is off the canvas.
+   *
+   * ⚠️ THE OTHER HALF OF THE OFF-CANVAS DRAG. `onMouseMove` is bound to the
+   * `<canvas>` element, so it stops firing the instant the pointer leaves it —
+   * which meant the unbounded coordinate path never got a chance to run and
+   * the shape froze at the border, even though the gesture was still open
+   * (owner report, 2026-09-01). Ending on a window `mouseup` fixed the RELEASE;
+   * this fixes the MOVE.
+   *
+   * ⚠️ Deliberately narrow: it forwards only while a shape drag is actually in
+   * flight. Panning, painting, selection and the reflection guide all keep
+   * their element-bound behaviour, where stopping at the edge is either
+   * correct or long-established — a brush must not smear along the border, and
+   * widening this would change all of them at once.
+   */
+  const mouseMoveRef = useRef(handleMouseMove);
+  mouseMoveRef.current = handleMouseMove;
+
+  const shapeDragOpen =
+    isDrawing && drawStartPoint !== null && isShapeTool(currentTool);
+  const shapeDragOpenRef = useRef(shapeDragOpen);
+  shapeDragOpenRef.current = shapeDragOpen;
+
+  useEffect(() => {
+    const onWindowMouseMove = (e: MouseEvent) => {
+      if (!shapeDragOpenRef.current) return;
+      // The canvas's own handler already ran if the pointer is over it; React
+      // synthetic events do not fire from a native window listener, so there
+      // is no double-dispatch to guard against here.
+      if (e.target === canvasRef.current) return;
+      mouseMoveRef.current(
+        e as unknown as React.MouseEvent<HTMLCanvasElement>,
+      );
+    };
+    window.addEventListener("mousemove", onWindowMouseMove);
+    return () => window.removeEventListener("mousemove", onWindowMouseMove);
+  }, []);
+
+  useEffect(() => {
+    const onWindowMouseUp = () => mouseUpRef.current();
+    /* `blur` covers the cases no mouse event reports: the window losing focus
+       mid-drag (cmd-tab, a system dialog stealing the pointer). Ending the
+       stroke there is right — the alternative is a gesture that silently
+       survives into a different application and resumes on return. */
+    window.addEventListener("mouseup", onWindowMouseUp);
+    window.addEventListener("blur", onWindowMouseUp);
+    return () => {
+      window.removeEventListener("mouseup", onWindowMouseUp);
+      window.removeEventListener("blur", onWindowMouseUp);
+    };
+  }, []);
 
   /* ── touch ─────────────────────────────────────────────────────────────── */
   /**
@@ -3512,6 +3830,25 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    // The shape tools keep tracking rather than bail — see `handleMouseMove`.
+    // On the iPad this is the difference between a rectangle that keeps
+    // following the Pencil past the bezel and one that vanishes.
+    if (isDrawing && drawStartPoint && isShapeTool(currentTool)) {
+      const aim = getUnboundedPixelCoords(touch.clientX, touch.clientY);
+      if (aim) {
+        const from = drawStartPoint as Point;
+        lastShapeAimRef.current = aim as Point;
+        actions.setPreviewPixels(
+          currentTool === "line"
+            ? getLinePixels(from, aim)
+            : currentTool === "rectangle"
+              ? getRectanglePixels(from, aim, shapeMode, borderRadius)
+              : getEllipsePixels(from, aim, shapeMode),
+        );
+        return;
+      }
+    }
+
     const coords = getPixelCoords(touch.clientX, touch.clientY);
     if (!coords) {
       if (isDrawing) lastStrokePixelRef.current = null;
@@ -3535,7 +3872,24 @@ export const CanvasContainer = observer(function CanvasContainer({
     pointer.continueStroke(touch.clientX, touch.clientY, "touch");
   };
 
-  const handleTouchEnd = () => {
+  /**
+   * A touch ended.
+   *
+   * ⚠️ `touchend` IS THE GENUINE RELEASE on iOS — including the case where the
+   * Pencil or finger slides off the screen edge, which reports `touchend` and
+   * nothing else. There is no "left the screen" event to distinguish, so a
+   * shape committed on a slide-off is committed on a real lift as far as the
+   * DOM is concerned. What must NOT commit is a touch the SYSTEM took away
+   * (`touchcancel` — a system-edge swipe, an incoming call, a palm rejected
+   * after the fact); that abandons the shape instead. See `handleTouchCancel`.
+   *
+   * ⚠️ ONLY when the LAST contact lifts. `e.touches` is every touch still on
+   * the page, so lifting one finger of a two-finger gesture — or a resting
+   * palm coming off mid-stroke — used to end a shape that the user was still
+   * drawing with the Pencil.
+   */
+  const handleTouchEnd = (e?: React.TouchEvent) => {
+    if (e && canvasTouches(e).length > 0) return;
     lastStrokePixelRef.current = null;
     // The finger is gone, so the marker goes with it: unlike a mouse there is
     // no resting pointer position left to mark, and a marker still sitting on
@@ -3568,6 +3922,27 @@ export const CanvasContainer = observer(function CanvasContainer({
       finishDrawingStroke();
       return;
     }
+    actions.endStroke();
+    actions.endDrawing();
+  };
+
+  /**
+   * The system took the touch away — ABANDON the shape, do not commit it.
+   *
+   * A `touchcancel` is not a release: the user never lifted, so committing
+   * whatever the preview happened to show would place a shape they did not
+   * finish drawing. The preview is dropped and the gesture closed.
+   *
+   * ⚠️ Without this binding the opposite bug appears: now that leaving the
+   * canvas no longer ends a gesture, a cancelled touch would leave `isDrawing`
+   * set forever and the next tap would extend the abandoned shape.
+   */
+  const handleTouchCancel = () => {
+    lastStrokePixelRef.current = null;
+    applyMarker("touch", "end", () => null);
+    actions.clearPreviewPixels();
+    setIsPanning(false);
+    setLastPanPoint(null);
     actions.endStroke();
     actions.endDrawing();
   };
@@ -3929,11 +4304,16 @@ export const CanvasContainer = observer(function CanvasContainer({
       reflectionGuides={reflectionGuides}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      /* ⚠️ NO `onMouseUp` HERE — the window-level listener owns the release,
+         so a mouse-up inside the canvas and one outside take the exact same
+         path. Binding both would run `handleMouseUp` twice for every release
+         inside the canvas (the canvas handler, then the same event bubbling
+         to `window`). `onMouseLeave` no longer ends anything. */
+      onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
       viewControls={
         <CanvasViewControls
           onResetView={handleResetView}

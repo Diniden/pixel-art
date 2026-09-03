@@ -70,6 +70,78 @@ describe("markerAction", () => {
     });
   });
 
+  describe("⭐ the ERASER keeps its marker through a mouse stroke", () => {
+    /* Owner report, 2026-09-01: "the eraser's highlight region disappears
+       while I erase, which is dangerous." The mouse rule — clear during a
+       stroke because "the cursor and the stroke are feedback enough" — is an
+       argument about a tool that ADDS colour. An erased cell shows nothing, so
+       the marker is the only thing describing the footprint being destroyed.
+       The module header already made this argument for touch; it was simply
+       never applied to the mouse. */
+    it("tracks while drawing, unlike every other tool", () => {
+      expect(
+        markerAction({
+          device: "mouse",
+          phase: "move",
+          isDrawing: true,
+          tool: "eraser",
+        }),
+      ).toBe("track");
+    });
+
+    it("still differs from the pencil, which clears", () => {
+      const eraser = markerAction({
+        device: "mouse",
+        phase: "move",
+        isDrawing: true,
+        tool: "eraser",
+      });
+      const pencil = markerAction({
+        device: "mouse",
+        phase: "move",
+        isDrawing: true,
+        tool: "pixel",
+      });
+      expect(eraser).toBe("track");
+      expect(pencil).toBe("clear");
+    });
+
+    it("an ENDED gesture still clears — no marker outlives a stroke", () => {
+      // The `phase === "end"` rule outranks the tool: a released eraser must
+      // not leave a marker sitting on the last cell.
+      expect(
+        markerAction({
+          device: "mouse",
+          phase: "end",
+          isDrawing: true,
+          tool: "eraser",
+        }),
+      ).toBe("clear");
+    });
+
+    it("is unchanged when NOT drawing — it tracked already", () => {
+      expect(
+        markerAction({
+          device: "mouse",
+          phase: "move",
+          isDrawing: false,
+          tool: "eraser",
+        }),
+      ).toBe("track");
+    });
+
+    it("touch is unaffected — it already tracked for every tool", () => {
+      expect(
+        markerAction({
+          device: "touch",
+          phase: "move",
+          isDrawing: true,
+          tool: "eraser",
+        }),
+      ).toBe("track");
+    });
+  });
+
   describe("bridged pencil hover — yields to the touch handlers", () => {
     it("ignores samples while a stroke is in flight, so there is ONE writer", () => {
       // The airborne tip and the contact point disagree when the pencil is

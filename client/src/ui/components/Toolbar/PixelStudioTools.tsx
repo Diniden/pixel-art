@@ -22,7 +22,6 @@ import {
   Pencil,
   Eraser,
   Pipette,
-  Square,
   PaintBucket,
   CloudFog,
   Minus,
@@ -92,7 +91,6 @@ const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
   { id: "pixel", icon: Pencil, label: "Pencil", hotkey: "1" },
   { id: "eraser", icon: Eraser, label: "Eraser", hotkey: "2" },
   { id: "eyedropper", icon: Pipette, label: "Eyedropper", hotkey: "3" },
-  { id: "fill-square", icon: Square, label: "Square Brush", hotkey: "4" },
   { id: "flood-fill", icon: PaintBucket, label: "Fill", hotkey: "5" },
   { id: "gaussian-fill", icon: CloudFog, label: "Gaussian Fill", hotkey: "G" },
   { id: "line", icon: Minus, label: "Line", hotkey: "6" },
@@ -249,13 +247,20 @@ function ToolButton({
      owner reported the tools had no tooltips there at all. `Tooltip` shows on
      hover, on keyboard focus, and on a touch long-press.
 
-     The hint no longer mentions long-press: that gesture shows this bubble
-     now, and the secondary action is reached by double-tap or right-click. */
+     ⚠️ NO GESTURE INSTRUCTIONS. Removed 2026-09-01 at the owner's request:
+     the tooltip names the tool and its hotkey, nothing more. It used to spell
+     out "double-tap or right-click for the second slot" on every tool, which
+     is noise on a bubble the user sees on every hover.
+
+     The gestures themselves are UNCHANGED — double-tap, right-click and
+     long-press all still assign the second slot (see `secondaryAction` and the
+     handlers below). Only the advertising is gone. Do not reintroduce it
+     here. */
   const hint = secondaryHint
     ? `${tool.label} (${tool.hotkey}) — ${secondaryHint}`
     : isAlternate
       ? `${tool.label} (${tool.hotkey}) — second slot`
-      : `${tool.label} (${tool.hotkey}) — double-tap or right-click for the second slot`;
+      : `${tool.label} (${tool.hotkey})`;
 
   // The menu portals itself out, so there is no wrapper and no change to the
   // toolbar's flex layout for the one tool that has one.
@@ -329,11 +334,13 @@ export function PixelStudioTools({
                     ? () => setIsEyedropperMenuOpen((open) => !open)
                     : undefined
                 }
+                /* ⚠️ States the MODE, never the gesture that changes it —
+                   see `ToolButton`'s hint note. */
                 secondaryHint={
                   isEyedropper
                     ? eyedropperMode === "stay"
-                      ? "stays active after sampling; long-press or double-click to change"
-                      : "returns to the previous tool after sampling; long-press or double-click to change"
+                      ? "stays active after sampling"
+                      : "returns to the previous tool after sampling"
                     : undefined
                 }
               >
@@ -369,9 +376,7 @@ export function PixelStudioTools({
         <div className="toolbar__group">
           {/* The human LABEL, never the raw tool id — `flood-fill` and
               `pixel` are internal names and mean nothing to the user. */}
-          <Tooltip
-            content={`Swap tools — ${alternateToolLabel} (Apple Pencil: double-tap)`}
-          >
+          <Tooltip content={`Swap tools — ${alternateToolLabel}`}>
             <button
               className="toolbar__tool-btn toolbar__tool-btn--swap"
               onClick={onSwapTools}

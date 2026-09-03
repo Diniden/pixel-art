@@ -45,8 +45,31 @@ export class ToolUIStore {
   /* ── persisted (14 of the 43) ─────────────────────────────────────────── */
 
   selectedTool: Tool = DEFAULT_UI_STATE.selectedTool;
-  /** `observableRef`: a colour is always replaced, never mutated in place. */
+  /**
+   * The EDGE colour. `observableRef`: a colour is always replaced, never
+   * mutated in place.
+   *
+   * ⚠️ Named `selectedColor` on the wire and everywhere else in the app — it
+   * is the original, unchanged single colour. Since 2026-09-01 it is one of a
+   * PAIR: the tools that draw an edge (pencil, eraser-as-colour, line, and a
+   * shape's outline) read this, and the tools that flood an area (the two
+   * fills, and a shape's interior) read {@link fillColor}. Renaming it would
+   * rewrite a key in every saved project for no user-visible gain.
+   */
   selectedColor: Color = DEFAULT_UI_STATE.selectedColor;
+
+  /**
+   * The FILL colour — bucket, gaussian fill, and a shape's interior.
+   *
+   * ⚠️ Tri-state, exactly like `borderRadius` and `eyedropperMode`:
+   * `undefined` means "absent from the project file", which is every project
+   * saved before this field existed. Seeding a default here would ADD a key to
+   * all 151 corpus snapshots and change their digests. Readers use
+   * {@link fillColorOrSelected}, which falls back to `selectedColor` so a
+   * project that predates the split behaves exactly as it did — one colour for
+   * both roles until the user picks a second.
+   */
+  fillColor: Color | undefined = undefined;
   brushSize: number = DEFAULT_UI_STATE.brushSize;
 
   /**
@@ -102,6 +125,18 @@ export class ToolUIStore {
   /* ── NOT persisted (session-lifetime only) ────────────────────────────── */
 
   /**
+   * Which colour slot the picker is currently editing — `"edge"` writes
+   * `selectedColor`, `"fill"` writes `fillColor`.
+   *
+   * ⚠️ NOT PERSISTED, deliberately, and so absent from `toPersistedUIState()`.
+   * It is a view state of one panel, not a property of the artwork: a project
+   * reopened tomorrow should present the picker on its default tab rather than
+   * on whichever one happened to be open when it was last saved. Persisting it
+   * would also add a key to all 151 corpus snapshots for no benefit.
+   */
+  colorTarget: "edge" | "fill" = "edge";
+
+  /**
    * The eyedropper's revert target. An `EditorState` field today, NOT a
    * `uiState` one — so it is deliberately absent from
    * `toPersistedUIState()`.
@@ -119,6 +154,7 @@ export class ToolUIStore {
       selectedColor: observableRef,
       brushSize: observable,
       bitDepth: observable,
+      fillColor: observableRef,
       shapeMode: observable,
       borderRadius: observable,
       eraserShape: observable,
@@ -130,6 +166,7 @@ export class ToolUIStore {
       eyedropperMode: observable,
       originColor: observableRef,
       gaussianFill: observableRef,
+      colorTarget: observable,
       previousTool: observableRef,
       colorAdjustment: observableRef,
 
@@ -139,6 +176,8 @@ export class ToolUIStore {
       setAlternateTool: action,
       revertToPreviousTool: action,
       setColor: action,
+      setFillColor: action,
+      setColorTarget: action,
       setBrushSize: action,
       setBitDepth: action,
       setShapeMode: action,
@@ -263,6 +302,27 @@ export class ToolUIStore {
 
   setColor(color: Color): void {
     this.selectedColor = color;
+  }
+
+  setFillColor(color: Color): void {
+    this.fillColor = color;
+  }
+
+  setColorTarget(target: "edge" | "fill"): void {
+    this.colorTarget = target;
+  }
+
+  /**
+   * The fill colour, falling back to the edge colour.
+   *
+   * ⚠️ THE FALLBACK IS THE COMPATIBILITY STORY. Every project saved before the
+   * edge/fill split has no `fillColor` key, and must keep behaving as it did:
+   * one colour driving both roles. Returning `selectedColor` here means a
+   * bucket fill in such a project paints exactly what it painted before, and
+   * the key is written only once the user actually picks a fill colour.
+   */
+  get fillColorOrSelected(): Color {
+    return this.fillColor ?? this.selectedColor;
   }
 
   setBrushSize(size: number): void {
@@ -394,6 +454,7 @@ export class ToolUIStore {
   hydrate(ui: {
     selectedTool?: Tool;
     selectedColor?: Color;
+    fillColor?: Color;
     brushSize?: number;
     bitDepth?: BitDepth;
     shapeMode?: ShapeMode;
@@ -408,8 +469,20 @@ export class ToolUIStore {
     originColor?: Color;
     gaussianFill?: GaussianFill;
   }): void {
-    if (ui.selectedTool !== undefined) this.selectedTool = ui.selectedTool;
+    if (ui.selectedTool !== undefined) {
+      /* ⚠️ `fill-square` MIGRATES TO `pixel` ON THE WAY IN.
+         "Square Brush" was removed from the toolbar on 2026-09-01 as a
+         duplicate of the pencil's own square shape setting. The id stays in
+         the `Tool` union and its handler stays wired, because the owner's
+         saved projects persist `selectedTool` and a project last saved on that
+         tool must still open. Restoring it verbatim would select a tool with
+         no button — the toolbar would show nothing active while strokes still
+         painted. Mapping it to `pixel` lands on the tool that replaced it. */
+      this.selectedTool =
+        ui.selectedTool === "fill-square" ? "pixel" : ui.selectedTool;
+    }
     if (ui.selectedColor !== undefined) this.selectedColor = ui.selectedColor;
+    if (ui.fillColor !== undefined) this.fillColor = ui.fillColor;
     if (ui.brushSize !== undefined) this.brushSize = ui.brushSize;
     if (ui.bitDepth !== undefined) this.bitDepth = ui.bitDepth;
     if (ui.shapeMode !== undefined) this.shapeMode = ui.shapeMode;

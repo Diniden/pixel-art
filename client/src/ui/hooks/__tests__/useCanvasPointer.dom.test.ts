@@ -212,4 +212,36 @@ describe("useCanvasPointer — gesture gating", () => {
     expect(linePreview).toHaveBeenCalledWith({ x: 1, y: 1 }, { x: 9, y: 9 });
     expect(setPreviewPixels).toHaveBeenCalled();
   });
+
+  /* ⚠️ REGRESSION (2026-09-01): line/rectangle/ellipse did nothing at all.
+     `beginStroke` used to bail on `if (!handler?.onDown) return false` BEFORE
+     calling `startDrawing`. The shape tools define only `onMove` — they preview
+     on drag and commit on release — so the gesture never opened for them, and
+     `continueStroke`'s `if (!isDrawing)` then rejected every move.
+
+     The test above cannot catch that: it injects `isDrawing: true` and a
+     `drawStartPoint` by hand, which is precisely the state `beginStroke` was
+     failing to produce. These drive the DOWN path instead, which is the half
+     that broke. */
+  for (const tool of ["line", "rectangle", "ellipse"]) {
+    it(`${tool} OPENS the gesture on pointer-down despite having no onDown`, () => {
+      const h = mount({ currentTool: tool, isDrawing: false });
+      let handled = false;
+      act(() => {
+        handled = h.result.current.beginStroke(4, 5, "mouse");
+      });
+      expect(handled).toBe(true);
+      expect(h.startDrawing).toHaveBeenCalledWith({ x: 4, y: 5 });
+    });
+  }
+
+  it("an unhandled tool still does NOT open a gesture", () => {
+    const h = mount({ currentTool: "not-a-real-tool", isDrawing: false });
+    let handled = true;
+    act(() => {
+      handled = h.result.current.beginStroke(1, 1, "mouse");
+    });
+    expect(handled).toBe(false);
+    expect(h.startDrawing).not.toHaveBeenCalled();
+  });
 });

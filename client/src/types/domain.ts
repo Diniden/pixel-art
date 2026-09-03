@@ -128,6 +128,15 @@ export interface UIState {
   selectedLayerId: string | null;
   selectedTool: Tool;
   selectedColor: Color;
+  /**
+   * The FILL colour — bucket, gaussian fill, and a shape's interior.
+   *
+   * ⚠️ OPTIONAL, and must stay optional: every project saved before the
+   * edge/fill split (2026-09-01) has no such key. Readers fall back to
+   * `selectedColor` via `ToolUIStore.fillColorOrSelected`, so those projects
+   * keep their single-colour behaviour and their corpus digests.
+   */
+  fillColor?: Color;
   // Selection tool options
   selectionMode?: SelectionMode;
   selectionBehavior?: SelectionBehavior;

@@ -350,9 +350,19 @@ describe("arrows — under each selectionBehavior", () => {
 });
 
 describe("tool hotkeys", () => {
-  it("maps all 13 tools", () => {
+  it("maps all 12 tools", () => {
+    // 12, not 13: `fill-square` ("Square Brush", key "4") was removed on
+    // 2026-09-01 as a duplicate of the pencil's square shape setting. The
+    // other digits were deliberately NOT renumbered, so "4" is simply absent.
     const tools = new Set(Object.values(TOOL_HOTKEYS));
-    expect(tools.size).toBe(13);
+    expect(tools.size).toBe(12);
+  });
+
+  it('"4" is unbound — the removed Square Brush left a deliberate gap', () => {
+    expect(TOOL_HOTKEYS["4"]).toBeUndefined();
+    const o = makeOptions();
+    handleCanvasKeyDown(keyOn(canvasEl, "4"), o);
+    expect(o.setTool).not.toHaveBeenCalled();
   });
 
   for (const [key, tool] of Object.entries(TOOL_HOTKEYS)) {

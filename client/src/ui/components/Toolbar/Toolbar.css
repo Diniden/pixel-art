@@ -316,7 +316,6 @@
    would lose its skin to the (0,2,0) :hover rules above (task 18/20 precedent). */
 .toolbar__tool-btn.toolbar__tool-btn--active {
   background: var(--accent-primary);
-  box-shadow: var(--glow-accent-8-40);
 }
 
 .toolbar__tool-btn--active .toolbar__tool-hotkey {
@@ -333,9 +332,18 @@
    flagged, clearly not the active tool.
 
    The corner tick is a ::after rather than an extra element so the tool
-   button's markup stays the same for every tool. */
+   button's markup stays the same for every tool.
+
+   ⚠️ The ring is an `outline`, NOT a `box-shadow`. Every box-shadow and glow
+   was removed from the tools on 2026-09-01 at the owner's request. This ring
+   is the ONLY marker distinguishing the alternate slot, so it could not simply
+   be deleted with the glows — it was converted instead. `outline` with a
+   negative `outline-offset` draws the same 2px inset ring, and like the shadow
+   it is outside the box model, so the button's 28x28 footprint is unchanged.
+   Do NOT reach for `border`: that WOULD resize the button. */
 .toolbar__tool-btn.toolbar__tool-btn--alternate {
-  box-shadow: var(--ring-alternate-inset);
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: -2px;
 }
 
 .toolbar__tool-btn--alternate::after {
@@ -362,7 +370,6 @@
 
 .toolbar__tool-btn.toolbar__tool-btn--light-grid {
   background: var(--tool-lightgrid);
-  box-shadow: var(--glow-lightgrid);
 }
 
 .toolbar__tool-btn--light-grid .toolbar__tool-icon {
@@ -387,7 +394,6 @@
 .toolbar__studio-mode-btn.toolbar__studio-mode-btn--active {
   background: var(--accent-primary);
   color: var(--white);
-  box-shadow: var(--glow-accent-8-30);
 }
 
 /* Lighting mode indicator */
@@ -397,7 +403,6 @@
     var(--status-warn) 0%,
     var(--status-warn-deep) 100%
   );
-  box-shadow: var(--glow-warn-12);
 }
 
 @media (max-width: 768px) {

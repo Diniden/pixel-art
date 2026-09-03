@@ -97,12 +97,36 @@ export const ColorPickerContainer = observer(function ColorPickerContainer() {
 
   return (
     <ColorPicker
-      selectedColor={ui.tool.selectedColor}
+      /* ⚠️ The picker edits ONE slot at a time, and the two are written by
+         DIFFERENT paths. `selectedColor` must go through the Zustand bridge
+         (`setColorAndAddToHistory` / `adjustColor`) or the next unrelated
+         Zustand change re-hydrates it away — see the note above. `fillColor`
+         is MobX-only, has no legacy mirror, and is written directly. */
+      target={ui.tool.colorTarget}
+      onTargetChange={(target) => ui.tool.setColorTarget(target)}
+      edgeColor={ui.tool.selectedColor}
+      fillColor={ui.tool.fillColorOrSelected}
+      selectedColor={
+        ui.tool.colorTarget === "fill"
+          ? ui.tool.fillColorOrSelected
+          : ui.tool.selectedColor
+      }
       colorHistory={session.colorHistory}
-      colorAdjustment={Boolean(colorAdjustment)}
-      onSetColor={(color) => app.setColorAndAddToHistory(color)}
+      colorAdjustment={ui.tool.colorTarget === "edge" && Boolean(colorAdjustment)}
+      onSetColor={(color) =>
+        ui.tool.colorTarget === "fill"
+          ? ui.tool.setFillColor(color)
+          : app.setColorAndAddToHistory(color)
+      }
       onAdjustColor={(color, trackHistory) =>
-        app.adjustColor(color, trackHistory)
+        /* Colour ADJUSTMENT recolours existing pixels and is an edge-slot
+           operation only: there is no "adjust every pixel of the fill colour"
+           concept, and running it while the fill tab is open would silently
+           recolour artwork the user was not looking at. On the fill tab the
+           picker just sets the slot. */
+        ui.tool.colorTarget === "fill"
+          ? ui.tool.setFillColor(color)
+          : app.adjustColor(color, trackHistory)
       }
       onSaveStateToHistory={(label) => app.saveStateToHistory(label)}
       onOtherHand={

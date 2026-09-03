@@ -20,6 +20,14 @@
  * A MOUSE leaves the cells visible and puts an OS cursor on them, so a marker
  * during a drag only doubles what the stroke already shows → cleared.
  *
+ * ⚠️ EXCEPT FOR THE ERASER, on every device. "The stroke already shows it" is
+ * an argument about a tool that ADDS colour; an eraser removes it, so there is
+ * nothing to see and the marker is the only thing describing the footprint
+ * about to be destroyed. Losing it mid-stroke is dangerous, not merely
+ * uninformative — the user is deleting artwork blind (owner report,
+ * 2026-09-01). The same sentence in the paragraph below already made this
+ * argument for touch; it applies verbatim to the mouse.
+ *
  * A FINGER or PENCIL TIP covers the cells it is painting, so during a touch
  * stroke the marker is the only indication of where the edit is landing. It
  * matters most for the eraser, which paints nothing to look at: without the
@@ -39,6 +47,11 @@ export interface MarkerDecisionInput {
   phase: MarkerPhase;
   /** True when a stroke is in flight. */
   isDrawing: boolean;
+  /**
+   * The active tool. Only the eraser changes the outcome — see the header — so
+   * this is optional and every other tool may leave it unset.
+   */
+  tool?: string;
 }
 
 /**
@@ -54,6 +67,7 @@ export function markerAction({
   device,
   phase,
   isDrawing,
+  tool,
 }: MarkerDecisionInput): MarkerAction {
   // A gesture that has ended never leaves a marker behind, on any device:
   // there is no resting pointer position to mark, and a leftover marker reads
@@ -61,6 +75,10 @@ export function markerAction({
   if (phase === "end") return "clear";
 
   if (device === "mouse") {
+    // ⚠️ The eraser TRACKS through the stroke; every other tool clears. An
+    // erased cell shows nothing, so the marker is the only feedback for what
+    // is being destroyed — see the header.
+    if (isDrawing && tool === "eraser") return "track";
     // Cleared during a stroke — the cursor and the stroke are feedback enough.
     return isDrawing ? "clear" : "track";
   }

@@ -130,5 +130,30 @@ export const NORMAL_SPHERE_GRID = "rgba(113, 128, 150, 0.4)";
 export const VARIANT_EDIT_REGULAR_DIM = 0.5;
 /** Dimming applied to a NON-edited variant layer while a variant is being edited. */
 export const VARIANT_EDIT_OTHER_DIM = 0.7;
-/** Opacity of the in-flight preview (brush) pixels. */
+/**
+ * Opacity of the in-flight preview (brush) pixels.
+ *
+ * ⚠️ Applies to the BRUSH preview only. The SHAPE tools paint their preview
+ * opaque and ring its silhouette instead — a translucent shape blends into
+ * artwork of a similar colour and reads as being drawn underneath it
+ * (2026-09-01). See `renderChrome`.
+ */
 export const PREVIEW_ALPHA = 0.6;
+
+/**
+ * The ring around an in-flight shape preview, tracing exactly the cells the
+ * operation will affect.
+ *
+ * White at half alpha over a dark editor, which is legible against artwork of
+ * ANY colour — including white, where the ring's own translucency lets the
+ * pixel show through rather than disappearing into it. It marks EXTENT, not
+ * colour, so it is deliberately not derived from the tool's colour.
+ */
+export const PREVIEW_RING = "rgba(255, 255, 255, 0.5)";
+
+/**
+ * Ring width in CELL units — the whole surface is magnified by the CSS
+ * transform, so this is a hairline at any zoom rather than a fixed pixel
+ * count that would swell into a slab when zoomed in.
+ */
+export const PREVIEW_RING_WIDTH = 0.08;

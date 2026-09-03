@@ -429,6 +429,15 @@ export class UIStore {
     // `borderRadius` is conditional: only 26 of the corpus's 151 snapshots
     // carry the key, because `compactToProject` has no `?? default` for it.
     /* 32 */ assign(persisted, "borderRadius", tool.borderRadius);
+    /* 32a */ // `fillColor` is conditional for the same reason: the key does
+    // not exist in any project predating the edge/fill split, and emitting it
+    // unconditionally would add a key to all 151 corpus snapshots. It appears
+    // only once the user picks a fill colour.
+    assign(
+      persisted,
+      "fillColor",
+      tool.fillColor === undefined ? undefined : rgbaToHex(tool.fillColor),
+    );
     // `gaussianFill` is conditional: projects predating the bucket options
     // have no such key, and the legacy spread does not invent one.
     /* 33 */ assign(persisted, "gaussianFill", tool.gaussianFill);

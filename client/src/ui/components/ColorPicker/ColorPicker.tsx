@@ -29,9 +29,22 @@ import { useHslMirror } from "../../hooks/useHslMirror";
 import { OtherHandButton } from "../OtherHand/OtherHandButton";
 import "./ColorPicker.css";
 
+/** Which of the two global colour slots the picker is editing. */
+export type ColorTarget = "edge" | "fill";
+
 interface ColorPickerProps {
-  /** `uiState.selectedColor` — the colour the picker reflects. */
+  /** The colour the picker reflects — whichever slot `target` names. */
   selectedColor: Color;
+  /**
+   * The slot being edited (2026-09-01). `"edge"` is `selectedColor` — pencil,
+   * line, and a shape's outline; `"fill"` is `fillColor` — the bucket, the
+   * gaussian fill, and a shape's interior.
+   */
+  target: ColorTarget;
+  onTargetChange: (target: ColorTarget) => void;
+  /** The OTHER slot's colour, for the swatch on the inactive tab. */
+  edgeColor: Color;
+  fillColor: Color;
   /** Recently used colours, newest first. */
   colorHistory: Color[];
   /** Truthy while a colour-adjustment session is active. */
@@ -46,6 +59,10 @@ interface ColorPickerProps {
 
 export function ColorPicker({
   selectedColor,
+  target,
+  onTargetChange,
+  edgeColor,
+  fillColor,
   colorHistory,
   colorAdjustment,
   onSetColor,
@@ -396,6 +413,39 @@ export function ColorPicker({
         ) : null}
       </div>
       <div className="panel__body">
+        {/* ── Which slot is being edited ───────────────────────────────────
+            Two GLOBAL colours, not a shape-tool option: the pencil and the
+            line draw with the edge colour, the bucket and the gaussian fill
+            use the fill colour, and a rectangle/ellipse in "both" mode uses
+            each for the part it names. The swatch on each tab is that slot's
+            current colour, so the pair is readable without switching. */}
+        <div className="color-picker__targets" role="tablist">
+          {(
+            [
+              ["edge", "Edge", edgeColor],
+              ["fill", "Fill", fillColor],
+            ] as const
+          ).map(([id, label, swatch]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={target === id}
+              className={`color-picker__target${
+                target === id ? " color-picker__target--active" : ""
+              }`}
+              onClick={() => onTargetChange(id)}
+            >
+              <span
+                className="color-picker__target-swatch"
+                style={{
+                  backgroundColor: `rgba(${swatch.r}, ${swatch.g}, ${swatch.b}, ${swatch.a / 255})`,
+                }}
+              />
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* Color History */}
         {colorHistory.length > 0 && (
           <div className="color-picker__history">

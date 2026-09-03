@@ -119,10 +119,19 @@ export function useCanvasPointer({
       if (!coords) return false;
 
       const handler = getToolHandler(currentTool);
-      if (!handler?.onDown) return false;
+      if (!handler) return false;
 
+      /* ⚠️ THE GESTURE OPENS FOR ANY HANDLED TOOL, NOT ONLY ONES WITH `onDown`.
+         The three shape tools (line/rectangle/ellipse) deliberately define ONLY
+         `onMove` — they preview on drag and commit on release. Guarding this
+         path on `onDown` therefore returned before `startDrawing`, so
+         `isDrawing` stayed false and `drawStartPoint` stayed null; then
+         `continueStroke`'s own `if (!isDrawing) return false` bailed on every
+         move. The shapes previewed nothing and committed nothing (2026-09-01).
+         `startDrawing` is what makes a drag a drag, so it must not be gated on
+         a callback that the drag-only tools have no reason to define. */
       startDrawing(coords);
-      handler.onDown(makeEvent(coords, device), getToolContext());
+      handler.onDown?.(makeEvent(coords, device), getToolContext());
       return true;
     },
     [currentTool, getCoords, getToolContext, makeEvent, startDrawing],

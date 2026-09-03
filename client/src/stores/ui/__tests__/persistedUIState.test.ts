@@ -134,6 +134,7 @@ function fullyPopulatedProject(): Project {
   Object.assign(project.uiState, {
     selectedTool: "ellipse",
     selectedColor: { r: 12, g: 34, b: 56, a: 255 },
+    fillColor: { r: 200, g: 100, b: 50, a: 255 },
     brushSize: 7,
     bitDepth: 8,
     shapeMode: "outline",
@@ -256,7 +257,14 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     // encode, because a real corpus snapshot carries `focusMode: true` and
     // would otherwise gain the key. See `needsHiddenRailsKey`.
     // 51 after `pencilOnly` joined the wire format on 2026-08-31.
-    expect(declared).toHaveLength(51);
+    // +1 (2026-09-01): `fillColor`, the second global colour slot — fills and
+    // a shape's interior use it, edges use `selectedColor`. Conditional like
+    // the others, and on the STRICTEST condition: both codecs emit it through
+    // a spread rather than as `key: undefined`, because "present but
+    // undefined" still counts as a key to `Object.keys()` and to the corpus
+    // digest. Measured — the plain `: undefined` form changed all 11 digests;
+    // the spread leaves every one of the owner's snapshots byte-identical.
+    expect(declared).toHaveLength(52);
 
     // A FULLY-POPULATED project, because 11 of the 44 keys are
     // conditionally present by design: the legacy `...project.uiState`

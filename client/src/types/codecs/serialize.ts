@@ -1,4 +1,4 @@
-import type { Layer, Project, VariantGroup } from "../domain";
+import type { Layer, Project, UIState, VariantGroup } from "../domain";
 import type {
   CompactLayer,
   CompactProject,
@@ -54,6 +54,16 @@ function variantGroupsToCompact(
 }
 
 // Convert runtime Project to compact format for saving
+/**
+ * `uiState` without `fillColor`, so the encoded value can be re-added without
+ * the domain `Color` widening the field's type. Purely a typing device — the
+ * key is put back (or deliberately left out) by the caller.
+ */
+function omitFillColor(ui: UIState): Omit<UIState, "fillColor"> {
+  const { fillColor: _fillColor, ...rest } = ui;
+  return rest;
+}
+
 export function projectToCompact(project: Project): CompactProject {
   return {
     version: project.version ?? "1.1.0", // Default to current version
@@ -76,7 +86,11 @@ export function projectToCompact(project: Project): CompactProject {
       colors: palette.colors.map((color) => rgbaToHex(color)),
     })),
     uiState: {
-      ...project.uiState,
+      /* `fillColor` is dropped from the spread and re-added below in its
+         encoded form. Without the omission the domain `Color` would flow
+         through untranslated and collide with the hex `number` the wire
+         format declares. */
+      ...omitFillColor(project.uiState),
       selectedColor: rgbaToHex(project.uiState.selectedColor),
       selectedNormal: normalToPacked(project.uiState.selectedNormal),
       lightDirection: normalToPacked(project.uiState.lightDirection),
@@ -86,6 +100,16 @@ export function projectToCompact(project: Project): CompactProject {
       originColor: project.uiState.originColor
         ? rgbaToHex(project.uiState.originColor)
         : undefined,
+      /* ⚠️ A CONDITIONAL SPREAD, not `: undefined`. Writing the key with an
+         undefined value would still ADD THE KEY — `Object.keys()` and the
+         corpus digest both count "present but undefined" as present, which is
+         the exact distinction the persistence builder's notes call out (and
+         which `originColor` above can ignore only because it is already in the
+         frozen key set). Measured: the plain form changed every corpus digest.
+         This way a project with no fill colour is byte-identical to before. */
+      ...(project.uiState.fillColor
+        ? { fillColor: rgbaToHex(project.uiState.fillColor) }
+        : {}),
     },
     // Project-level variants
     variants: variantGroupsToCompact(project.variants),

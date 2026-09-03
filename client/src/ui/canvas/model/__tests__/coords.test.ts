@@ -145,6 +145,81 @@ describe('screenToPixel — "pixel" mode, editing a variant', () => {
   });
 });
 
+describe('screenToPixel — "pixel-unbounded" mode', () => {
+  /* The mode exists so a shape drag survives leaving the canvas: a
+     line/rectangle/ellipse must keep tracking the real pointer rather than
+     vanishing, which is what `"pixel"`'s `null` caused (owner, 2026-09-01). */
+  it('agrees with "pixel" everywhere INSIDE the grid', () => {
+    for (const [cx, cy] of [
+      [0, 0],
+      [50, 90],
+      [40, 40],
+      [159, 159],
+    ]) {
+      expect(screenToPixel(cx, cy, rect, geom(), "pixel-unbounded")).toEqual(
+        screenToPixel(cx, cy, rect, geom(), "pixel"),
+      );
+    }
+  });
+
+  /* ⚠️ UNBOUNDED, NOT CLAMPED — the distinction is the whole feature. Clamping
+     would pin the shape's far corner to the border, so dragging further out
+     would stop changing it; the drag has to keep sizing against the cursor.
+     Off-grid cells are dropped by `setPixels` at commit. */
+  it("keeps counting cells PAST the grid, in both directions", () => {
+    // One cell is 40px, so -60 is cell -2 and 260 is cell 6 on a 4-wide grid.
+    expect(screenToPixel(-60, -60, rect, geom(), "pixel-unbounded")).toEqual({
+      x: -2,
+      y: -2,
+    });
+    expect(screenToPixel(260, 260, rect, geom(), "pixel-unbounded")).toEqual({
+      x: 6,
+      y: 6,
+    });
+    // One axis out, one in.
+    expect(screenToPixel(-20, 90, rect, geom(), "pixel-unbounded")).toEqual({
+      x: -1,
+      y: 2,
+    });
+  });
+
+  it("does NOT clamp to the border — further out keeps changing the cell", () => {
+    const a = screenToPixel(200, 80, rect, geom(), "pixel-unbounded");
+    const b = screenToPixel(400, 80, rect, geom(), "pixel-unbounded");
+    expect(a).not.toEqual(b);
+    // A clamping implementation would return { x: 3 } for both.
+    expect(a!.x).toBeGreaterThan(3);
+    expect(b!.x).toBeGreaterThan(a!.x);
+  });
+
+  it("the same points are all null in \"pixel\" mode", () => {
+    for (const [cx, cy] of [
+      [-60, -60],
+      [260, 260],
+      [-20, 90],
+    ]) {
+      expect(screenToPixel(cx, cy, rect, geom(), "pixel")).toBeNull();
+    }
+  });
+
+  it("still returns null for a DEGENERATE rect", () => {
+    const dead = { left: 0, top: 0, width: 0, height: 0 };
+    expect(screenToPixel(10, 10, dead, geom(), "pixel-unbounded")).toBeNull();
+  });
+
+  it("goes unbounded in VARIANT space too", () => {
+    const g = geom({
+      editingVariant: true,
+      variantOffset: { x: 2, y: 2 },
+    });
+    // Variant-local, so the offset shifts the result but nothing clamps it.
+    expect(screenToPixel(-60, -60, rect, g, "pixel-unbounded")).toEqual({
+      x: -4,
+      y: -4,
+    });
+  });
+});
+
 describe('screenToPixel — "origin" mode', () => {
   it("SNAPS to the nearest half cell", () => {
     expect(screenToPixel(0, 0, rect, geom(), "origin")).toEqual({ x: 0, y: 0 });

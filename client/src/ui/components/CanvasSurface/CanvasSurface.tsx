@@ -374,11 +374,23 @@ export interface CanvasSurfaceProps {
   /* ── pointer events (the hooks' handlers, passed straight through) ─────── */
   onMouseDown: (e: MouseEvent<HTMLCanvasElement>) => void;
   onMouseMove: (e: MouseEvent<HTMLCanvasElement>) => void;
-  onMouseUp: () => void;
+  /**
+   * Optional: the pixel canvas ends strokes from a WINDOW-level `mouseup`
+   * instead, so a release outside the canvas ends the gesture the same way a
+   * release inside it does. Binding it here too would double-fire for every
+   * release over the canvas. The lighting canvas still passes one.
+   */
+  onMouseUp?: () => void;
   onMouseLeave: () => void;
   onTouchStart: (e: TouchEvent<HTMLCanvasElement>) => void;
   onTouchMove: (e: TouchEvent<HTMLCanvasElement>) => void;
   onTouchEnd: (e: TouchEvent<HTMLCanvasElement>) => void;
+  /**
+   * The SYSTEM revoked the touch (edge swipe, incoming call, late palm
+   * rejection). Distinct from `onTouchEnd`: a cancel is not a release, so a
+   * shape in flight is abandoned rather than committed.
+   */
+  onTouchCancel?: (e: TouchEvent<HTMLCanvasElement>) => void;
   /**
    * Floating controls over the viewport (the bottom-left column).
    *
@@ -507,6 +519,7 @@ export function CanvasSurface({
   onTouchStart,
   onTouchMove,
   onTouchEnd,
+  onTouchCancel,
   viewControls,
 }: CanvasSurfaceProps) {
   const layerRefs = useLayerRefs(layerIds, registerLayerCanvas);
@@ -632,6 +645,7 @@ export function CanvasSurface({
               onTouchStart={onTouchStart}
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}
+              onTouchCancel={onTouchCancel}
             />
 
             {/* The hover marker's FILL. Its outline is in the SVG below. */}
