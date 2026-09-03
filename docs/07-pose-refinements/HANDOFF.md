@@ -27,7 +27,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 04 | Outline post-pass | W2 | DONE | `b5ece14` | `applyOutline()`, Chebyshev, mutates in place, 48 tests |
 | 05 | Mannequin part meshes; delete framing | W3 | DONE | `fdb4574` | Exact partition: 9,636 tris across 5 parts, none empty. ⚠️ Leaves `tsc` red for task 06 |
 | 06 | Container integration | W4 | DONE | `00e5a7e`, `5e0055e`, `0ebccce` | ⭐ Found the REAL zoom cap (~1.12, not 10). Outline NOT stamped (E7) |
-| 07 | Full gate, QA, handoff | W5 | IN PROGRESS | | Likely ends `PARTIAL` |
+| 07 | Full gate, QA, handoff | W5 | **PARTIAL** | (this commit) | `bun run verify` **exit 0**; bundle +5.33 kB explained; **63 owed checks → 41** in §7.7. PARTIAL because no agent can perform them |
 
 ## Known state at planning time (2026-09-03)
 
@@ -603,6 +603,11 @@ shared worktree. Use `git commit --only <explicit paths>`.**
 
 ## Manual check results
 
+> ⚠️ **ALL THE PER-TASK LISTS IN THIS SECTION ARE SUPERSEDED by §7.7**, the one
+> consolidated, de-duplicated, risk-ordered checklist built by task 07. They are **kept for
+> provenance only** — do not work through them separately, and do not count them twice.
+> **§7.7 is the list to take to the keyboard.**
+
 **W1 — task 01: none required, none skipped.** Pure store logic with no UI surface yet;
 the spec says so explicitly and the coordinator confirms it. Everything in its definition
 of done is covered by automated tests.
@@ -687,9 +692,15 @@ the wiring does not yet exist.
 These compound with the **30 still-unperformed checks from `docs/06-pose-tool/`**, including
 the GPU depth-derived heights that share the readback path this plan adds the outline to.
 **Running total owed by this plan: 33** (5 + 8 + 5 + 15), plus plan 06's 30.
-Task 07 merges both lists into one risk-ordered checklist.
+
+✅ **DONE by task 07: both lists are merged in §7.7** — 63 raw checks de-duplicated to **41
+distinct**, ordered into four risk tiers. **Everything above this line is superseded by it.**
 
 ## Notes for the next session
+
+> ⚠️ **HISTORICAL — written at the end of W1.** All five waves have since landed. **The
+> current forward-looking note is §7.13, at the very bottom of this file.** Kept for
+> provenance.
 
 **W1 landed clean; W2 is next (tasks 03 + 04, two agents in parallel).**
 
@@ -704,3 +715,511 @@ Facts W2 executors need, established by W1:
   Panel callback name is `onRequestFit` per MASTER §8.
 - **`POSE_ZOOM_MAX` no longer exists** — anything importing it will not compile.
 - **Agents must NOT use `git stash`** in this repo (see the W1 process incident above).
+
+---
+
+# W5 — Task 07: full gate, QA sweep, handoff (2026-09-03)
+
+**Status: `PARTIAL`** — the tree is gate-green and every automatable claim is verified, but
+**not one visual, gesture or GPU behaviour has been observed by anybody**, across either
+plan. That is the honest outcome, and §7.6 below is the reason this task exists.
+
+Run against the settled tree at `35627cd`, worktree **clean**, branch `feat/07-pose-refinements`.
+No application code was changed by this task. `format:check` passed, so **nothing was
+reformatted** either.
+
+## 7.1 The real root gate — `bun run verify` → **exit 0**
+
+Actual terminal output, elided only where a 172,000-line log repeats itself:
+
+```
+$ bun run verify
+$ bun run typecheck && bun run lint && bun run format:check && bun run test && bun run build
+
+$ bun run --cwd client typecheck && bun run --cwd server typecheck
+$ tsc --noEmit          (client — clean, no output)
+$ tsc --noEmit          (server — clean, no output)
+
+$ bun run --cwd client lint && bun run --cwd server lint
+$ eslint .
+✖ 65 problems (0 errors, 65 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+$ eslint .              (server — clean, no output)
+
+$ bunx prettier --check "*.{json,md,yaml,yml}" "client/*.{ts,js,json}" "server/*.{ts,js,json}" "client/src/types/**/*.{ts,tsx}"
+Checking formatting...
+All matched files use Prettier code style!
+
+$ bun run --cwd client test
+$ vitest run
+ RUN  v3.2.7 /Users/diniden/Desktop/self/pixel-art/client
+ Test Files  146 passed (146)
+      Tests  2866 passed (2866)
+   Duration  69.09s (transform 3.05s, setup 15.57s, collect 11.91s, tests 123.91s,
+                     environment 25.70s, prepare 7.63s)
+
+$ cd client && bun run build
+$ tsc --noEmit && vite build
+vite v7.3.6 building client environment for production...
+✓ 2041 modules transformed.
+dist/index.html                         0.76 kB │ gzip:   0.42 kB
+dist/assets/index-NAWcuvlU.css        217.99 kB │ gzip:  27.63 kB
+dist/assets/GLTFLoader--NCVAYW2.js     45.56 kB │ gzip:  13.70 kB
+dist/assets/three.module-PDSP0dbZ.js  734.33 kB │ gzip: 189.46 kB
+dist/assets/index-xjY-C2eP.js         793.89 kB │ gzip: 231.22 kB
+✓ built in 2.03s
+
+=== VERIFY EXIT CODE: 0 ===
+```
+
+**eslint is at exactly the MASTER §4 baseline** — 0 errors, 65 warnings. The test count is
+**2866**, up **+129** from the planning baseline's 2737, across **+1** file.
+
+**`format:check` PASSED with no changes needed — nothing was reformatted and no formatting
+commit was made.** ⚠️ Note honestly that the root prettier glob covers only
+`*.{json,md,yaml,yml}`, `client/*`, `server/*` and `client/src/types/**`. **Every file this
+plan touched is outside that glob.** `format:check` therefore passed on a narrower set than
+"everything this plan wrote". That is the repo's pre-existing configuration; per the task
+spec it was **flagged, not widened**.
+
+## 7.2 The individual client gates
+
+```
+$ cd client && bunx stylelint "src/**/*.css"
+✖ 70 problems (2 errors, 68 warnings)
+  2 errors potentially fixable with the "--fix" option.
+
+  # EXACTLY 2 ERRORS — identified by file:line, not just counted:
+  #   src/ui/components/OtherHand/OtherHand.css:338:3  scale-unlimited/declaration-strict-value
+  #   src/ui/components/OtherHand/OtherHand.css:359:3  scale-unlimited/declaration-strict-value
+  # Both are `border-radius: 22px` (read from source to confirm), both PRE-EXISTING.
+  # Task 03 added ~90 lines of CSS and introduced ZERO new errors.
+
+$ cd client && bun run lint:boundaries
+$ bun scripts/check-boundaries.mjs
+check-boundaries: OK — all 5 boundary rules hold.
+
+$ cd client && bunx storybook build
+SB_EXIT=0
+storybook-static/assets/iframe-C6933QGi.js   1,541.95 kB │ gzip: 442.97 kB
+✓ built in 5.76s
+info => Output directory: client/storybook-static      (gitignored; tree stayed clean)
+```
+
+`tsc`, `eslint` and `vitest` are not repeated — the root gate above runs the identical
+commands and its real output is pasted in full.
+
+## 7.3 Data-safety invariants — all hold
+
+```
+$ git diff b682b61..HEAD -- client/src/stores/ui/UIStore.ts   → EMPTY (0 bytes)
+$ git status --short -- '*__snapshots__*' '*.snap'            → EMPTY (0 bytes)
+$ git diff b682b61..HEAD --stat -- server/                    → EMPTY (0 bytes)
+$ find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules → EMPTY
+$ git status --short                                          → EMPTY (tree clean)
+$ grep -in 'pose' client/src/stores/ui/UIStore.ts             → only `proposed`/`dispose`
+                                                                 substrings; NO pose key
+```
+
+**The `UIStore.ts` line is the strongest single proof in this plan.** The file has **no diff
+at all** across the entire refinement, so `toPersistedUIState()` provably gained no key, the
+wire format is unchanged, and the **151 corpus digests could not have shifted.** It is a
+structural guarantee, not a passing assertion.
+
+**Corpus and migration snapshots pass UNCHANGED**, from the real vitest run above — all 8
+backup files digest-frozen *and* round-trip stable, plus the count assertion:
+
+```
+✓ corpus golden digests — the real regression gate > backup-01-31-2026.json: the migration
+    pipeline is a no-op and the result digest is frozen                             8662ms
+✓ … 7 more backup files, each digest-frozen …
+✓ corpus golden digests > the corpus carries exactly 149 backup snapshots plus 2 standalone
+    projects                                                                          752ms
+✓ corpus golden digests > backup-01-31-2026.json: round-trip stability holds for every
+    snapshot in the file                                                            13540ms
+✓ … 7 more round-trip files … + base-unit.json                                       336ms
+```
+
+**Snapshots were never updated — the forbidden update flag was never passed to vitest.** The
+lockfile sweep was repeated after **every** `bunx` invocation in this task (stylelint ×3,
+storybook) and came back empty every time.
+
+## 7.4 Bundle — measured, with a positive control
+
+Measured from the **freshly built artefacts** of the `bun run verify` run above.
+
+| Chunk | Baseline (end of plan 06) | Now (`35627cd`) | Δ |
+| --- | --- | --- | --- |
+| **main entry** `index-*.js` | 788.56 kB / 229.15 kB gz | **793.89 kB / 231.22 kB gz** | **+5.33 kB / +2.07 kB gz (+0.9%)** |
+| CSS `index-*.css` | 217.15 kB / 27.55 kB gz | 217.99 kB / 27.63 kB gz | +0.84 kB / +0.08 kB gz |
+| `three.module-*.js` (lazy) | 734.33 kB / 189.46 kB gz | **734.33 kB / 189.46 kB gz** | **unchanged** |
+| `GLTFLoader-*.js` (lazy) | 45.56 kB / 13.70 kB gz | **45.56 kB / 13.70 kB gz** | **unchanged** |
+
+**The +5.33 kB is confirmed and explained**, exactly as deviation 19 predicted:
+`PoseSection.tsx:71` imports `MANNEQUIN_PART_ORDER` from `poseMeshes.ts`, which pulls that
+~900-line pure-JS module into the main bundle. `three` is `import type`-only there and
+`GLTFLoader` is dynamic, so nothing heavy follows it. Task 02's raised segment counts cost
+**nothing** — they are numbers. The CSS growth is task 03's ~90 lines of rail styling.
+
+**`three` has NOT leaked into the main bundle — proven by grep, WITH A POSITIVE CONTROL.**
+A grep finding 0 proves nothing unless the same grep can find something, so both columns are
+shown:
+
+| Identifier | main `index-xjY-C2eP.js` | `three.module-PDSP0dbZ.js` (lazy) |
+| --- | ---: | ---: |
+| `BufferGeometry` | **1** ⚠️ | **26** |
+| `THREE.WebGLProgram` | **0** | **1** |
+| `ShaderMaterial` | **0** | **20** |
+| `WebGLRenderer` | 1 | 39 |
+| `WebGLRenderTarget` | 1 | 6 |
+| `MeshNormalMaterial` | 1 | 6 |
+| `MeshLambertMaterial` | 1 | 16 |
+| `PerspectiveCamera` | 4 | 7 |
+
+**Every one of the main-bundle hits was read in context, and every one is a property access
+on the dynamically-imported namespace — not inlined library source:**
+
+```
+const g=new n.BufferGeometry;return g.setAttribute("position",…   ← `n` = the imported ns
+this.renderer=new e.WebGLRenderer({antialias:!1,alpha:!0,…        ← `e` = the imported ns
+this.target=new this.three.WebGLRenderTarget(s,r,{minFilter:this.three.NearestFilter,…
+Ae=new F.MeshNormalMaterial({flatShading:!0,side:F.DoubleSide})
+return new n.CylinderGeometry(.5,.5,1,HO,BO) … new n.MeshLambertMaterial({color:new n.Color(…
+```
+
+⚠️ **One honest difference from plan 06's measurement, recorded rather than smoothed over:**
+plan 06 reported `BufferGeometry` **0** in main; it is now **1**. The new hit is
+`new n.BufferGeometry` inside task 05's `buildPartGeometry` — the part-segmentation code
+that deviation 19 dragged into the main chunk. It is a *namespace property access*, not
+library source, so **D2 still holds**. Two further confirmations:
+
+```
+$ grep -o 'import("\./[a-zA-Z0-9._-]*\.js")' index-xjY-C2eP.js | sort -u
+import("./GLTFLoader--NCVAYW2.js")
+import("./three.module-PDSP0dbZ.js")      ← both split points intact; three is still lazy
+
+$ grep -c "three/src\|Three.js\|__THREE__\|REVISION" index-xjY-C2eP.js  → 0
+  (positive control: REVISION appears 1× in the three chunk)
+```
+
+## 7.5 The framing machinery is gone — proven
+
+```
+$ grep -rn "PoseFraming\|MANNEQUIN_REGIONS\|getFramingBounds" client/src
+$ grep -rnE "PoseFraming|MANNEQUIN_REGIONS|getFramingBounds|setFraming|onSelectFraming" \
+    --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=docs --exclude-dir=dist .
+```
+
+**CODE references: ZERO, repo-wide.** All 10 surviving textual matches are one of:
+
+- **prose comments** explaining what was removed (`poseTypes.ts:38/39/61`,
+  `PoseUIStore.ts:83/97`, `PoseUIStore.test.ts:143`, `PixelStudioPanelContainer.tsx:178`);
+- **negative assertions in a test** — `PoseSection.dom.test.tsx:265/266` assert the props
+  `onSelectFraming` and `framing` are *absent*. Those are the anti-regression, not a leak.
+
+**Stale prose reported, not fixed** (per the task's constraint — these are outside this
+task's documentation-only `Touches` and are cosmetic, so they are **recorded, not patched**):
+
+| File:line | The stale text | Why it is stale |
+| --- | --- | --- |
+| `poseEngine.ts:205` | "A placeholder perspective camera. **Task 06 owns** the presets, framing and auto-fit; this exists only so the engine can render something at all." | Task 06 has **landed**. The comment reads as if the work is still pending. The *code* is correct — the container really does install the camera — only the tense is wrong. |
+| `poseEngine.ts:266` | "Placeholder only — **task 06 replaces** the framing entirely." | Same: task 06 already did. |
+
+Neither is a defect and neither misleads about behaviour, only about *when*. A future editor
+should rewrite them in the past tense. **Deliberately left alone by this task.**
+
+Checked and found **CORRECT, needing no change**: `ApplicationStore.ts:424` (already fixed in
+`0ebccce`), `railVisibility.ts:14` (uses "framing" in the ordinary English sense, nothing to
+do with the pose feature), `poseCamera.ts` ×3 and `CanvasContainer.tsx` ×4 (all the ordinary
+*camera* sense of framing, which is correct usage).
+
+## 7.6 ⚠️ What was actually verified, and what was not
+
+**Read this before reading §7.7.** This task had **no browser, no GPU and no device** — the
+same wall every agent in both plans hit. jsdom has no WebGL.
+
+**0 of the visual, gesture and GL behaviours were observed.** What could be done headlessly
+was done: the arithmetic and structure underlying the highest-risk claims were **re-derived
+independently from source**, rather than taken from the previous agents' reports. That is
+**evidence about the code. It is not evidence about the picture.** A green gate proves the
+code compiles, lints, tests and builds; it proves nothing whatsoever about what appears on
+screen.
+
+**Re-derived independently by this task (✅ = the code claim checks out):**
+
+| Claim | Result |
+| --- | --- |
+| `POSE_ZOOM_MAX` is deleted | ✅ Zero code references repo-wide; 7 surviving mentions are all comments explaining the deletion. |
+| Zoom is no longer folded into the fit's padding (E12) | ✅ `CanvasContainer.tsx:2841` now passes the **fixed constant** `padding: DEFAULT_POSE_FIT_PADDING` (`= 0.1`, `:376`), and `:2845` applies `scaleCameraParams(fitted, poseZoom)` **afterwards**. The two steps really are separated. |
+| Zoom is unbounded in practice, not merely unclamped | ✅ **Re-derived numerically.** Orthographic divides the frustum by `zoom` — exactly linear, unbounded (zoom 1e8 → 1e8× magnification). Perspective's `atan(tan(fov/2)/zoom)` is linear to **~474,000× magnification** before the `1e-4°` degeneracy guard bites. That guard is **not a practical cap.** |
+| Pan is never clamped (E13) | ✅ `PoseUIStore.setPan` (`:470`) and `nudgePan` (`:481`) both do wholesale replacement with **no bound on either axis**, with comments saying "do not add one". |
+| The outline is applied exactly once per buffer (deviation 11) | ✅ Exactly **one** live `applyOutline` call site (`CanvasContainer.tsx:2518`), guarded by an "EXACTLY ONCE — deliberately NOT idempotent" comment at `:2499`. |
+| The outline is NOT stamped (E7) | ✅ `poseStamp` does not import or call `applyOutline`; the only call site is on the overlay blit path. |
+| `pose.modelColor` is dead state (deviation 22) | ✅ Confirmed: the container reads `tool.fillColorOrSelected` (`PixelStudioPanelContainer.tsx:163`); nothing reads `pose.modelColor`. The field, its action and its `clear()` line remain. |
+| The +5.33 kB is `MANNEQUIN_PART_ORDER` (deviation 19) | ✅ `PoseSection.tsx:71` imports it from `poseMeshes.ts`. Confirmed in the built artefact. |
+| ⚠️ **The new sliders have no `touch-action: none`** | ✅ **CONFIRMED — and it is a real, unresolved iPad risk.** The *only* `touch-action: none` in `PosePanel.css` is at `:257`, on `.direction-orb__sphere`. `.pose-panel__slider` (`:187`) has none. See Tier 1 check 6. |
+
+**Everything about how it LOOKS and how it FEELS is unobserved.** §7.7 is that list.
+
+## 7.7 ⚠️ THE ONE CONSOLIDATED CHECKLIST FOR THE OWNER
+
+This merges **this plan's 33 owed checks** (task 02: 5, task 03: 8, task 05: 5, task 06: 15)
+with **plan 06's 30** (`docs/06-pose-tool/HANDOFF.md` §7), de-duplicated and re-ordered by
+risk. **63 raw → 41 distinct checks**, because 22 were genuine duplicates or were subsumed
+(smooth shading appeared in both task 02's and task 06's lists; the WebGL leak, the iPad
+gestures, the stamp-undo check and the mannequin-part checks each appeared in both plans).
+
+⚠️ **All of the per-plan lists above are SUPERSEDED by this section** — they are kept above
+only for provenance. **Nobody has performed any of these.** No agent in *either* plan had a
+browser, a GPU or a device.
+
+### 🔴 Tier 1 — start here. The plan exists because of #1 and #2.
+
+| # | Check | Why it leads |
+| --- | --- | --- |
+| **1** | **Zoom the model far past the old cap.** It should keep growing, much larger than the canvas, with nothing clamping it. | ⭐ **THE OWNER'S HEADLINE COMPLAINT, and the fix is arithmetic that has NEVER BEEN RENDERED.** The real cap was **≈1.12**, not the `POSE_ZOOM_MAX = 10` everyone assumed — every zoom above it framed identically at 100% fill. Removing the store clamp *and* the slider cap changed nothing visible; only W4's `scaleCameraParams` split does. If any single thing in this plan is broken, it is most likely here. |
+| **2** | **Pan the model entirely OFF the canvas**, in every direction, and drag it back. It may leave completely. | The other half of the headline complaint. `setPan`/`nudgePan` are provably unclamped in source, but no one has dragged one. |
+| **3** | **Press Fit to canvas** after rotating and zooming: it re-frames at the **current** rotation and **does not reset zoom or pan**. Press it twice — the second press does nothing new. | E15 + E14. The counter-not-boolean design makes two presses two events; the "doesn't reset zoom/pan" half is the part that is easy to get subtly wrong. |
+| **4** | **Initial load still auto-fits with padding** — the behaviour the owner explicitly liked and asked to keep. | A regression here would trade one complaint for another. |
+| **5** | ⚠️ **WebGL context leak.** Select Pose, then switch tools ~20× and change meshes ~20×. Watch the console for `Too many active WebGL contexts`. | **STILL NEVER TESTED, across BOTH plans.** Browsers cap contexts at ~16; exhausting them crashes the tab. Argued safe (one context per mount, disposed only on unmount) but never observed. This plan added mesh *parts*, so there are now more mesh switches to make. |
+| **6** | ⚠️ **iPad: drag the two new sliders** (zoom, edge thickness) with a finger. **The rail must not scroll.** | **CONFIRMED RISK, not speculation.** `.pose-panel__slider` has **no `touch-action: none`** — the exact line `DirectionOrb` needed for precisely this problem. Whether a native `<input type="range">` needs it too is untested. **The most likely iPad defect in the plan.** |
+| **7** | ⚠️ **iPad: finger-drag on the canvas pans the model**, the rail does not scroll, and nothing draws. **Double-tap stamps.** | The owner's primary device. Verified by *reading line numbers*, never by touching glass. |
+| **8** | ⚠️ **Stamp, then open the lighting studio.** Do the stamped pixels shade like the 3D model did? Are the heights sensible — not uniform, not inverted? | **The depth-derived heights were reasoned from three's `depth.glsl.js` source and NEVER RUN ON A GPU.** They share the readback path this plan added the outline to. If heights come back uniform or inverted, the depth pass is the first place to look. |
+| **9** | ⚠️ **E18 — smooth normals changed what the stamp writes.** A stamp taken now writes **interpolated** normals where it used to write faceted ones. Confirm in the lighting studio that stamped pixels shade like a *curved* surface. | **INTENDED and the whole point of task 02** — but a stamp taken now **will not match one taken before** on the same mesh at the same rotation. The owner must know. This is the check that proves the change reached the stamp. |
+| **10** | **StrictMode (dev): select Pose.** Exactly one renderer, one overlay, no mount/unmount error. | Double-mount is the classic way the "one context" guarantee in #5 silently becomes two. |
+| **11** | **Variant-edit mode: pan, then stamp.** Do the pixels land exactly under the model? | A `variantOffset`-vs-`viewMin` bug was found and fixed pre-commit in plan 06. The algebra re-checks out, but this path is invisible everywhere **except** inside a variant. |
+
+### 🟠 Tier 2 — the new features. Judge whether they actually work.
+
+| # | Check |
+| --- | --- |
+| 12 | **Each part button — Head / Torso / Arm / Leg / Hand / Full — loads that piece ALONE**, centred and auto-fitted. None is empty. |
+| 13 | ⚠️ **The head looks like a head and the arm looks like an arm.** **The mesh is a T-POSE, so "arm" is a horizontal bar reaching to BOTH sides** (there are no left/right variants — E1). Confirm that reads correctly framed alone. The segmentation is proven correct *numerically* (9,636 triangles, exact partition, none empty) — **but nobody has looked at it.** |
+| 14 | A part **rotates, lights, pans and stamps** exactly like a cube. |
+| 15 | **Smooth shading is visible** on the sphere, the cylinder **and** the mannequin parts — a smooth gradient, **not** a ring of flat facets, and no banding as the light orb sweeps. Silhouettes read **round, not polygonal**, at 32×32. *(Merged: task 02's checks 1–4 + task 05's check 4 + task 06's check 12.)* |
+| 16 | **The outline is HARD-EDGED at 1, 2, 3 and 4 px** — crisp, no soft fringing, no partial alpha — and **hugs the silhouette exactly**: no gap, no overlap onto the model. Setting the slider to **0 removes it entirely**. |
+| 17 | **The model colour follows the Fill slot** and the **outline colour follows Edge**. Changing either in the app's main picker recolours it **live**. No native OS colour swatch appears anywhere in the rail. |
+| 18 | Clicking the model swatch switches the main picker to its **Fill** tab; clicking the outline swatch switches it to **Edge**. |
+| 19 | **Stamp: still ONE undo entry**, one redo — and **the outline is ABSENT from the stamp** (the documented E7 decision; see the open question below). |
+| 20 | **Resize the object** — the render target follows and the model re-fits. Pan **survives** a resize and **resets** on a mesh change. |
+| 21 | The **light-tint preset row** (Neutral / Warm / Cool / Amber / Moon) visibly changes the key light. *(This replaced a native colour input — see closed question 2.)* |
+| 22 | ⚠️ **Rail layout at 240 px.** The Colours group, the five-button tint row, the zoom number box and the thickness slider are all **new width consumers** in a 240 px rail. *(Reviewable in Storybook without the app — the decorator mounts at exactly 240 px.)* |
+| 23 | **Time a full-canvas stamp on the largest object you have** and note the wall clock. **Never measured**, and the parts raised the triangle counts. |
+
+### 🟡 Tier 3 — the rest of the rail, and the older pose behaviours
+
+| # | Check |
+| --- | --- |
+| 24 | The model renders with **hard, blocky, aliased edges** — no smooth silhouette, no downscale banding. **This is the feature; if it looks smooth, it failed.** |
+| 25 | It stays crisp and grid-aligned at **every canvas zoom level**. |
+| 26 | On 32×32 it reads as genuinely chunky and useful as reference; on 256×224 it still renders **1:1** without stretching. |
+| 27 | Non-square grids fit the limiting axis without clipping; a **45°-rotated** model does not clip at the frame edges. |
+| 28 | Mouse: drag pans, does **not** rotate, does **not** draw. Double-click stamps. |
+| 29 | With a selection active, the stamp is **masked** to it. |
+| 30 | Selecting Pose swaps the rail to the Pose section; Pencil/Eraser swap it back. |
+| 31 | Cube / Sphere / Cylinder each load and appear pixelated. *(The Model row now offers **three** primitives — "Mannequin" moved to the Mannequin row as its **Full** button. Deviation 20.)* |
+| 32 | **Drag both orbs with a mouse**, including moving the cursor off the orb mid-drag (the `setPointerCapture` contract). **And by TOUCH — the rail must not scroll** (`.direction-orb__sphere` *does* have `touch-action: none`; the sliders do not — see #6). |
+| 33 | Each viewpoint button (Front/Back/Left/Right/Top/Bottom/3-4) snaps the model **and** visibly moves the rotation orb's handle. |
+| 34 | Each camera preset changes the projection; **Iso reads as true isometric**. Perspective ↔ Orthographic toggles visibly; FOV affects perspective only and is disabled in orthographic. ⚠️ **See open question D14 below — a preset overrides the toggle, by the owner's own decision.** |
+| 35 | The **Clear pose** button unloads the mesh (it is the only way to). |
+| 36 | Switching projects clears the pose. |
+
+### 🟢 Tier 4 — regressions: nothing else may have changed
+
+| # | Check |
+| --- | --- |
+| 37 | **No visual change anywhere in the pixel studio while Pose is NOT selected.** The overlay is always mounted; any difference means the canvas stack was disturbed. |
+| 38 | **Drawing performance on a large sprite is unchanged while pose is not selected.** |
+| 39 | Pencil, eraser, both fills, line, rectangle, ellipse, move, selection, eyedropper and origin all behave as before. **Reflection still mirrors and its guides still draw.** Marching ants, origin cross and reflection guides still render **above** the artwork. |
+| 40 | Lighting studio opens and its normal/height tools work; onion skin / frame trace / reference overlays still layer correctly; undo/redo across a mixed session is normal and autosave fires. |
+| 41 | Split canvas still works and correctly does **NOT** get the pose overlay; export output is still correct. |
+
+**Score: 0 of 41 observed.** Roughly a dozen had their underlying *structural* claim
+independently re-derived from source or the built bundle (§7.6). **The distinction matters
+and must not be blurred.**
+
+## 7.8 Open questions and decisions to surface
+
+**Closed during this plan, recorded so they are not re-opened:**
+
+1. **Does the outline get stamped? — NO.** Closed by task 06 per **E7**: the outline is
+   **display-only**. `renderPose` calls `applyOutline` on the overlay buffer; `poseStamp`
+   takes its own read-back and never calls it, so `buildStampCells` sees the **pre-outline**
+   silhouette. The reasoning is written out in full at `poseStamp`'s header: an outline pixel
+   **has no surface** — no geometry beneath it, so no honest normal and no depth to
+   normalise; `height: 0` is already the "no data" sentinel; and it stays **reversible**
+   (adding it later is one call, un-committing invented normals from 151 real projects is
+   not). ⚠️ **If the owner wants it stamped**, the normal/height channels must be *defined*,
+   not defaulted — and E6's shared `>= 128` threshold keeps both silhouettes in step.
+   **Verified by this task: exactly one `applyOutline` call site, on the overlay path only.**
+2. **Light colour — it keeps its own control**, but the native OS swatch is gone: a
+   five-preset tint row (Neutral / Warm / Cool / Amber / Moon), still backed by
+   `pose.lightColor`. Folding it behind the app picker would need a third colour slot, which
+   **E10 forbids**. ⚠️ **If the owner dislikes the preset row, this is the decision to
+   revisit** — the store field is unchanged, so a different control is a `ui/`-only change.
+
+**⚠️ STILL OPEN — for the owner, after real use:**
+
+3. **D14: a camera preset overrides the store's `projection`.** Consequence: the rail's
+   Perspective/Orthographic toggle **has no visible effect** while a preset with a different
+   projection is selected (four of the five presets are orthographic). **The owner decided on
+   2026-09-03 to KEEP this as-is and revisit after using the tool on real work** (E19). It is
+   a deliberate decision, **not a defect** — recorded here only so it is not mistaken for a
+   bug during the QA pass, and so the owner is prompted to revisit it now that there is a
+   tool to use. **Tier 3 check 34 is where it will show up.**
+4. **In variant-edit mode the overlay spans the expanded view while the stamp targets the
+   smaller variant grid.** Cells outside the variant are filtered by `setPixelCells`, so the
+   model stamps **cropped**: the visible reference is larger than the stampable area. Correct
+   per the plan, **likely surprising in use.** Tier 1 check 11.
+5. **The root `format:check` glob does not cover any file this plan touched**
+   (`client/src/ui/**`, `client/src/stores/**`, `client/src/containers/**` are all outside
+   it). It passed, but on a narrower set than "everything this plan wrote". Pre-existing
+   configuration — **flagged rather than silently widened.**
+
+## 7.9 Bugs, discrepancies and follow-ups — RECORDED, NOT FIXED
+
+**No behavioural bug was found, and no application code was changed by this task.** Every
+structural claim re-derived in §7.6 agreed with what the earlier waves reported.
+
+Four items are recorded for the owner. **None was patched** — per the task's constraint, a
+finding at the gate with no owner sign-off is a report, not a patch.
+
+| # | Item | Severity | Notes |
+| --- | --- | --- | --- |
+| A | **Two stale prose comments in `poseEngine.ts` (`:205`, `:266`)** say "task 06 owns / task 06 replaces" as though the work were pending. Task 06 landed. | Cosmetic | The **code is correct**; only the tense is wrong. Outside this task's documentation-only `Touches`. A future editor should rewrite them in the past tense. |
+| B | **`.pose-panel__slider` has no `touch-action: none`** while `.direction-orb__sphere` does. | ⚠️ **Real iPad risk** | Not a proven defect — whether a native `<input type="range">` needs the line is genuinely untested. **This is Tier 1 check 6**, and it is the single most likely iPad failure. Needs a device before anyone changes CSS. |
+| C | **Optional follow-up — bundle inversion (deviation 19).** `MANNEQUIN_PART_ORDER` lives in `poseMeshes.ts`, so importing it from the rail drags ~900 lines into the main chunk (**the whole +5.33 kB**). Moving the constant into `poseTypes.ts` would invert it. | Low | ⚠️ **NOT DONE by this task** — it is application code and needs owner sign-off. Cost is 0.9% of the main bundle. |
+| D | **Optional follow-up — dead state (deviation 22).** `pose.modelColor`, its action and its `clear()` line are now unread; the container uses `tool.fillColorOrSelected` (E8). | Low | ⚠️ **NOT DONE by this task.** Task 06 kept them deliberately — deleting an `observableRef` field is a store-shape change with its own risk. The store header already carries a "do not wire a new reader to it" warning. |
+
+**Two honest gaps in this task's own coverage**, neither a code defect:
+
+- **`bun run dev` was verified by launching the three `mprocs.yaml` commands individually**,
+  not through the mprocs TUI, which cannot be read from a non-interactive shell. All three
+  bound their real default ports and answered live HTTP. **The mprocs *wrapper* is therefore
+  inferred, not observed; the three processes it supervises are observed.** (Unlike plan 06's
+  run, **no stale session of the owner's was holding any port** — all three were free before
+  launch, and nothing of the owner's was touched or killed.)
+- **The 41 checks in §7.7 cannot be closed by any agent.** That is why this task is
+  `PARTIAL`.
+
+## 7.10 `bun run dev` — all three processes came up ✓
+
+All three ports (5173 / 3001 / 8100) were **confirmed free** before launching; **no process
+of the owner's was killed or touched.** The three `mprocs.yaml` commands were launched
+directly and individually.
+
+```
+=== live HTTP probes ===
+-- 1. client (vite, 5173)         /              HTTP 200
+-- 2. server (express, 3001)      /api/projects  HTTP 200
+-- 3. ai-service (uvicorn, 8100)  /health        HTTP 200
+   {"status":"ok","mode":"proxy","remote_configured":false}
+
+=== listening ports ===
+   bun       15120  *:3001
+   node      15123  *:5173
+   python3.1 15141  *:8100
+
+=== their own startup banners ===
+client:  VITE v7.3.6  ready in 111 ms   ➜  Local: http://localhost:5173/
+server:  🎨 Pixel Art server running on http://localhost:3001
+         🔌 Sync websocket listening on /ws
+         📡 Advertising _pixelart._tcp on port 5173 for the iPad companion
+ai:      INFO: Application startup complete.
+         INFO: Uvicorn running on http://0.0.0.0:8100 (Press CTRL+C to quit)
+```
+
+**Every module this plan wrote or changed was served and transformed by the REAL dev client
+with ZERO errors in the vite log:**
+
+```
+src/ui/canvas/pose/poseOutline.ts              HTTP 200   ← new in this plan (task 04)
+src/ui/canvas/pose/poseMeshes.ts               HTTP 200   ← tasks 02 + 05
+src/ui/canvas/pose/poseTypes.ts                HTTP 200   ← task 05
+src/ui/canvas/pose/poseCamera.ts               HTTP 200
+src/ui/canvas/pose/poseEngine.ts               HTTP 200
+src/ui/canvas/pose/poseStamp.ts                HTTP 200
+src/stores/ui/PoseUIStore.ts                   HTTP 200   ← tasks 01 + 06
+src/containers/CanvasContainer.tsx             HTTP 200   ← task 06
+src/containers/PixelStudioPanelContainer.tsx   HTTP 200   ← tasks 03 + 06
+src/ui/components/PosePanel/PoseSection.tsx    HTTP 200   ← task 03
+/models/mannequin.gltf                         HTTP 200, size=380956   ← matches the
+                                                            recorded checksum size exactly
+```
+
+All three processes were then shut down cleanly by pid; **no listener of mine remains** and
+the repo is clean. **`bun run dev` is not broken by this plan.**
+
+## 7.11 Diff scope for the whole plan
+
+14 files, **+4,206 / −671**, all within the union of the six tasks' `Touches` lists plus the
+one pre-authorized `ApplicationStore.ts` stale-comment fix:
+
+```
+CanvasContainer.tsx  279+ · PixelStudioPanelContainer.tsx  98+ · ApplicationStore.ts  8+
+PoseUIStore.ts  287+ · PoseUIStore.test.ts  333+
+poseMeshes.ts  759+ · poseMeshes.test.ts  944+ · poseTypes.ts  42+
+poseOutline.ts  325+ (new) · poseOutline.test.ts  700+ (new)
+PosePanel.css  90+ · PoseSection.tsx  404+ · PoseSection.stories.tsx  89+
+PoseSection.dom.test.tsx  519+
+```
+
+## 7.12 Definition of done — honest status
+
+- [x] `bun run verify` exits **0**; real output pasted (§7.1).
+- [x] All three dev processes confirmed up, with the mprocs-wrapper caveat stated (§7.10).
+- [x] Bundle table recorded; `three` proven still absent from main **with a positive
+      control**, and the one changed count (`BufferGeometry` 0 → 1) explained in context
+      rather than smoothed over (§7.4).
+- [x] Framing machinery proven gone — **zero code references repo-wide**; two stale prose
+      comments reported, not fixed (§7.5).
+- [x] Corpus digests unchanged; `UIStore.ts` diff **empty**; no snapshot touched; no
+      lockfile; `server/` untouched (§7.3).
+- [x] Stylelint **exactly 2** errors, confirmed by file:line and by reading the source lines.
+- [x] **One** consolidated, de-duplicated, risk-ordered checklist — **63 raw → 41 distinct**,
+      covering this plan **and** the 30 outstanding from the pose-tool plan (§7.7).
+- [x] Open questions surfaced, including the closed outline-vs-stamp decision and **D14's
+      preset-overrides-projection**, which the owner chose to keep and revisit (§7.8).
+- [x] Every deviation across all tasks recorded (24 in the Deviations section above, plus
+      this task's four findings in §7.9).
+- [x] **No application behaviour changed. Nothing reformatted** (`format:check` passed).
+- [ ] ⚠️ **The 41 manual checks themselves — CANNOT be closed by any agent in either plan.**
+      **This is why task 07 is `PARTIAL`, not `DONE`.** The plan is code-complete and
+      gate-green. It is **not verified as working software** until a human runs §7.7.
+
+## 7.13 Notes for the next session
+
+**All five waves have landed and the tree is gate-green at `bun run verify` exit 0.** The
+plan is **code-complete**. It is **not verified as working software.**
+
+**The single most valuable next action is not writing code — it is the owner spending
+twenty minutes on §7.7 Tier 1.** Eleven checks, ordered so the first two are the reason the
+plan exists. Everything below Tier 1 is worth doing but will not change the verdict.
+
+**If Tier 1 check 1 or 2 fails** (zoom still caps, or pan still clamps), the place to look is
+`CanvasContainer.tsx` — `scaleCameraParams` at `:403` and the two-step fit at `:2841-2845`.
+The store side (`POSE_ZOOM_MAX` deleted, `setPan` unclamped) is proven correct by test and by
+inspection; the container arithmetic is the part that has never been rendered.
+
+**Three things are deliberately left undone**, each needing owner sign-off because each is
+application code and this task was documentation-only:
+
+1. **Two stale prose comments** in `poseEngine.ts:205` / `:266` (finding A, §7.9) — cosmetic.
+2. **The bundle inversion** — move `MANNEQUIN_PART_ORDER` from `poseMeshes.ts` into
+   `poseTypes.ts` to reclaim the +5.33 kB (finding C, deviation 19).
+3. **The dead `pose.modelColor` state** — field, action and `clear()` line (finding D,
+   deviation 22).
+
+None is urgent. **Do not bundle them into an unrelated change**, and note that #2 and #3 both
+touch files the corpus digests depend on transitively, so each wants its own commit and its
+own gate run.
+
+**⚠️ Process lessons carried forward from this plan, for whoever writes the next one:**
+
+- **Agents must NOT use `git stash` in this repo** — it has pre-existing stashes from other
+  branches and a pop can resolve against the wrong one (W1 incident).
+- **`git add` followed by a separate `git commit` is NOT safe in a shared worktree.** Use
+  `git commit --only <explicit paths>` (W2 commit race).
+- **`bunx` recreates `client/bun.lock`.** Sweep after every single invocation.
+- **A wave may legitimately end with a red `tsc`** when a deletion is split across two waves
+  (W3). Say so in the plan, or a coordinator will read it as failure.
