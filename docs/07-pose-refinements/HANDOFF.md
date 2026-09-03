@@ -1,6 +1,6 @@
 # HANDOFF — Pose tool refinements
 
-**Current position:** W4 DONE — W5 next (task 07: gate, QA sweep, handoff)
+**Current position:** W5 IN PROGRESS
 **Branch:** `feat/07-pose-refinements`
 **Last commit:** `0ebccce`
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `54d6501` (branch `feat/06-pose-tool`)
@@ -13,7 +13,7 @@
 | W2 | 03, 04 | DONE | 2026-09-03 | `b5ece14` | tsc 0 · eslint 0 err · vitest 146 files / 2818 pass · boundaries OK · stylelint exactly 2 err · storybook exit 0 · no lockfile |
 | W3 | 05 | DONE | 2026-09-03 | `fdb4574` | ⚠️ `tsc` RED **by design** — 3 errors, all task-06-owned, listed below · eslint 0 err · vitest 146 files / 2857 pass · boundaries OK · no lockfile |
 | W4 | 06 | DONE | 2026-09-03 | `0ebccce` | **`bun run verify` exit 0** · tsc 0 (hole CLOSED) · eslint 0 err · vitest 146 files / 2866 pass · boundaries OK · stylelint exactly 2 err · UIStore diff empty · no snapshot changed · no lockfile |
-| W5 | 07 | TODO | | | |
+| W5 | 07 | IN PROGRESS | 2026-09-03 | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
@@ -27,7 +27,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 04 | Outline post-pass | W2 | DONE | `b5ece14` | `applyOutline()`, Chebyshev, mutates in place, 48 tests |
 | 05 | Mannequin part meshes; delete framing | W3 | DONE | `fdb4574` | Exact partition: 9,636 tris across 5 parts, none empty. ⚠️ Leaves `tsc` red for task 06 |
 | 06 | Container integration | W4 | DONE | `00e5a7e`, `5e0055e`, `0ebccce` | ⭐ Found the REAL zoom cap (~1.12, not 10). Outline NOT stamped (E7) |
-| 07 | Full gate, QA, handoff | W5 | TODO | | Likely ends `PARTIAL` |
+| 07 | Full gate, QA, handoff | W5 | IN PROGRESS | | Likely ends `PARTIAL` |
 
 ## Known state at planning time (2026-09-03)
 
