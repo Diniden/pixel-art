@@ -1,10 +1,14 @@
 # HANDOFF — Pose tool
 
-**Current position:** ✅ **ALL WAVES LANDED — W5 (task 10) DONE.** The plan is code-complete
-and the full root gate is green. ⚠️ **30 manual checks remain OWED to the owner** — see
-[Priority checks for the owner](#7--priority-checks-for-the-owner--the-one-consolidated-list).
+**Current position:** ✅ **ALL 10 TASKS LANDED. `bun run verify` exits 0.**
+⚠️ **NOT YET VERIFIED AS WORKING SOFTWARE.** W5 is **PARTIAL**, deliberately: **0 of 30**
+visual / gesture / GPU checks have been performed, because no agent in this plan had a
+browser, a GPU or a device. The code is complete and every automated gate is green; nobody
+has yet seen the feature run. Work through
+[§7 Priority checks](#7--priority-checks-for-the-owner--the-one-consolidated-list) before
+merging.
 **Branch:** `feat/06-pose-tool`
-**Last commit:** `62df16a` (+ this task's docs commit)
+**Last commit:** `8fd1602`
 **Plan written:** 2026-09-02 · Planning baseline HEAD: `cd7a852`
 
 ## Wave ledger
@@ -15,7 +19,7 @@ and the full root gate is green. ⚠️ **30 manual checks remain OWED to the ow
 | W2 | 06, 07 | DONE | 2026-09-03 | `f4ef0de` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · no lockfile |
 | W3 | 08 | DONE | 2026-09-03 | `2dcdd42` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · build OK · no lockfile · **24 manual checks OWED** |
 | W4 | 09 | DONE | 2026-09-03 | `16e1645` | **NOT blocked** — CC0 re-verified, asset vendored. tsc 0 · eslint 0 err · vitest 145/2737 · boundaries OK · stylelint 2 err · no lockfile |
-| W5 | 10 | **DONE** | 2026-09-03 | _this commit_ | `bun run verify` **exit 0** · storybook build 0 · boundaries OK · stylelint 2 err · no lockfile · snapshots untouched · `bun run dev` all 3 procs UP · **30 manual checks owed** |
+| W5 | 10 | **PARTIAL** | 2026-09-03 | `8fd1602` | `bun run verify` **exit 0** · storybook build 0 · boundaries OK · stylelint 2 err · no lockfile · snapshots untouched · `bun run dev` all 3 procs UP · **30 manual checks owed** |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
@@ -32,7 +36,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 07 | Pose rail section + orbs | W2 | DONE | `5193dfd` | 33 tests. One DirectionOrb used twice. Added a Clear-pose button. 9 manual checks owed. |
 | 08 | `CanvasContainer` integration | W3 | DONE | `2dcdd42` | Own `useCanvasRender`; lazy engine + token guard; 3-pass stamp. **Depth fallback NOT needed.** 24 manual checks owed. |
 | 09 | Vendor the CC0 mannequin | W4 | DONE | `16e1645` | CC0 re-verified 2026-09-03. **Mesh is a T-POSE** — old arm/hand regions framed 0 vertices. 6 manual checks owed. |
-| 10 | Full gate, QA, handoff | W5 | **PARTIAL** | _this commit_ | Gate fully green and `bun run dev` verified live on all 3 ports. **QA sweep is PARTIAL by necessity: 0 of the 30 visual/gesture/GL checks could be performed headlessly.** No behaviour changed; no formatting fix was needed. |
+| 10 | Full gate, QA, handoff | W5 | **PARTIAL** | `8fd1602` | Gate fully green and `bun run dev` verified live on all 3 ports. **QA sweep is PARTIAL by necessity: 0 of the 30 visual/gesture/GL checks could be performed headlessly.** No behaviour changed; no formatting fix was needed. |
 
 ## Known state at planning time (2026-09-02)
 
@@ -818,6 +822,40 @@ Every claim below marked ✅ was re-derived by this task. Everything marked ❌ 
 **Score: 0 of 29 QA items observed. 18 of 29 had their underlying structural claim
 independently re-verified from source or the built bundle by this task.** The distinction
 matters and should not be blurred.
+
+## 6b. Final gate — re-run independently by the coordinator, 2026-09-03
+
+The coordinator re-ran the root gate itself at `8fd1602` rather than accepting task 10's
+report, as it did for every prior wave:
+
+```
+bun run verify                 → EXIT 0
+  tsc (client + server)          clean
+  eslint                         ✖ 65 problems (0 errors, 65 warnings)
+  prettier --check               All matched files use Prettier code style!
+  vitest run                     Test Files 145 passed (145) · Tests 2737 passed (2737)
+  vite build                     ✓ 2040 modules transformed · built in 2.12s
+
+find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules   → empty
+git diff 35d1644..HEAD -- client/src/stores/ui/UIStore.ts     → EMPTY
+```
+
+**That last line is the strongest single proof in this plan.** `UIStore.ts` has no diff
+across the entire feature, so `toPersistedUIState()` provably gained no key, the wire format
+is unchanged, and the 151 corpus digests could not have shifted. It is a structural
+guarantee, not a passing assertion.
+
+**D2 re-verified with a positive control** (a grep that finds nothing proves nothing unless
+you show it can find something):
+
+| Chunk | `BufferGeometry` | `THREE.WebGLProgram` |
+| --- | --- | --- |
+| `index-DM9IbQGG.js` (main) | **0** | **0** |
+| `three.module-PDSP0dbZ.js` (lazy) | **4** | — |
+
+Built chunks: main **788.56 kB / 229.15 kB gzip**; `three.module` **734.33 / 189.46 gz**;
+`GLTFLoader` **45.56 / 13.70 gz** — both lazy, neither on the initial load path. The feature
+cost the main bundle **+27.21 kB** and three itself stays off the critical path.
 
 ## 7. ⚠️ PRIORITY CHECKS FOR THE OWNER — the one consolidated list
 
