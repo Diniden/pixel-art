@@ -1,15 +1,15 @@
 # HANDOFF — Pose tool refinements
 
-**Current position:** W1 not started
-**Branch:** (set by /plan-go — expected `feat/07-pose-refinements`)
-**Last commit:** (set by /plan-go)
+**Current position:** W1 IN PROGRESS
+**Branch:** `feat/07-pose-refinements`
+**Last commit:** `b682b61` (branch created from `feat/06-pose-tool`)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `54d6501` (branch `feat/06-pose-tool`)
 
 ## Wave ledger
 
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
-| W1 | 01, 02 | TODO | | | |
+| W1 | 01, 02 | IN PROGRESS | 2026-09-03 | | |
 | W2 | 03, 04 | TODO | | | |
 | W3 | 05 | TODO | | | |
 | W4 | 06 | TODO | | | |
@@ -21,8 +21,8 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
 | Task | Title | Wave | Status | Commit | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 01 | Free zoom/pan + Fit seam | W1 | TODO | | |
-| 02 | Smooth normals + tesselation | W1 | TODO | | |
+| 01 | Free zoom/pan + Fit seam | W1 | IN PROGRESS | | |
+| 02 | Smooth normals + tesselation | W1 | IN PROGRESS | | |
 | 03 | Panel: colours, Fit, edge slider | W2 | TODO | | |
 | 04 | Outline post-pass | W2 | TODO | | |
 | 05 | Mannequin part meshes; delete framing | W3 | TODO | | ⚠️ May legitimately leave `tsc` red |
