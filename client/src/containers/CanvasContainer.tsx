@@ -258,6 +258,33 @@ import { useCanvasViewport } from "../ui/hooks/useCanvasViewport";
 import { usePencilHover } from "../ui/hooks/usePencilHover";
 import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
 
+/* ── the pose tool (pose-tool task 08, concern #14) ────────────────────────
+ *
+ * ⚠️ Every one of these is a TYPE-ONLY import except `poseEngine`'s and
+ * `poseCamera`/`poseMeshes`/`poseStamp`'s pure functions — and NONE of them
+ * pulls three into this module's graph. `PoseEngine` reaches three through a
+ * dynamic `import("three")` (MASTER D2), which Vite emits as its own ~734 kB
+ * chunk; a static `import ... from "three"` anywhere in this file would drag
+ * that chunk into the main bundle for every user who never opens the tool.
+ * The `import type` below is erased at build time and pulls in nothing.
+ */
+import { PoseEngine, loadThree } from "../ui/canvas/pose/poseEngine";
+import type { PoseEngineCamera } from "../ui/canvas/pose/poseEngine";
+import {
+  applyCameraParams,
+  fitCameraToMesh,
+  getCameraPreset,
+} from "../ui/canvas/pose/poseCamera";
+import {
+  UNIT_BOUNDS,
+  applyMaterial,
+  buildMesh,
+  getFramingBounds,
+} from "../ui/canvas/pose/poseMeshes";
+import { buildStampCells } from "../ui/canvas/pose/poseStamp";
+import type { PoseStampCell } from "../ui/canvas/pose/poseTypes";
+import type { Object3D } from "three";
+
 /**
  * Narrow a pixel cell.
  *
@@ -281,14 +308,59 @@ function getPixelColor(cell: unknown): Pixel | null {
  * touch. Adding one without the other is the bug this ordering exists to
  * prevent (MASTER §9: "touch gesture-tool bail swallows the reflection
  * gesture") — every other member of this list simply does nothing on touch.
+ *
+ * ⚠️ `pose` (pose-tool task 08, D12) is the SECOND member with real touch
+ * branches, and it is in this list for the same two reasons: its
+ * `toolHandlers` entry is an empty `pose: {}`, and it must never open a
+ * history stroke. Its drag PANS the 3D reference and its double-tap STAMPS —
+ * neither is a pixel write through the tool table, and the stamp it does make
+ * is one atomic `setPixelCells` commit rather than a stroke.
  */
+/* ── the pose tool's tuning constants (pose-tool task 08) ──────────────────
+ *
+ * Module-level rather than inline so they are named, greppable, and cannot be
+ * re-typed differently in the mouse and touch paths.
+ */
+
+/**
+ * The double-click window (D12). Two pointer-downs closer together than this
+ * — and within {@link POSE_DOUBLE_CLICK_CELLS} — are one stamp gesture.
+ *
+ * ⚠️ Detected explicitly rather than by listening for a `dblclick` event:
+ * `dblclick` is not dispatched reliably on touch, and the owner uses an iPad.
+ */
+const POSE_DOUBLE_CLICK_MS = 400;
+
+/** How far the two downs may drift and still count as one place (D12). */
+const POSE_DOUBLE_CLICK_CELLS = 2;
+
+/**
+ * A texel is stamped iff its alpha is at least this (D8).
+ *
+ * The same threshold `poseStamp.ts` defaults to, restated here because the
+ * container ALSO uses it to decide which texels contribute to the observed
+ * depth range — the two must agree or the range would be measured over texels
+ * that are never stamped.
+ */
+const POSE_ALPHA_THRESHOLD = 128;
+
+/**
+ * The auto-fit's padding at zoom 1: 10% total, so the model fills 90% of the
+ * shorter canvas axis (D7).
+ *
+ * The user's zoom is folded into this rather than applied as a separate camera
+ * scale — see the fit effect for why the framing has exactly one owner.
+ */
+const DEFAULT_POSE_FIT_PADDING = 0.1;
+
 function isGestureTool(tool: string): boolean {
   return (
     tool === "move" ||
     tool === "selection" ||
     tool === "eyedropper" ||
     tool === "origin" ||
-    tool === "reflection"
+    tool === "reflection" ||
+    tool === "pose"
   );
 }
 
@@ -409,6 +481,10 @@ export const CanvasContainer = observer(function CanvasContainer({
   const frameOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
+  // The pose tool's 3D reference overlay (task 04 mounted it; this passes the
+  // ref). Always-mounted and blank until the tool is selected AND a mesh is
+  // loaded — see the pose region below.
+  const poseCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // ⚠️ THE OFFSCREEN BACKGROUND CACHE AND ITS KEY ARE GONE (task 06). The
@@ -555,6 +631,46 @@ export const CanvasContainer = observer(function CanvasContainer({
   // class of regression documented at `hoverPixelRef`.
   const reflectionLines = app.reflection.lines;
   const reflectionDraft = app.reflection.draft;
+
+  // ── the pose tool's render inputs (pose-tool task 08) ──────────────────
+  //
+  // ⚠️ Read HERE, in the `observer()` body, and that is what makes the
+  // overlay follow the rail's controls: every one of these is a scalar or an
+  // `observableRef` replaced wholesale, so reading it subscribes this
+  // container to its VALUE (or its identity) and a rail change re-renders us.
+  //
+  // ⚠️ That re-render is correct for DISCRETE changes (mesh, preset,
+  // projection, framing) and acceptable for the continuous ones (the two orb
+  // drags, the zoom slider) ONLY because the pose render path is cheap: the
+  // effects below hand the new value to the engine and call the POSE
+  // scheduler's `invalidate()`. Nothing pose-related may ever appear in the
+  // main `render`'s dependencies — that would re-rasterise every cell of
+  // every layer per orb sample (D11, the measured 2026-08-28 bug class).
+  //
+  // ⚠️ The PAN is deliberately NOT read here. It is pointer-rate during a
+  // drag, and a body read would put a full container re-render on every
+  // sample — the same regression. The drag writes the store AND a ref, and
+  // the painter reads the ref; see `posePanRef`.
+  const pose = app.pose;
+  const poseMeshId = pose.meshId;
+  const poseFraming = pose.framing;
+  const poseRotation = pose.rotation;
+  const poseLightDirection = pose.lightDirection;
+  const poseLightColor = pose.lightColor;
+  const poseModelColor = pose.modelColor;
+  const poseProjection = pose.projection;
+  const poseCameraPreset = pose.cameraPreset;
+  const poseZoom = pose.zoom;
+  const poseFov = pose.fov;
+
+  /**
+   * Whether the pose overlay should paint at all.
+   *
+   * BOTH conditions: the tool has to be selected (deselecting hides the
+   * reference without unloading it — manual check 20) and a mesh has to be
+   * loaded (an empty pose paints nothing rather than a blank frame).
+   */
+  const poseActive = currentTool === "pose" && poseMeshId !== null;
 
   /* ══════════════════════════════════════════════════════════════════════
    *  ACTIONS — now assembled from the MobX stores (W29i)
@@ -2105,6 +2221,810 @@ export const CanvasContainer = observer(function CanvasContainer({
   // over one that would go stale.
   invalidateHoverRef.current = invalidateHover;
 
+  /* ══════════════════════════════════════════════════════════════════════
+   *  CONCERN #14 — THE POSE TOOL'S 3D REFERENCE (pose-tool task 08)
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * ONE contiguous region, deliberately: this file already carries thirteen
+   * concerns and a fourteenth scattered through it would be unfindable.
+   * Everything the pose overlay needs — the engine's lifecycle, the mesh, the
+   * camera, the painter, the pan drag and the stamp — is between here and the
+   * "end of concern #14" marker. Its GESTURE branches are the only exception,
+   * and they have to live in the pointer handlers with the others.
+   *
+   * ── The shape of it, and why each piece is the way it is ────────────────
+   *
+   * 1. **Its own `useCanvasRender`** (D11), never the main `render`. Orb
+   *    drags and pans are pointer-rate; routing them through `render` would
+   *    repaint every visible cell of every visible layer per sample — the
+   *    measured 2026-08-28 class of bug, restated for a third overlay. The
+   *    hover marker and the reflection guides above made exactly this call.
+   *
+   * 2. **The render target is EXACTLY `cellWidth × cellHeight`** (D5) — one
+   *    texel per art pixel, blitted with `putImageData` at 1:1. There is no
+   *    `drawImage` anywhere on this path and there must never be one:
+   *    magnification is the single CSS transform on `.canvas__layout` plus
+   *    `image-rendering: pixelated`, exactly as for every other canvas in the
+   *    stack. Rendering large and downsampling is the one thing that would
+   *    defeat the whole feature.
+   *
+   * 3. **The engine is created LAZILY**, on first activation, and held in a
+   *    ref. It pulls three's ~734 kB chunk; a user who never opens the tool
+   *    must never pay for it. It is disposed on unmount — WebGL contexts are
+   *    capped (~16 per page) and three does not GC GPU memory, so a leaked
+   *    renderer per tool switch crashes the tab.
+   *
+   * 4. **Drag state lives in REFS**, and the repaint is `invalidate()`. Never
+   *    `useState` per pointer sample — see `hoverPixelRef`'s header for the
+   *    "unable to slide and draw" regression that discipline exists to
+   *    prevent.
+   */
+
+  /**
+   * The WebGL engine, or `null` before the tool has ever been selected.
+   *
+   * ⚠️ A REF, not state. Creating it must not re-render this container, and
+   * nothing in the React tree depends on its identity — the effects below
+   * reach it imperatively and the painter reads it at paint time.
+   */
+  const poseEngineRef = useRef<PoseEngine | null>(null);
+
+  /**
+   * The three namespace, cached once the chunk has loaded.
+   *
+   * `loadThree()` memoises the import itself, so this is not about avoiding a
+   * second fetch — it is so the mesh effect can build geometry without
+   * awaiting on the frames where the module is already in hand.
+   */
+  const poseThreeRef = useRef<Awaited<ReturnType<typeof loadThree>> | null>(
+    null,
+  );
+
+  /**
+   * The root object currently in the scene, so the stamp's normal and depth
+   * passes can swap its materials without going through `setObject3D` (which
+   * would dispose the very object it is handed back).
+   */
+  const poseRootRef = useRef<Object3D | null>(null);
+
+  /**
+   * The camera instance, rebuilt when the PROJECTION changes.
+   *
+   * Kept across fits rather than reallocated: `applyCameraParams` writes every
+   * field a fit produces, so the only reason to build a new one is a switch
+   * between `PerspectiveCamera` and `OrthographicCamera`. A camera holds no
+   * GPU resource, so there is nothing to dispose when it is replaced.
+   */
+  const poseCameraRef = useRef<PoseEngineCamera | null>(null);
+
+  /**
+   * Monotonic token guarding every async step in this region.
+   *
+   * ⚠️ Load-bearing under StrictMode AND under fast clicking. `PoseEngine
+   * .create()` and `buildMesh()` both await, so two activations (or a
+   * dev-mode double-invoked effect) can have two builds in flight at once.
+   * Each captures the token standing when it started and drops its result if
+   * the token has since moved — which is what stops the SECOND mesh being
+   * overwritten by the FIRST one's late arrival, and what stops a disposed
+   * engine being handed a mesh it will never release.
+   */
+  const poseTokenRef = useRef(0);
+
+  /**
+   * The live pan, mirrored out of the store so the painter can read it at
+   * pointer rate without a React render (see the store-read note above).
+   *
+   * The STORE remains the source of truth — the rail and `clear()` both write
+   * it, and the effect below syncs this ref from it. This ref exists only so
+   * a drag can update the picture between renders.
+   */
+  const posePanRef = useRef<{ x: number; y: number }>(pose.pan);
+
+  /** Filled once the pose scheduler exists; see `invalidateHoverRef`. */
+  const invalidatePoseRef = useRef<(() => void) | null>(null);
+
+  /* ── the painter (D5) ───────────────────────────────────────────────────
+   *
+   * The established overlay recipe, with one addition: the frame comes from
+   * the GPU rather than from an `ImageData` this file fills in.
+   */
+  const renderPose = useCallback(() => {
+    const canvas = poseCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    const engine = poseEngineRef.current;
+    if (!poseActive || !engine || engine.isDisposed || !poseRootRef.current) {
+      // Inert when the tool is not selected, or nothing is loaded. Clearing
+      // through the canvas's OWN dimensions rather than `cellWidth` matters
+      // here: on the frame a resize lands, the backing store may still be the
+      // old size and a `cellWidth`-sized clear would leave a stale band.
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    // ⚠️ 1:1 — NEVER `* zoom`. Assigning `.width` also CLEARS the backing
+    // store and RESETS `imageSmoothingEnabled` to `true`, which is why the
+    // flag is re-disabled immediately afterwards on every single paint.
+    if (canvas.width !== cellWidth) canvas.width = cellWidth;
+    if (canvas.height !== cellHeight) canvas.height = cellHeight;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, cellWidth, cellHeight);
+
+    if (cellWidth <= 0 || cellHeight <= 0) return;
+
+    // Idempotent — a no-op when the size already matches, so calling it from
+    // the paint path costs nothing and guarantees the target can never be out
+    // of step with the canvas even if an effect has not run yet.
+    engine.resize(cellWidth, cellHeight);
+
+    const frame = engine.render();
+    if (frame.length !== cellWidth * cellHeight * 4) return;
+
+    // ⚠️ `putImageData` ONLY, at 1:1, and never a scaling `drawImage` (D5).
+    // `Uint8ClampedArray` over the SAME buffer, not a copy: `ImageData`
+    // demands that view type and the engine's array is already the right
+    // bytes. `putImageData` reads it synchronously, so sharing the engine's
+    // reused readback buffer is safe.
+    // ⚠️ `frame.buffer` is typed `ArrayBufferLike`, which `ImageData` refuses
+    // because it could in principle be a `SharedArrayBuffer`. It never is — the
+    // engine allocates a plain `Uint8Array` — so the assertion narrows a
+    // possibility the runtime does not have, rather than papering over one.
+    const image = new ImageData(
+      new Uint8ClampedArray(
+        frame.buffer as ArrayBuffer,
+        frame.byteOffset,
+        frame.length,
+      ),
+      cellWidth,
+      cellHeight,
+    );
+
+    // ⚠️ The variant-edit view shift, exactly as the other overlays do it.
+    // While a variant is being edited the grid is drawn at its offset inside
+    // an expanded view; painting at raw target coordinates would put the
+    // reference that offset away from the artwork it is a reference FOR.
+    const ox = isEditingVariantResolved ? viewMinX : 0;
+    const oy = isEditingVariantResolved ? viewMinY : 0;
+
+    // The pan is applied HERE, as a whole-image translation, rather than by
+    // moving the camera: a camera pan would re-fit and re-rasterise, and the
+    // whole point of the drag is that it slides the picture the user is
+    // already looking at. Rounded to whole cells so the reference stays
+    // aligned to the pixel grid at every pan offset (manual check 3).
+    const pan = posePanRef.current;
+    const px = Math.round(pan.x) - ox;
+    const py = Math.round(pan.y) - oy;
+
+    ctx.putImageData(image, px, py);
+  }, [poseActive, cellWidth, cellHeight, isEditingVariantResolved, viewMinX, viewMinY]);
+
+  /**
+   * The pose overlay's OWN scheduler (D11).
+   *
+   * ⚠️ `renderPose` is the only dependency. Everything else that changes the
+   * picture — a light drag, a rotation, a camera preset, a resize — reaches
+   * it through the effects below, which push the value into the engine and
+   * then call `invalidate()`. That indirection is what keeps a pointer-rate
+   * input off React's render path.
+   */
+  const { invalidate: invalidatePose } = useCanvasRender(renderPose, [
+    renderPose,
+  ]);
+  // Deliberate render-phase write, the same pattern as `invalidateHoverRef`:
+  // the gesture handlers are built before the scheduler exists and must reach
+  // the CURRENT `invalidate` rather than close over a stale one.
+  invalidatePoseRef.current = invalidatePose;
+
+  /* ── engine lifecycle ──────────────────────────────────────────────────── */
+
+  /**
+   * One re-render when the engine becomes available, so the mesh effect below
+   * (which cannot run against a `null` engine) gets a chance to build.
+   *
+   * ⚠️ A counter, not the engine itself, and it ticks exactly ONCE per engine
+   * — this is not on any pointer path.
+   */
+  const [poseEngineTick, setPoseEngineTick] = useState(0);
+
+  /**
+   * Create the engine on first activation; NEVER on mount.
+   *
+   * ⚠️ Idempotent under StrictMode's double-invoked effects. The guard is the
+   * ref, not the effect body: a second invocation finds `poseEngineRef
+   * .current` already set (or a create already in flight, caught by the
+   * token) and does nothing, so exactly ONE WebGL context exists per mount.
+   *
+   * ⚠️ The cleanup deliberately does NOT dispose. Disposing on deactivation
+   * would destroy and rebuild a context on every tool switch — 20 switches is
+   * 20 contexts against a browser cap of ~16, which is manual check 22's leak
+   * scenario arriving from the other direction. The engine is kept alive for
+   * the container's lifetime and released once, on unmount, by the effect
+   * below. It costs one idle context and renders nothing while inactive.
+   */
+  useEffect(() => {
+    if (currentTool !== "pose") return;
+    if (poseEngineRef.current) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [three, engine] = await Promise.all([
+          loadThree(),
+          PoseEngine.create(),
+        ]);
+        if (cancelled || poseEngineRef.current) {
+          // A second create won the race (or the component unmounted while
+          // this one was in flight). Release ours rather than leaking it.
+          engine.dispose();
+          return;
+        }
+        poseThreeRef.current = three;
+        poseEngineRef.current = engine;
+        invalidatePoseRef.current?.();
+        // Bumping the token re-runs the mesh effect, which cannot have built
+        // anything while the engine was still `null`.
+        poseTokenRef.current += 1;
+        setPoseEngineTick((t) => t + 1);
+      } catch (error) {
+        // WebGL unavailable, or the chunk failed to load. The tool simply
+        // cannot run here; every other tool is unaffected, so this is a
+        // warning and not a thrown error mid-render.
+        console.warn("[pose] the 3D reference engine is unavailable", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTool]);
+
+  /**
+   * Dispose on unmount — the obligation `PoseEngine`'s header states.
+   *
+   * ⚠️ EMPTY dependency array, deliberately. A dependency here would run the
+   * cleanup on that dependency's every change and destroy a live context
+   * mid-session. StrictMode's synthetic unmount does dispose, and the create
+   * effect above then builds a fresh one on the remount — which is the
+   * correct behaviour and is precisely what manual check 23 looks for.
+   */
+  useEffect(() => {
+    return () => {
+      poseTokenRef.current += 1;
+      poseRootRef.current = null;
+      poseCameraRef.current = null;
+      poseThreeRef.current = null;
+      poseEngineRef.current?.dispose();
+      poseEngineRef.current = null;
+    };
+  }, []);
+
+  /* ── the mesh ──────────────────────────────────────────────────────────── */
+
+  /**
+   * Build (or unload) the reference solid whenever the mesh id changes.
+   *
+   * ⚠️ The MODEL COLOUR is handled here too, but by re-materialising in place
+   * rather than by rebuilding the geometry — a colour change must not throw
+   * away and re-upload a 9.6k-triangle mannequin. `applyMaterial` disposes
+   * the outgoing materials as it goes.
+   *
+   * ⚠️ `setObject3D` TAKES OWNERSHIP and disposes whatever it replaces, so
+   * routing every mesh through it is what keeps geometries from leaking on
+   * repeated mesh changes (manual check 22).
+   */
+  useEffect(() => {
+    const engine = poseEngineRef.current;
+    const three = poseThreeRef.current;
+    if (!engine || !three || engine.isDisposed) return;
+
+    if (poseMeshId === null) {
+      engine.clearObject3D();
+      poseRootRef.current = null;
+      invalidatePoseRef.current?.();
+      return;
+    }
+
+    poseTokenRef.current += 1;
+    const token = poseTokenRef.current;
+
+    void (async () => {
+      try {
+        const object = await buildMesh(three, poseMeshId, poseModelColor);
+        // ⚠️ The token check is what makes two overlapping builds safe. A
+        // stale one disposes its own object rather than installing it over
+        // the newer mesh — see `poseTokenRef`.
+        const live = poseEngineRef.current;
+        if (token !== poseTokenRef.current || !live || live.isDisposed) {
+          object.traverse((node) => {
+            const holder = node as Object3D & {
+              geometry?: { dispose?: () => void };
+              material?: { dispose?: () => void } | { dispose?: () => void }[];
+            };
+            holder.geometry?.dispose?.();
+            const material = holder.material;
+            if (Array.isArray(material)) for (const m of material) m?.dispose?.();
+            else material?.dispose?.();
+          });
+          return;
+        }
+        live.setObject3D(object);
+        poseRootRef.current = object;
+        invalidatePoseRef.current?.();
+      } catch (error) {
+        // The mannequin is not vendored until task 09, so
+        // `MannequinUnavailableError` is the EXPECTED failure here. Warn and
+        // leave the previous mesh in place rather than blanking the overlay.
+        console.warn("[pose] could not load the reference mesh", error);
+      }
+    })();
+    // ⚠️ `poseModelColor` is deliberately NOT a dependency: it is handled by
+    // the re-materialise effect below, which does not rebuild the geometry.
+    // It is READ here so a freshly built mesh starts in the right colour.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poseMeshId, poseEngineTick]);
+
+  /** Re-tint the existing mesh. No geometry rebuild — see the effect above. */
+  useEffect(() => {
+    const three = poseThreeRef.current;
+    const root = poseRootRef.current;
+    if (!three || !root) return;
+    applyMaterial(three, root, poseModelColor);
+    invalidatePoseRef.current?.();
+  }, [poseModelColor, poseEngineTick, poseMeshId]);
+
+  /* ── rotation, light, camera ───────────────────────────────────────────── */
+
+  /** The model's orientation. Euler XYZ radians, three's default order. */
+  useEffect(() => {
+    const root = poseRootRef.current;
+    if (!root) return;
+    root.rotation.set(poseRotation.x, poseRotation.y, poseRotation.z);
+    invalidatePoseRef.current?.();
+  }, [poseRotation, poseEngineTick, poseMeshId]);
+
+  /** The key light's direction and colour. */
+  useEffect(() => {
+    const engine = poseEngineRef.current;
+    if (!engine || engine.isDisposed) return;
+    engine.setLight(poseLightDirection, poseLightColor);
+    invalidatePoseRef.current?.();
+  }, [poseLightDirection, poseLightColor, poseEngineTick]);
+
+  /* ── auto-fit (D7) ─────────────────────────────────────────────────────── */
+
+  /**
+   * Re-frame the model. Runs on mesh, framing, projection, preset, rotation,
+   * zoom, FOV **and `cellWidth`/`cellHeight`** change.
+   *
+   * ⚠️ THE RESIZE PATH IS THE `cellWidth`/`cellHeight` DEPENDENCY, and that is
+   * the whole answer to "respond to the object being resized". A grid resize
+   * notifies through `domainVersion`, NOT `pixelVersion`, so there is no
+   * pixel-side signal to observe — but `cellWidth`/`cellHeight` already flow
+   * through this container as plain values and change when the object is
+   * resized. Keying off them directly is both simpler and correct.
+   *
+   * ⚠️ THE PAN IS PRESERVED. It is neither read nor written here, so a resize
+   * re-fits the model while leaving it wherever the user dragged it (manual
+   * check 19). Only `PoseUIStore.setMesh` resets it — which is why a mesh
+   * change recentres and a resize does not.
+   *
+   * ⚠️ The camera is rebuilt only when the PROJECTION changes. Four of the
+   * five presets are orthographic (D14) and `OrthographicCamera` is a
+   * different class, so the instance genuinely has to change — but a preset
+   * that keeps the projection reuses the camera and only rewrites its fields.
+   */
+  useEffect(() => {
+    const engine = poseEngineRef.current;
+    const three = poseThreeRef.current;
+    if (!engine || !three || engine.isDisposed) return;
+    if (cellWidth <= 0 || cellHeight <= 0) return;
+
+    // A preset OVERRIDES the projection and supplies the orbit; the store's
+    // own `projection` is the fallback for a preset id that no longer exists.
+    const preset = getCameraPreset(poseCameraPreset);
+    const projection = preset?.projection ?? poseProjection;
+
+    const params = fitCameraToMesh({
+      // Primitives are normalised into the unit box and only ever use
+      // `"full"`; the mannequin's body-part buttons are sub-boxes of the
+      // same box (D4), so ONE call covers both.
+      bounds: getFramingBounds(poseFraming, UNIT_BOUNDS),
+      canvasWidth: cellWidth,
+      canvasHeight: cellHeight,
+      projection,
+      rotation: poseRotation,
+      fov: poseFov,
+      pitch: preset?.pitch ?? 0,
+      yaw: preset?.yaw ?? 0,
+      // ⚠️ Zoom is folded into the PADDING, not applied as a camera scale.
+      // A larger zoom means less padding means a bigger model, and expressing
+      // it this way keeps `fitCameraToMesh` the single owner of the framing —
+      // an independent scale multiplier would be a second place that decides
+      // how big the model is, and the two would drift.
+      padding: 1 - (1 - DEFAULT_POSE_FIT_PADDING) * poseZoom,
+    });
+
+    // Rebuild the camera only on a genuine projection change.
+    const current = poseCameraRef.current;
+    const needsPerspective = params.projection === "perspective";
+    // ⚠️ `in`, not a property read: each class declares only its OWN flag, as
+    // the literal `true`, so neither exists on the other member of the union.
+    const matches =
+      current !== null &&
+      (needsPerspective
+        ? "isPerspectiveCamera" in current
+        : "isOrthographicCamera" in current);
+
+    if (!matches) {
+      poseCameraRef.current = needsPerspective
+        ? new three.PerspectiveCamera()
+        : new three.OrthographicCamera(-1, 1, 1, -1);
+    }
+
+    const camera = poseCameraRef.current;
+    if (!camera) return;
+    applyCameraParams(camera, params);
+    engine.setCamera(camera);
+    invalidatePoseRef.current?.();
+  }, [
+    poseEngineTick,
+    poseMeshId,
+    poseFraming,
+    poseProjection,
+    poseCameraPreset,
+    poseRotation,
+    poseZoom,
+    poseFov,
+    cellWidth,
+    cellHeight,
+  ]);
+
+  /**
+   * Keep the render target in step with the grid, and repaint.
+   *
+   * Separate from the fit above so the two concerns stay legible: this owns
+   * the TARGET's dimensions, that owns the CAMERA's framing. `resize()` is
+   * idempotent, so the overlap is free.
+   */
+  useEffect(() => {
+    const engine = poseEngineRef.current;
+    if (!engine || engine.isDisposed) return;
+    engine.resize(cellWidth, cellHeight);
+    invalidatePoseRef.current?.();
+  }, [cellWidth, cellHeight, poseEngineTick]);
+
+  /**
+   * Adopt a pan written by anything other than a drag — `setMesh`'s reset and
+   * `clear()`'s. The drag writes the ref itself and does not wait for this.
+   */
+  useEffect(() => {
+    posePanRef.current = pose.pan;
+    invalidatePoseRef.current?.();
+  }, [pose.pan]);
+
+  /* ── the gestures (D12) ────────────────────────────────────────────────── */
+
+  /**
+   * The in-flight pan drag: the last client point, or `null` when idle.
+   *
+   * ⚠️ A REF, per D11. A `useState` here would re-render this container on
+   * every pointer sample, rebuilding `getToolContext`, the tool handlers and
+   * `pointer` mid-gesture — the "unable to slide and draw" regression
+   * documented at `hoverPixelRef`.
+   */
+  const poseDragRef = useRef<{ x: number; y: number } | null>(null);
+
+  /**
+   * The previous pointer-down, for double-click detection.
+   *
+   * ⚠️ Detected EXPLICITLY as two downs within 400 ms and within 2 cells,
+   * rather than by listening for `dblclick` (D12). `dblclick` is not
+   * dispatched reliably for touch, and the owner uses an iPad — a
+   * mouse-only stamp is a failed task.
+   */
+  const poseLastDownRef = useRef<{ t: number; x: number; y: number } | null>(
+    null,
+  );
+
+  /**
+   * Screen-space delta → grid-cell delta.
+   *
+   * ⚠️ Through the canvas RECT, never by dividing by `zoom`. The canvas
+   * carries a CSS `transform: scale()` for pinch and only the rect reflects
+   * it mid-gesture — the same reasoning `coords.ts` documents, and the reason
+   * pose needs no new snap mode of its own.
+   */
+  const poseScreenToCellDelta = useCallback(
+    (dx: number, dy: number): { x: number; y: number } => {
+      const canvas = canvasRef.current;
+      if (!canvas) return { x: 0, y: 0 };
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
+      return {
+        x: (dx * cellWidth) / rect.width,
+        y: (dy * cellHeight) / rect.height,
+      };
+    },
+    [cellWidth, cellHeight],
+  );
+
+  /**
+   * `true` if this down is the second half of a double-click/tap.
+   *
+   * Consumes the record either way: a third rapid click starts a new pair
+   * rather than stamping again, which is what a user tapping repeatedly
+   * expects and what stops one gesture producing two undo entries.
+   */
+  const posePollDoubleClick = useCallback(
+    (clientX: number, clientY: number): boolean => {
+      const now = Date.now();
+      const prev = poseLastDownRef.current;
+      poseLastDownRef.current = { t: now, x: clientX, y: clientY };
+      if (!prev) return false;
+      if (now - prev.t > POSE_DOUBLE_CLICK_MS) return false;
+      const delta = poseScreenToCellDelta(clientX - prev.x, clientY - prev.y);
+      if (Math.hypot(delta.x, delta.y) > POSE_DOUBLE_CLICK_CELLS) return false;
+      poseLastDownRef.current = null;
+      return true;
+    },
+    [poseScreenToCellDelta],
+  );
+
+  /* ── the stamp (D8, D9) ────────────────────────────────────────────────── */
+
+  /**
+   * Render the colour, normal and depth passes and commit them as ONE cell
+   * write.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THREE PASSES OVER THE SAME MESH, NOT THREE SCENES
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * The engine holds one root and renders whatever material that root
+   * carries, so the extra passes are done by SWAPPING the root's materials
+   * and rendering again. The alternative — `scene.overrideMaterial` — is
+   * private to the engine, and a second scene would mean a second copy of the
+   * geometry. Every swapped-in material is disposed before the original is
+   * restored, so the two extra passes leak nothing.
+   *
+   * ── The depth pass, and the D8 fallback ─────────────────────────────────
+   *
+   * `MeshDepthMaterial` with `BasicDepthPacking` writes `1 - ndcDepth` into
+   * RGB as luminance — so the RGBA readback the engine already does IS the
+   * depth buffer, with NEARER = LARGER. That sidesteps `readRenderTargetPixels`
+   * being RGBA-only, which is what would otherwise have made depth
+   * unavailable and forced the height = 0 fallback. The fallback is still
+   * wired: if the pass throws or comes back the wrong size, `depth` is passed
+   * as `null` and every cell's height becomes `0` (the project's "no data"
+   * sentinel) while colour and normal still land.
+   *
+   * ⚠️ The height range is measured from the model's OWN observed depths, not
+   * from the clip planes — D8 says "normalised across the model's own
+   * near/far bounds", and the clip planes carry padding the model does not
+   * occupy, which would compress every real height into a narrow band.
+   *
+   * ⚠️ NOT routed through `actions.setPixels`. That closure applies the
+   * REFLECTION MIRROR and is for drawing; a stamp is a placement, in the same
+   * category as `moveLayerPixels` and the lighting studio, which are
+   * excluded for the same reason. `app.selectionUI.writeOptions` is passed so
+   * an active selection still masks it (manual check 16).
+   */
+  const poseStamp = useCallback(() => {
+    const engine = poseEngineRef.current;
+    const three = poseThreeRef.current;
+    const root = poseRootRef.current;
+    if (!engine || !three || !root || engine.isDisposed) return;
+    if (cellWidth <= 0 || cellHeight <= 0) return;
+    if (!layer) return;
+
+    const texels = cellWidth * cellHeight;
+
+    // ── pass 1: the lit colour ─────────────────────────────────────────
+    // Copied, because the engine REUSES its readback buffer across frames and
+    // two more passes are about to overwrite it.
+    engine.resize(cellWidth, cellHeight);
+    const colorBuffer = Uint8Array.from(engine.render());
+    if (colorBuffer.length !== texels * 4) return;
+
+    /**
+     * Render one pass with `material` swapped in for the root's own, then put
+     * the originals back. Returns a COPY of the frame, or `null` if the pass
+     * could not run — the caller decides how to degrade.
+     */
+    const renderWithMaterial = (
+      material: { dispose?: () => void },
+    ): Uint8Array | null => {
+      const saved: {
+        node: { material?: unknown };
+        material: unknown;
+      }[] = [];
+      try {
+        root.traverse((node) => {
+          const holder = node as Object3D & { material?: unknown };
+          if (holder.material === undefined) return;
+          saved.push({ node: holder, material: holder.material });
+          holder.material = material;
+        });
+        if (saved.length === 0) return null;
+        const out = Uint8Array.from(engine.render());
+        return out.length === texels * 4 ? out : null;
+      } catch {
+        return null;
+      } finally {
+        for (const entry of saved) entry.node.material = entry.material;
+      }
+    };
+
+    // ── pass 2: the view-space normals ─────────────────────────────────
+    // `MeshNormalMaterial` writes `n * 0.5 + 0.5` per channel. `poseStamp`'s
+    // `decodeNormalTexel` undoes that AND negates Y — three is Y-up, this
+    // project is Y-down. That convention is settled and verified in three
+    // places; do not "correct" it here.
+    const normalMaterial = new three.MeshNormalMaterial({
+      flatShading: true,
+      side: three.DoubleSide,
+    });
+    let normalBuffer: Uint8Array;
+    try {
+      normalBuffer = renderWithMaterial(normalMaterial) ?? new Uint8Array(0);
+    } finally {
+      normalMaterial.dispose();
+    }
+
+    // ── pass 3: depth ──────────────────────────────────────────────────
+    const depthMaterial = new three.MeshDepthMaterial({
+      depthPacking: three.BasicDepthPacking,
+      side: three.DoubleSide,
+    });
+    let depthRgba: Uint8Array | null;
+    try {
+      depthRgba = renderWithMaterial(depthMaterial);
+    } finally {
+      depthMaterial.dispose();
+    }
+
+    // Restore the picture the user is looking at: the passes above rendered
+    // over the target, and without this the overlay would show the depth pass
+    // until the next invalidation.
+    invalidatePoseRef.current?.();
+
+    // One value per texel, taken from R (all three channels carry the same
+    // luminance under `BasicDepthPacking`).
+    //
+    // ⚠️ The observed range is measured ONLY over texels the COLOUR pass says
+    // were drawn. The target clears transparent, so every background texel
+    // reads R = 0 — include those and the range becomes `[0, hi]` for every
+    // model, which compresses the model's real depths into the top of the
+    // scale and flattens the height field. Gating on the colour pass's alpha
+    // is what makes this the model's OWN near/far bounds, as D8 requires.
+    let depth: Uint8Array | null = null;
+    let depthNear = 255;
+    let depthFar = 0;
+    if (depthRgba) {
+      depth = new Uint8Array(texels);
+      let seen = false;
+      let lo = 255;
+      let hi = 0;
+      for (let i = 0; i < texels; i++) {
+        const value = depthRgba[i * 4];
+        depth[i] = value;
+        if (colorBuffer[i * 4 + 3] < POSE_ALPHA_THRESHOLD) continue;
+        seen = true;
+        if (value < lo) lo = value;
+        if (value > hi) hi = value;
+      }
+      if (!seen || hi === lo) {
+        // A perfectly flat model (a face-on plane) has no gradient to
+        // normalise across. `depthToHeight` answers HEIGHT_MAX for a
+        // degenerate range, which is the right uniform slab.
+        depthNear = 1;
+        depthFar = 1;
+      } else {
+        // NEARER IS TALLER, and under `BasicDepthPacking` nearer is LARGER —
+        // so the "near" bound of the range is the MAXIMUM observed value.
+        depthNear = hi;
+        depthFar = lo;
+      }
+    }
+
+    // ⚠️ THE OFFSET MUST MATCH THE PAINTER'S, EXACTLY — this is manual check
+    // 14 ("the stamped pixels land exactly where the model was drawn").
+    //
+    // Two terms, and BOTH are needed:
+    //
+    //  - the PAN, rounded to whole cells the same way `renderPose` rounds it.
+    //    Rounding in only one of the two places would put the stamp up to a
+    //    cell away from the picture at half-integer pans.
+    //  - the VARIANT-EDIT SHIFT, which is `variantOffset` and NOT `viewMin`.
+    //    Derived, not guessed, from `placeHoverCells` — the one place that
+    //    already converts between these two spaces:
+    //
+    //      canvasX = gridX + (variantOffset.x - viewMinX)
+    //
+    //    The painter puts the render target's texel (0,0) at canvas column
+    //    `round(pan.x) - viewMinX`, so inverting the line above gives that
+    //    texel a GRID column of `round(pan.x) - variantOffset.x` — the
+    //    `viewMinX` terms cancel exactly. `setPixelCells` writes the VARIANT's
+    //    own grid while editing one (`PixelStore.resolveTarget`'s variant
+    //    branch), which is that space. Using `viewMin` here instead would be
+    //    wrong by `variantOffset - viewMin` and visible only while editing a
+    //    variant — exactly the kind of offset bug that ships.
+    const pan = posePanRef.current;
+    const stampOx = isEditingVariantResolved ? variantOffset.x : 0;
+    const stampOy = isEditingVariantResolved ? variantOffset.y : 0;
+    const cells: PoseStampCell[] = buildStampCells({
+      color: colorBuffer,
+      normal: normalBuffer,
+      depth,
+      width: cellWidth,
+      height: cellHeight,
+      alphaThreshold: POSE_ALPHA_THRESHOLD,
+      heightRange: { near: depthNear, far: depthFar },
+      offsetX: Math.round(pan.x) - stampOx,
+      offsetY: Math.round(pan.y) - stampOy,
+    });
+    if (cells.length === 0) return;
+
+    // ⚠️ `buildStampCells` allocates a FRESH `color` and `normal` per cell,
+    // which is required: `setPixelCells` stores the caller's objects in its
+    // history patch without deep-copying, so a shared object mutated later
+    // would corrupt an already-recorded undo entry.
+    app.pixels.setPixelCells(cells, app.selectionUI.writeOptions);
+  }, [app, cellWidth, cellHeight, layer, isEditingVariantResolved, variantOffset]);
+
+  /**
+   * A pointer went down with the pose tool selected.
+   *
+   * Returns `true` if the pose tool consumed the event, so the mouse and
+   * touch handlers can share ONE arbitration and cannot drift apart.
+   */
+  const posePointerDown = useCallback(
+    (clientX: number, clientY: number): boolean => {
+      if (currentTool !== "pose") return false;
+      if (posePollDoubleClick(clientX, clientY)) {
+        poseDragRef.current = null;
+        poseStamp();
+        return true;
+      }
+      poseDragRef.current = { x: clientX, y: clientY };
+      return true;
+    },
+    [currentTool, posePollDoubleClick, poseStamp],
+  );
+
+  /** A pointer moved: pan the model, at pointer rate, through the refs. */
+  const posePointerMove = useCallback(
+    (clientX: number, clientY: number): boolean => {
+      if (currentTool !== "pose") return false;
+      const from = poseDragRef.current;
+      if (!from) return true;
+      const delta = poseScreenToCellDelta(clientX - from.x, clientY - from.y);
+      if (delta.x === 0 && delta.y === 0) return true;
+      poseDragRef.current = { x: clientX, y: clientY };
+      // The REF is what the painter reads, so it is updated first and the
+      // repaint scheduled immediately; the store write is the durable record.
+      const next = {
+        x: posePanRef.current.x + delta.x,
+        y: posePanRef.current.y + delta.y,
+      };
+      posePanRef.current = next;
+      invalidatePoseRef.current?.();
+      app.pose.setPan(next);
+      return true;
+    },
+    [currentTool, poseScreenToCellDelta, app],
+  );
+
+  /** The gesture ended. Nothing to commit — the pan is already in the store. */
+  const posePointerUp = useCallback((): boolean => {
+    if (currentTool !== "pose") return false;
+    poseDragRef.current = null;
+    return true;
+  }, [currentTool]);
+
+  /* ── end of concern #14 ────────────────────────────────────────────────── */
+
   /* ── the reflection guides (concern #13, reflection-tool task 07) ───────── */
   //
   // ══════════════════════════════════════════════════════════════════════
@@ -3003,6 +3923,21 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  THE POSE GESTURE — ARBITRATED HERE TOO (pose-tool task 08, D12)
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // Ahead of the tool table with `origin` and `reflection`, and for the
+    // same reason: `pose`'s `toolHandlers` entry is deliberately empty, it
+    // opens NO history stroke, and it writes no pixels through the table. A
+    // drag pans the reference; a double-click stamps it, as ONE atomic
+    // `setPixelCells` commit.
+    //
+    // ⚠️ Also ahead of the `!coords || !layer` guard below — but `poseStamp`
+    // checks `layer` itself, because a stamp genuinely does need somewhere to
+    // land while a PAN is perfectly meaningful with no layer selected.
+    if (posePointerDown(e.clientX, e.clientY)) return;
+
     const coords = getPixelCoords(e.clientX, e.clientY);
     if (!coords || !layer) return;
 
@@ -3205,6 +4140,11 @@ export const CanvasContainer = observer(function CanvasContainer({
       if (corner) app.reflection.updateDraft(corner.x, corner.y);
       return;
     }
+
+    // Pan the 3D reference. Before the `!coords` bail below for the same
+    // reason reflection is: dragging past the sprite's edge must keep moving
+    // the model rather than abandoning the gesture mid-drag.
+    if (posePointerMove(e.clientX, e.clientY)) return;
 
     /* ⚠️ A SHAPE DRAG KEEPS TRACKING INSTEAD OF BAILING, and it must come
        BEFORE the `!coords` early return. Dragging a line/rectangle/ellipse
@@ -3474,6 +4414,10 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    // Ends the pan. Nothing to commit — `posePointerMove` already wrote every
+    // sample to the store, so a release has no work beyond dropping the ref.
+    if (posePointerUp()) return;
+
     if (isPanning) {
       setIsPanning(false);
       setLastPanPoint(null);
@@ -3676,6 +4620,11 @@ export const CanvasContainer = observer(function CanvasContainer({
       // A second finger during a guide drag is a pinch, not a line. Drop the
       // draft so the zoom does not also leave a stray guide behind on release.
       app.reflection.cancelDraft();
+      // Same for a pose pan: a pinch must zoom the VIEW, not drag the model
+      // along with it, and a second contact must not pair with the first into
+      // a phantom double-tap stamp.
+      poseDragRef.current = null;
+      poseLastDownRef.current = null;
       return;
     }
 
@@ -3704,6 +4653,16 @@ export const CanvasContainer = observer(function CanvasContainer({
       if (corner) app.reflection.beginDraft(corner.x, corner.y);
       return;
     }
+
+    // ⚠️ POSE, ALSO BEFORE THE `isGestureTool` BAIL BELOW — the same ordering
+    // rule, for the second tool that actually needs it. `pose` is in that
+    // list, so the bail further down would swallow the whole gesture: no pan,
+    // no double-tap stamp, silently. The owner uses an iPad; a mouse-only
+    // pose tool is a failed task (D12).
+    //
+    // ⚠️ Also before the `!coords || !layer` guard, for the same reason as
+    // the mouse path.
+    if (posePointerDown(touch.clientX, touch.clientY)) return;
 
     const coords = getPixelCoords(touch.clientX, touch.clientY);
     if (!coords || !layer) return;
@@ -3740,6 +4699,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       // never dragged. `cancelDraft` is a no-op with no draft, so this costs
       // nothing on the far more common pinch-with-no-guide-in-flight path.
       app.reflection.cancelDraft();
+      poseDragRef.current = null;
       return;
     }
 
@@ -3830,6 +4790,12 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    // ⚠️ Before BOTH bails below, exactly as reflection is: the `!coords` one
+    // (a pan past the sprite's edge must keep panning) and the
+    // `isGestureTool` one at the end of this handler, which would otherwise
+    // discard every sample of the drag.
+    if (posePointerMove(touch.clientX, touch.clientY)) return;
+
     // The shape tools keep tracking rather than bail — see `handleMouseMove`.
     // On the iPad this is the difference between a rectangle that keeps
     // following the Pencil past the bezel and one that vanishes.
@@ -3909,6 +4875,13 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    // Before the `isGestureTool` bail this handler reaches through its
+    // siblings, and before every early return below: a pose gesture sets none
+    // of `isPanning` / `isDraggingPixels` / `isDrawing`, so without this the
+    // drag ref would survive the lift and the NEXT touch would resume panning
+    // from a stale origin.
+    if (posePointerUp()) return;
+
     if (isPanning) {
       setIsPanning(false);
       setLastPanPoint(null);
@@ -3940,6 +4913,13 @@ export const CanvasContainer = observer(function CanvasContainer({
   const handleTouchCancel = () => {
     lastStrokePixelRef.current = null;
     applyMarker("touch", "end", () => null);
+    // The system took the touch away, so the pan drag ends where it is. It is
+    // NOT rolled back: unlike a shape, every sample of a pan has already been
+    // committed to the store and there is no in-flight preview to abandon.
+    // The double-click record is dropped too, so a cancelled tap cannot pair
+    // with the next one into a stamp the user never asked for.
+    poseDragRef.current = null;
+    poseLastDownRef.current = null;
     actions.clearPreviewPixels();
     setIsPanning(false);
     setLastPanPoint(null);
@@ -4253,6 +5233,11 @@ export const CanvasContainer = observer(function CanvasContainer({
       frameOverlayCanvasRef={frameOverlayCanvasRef}
       frameTraceOverlayCanvasRef={frameTraceOverlayCanvasRef}
       hoverCanvasRef={hoverCanvasRef}
+      // The pose tool's 3D reference (task 04 mounted the canvas; this
+      // supplies the ref). It sits above every layer and below the reflection
+      // guides and the SVG chrome — DOM order is z-order in the stack, and
+      // `CanvasSurface` inserts it accordingly (D10).
+      poseCanvasRef={poseCanvasRef}
       containerRef={containerRef}
       // ⚠️ `reflectionCanvasRef` is DELIBERATELY NOT PASSED. `CanvasSurface`
       // mounts that canvas unconditionally and the prop is optional, so the

@@ -78,14 +78,42 @@
  */
 import type {
   AmbientLight,
+  Camera,
   Color as ThreeColor,
   DirectionalLight,
   Object3D,
+  OrthographicCamera,
   PerspectiveCamera,
   Scene,
   WebGLRenderer,
   WebGLRenderTarget,
 } from "three";
+
+/**
+ * The camera types this engine will render with.
+ *
+ * ⚠️ Widened from `PerspectiveCamera` by pose-tool task 08, under the
+ * coordinator's authorised scope extension of 2026-09-03. MASTER D14 makes
+ * FOUR of the five camera presets orthographic, and `OrthographicCamera` is
+ * not assignable to `PerspectiveCamera` in `@types/three` — so the original
+ * signature could not express the feature the presets describe.
+ *
+ * A union rather than the bare `Camera` base class: `resize()` below narrows
+ * on `isPerspectiveCamera` to refresh the aspect ratio, and the union is what
+ * makes that discriminant visible to the compiler. `Camera` is still imported
+ * so the intent — "any three camera would render" — stays legible; only the
+ * two the presets actually produce are accepted.
+ */
+export type PoseEngineCamera = PerspectiveCamera | OrthographicCamera;
+
+/**
+ * Compile-time assertion that the union really is a `Camera`, so a future
+ * widening cannot admit something the renderer would reject. `AssertCamera` is
+ * `never` if it ever stops holding, and a `never` type parameter is a `tsc`
+ * error at the `satisfies` below. Both are erased at build time.
+ */
+type AssertCamera<T extends Camera> = T;
+export type PoseEngineCameraIsCamera = AssertCamera<PoseEngineCamera>;
 import type { PoseColor, PoseVector } from "@/ui/canvas/pose/poseTypes";
 
 /** The three module namespace, as returned by the dynamic import. */
@@ -176,8 +204,11 @@ export class PoseEngine {
   /**
    * A placeholder perspective camera. Task 06 owns the presets, framing and
    * auto-fit; this exists only so the engine can render something at all.
+   *
+   * Typed as the {@link PoseEngineCamera} union because task 08 installs an
+   * `OrthographicCamera` for four of the five presets (D14).
    */
-  private camera: PerspectiveCamera;
+  private camera: PoseEngineCamera;
 
   private readonly keyLight: DirectionalLight;
 
@@ -301,9 +332,14 @@ export class PoseEngine {
     const needed = w * h * 4;
     if (this.readback.length !== needed) this.readback = new Uint8Array(needed);
 
-    if (this.camera.isPerspectiveCamera) {
-      this.camera.aspect = w / h;
-      this.camera.updateProjectionMatrix();
+    // ⚠️ `"isPerspectiveCamera" in camera`, not a property read. Both classes
+    // declare their own flag as the literal `true`, so neither flag exists on
+    // the other member of the union and a direct read does not compile. The
+    // `in` check is the discriminant TypeScript can actually narrow on.
+    const camera = this.camera;
+    if ("isPerspectiveCamera" in camera) {
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
     }
   }
 
@@ -373,14 +409,20 @@ export class PoseEngine {
     this.root = null;
   }
 
-  /** Replace the placeholder camera (task 06 owns the real ones). */
-  setCamera(camera: PerspectiveCamera): void {
+  /**
+   * Replace the placeholder camera (task 06 owns the real ones).
+   *
+   * Accepts either projection — see {@link PoseEngineCamera}. The engine does
+   * NOT take ownership: a camera holds no GPU resource, so there is nothing to
+   * dispose and `dispose()` deliberately leaves it alone.
+   */
+  setCamera(camera: PoseEngineCamera): void {
     if (this.disposed) return;
     this.camera = camera;
   }
 
   /** The camera currently used for rendering. */
-  getCamera(): PerspectiveCamera {
+  getCamera(): PoseEngineCamera {
     return this.camera;
   }
 
