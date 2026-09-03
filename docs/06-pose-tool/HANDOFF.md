@@ -1,15 +1,15 @@
 # HANDOFF — Pose tool
 
-**Current position:** W1 IN PROGRESS
+**Current position:** W1 DONE — W2 next
 **Branch:** `feat/06-pose-tool`
-**Last commit:** `35d1644`
+**Last commit:** `2073de6`
 **Plan written:** 2026-09-02 · Planning baseline HEAD: `cd7a852`
 
 ## Wave ledger
 
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
-| W1 | 01, 02, 03, 04, 05 | IN PROGRESS | 2026-09-02 | | |
+| W1 | 01, 02, 03, 04, 05 | DONE | 2026-09-02 | `2073de6` | tsc 0 · eslint 0 err/65 warn · vitest 140 files 2571 tests · boundaries OK · stylelint 2 err · no lockfile |
 | W2 | 06, 07 | TODO | | | |
 | W3 | 08 | TODO | | | |
 | W4 | 09 | TODO | | | |
@@ -21,11 +21,11 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
 | Task | Title | Wave | Status | Commit | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 01 | Register the `pose` tool | W1 | TODO | | |
-| 02 | `PoseUIStore` + wiring | W1 | TODO | | |
-| 03 | three.js + engine skeleton | W1 | TODO | | |
-| 04 | Pose overlay canvas | W1 | TODO | | |
-| 05 | `PixelStore.setPixelCells()` | W1 | TODO | | |
+| 01 | Register the `pose` tool | W1 | DONE | `74e709b` | Tool union 18, `pose: {}`, hotkey P/p, Box button last. 5 manual checks owed. |
+| 02 | `PoseUIStore` + wiring | W1 | DONE | `23906d5` | 11 fields, 25 tests. Cleared on `loadGeneration`, NOT `adoptTree`. Not persisted. |
+| 03 | three.js + engine skeleton | W1 | DONE | `14ee191` | three 0.185.1 / @types 0.185.4, both exact. Lazy chunk proven: 734 kB split. |
+| 04 | Pose overlay canvas | W1 | DONE | `bc27135` | Overlay before reflection (754 < 769). CSS comment-only. Negative control run. |
+| 05 | `PixelStore.setPixelCells()` | W1 | DONE | `2073de6` | `setPixelCells` additive, one history entry. Corpus digests unchanged. |
 | 06 | Meshes, camera, auto-fit, stamp math | W2 | TODO | | |
 | 07 | Pose rail section + orbs | W2 | TODO | | |
 | 08 | `CanvasContainer` integration | W3 | TODO | | |
@@ -75,6 +75,27 @@ never revert or commit someone else's work.
   worktree", High/High) **does not apply to this execution**. MASTER.md's stated line
   numbers for `types/domain.ts`, `PixelStudioTools.tsx`, `UIStore.ts` and
   `CanvasContainer.tsx` predate that commit — locate symbols by name, not by line.
+- **2026-09-02 · W1 · task 01.** Corrected four stale doc counts its change falsified
+  ("16-tool union"→18, "17th tool"→19th in `toolHandlers.ts`; "17-member"→18, "12 tool
+  hotkeys"→13 in `useCanvasKeyboard.ts`) and renamed the `maps all 12 tools` test to 13 —
+  that assertion is `expect(tools.size).toBe(12)` and would otherwise fail. In-scope files,
+  no behaviour change.
+- **2026-09-02 · W1 · task 02.** `clamp()` treats only `NaN` as "fall back to min";
+  infinities clamp to the bound they run into, so `setFov(Infinity)` gives 120 rather than
+  10. Both pinned by tests.
+- **2026-09-02 · W1 · task 03.** Added `setCamera()`/`getCamera()` to `PoseEngine` beyond
+  the stated surface, so task 06 has a public seam for its camera. Also confirmed
+  `bun add --exact` **does** write `client/bun.lock` — deleted after every invocation, and
+  the coordinator re-verified the tree is lockfile-free.
+- **2026-09-02 · W1 · task 04.** Added **no** `.canvas__overlay--pose` declarations, only a
+  comment block: nothing differs from the `.canvas__overlay` base, and both sibling
+  modifiers (`--hover`, `--reflection`) are comment-only by explicit design. Also added
+  `:not(--pose)` to an existing overlay-counting test that would otherwise have silently
+  stopped asserting anything.
+- **2026-09-02 · W1 · task 05.** Added 4 tests beyond the 7 specified, all pins on the new
+  action only. Flagged that `after` does not deep-copy caller objects (see Notes).
+- **2026-09-02 · W1 · coordinator.** MASTER.md's stylelint baseline named the wrong files.
+  Corrected in place: the 2 errors are `OtherHand.css:338`/`:359`.
 
 ## Blocked items
 
@@ -82,9 +103,79 @@ never revert or commit someone else's work.
 
 ## Manual check results
 
-(recorded per task as waves complete — tasks 01, 04, 07, 08, 09 and 10 all carry required
-manual checks)
+### W1 — verified by the coordinator, 2026-09-02
+
+Gate run by the coordinator against the combined tree at `2073de6` (not taken from any
+subagent's report — each of theirs was measured on a moving worktree while siblings wrote):
+
+```
+bunx tsc --noEmit              exit 0
+bunx eslint .                  ✖ 65 problems (0 errors, 65 warnings)
+bunx vitest run                Test Files 140 passed (140) · Tests 2571 passed (2571)
+bun run lint:boundaries        check-boundaries: OK — all 5 boundary rules hold.
+bunx stylelint "src/**/*.css"  ✖ 69 problems (2 errors, 67 warnings)
+find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules   → empty
+```
+
+Coordinator spot-checks, all passing: 18 changed files, all inside the union of the five
+`Touches` lists (no scope creep); no `stores/`/`mobx`/`services/` import anywhere under
+`ui/canvas/pose/` or in `CanvasSurface.tsx`; `UIStore.ts` untouched, so `toPersistedUIState()`
+gained no key (D6); no `z-index` or `will-change` declaration added (the grep hits are
+comment text explaining the prohibition); `three` and `@types/three` pinned bare with no
+`^`/`~`; the only `from "three"` is an `import type` (erased at build — D2's lazy loading
+is intact, and task 03's probe build measured the 734 kB chunk separately); pose overlay at
+`CanvasSurface.tsx:754`, reflection at `:769`, so DOM order satisfies D10.
+
+### ⚠️ Manual checks OWED to the owner — W1 (nobody has performed these)
+
+No subagent had a browser. Every check below needs the owner at the running app. None
+block W2, but **task 10's QA sweep must cover them.**
+
+From task 01 (tool registration):
+1. The Box icon renders last in the toolbar, tooltip reads "Pose (3D reference)".
+2. Clicking it applies active styling; console stays clean.
+3. `P` selects it; another hotkey moves off it. *(3 hotkey tests pass, but unobserved.)*
+4. Click-dragging the canvas with pose selected draws nothing and does not throw.
+   *(Structurally guaranteed by the empty `pose: {}` handler — no `onDown`/`onMove` exists.)*
+5. Undo/redo still work after selecting pose.
+
+From task 04 (overlay):
+6. **No visual change at all** anywhere in the pixel studio. The overlay is transparent and
+   empty; any visible difference means the canvas stack was disturbed.
+7. Resize the object in the app; the pose canvas's `width`/`height` follow.
+8. Draw with the pencil — marching ants and the origin cross still render above the artwork.
+9. Open the lighting studio; `LightingCanvasContainer` still renders correctly.
+
+From task 05 (`setPixelCells`):
+10. Draw / erase / flood fill / lighting normal + height tools all behave unchanged.
+11. Undo/redo across a mixed draw + normal + height sequence.
+12. Save indicator behaves normally, no spurious saves.
+
+From task 02: switching projects then undoing several times produces no console errors.
+*(Covered non-visually by three tests: `adoptTree` leaves pose intact, `loadGeneration`
+clears it, `dispose()` stops the reaction.)*
+
+Also unperformed by anyone: the full three-process `bun run dev` under mprocs. Each agent
+started only the Vite client (on a non-default port) to avoid seizing ports from siblings.
+All four confirmed the client serves HTTP 200 and transforms the new modules.
 
 ## Notes for the next session
 
-(none yet)
+**Carry into W2 (tasks 06 and 07):**
+
+- **Task 03 added `setCamera()`/`getCamera()`** to `PoseEngine` beyond the task's stated
+  surface, specifically so task 06 can install its camera without reaching into a private
+  field. Task 06 should use it rather than inventing a seam.
+- **`setPixelRatio(1)` is deliberate** in the engine. A HiDPI ratio would silently
+  supersample the 1:1 render target and defeat D5. Task 08 must not "fix" it.
+- **`poseTypes.ts` duplicates the five unions in `PoseUIStore.ts`** — unavoidable, because
+  the `ui/` boundary forbids importing from `stores/`. They are currently member-for-member
+  identical. **Any change to one must change the other**; both files say so in their headers.
+- **Task 05's `after` cell does not deep-copy the caller's `color`/`normal` objects**
+  (consistent with `setPixels`). **Task 08 must pass fresh objects per cell** — a caller
+  that mutates a `Normal` after passing it in would corrupt the recorded patch.
+- **Stylelint baseline locations were wrong in MASTER.md** and are now corrected there: the
+  2 errors are `OtherHand.css:338` and `:359`, not `ConfirmDialog.css`/`IconButton.css`
+  (those are warnings). The count of 2 is what matters and is unchanged.
+- **Bundle numbers for task 10:** main bundle 764.15 kB / 220.49 kB gzip, unchanged by W1.
+  The three chunk is 734.33 kB / 189.46 kB gzip and loads only on first engine use.

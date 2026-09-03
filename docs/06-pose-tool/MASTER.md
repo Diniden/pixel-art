@@ -127,7 +127,7 @@ execution hazard.
 | Command | Result |
 | --- | --- |
 | `bunx tsc --noEmit` | **exit 0**, clean |
-| `bunx stylelint "src/**/*.css"` | **exit 0** — 69 problems: **2 errors** (`ConfirmDialog.css:15`, `IconButton.css:32`) + 67 warnings. **This 2-error baseline is pre-existing.** New CSS must not raise it. |
+| `bunx stylelint "src/**/*.css"` | **exit 0** — 69 problems: **2 errors** (`OtherHand.css:338` and `:359`) + 67 warnings. **This 2-error baseline is pre-existing.** New CSS must not raise it. |
 | `bunx eslint .` | **exit 0** — 0 errors, 65 warnings (measured this session) |
 | `bunx vitest run` | two lanes: `unit` (node, `*.test.ts`), `dom` (jsdom, `*.dom.test.*`) |
 | `bun run lint:boundaries` | 5 rules, from `client/scripts/check-boundaries.mjs` |
