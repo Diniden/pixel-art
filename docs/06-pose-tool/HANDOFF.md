@@ -12,7 +12,7 @@
 | W1 | 01, 02, 03, 04, 05 | DONE | 2026-09-02 | `2073de6` | tsc 0 · eslint 0 err/65 warn · vitest 140 files 2571 tests · boundaries OK · stylelint 2 err · no lockfile |
 | W2 | 06, 07 | DONE | 2026-09-03 | `f4ef0de` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · no lockfile |
 | W3 | 08 | DONE | 2026-09-03 | `2dcdd42` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · build OK · no lockfile · **24 manual checks OWED** |
-| W4 | 09 | TODO | | | |
+| W4 | 09 | IN PROGRESS | 2026-09-03 | | |
 | W5 | 10 | TODO | | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
@@ -404,6 +404,21 @@ and normal intact, the pan offset, and fresh per-cell `color`/`normal` objects.
 **Dev server**: `bunx vite` on port 5279 serves `/` 200 and transforms the modified
 `CanvasContainer.tsx` 200, with `poseCanvasRef` present in the transformed output. The full
 three-process `bun run dev` under mprocs was **not** run.
+
+## OWNER DECISIONS (2026-09-03)
+
+The coordinator put two questions to the owner directly. Both are answered:
+
+1. **W4 / the mannequin: APPROVED.** The owner signed off on downloading the CC0 mannequin
+   from `burning-barb.itch.io/mannequin` and vendoring it into `client/public/models/`.
+   D3's "must ask the owner to confirm before committing a binary asset" is **satisfied**.
+   ⚠️ Sign-off covers the *download and commit* only — **task 09 must still re-verify the
+   CC0 license at execution time**, and must still record BLOCKED rather than substitute an
+   unverified asset if that re-verification fails.
+2. **Question 1 below (preset overrides projection): KEEP D14 AS-IS.** The owner chose to
+   leave the behaviour alone for now and revisit after using the tool on real work. **Not a
+   deviation — a deliberate decision.** Task 10 should surface it in the QA notes, not
+   "fix" it.
 
 ## ⚠️ THREE QUESTIONS FOR THE OWNER, RAISED BY TASK 08 (not blockers)
 
