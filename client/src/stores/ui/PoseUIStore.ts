@@ -5,9 +5,21 @@
  * The pose tool renders a reference solid — a primitive or the CC0 mannequin —
  * into an offscreen render target sized exactly `cellWidth × cellHeight` and
  * blits it onto an overlay canvas above every layer. This store is the one home
- * for everything that render is a function of: which mesh is loaded, how it is
- * framed, its rotation, the key light's direction and colour, the model colour,
- * the camera's projection / preset / zoom / FOV, and the screen-space pan.
+ * for everything that render is a function of: which mesh is loaded (a
+ * primitive, the whole mannequin, or one of its parts), its rotation, the key
+ * light's direction and colour, the outline's thickness, the camera's
+ * projection / preset / zoom / FOV, and the screen-space pan.
+ *
+ * ⚠️ **The model's and outline's COLOURS are not here.** They are the app's own
+ * Fill and Edge slots on `ToolUIStore` (MASTER E8/E9), read by
+ * `PixelStudioPanelContainer` / `CanvasContainer` through
+ * `fillColorOrSelected` and `selectedColor`.
+ *
+ * ⚠️ `modelColor` below is therefore **no longer read by anything that
+ * renders.** It is kept rather than deleted because removing an
+ * `observableRef` field, its action and its `clear()` line is a store-shape
+ * change with its own risk, and it is harmless dead state — but do not wire a
+ * new reader to it. The model's colour is the Fill slot.
  *
  * ══════════════════════════════════════════════════════════════════════════
  *  ⚠️ NOTHING HERE IS PERSISTED, AND NOTHING HERE MAY BE DEEP
@@ -53,22 +65,45 @@ import type { Color } from "@/types/domain";
 /* ── local type declarations ───────────────────────────────────────────────
  *
  * ⚠️ Declared here rather than imported: `ui/canvas/pose/poseTypes.ts`
- * (task 03) declares structurally identical types, and `stores/**` may not
- * depend on a `ui/` module's landing order — nor may it import from `ui/` at
- * all under the boundary rule. The two sets are structurally identical, so no
- * cast is ever needed at the seam. `ReflectionUIStore` does exactly this for
+ * declares structurally identical types, and `stores/**` may not depend on a
+ * `ui/` module's landing order — nor may it import from `ui/` at all under the
+ * boundary rule. The two sets are structurally identical, so no cast is ever
+ * needed at the seam. `ReflectionUIStore` does exactly this for
  * `ReflectionLine`. `Color` IS imported: it is a domain type, not a `ui/` one.
+ *
+ * ⚠️ **THE DUPLICATION IS DELIBERATE AND THE TWO CHANGE TOGETHER** (MASTER
+ * E20). A member added here and not there — or vice versa — compiles on one
+ * side and fails at the container, far from either declaration.
  */
-
-/** The reference solids the rail offers (MASTER D1/D3). */
-export type PoseMeshId = "cube" | "sphere" | "cylinder" | "mannequin";
 
 /**
- * Which region of the mannequin the camera frames (MASTER D4). The asset is
- * unrigged, so the "body part" buttons are framing presets over one mesh
- * rather than separate meshes. Primitives only ever use `"full"`.
+ * One anatomical piece of the mannequin, built as its OWN geometry (E1).
+ *
+ * ⚠️ **Mirrors `ui/canvas/pose/poseTypes.ts` character for character (E20).**
+ * These replaced the deleted `PoseFraming` union: framing pointed a camera at
+ * a slice of the whole figure, so clicking **Head** still rendered — and lit,
+ * and stamped — the entire mannequin. A part id now selects a real triangle
+ * subset, re-centred and auto-fitted exactly like a cube.
+ *
+ * **No left/right variants (E1):** `"arm"` is *both* arms, `"hand"` both hands.
  */
-export type PoseFraming = "full" | "head" | "torso" | "arm" | "leg" | "hand";
+export type PosePartId = "head" | "torso" | "arm" | "leg" | "hand";
+
+/**
+ * The reference solids the rail offers: the three primitives (MASTER D1), the
+ * whole mannequin (D3), and each of its parts (E1).
+ *
+ * `"mannequin"` is the *whole* figure — the rail labels it **Full** — and is
+ * what the old `PoseFraming` called `"full"`. The five part ids are spelled
+ * identically to their old framing names, so a stale session value for a body
+ * part still resolves to the same body part; only `"full"` has no counterpart.
+ */
+export type PoseMeshId =
+  | "cube"
+  | "sphere"
+  | "cylinder"
+  | "mannequin"
+  | PosePartId;
 
 /** Camera projection (MASTER D14). */
 export type PoseProjection = "perspective" | "orthographic";
@@ -159,6 +194,39 @@ export const POSE_FOV_MIN = 10;
 export const POSE_FOV_MAX = 120;
 
 /**
+ * Outline thickness range, in **whole rendered pixels** (MASTER E4).
+ *
+ * ⚠️ **Mirrors `ui/components/PosePanel/PoseSection.tsx`'s
+ * `POSE_EDGE_WIDTH_MIN` / `POSE_EDGE_WIDTH_MAX`**, which the rail's slider
+ * uses as its `min`/`max`. They are duplicated for the same boundary reason
+ * the unions are, and must change together.
+ *
+ * `0` **is** the off state rather than a separate toggle: one control cannot
+ * disagree with itself, whereas a toggle plus a slider can be "on" at width 0.
+ * The rail reads 0 as **"Off"**.
+ *
+ * The maximum is 4 because at the 1:1 render target (D5) the outline dilates
+ * the silhouette by whole art pixels, and on a 32-px sprite a 5-px border is
+ * already most of the model. `poseOutline.ts` keeps its own, far larger
+ * `MAX_OUTLINE_WIDTH = 64` safety clamp; that is a hang guard, not the UI
+ * range, and the two are deliberately different numbers.
+ */
+export const POSE_EDGE_WIDTH_MIN = 0;
+export const POSE_EDGE_WIDTH_MAX = 4;
+
+/**
+ * The outline is **OFF by default** (MASTER E4) — and this specific `0` is
+ * load-bearing.
+ *
+ * The pose tool shipped without an outline, so any non-zero default would put
+ * an edge around the reference of every existing project the first time its
+ * owner opened the tool after this change, unbidden and with no way to
+ * attribute it. Zero means the tool behaves exactly as it did until the owner
+ * drags the slider.
+ */
+export const DEFAULT_POSE_EDGE_WIDTH = 0;
+
+/**
  * Unit-length copy of `v`, or the input's components unchanged when it has no
  * length (there is no meaningful direction to pick for a zero vector, and
  * dividing by zero would poison the render with `NaN`).
@@ -205,8 +273,17 @@ export class PoseUIStore {
   /** Which reference solid is loaded, or `null` for "no model" (the default). */
   meshId: PoseMeshId | null = null;
 
-  /** Which region the camera frames. Only meaningful for the mannequin. */
-  framing: PoseFraming = "full";
+  /**
+   * Outline thickness in whole rendered pixels; `0` means **no outline**
+   * (MASTER E4). Clamped to `[POSE_EDGE_WIDTH_MIN, POSE_EDGE_WIDTH_MAX]` and
+   * rounded to an integer on write.
+   *
+   * ⚠️ Session-only like every other field here — see the header. The outline
+   * is a *reference* affordance over the artwork, not part of the document,
+   * and adding it to `toPersistedUIState()` would change the wire format
+   * across the owner's 151-snapshot corpus (MASTER D6).
+   */
+  edgeWidth = DEFAULT_POSE_EDGE_WIDTH;
 
   /** Model orientation, euler radians. `observableRef`. */
   rotation: PoseVector = DEFAULT_POSE_ROTATION;
@@ -262,7 +339,7 @@ export class PoseUIStore {
   constructor() {
     makeObservable(this, {
       meshId: observable,
-      framing: observable,
+      edgeWidth: observable,
       rotation: observableRef,
       lightDirection: observableRef,
       lightColor: observableRef,
@@ -277,7 +354,7 @@ export class PoseUIStore {
       hasMesh: computed,
 
       setMesh: action,
-      setFraming: action,
+      setEdgeWidth: action,
       setRotation: action,
       setLightDirection: action,
       setLightColor: action,
@@ -301,19 +378,34 @@ export class PoseUIStore {
   /**
    * Load (or unload, with `null`) a reference solid.
    *
-   * Resets `pan` and `framing`: a different mesh has a different bounding box,
-   * so an inherited pan would push it off-frame and an inherited body-part
-   * framing would be meaningless on a primitive (MASTER D7). Rotation, light
-   * and camera are deliberately KEPT — they are the owner's working setup.
+   * Resets `pan`: a different mesh has a different bounding box, so an
+   * inherited pan would push it off-frame (MASTER D7). Rotation, light and
+   * camera are deliberately KEPT — they are the owner's working setup.
+   *
+   * ⚠️ `edgeWidth` is also KEPT. It is an outline preference, not a property
+   * of the mesh, and having it snap back to Off on every part button would
+   * make comparing two parts with the same outline impossible.
    */
   setMesh(meshId: PoseMeshId | null): void {
     this.meshId = meshId;
-    this.framing = "full";
     this.pan = DEFAULT_POSE_PAN;
   }
 
-  setFraming(framing: PoseFraming): void {
-    this.framing = framing;
+  /**
+   * Outline thickness in whole pixels, clamped to
+   * `[POSE_EDGE_WIDTH_MIN, POSE_EDGE_WIDTH_MAX]` and **rounded to an integer**
+   * (MASTER E4). `0` turns the outline off.
+   *
+   * Rounded here as well as in the rail because the store is the guarantee and
+   * the slider is only the affordance: `poseOutline.ts` floors whatever it is
+   * given, so a stored `1.9` would silently draw a 1-px outline while every
+   * readout said 2. `clamp()` sends `NaN` to the minimum, which is the off
+   * state — the safe direction for a mis-parsed input.
+   */
+  setEdgeWidth(width: number): void {
+    this.edgeWidth = Math.round(
+      clamp(width, POSE_EDGE_WIDTH_MIN, POSE_EDGE_WIDTH_MAX),
+    );
   }
 
   /** Replaces the vector wholesale — never edits the held object. */
@@ -419,7 +511,7 @@ export class PoseUIStore {
    */
   clear(): void {
     this.meshId = null;
-    this.framing = "full";
+    this.edgeWidth = DEFAULT_POSE_EDGE_WIDTH;
     this.rotation = DEFAULT_POSE_ROTATION;
     this.lightDirection = DEFAULT_POSE_LIGHT_DIRECTION;
     this.lightColor = DEFAULT_POSE_LIGHT_COLOR;

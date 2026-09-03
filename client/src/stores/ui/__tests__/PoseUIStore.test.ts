@@ -8,7 +8,8 @@
  * write produces a NEW object identity, which is what lets the overlay painter
  * decide to re-render on identity alone.
  *
- * Also pins MASTER D7 (`setMesh` resets pan and framing), the FOV clamp, and
+ * Also pins MASTER D7 (`setMesh` resets pan), the FOV clamp, the outline
+ * thickness (`edgeWidth`, E4 — integer 0–4, default OFF), and
  * — from the refinements plan, 2026-09-03 — that zoom has **no upper bound**
  * (E11), that pan is **never** clamped (E13), and that `fitGeneration` /
  * `requestFit()` form an event counter that mutates no camera state (E14/E15).
@@ -29,6 +30,9 @@ import {
   DEFAULT_POSE_ROTATION,
   POSE_FOV_MAX,
   POSE_FOV_MIN,
+  DEFAULT_POSE_EDGE_WIDTH,
+  POSE_EDGE_WIDTH_MAX,
+  POSE_EDGE_WIDTH_MIN,
   POSE_ZOOM_MIN_SAFE,
   PoseUIStore,
 } from "../PoseUIStore";
@@ -46,7 +50,10 @@ describe("PoseUIStore — defaults", () => {
     const s = new PoseUIStore();
     expect(s.meshId).toBeNull();
     expect(s.hasMesh).toBe(false);
-    expect(s.framing).toBe("full");
+    // ⚠️ The outline is OFF by default (MASTER E4). A non-zero default would
+    // put an edge around the reference of every existing project unbidden.
+    expect(s.edgeWidth).toBe(0);
+    expect(DEFAULT_POSE_EDGE_WIDTH).toBe(0);
     expect(s.rotation).toEqual({ x: 0, y: 0, z: 0 });
     expect(s.lightColor).toEqual({ r: 255, g: 255, b: 255, a: 255 });
     expect(s.modelColor).toEqual(DEFAULT_POSE_MODEL_COLOR);
@@ -70,7 +77,7 @@ describe("PoseUIStore — defaults", () => {
     const s = new PoseUIStore();
     for (const key of [
       "meshId",
-      "framing",
+      "edgeWidth",
       "rotation",
       "lightDirection",
       "lightColor",
@@ -106,11 +113,11 @@ describe("PoseUIStore — setters", () => {
     expect(s.hasMesh).toBe(false);
   });
 
-  it("setMesh resets pan and framing but keeps rotation, light and camera", () => {
+  it("setMesh resets pan but keeps rotation, light, camera and edgeWidth", () => {
     const s = new PoseUIStore();
     runInAction(() => {
       s.setMesh("mannequin");
-      s.setFraming("head");
+      s.setEdgeWidth(3);
       s.setPan({ x: 7, y: -3 });
       s.setRotation({ x: 0.5, y: 0.5, z: 0 });
       s.setZoom(2);
@@ -120,11 +127,33 @@ describe("PoseUIStore — setters", () => {
     runInAction(() => s.setMesh("cube"));
 
     expect(s.pan).toEqual({ x: 0, y: 0 });
-    expect(s.framing).toBe("full");
-    // The owner's working setup survives a mesh swap.
+    // The owner's working setup survives a mesh swap — the outline width
+    // included: it is an outline preference, not a property of the mesh, and
+    // snapping it back to Off on every part button would make comparing two
+    // parts at the same thickness impossible.
+    expect(s.edgeWidth).toBe(3);
     expect(s.rotation).toEqual({ x: 0.5, y: 0.5, z: 0 });
     expect(s.zoom).toBe(2);
     expect(s.projection).toBe("orthographic");
+  });
+
+  /**
+   * MASTER E1/E2/E20 — the part ids are MESH ids now, so `setMesh` takes them
+   * directly. This is the store half of the union mirroring: the same five
+   * spellings the old `PoseFraming` used, so a stale session value for a body
+   * part still resolves to the same body part.
+   */
+  it("setMesh accepts every mannequin part id as a mesh in its own right", () => {
+    const s = new PoseUIStore();
+    for (const id of ["head", "torso", "arm", "leg", "hand"] as const) {
+      runInAction(() => s.setMesh(id));
+      expect(s.meshId).toBe(id);
+      expect(s.hasMesh).toBe(true);
+    }
+    // `"mannequin"` is the WHOLE figure — what the rail labels Full, and what
+    // the deleted framing union called `"full"`. There is no `"full"` mesh id.
+    runInAction(() => s.setMesh("mannequin"));
+    expect(s.meshId).toBe("mannequin");
   });
 
   /**
@@ -147,11 +176,7 @@ describe("PoseUIStore — setters", () => {
     expect(s.zoom).toBe(2500);
   });
 
-  it("setFraming stores the region", () => {
-    const s = new PoseUIStore();
-    runInAction(() => s.setFraming("hand"));
-    expect(s.framing).toBe("hand");
-  });
+
 
   it("setLightDirection normalises", () => {
     const s = new PoseUIStore();
@@ -276,6 +301,84 @@ describe("PoseUIStore — zoom sanitising (no upper bound)", () => {
   });
 });
 
+/* ── the outline's thickness (MASTER E4) ───────────────────────────────────
+ *
+ * Session state like everything else in this store — the "not persisted" block
+ * at the bottom of this file covers it with the rest.
+ */
+describe("PoseUIStore — edgeWidth (the outline thickness)", () => {
+  it("defaults to 0 — the outline is OFF until asked for", () => {
+    // ⚠️ The single most consequential value in this task. The pose tool
+    // shipped without an outline, so a non-zero default would put one around
+    // the reference of every existing project the first time its owner opened
+    // the tool, unbidden and unattributable.
+    expect(new PoseUIStore().edgeWidth).toBe(0);
+    expect(DEFAULT_POSE_EDGE_WIDTH).toBe(POSE_EDGE_WIDTH_MIN);
+  });
+
+  it("stores each whole width in range", () => {
+    const s = new PoseUIStore();
+    for (const w of [0, 1, 2, 3, 4]) {
+      runInAction(() => s.setEdgeWidth(w));
+      expect(s.edgeWidth).toBe(w);
+    }
+  });
+
+  it("clamps at both ends", () => {
+    const s = new PoseUIStore();
+    runInAction(() => s.setEdgeWidth(99));
+    expect(s.edgeWidth).toBe(POSE_EDGE_WIDTH_MAX);
+    runInAction(() => s.setEdgeWidth(-5));
+    expect(s.edgeWidth).toBe(POSE_EDGE_WIDTH_MIN);
+  });
+
+  it("rounds — the outline dilates by WHOLE pixels at 1:1", () => {
+    // `poseOutline.ts` floors whatever it is handed, so a stored 1.9 would
+    // draw a 1-px outline while every readout said 2.
+    const s = new PoseUIStore();
+    for (const [input, expected] of [
+      [1.4, 1],
+      [1.5, 2],
+      [2.6, 3],
+      [3.49, 3],
+    ] as const) {
+      runInAction(() => s.setEdgeWidth(input));
+      expect(s.edgeWidth).toBe(expected);
+      expect(Number.isInteger(s.edgeWidth)).toBe(true);
+    }
+  });
+
+  it("sends NaN to the OFF end, not to a random width", () => {
+    const s = new PoseUIStore();
+    runInAction(() => s.setEdgeWidth(2));
+    runInAction(() => s.setEdgeWidth(Number.NaN));
+    expect(s.edgeWidth).toBe(POSE_EDGE_WIDTH_MIN);
+  });
+
+  it("clamps both infinities to the bound they meet", () => {
+    const s = new PoseUIStore();
+    runInAction(() => s.setEdgeWidth(Number.POSITIVE_INFINITY));
+    expect(s.edgeWidth).toBe(POSE_EDGE_WIDTH_MAX);
+    runInAction(() => s.setEdgeWidth(Number.NEGATIVE_INFINITY));
+    expect(s.edgeWidth).toBe(POSE_EDGE_WIDTH_MIN);
+  });
+
+  it("the range mirrors the rail's slider bounds exactly (E4)", () => {
+    // ⚠️ Duplicated on purpose — `ui/` may not import `stores/`. The rail's
+    // `POSE_EDGE_WIDTH_MIN`/`MAX` in `PoseSection.tsx` carry these same two
+    // numbers, and the two change together. Pinned so a silent drift fails.
+    expect(POSE_EDGE_WIDTH_MIN).toBe(0);
+    expect(POSE_EDGE_WIDTH_MAX).toBe(4);
+  });
+
+  it("is reset by clear() — it is pose state, not a global preference", () => {
+    const s = new PoseUIStore();
+    runInAction(() => s.setEdgeWidth(4));
+    runInAction(() => s.clear());
+    expect(s.edgeWidth).toBe(DEFAULT_POSE_EDGE_WIDTH);
+  });
+});
+
 describe("PoseUIStore — FOV clamping", () => {
   it("setFov clamps at both ends", () => {
     const s = new PoseUIStore();
@@ -356,7 +459,7 @@ describe("PoseUIStore — fitGeneration / requestFit (E14/E15)", () => {
     const s = new PoseUIStore();
     runInAction(() => {
       s.setMesh("mannequin");
-      s.setFraming("head");
+      s.setEdgeWidth(3);
       s.setRotation({ x: 0.3, y: 0.6, z: 0.9 });
       s.setLightDirection({ x: 1, y: 0, z: 0 });
       s.setLightColor(RED);
@@ -434,7 +537,7 @@ describe("PoseUIStore — clear()", () => {
     const s = new PoseUIStore();
     runInAction(() => {
       s.setMesh("cylinder");
-      s.setFraming("torso");
+      s.setEdgeWidth(2);
       s.setRotation({ x: 1, y: 2, z: 3 });
       s.setLightDirection({ x: 1, y: 0, z: 0 });
       s.setLightColor(RED);
@@ -450,7 +553,7 @@ describe("PoseUIStore — clear()", () => {
 
     expect(s.meshId).toBeNull();
     expect(s.hasMesh).toBe(false);
-    expect(s.framing).toBe("full");
+    expect(s.edgeWidth).toBe(DEFAULT_POSE_EDGE_WIDTH);
     expect(s.rotation).toEqual(DEFAULT_POSE_ROTATION);
     expect(s.lightDirection).toEqual(DEFAULT_POSE_LIGHT_DIRECTION);
     expect(s.lightColor).toEqual(DEFAULT_POSE_LIGHT_COLOR);
@@ -531,7 +634,7 @@ describe("ApplicationStore — app.pose", () => {
     try {
       runInAction(() => {
         app.pose.setMesh("mannequin");
-        app.pose.setFraming("head");
+        app.pose.setEdgeWidth(4);
         app.pose.setPan({ x: 3, y: 3 });
         app.pose.setZoom(5);
       });
@@ -542,7 +645,7 @@ describe("ApplicationStore — app.pose", () => {
       });
 
       expect(app.pose.meshId).toBeNull();
-      expect(app.pose.framing).toBe("full");
+      expect(app.pose.edgeWidth).toBe(DEFAULT_POSE_EDGE_WIDTH);
       expect(app.pose.pan).toEqual({ x: 0, y: 0 });
       expect(app.pose.zoom).toBe(1);
     } finally {
