@@ -64,6 +64,7 @@ import { CanvasInteractionStore } from "./ui/CanvasInteractionStore";
 import { CanvasViewsUIStore } from "./ui/CanvasViewsUIStore";
 import { LightingViewsUIStore } from "./ui/LightingViewsUIStore";
 import { ReflectionUIStore } from "./ui/ReflectionUIStore";
+import { PoseUIStore } from "./ui/PoseUIStore";
 import { editorHistory } from "./history/editorHistory";
 import { createSnapshotCommand } from "./history/commands";
 import type { Command, SnapshotHost } from "./history/commands";
@@ -417,6 +418,23 @@ export class ApplicationStore {
    */
   private readonly disposeReflectionReaction: () => void;
 
+  /**
+   * The pose tool's 3D reference state — mesh, framing, rotation, light,
+   * colours, camera and pan (pose-tool task 02). Session-only: not in
+   * `toPersistedUIState()`, not in history, never schedules a save. No
+   * dependencies in either direction, like `reflection`.
+   *
+   * The pose outlives layer/frame/object switches and is cleared only when a
+   * DIFFERENT project is installed — see `disposePoseReaction` below.
+   */
+  readonly pose: PoseUIStore;
+
+  /**
+   * Stops the `loadGeneration` → `pose.clear()` reaction; run by
+   * {@link ApplicationStore.dispose}.
+   */
+  private readonly disposePoseReaction: () => void;
+
   readonly options: Readonly<{
     api: unknown;
     autoSaveEnabled: boolean;
@@ -533,6 +551,16 @@ export class ApplicationStore {
     this.disposeReflectionReaction = reaction(
       () => this.domain.loadGeneration,
       () => this.reflection.clear(),
+    );
+    // Pose-tool task 02: same reasoning as `reflection`.
+    this.pose = new PoseUIStore();
+    // Locked D6 — the pose is cleared when a DIFFERENT project is installed.
+    // `DomainStore.loadGeneration` is bumped once per fresh install (init /
+    // load / create / switch / delete) and NOT by `adoptProject`, which also
+    // runs on snapshot undo/redo; hooking that would wipe the pose on undo.
+    this.disposePoseReaction = reaction(
+      () => this.domain.loadGeneration,
+      () => this.pose.clear(),
     );
     // ── task 38: the NATIVE sinks — the hosted `uiState` replaces Zustand ──
     //
@@ -1769,6 +1797,7 @@ export class ApplicationStore {
   dispose(): void {
     this.autoSave?.dispose();
     this.disposeReflectionReaction();
+    this.disposePoseReaction();
     this.syncClient?.dispose();
     this.ui.dispose();
     this.referenceUI.dispose();
