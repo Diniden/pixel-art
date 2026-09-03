@@ -15,15 +15,27 @@
  * and threaded through. The `import type` below is erased at build time and
  * pulls in nothing, so the lazy chunk split survives.
  *
- * ## Low-poly on purpose
+ * ## Smoothly shaded, and tessellated enough to earn it
  *
- * The output is a handful of pixels wide. Rasterised to a 32×32 grid a
- * 64-segment sphere and an 8-segment sphere are indistinguishable — you are
- * paying for vertices that never survive the first texel. Worse, a very smooth
- * sphere shades as a continuous gradient, which is precisely the thing pixel
- * art has to break into bands by hand; a faceted one already reads as discrete
- * planes and is a BETTER reference. So: sphere 16×12, cylinder 16 radial. Low
- * enough to face, high enough that the silhouette is not visibly a polygon.
+ * ⚠️ **This file used to argue the opposite.** The original reasoning was that
+ * a faceted low-poly solid reads as discrete planes and is therefore a *better*
+ * pixel-art reference than a smooth gradient, so `flatShading` was on and the
+ * segment counts were held down (sphere 16×12, cylinder 16 radial) on the
+ * grounds that extra segments are invisible once rasterised.
+ *
+ * **The owner overruled that on 2026-09-03:** *"it's rendering the normals for
+ * the faces orthogonal to the face: we need to do normal blending at the
+ * vertices so the light blends better. Also, you can up the polys for the
+ * rounded primitives. We're dealing with barely any pixels."*
+ *
+ * So the reference now shades from **interpolated per-vertex normals**
+ * ({@link buildMaterial}) and carries enough geometry to make that
+ * interpolation smooth ({@link SPHERE_WIDTH_SEGMENTS} and friends). The old
+ * "invisible after rasterising" argument was an argument about *silhouettes*
+ * under *flat* shading; with smooth shading the segment count also controls how
+ * finely the light **gradient** is sampled, which survives rasterising even at
+ * 32×32 because it lands in the pixel *values*, not the outline. Reading bands
+ * off the render is the artist's job again, which is what was asked for.
  *
  * ## Normalised size
  *
@@ -60,28 +72,93 @@ export const UNIT_BOUNDS: PoseMeshBounds = {
   max: { x: 0.5, y: 0.5, z: 0.5 },
 };
 
-/* ── low-poly segment counts, and why ─────────────────────────────────────── */
+/* ── segment counts, and why they are what they are ───────────────────────── */
 
 /**
- * Sphere tessellation: 16 around, 12 top-to-bottom.
+ * Sphere tessellation: 48 around, 32 top-to-bottom (was 16×12).
  *
- * At the target resolution the silhouette is a few texels of arc, so segments
- * beyond this buy nothing visible. 16×12 also lands the seams off the cardinal
- * axes, which keeps the front-on view from showing a single flat facet
- * straight at the camera.
+ * Raised on the owner's instruction of 2026-09-03 (*"you can up the polys for
+ * the rounded primitives. We're dealing with barely any pixels."*), together
+ * with turning `flatShading` off in {@link buildMaterial}.
+ *
+ * **Why the old ceiling no longer applies.** The previous comment argued that
+ * segments beyond ~16 are "invisible after rasterising". That was true of the
+ * *silhouette* — and only under *flat* shading, where each facet is one flat
+ * tone and the segment count is purely a silhouette knob. With smooth shading
+ * the segment count is also the sampling rate of the light **gradient**: the
+ * facet boundaries stop being invisible and start being visible *banding* in
+ * the terminator, because a Lambert term interpolated across a 22.5°-wide
+ * facet changes in visible steps. At 16×12 a sphere's terminator bands even at
+ * 32×32; the banding lands in pixel *values*, which is exactly what does
+ * survive rasterising.
+ *
+ * **Why 48×32 and not more.** 48 around is 7.5° per segment, below the point
+ * where a Lambert falloff shows a seam, and 32 rows keeps the poles from
+ * pinching into a visible star. It is 2,976 triangles (measured) — versus 352
+ * before, and versus the mannequin's 9,636 — rendered once per frame into a
+ * target that is at most a few thousand pixels. This is deliberately **not** a
+ * performance trade-off at this scale, so the values are chosen for how the
+ * gradient reads and nothing else.
+ *
+ * 48 and 32 are both multiples of 4, which keeps a seam on each cardinal axis
+ * rather than a facet centred on it — the front-on view therefore shows a
+ * vertex, not a flat plate aimed at the camera.
+ *
+ * An upper bound is still asserted in the tests. Smooth normals remove the
+ * reason to stay low, not the reason to stay finite: nothing here would *look*
+ * wrong at 512 segments, so only a test stops someone shipping it by accident.
  */
-export const SPHERE_WIDTH_SEGMENTS = 16;
-export const SPHERE_HEIGHT_SEGMENTS = 12;
+export const SPHERE_WIDTH_SEGMENTS = 48;
+export const SPHERE_HEIGHT_SEGMENTS = 32;
 
 /**
- * Cylinder tessellation: 16 radial segments, 1 along the height.
+ * Cylinder tessellation: 48 radial segments, 1 along the height.
  *
- * 16 matches the sphere so the two read as the same "resolution" of solid when
- * placed side by side. One height segment is all a straight tube needs —
- * subdividing it adds vertices no shader here looks at.
+ * 48 radial matches the sphere's 48 around, so the two still read as the same
+ * "resolution" of solid side by side, and for the same reason: with smooth
+ * shading, radial segments sample the gradient that wraps around the curved
+ * side. 192 triangles (measured).
+ *
+ * **`CYLINDER_HEIGHT_SEGMENTS` stays 1 — measured, not assumed.** The task
+ * asked whether a vertical light component needs vertical subdivision to
+ * produce a vertical gradient. It does not, for two compounding reasons:
+ *
+ * 1. This cylinder is **straight** (both radii 0.5), so its side normal is
+ *    purely radial — `(sinθ, slope=0, cosθ)` in three's `CylinderGeometry` —
+ *    and therefore **independent of y**. Measured directly against three
+ *    0.185.1: at 8 radial segments, height segments of 1, 2 and 4 all produce
+ *    exactly **9 distinct side-normal directions**. Subdividing the height
+ *    adds vertices (52 → 61 → 79) and **zero** new normal directions.
+ * 2. Lambert is evaluated **per fragment** from the interpolated normal, and
+ *    interpolating between two identical normals is that same normal. So the
+ *    side is uniform along its length no matter what the light does, and no
+ *    number of height segments changes that.
+ *
+ * A vertical gradient on a straight tube's side would require a normal that
+ * varies with y, which only a taper or a bend produces. Raising this constant
+ * would cost vertices and buy nothing observable — so it stays 1, and the test
+ * pins it at 1 with this measurement as the reason.
  */
-export const CYLINDER_RADIAL_SEGMENTS = 16;
+export const CYLINDER_RADIAL_SEGMENTS = 48;
 export const CYLINDER_HEIGHT_SEGMENTS = 1;
+
+/**
+ * Whether {@link buildMaterial} flat-shades. **Always `false`** — see that
+ * function's comment for the owner decision behind it (2026-09-03).
+ *
+ * Exported as a named constant purely so it can be *tested*. jsdom has no
+ * WebGL and this suite deliberately constructs no three objects, so a guard
+ * test cannot build a material and read `material.flatShading` back off it.
+ * Asserting the constant is the next best thing: it cannot catch someone
+ * hardcoding `flatShading: true` in the constructor call, but it does make the
+ * intended value a stated, single-sourced fact that a reviewer of any future
+ * diff has to consciously change.
+ *
+ * ⚠️ Do not "simplify" this by inlining it — a bare `false` literal in the
+ * material constructor is exactly the thing a refactor flips back without
+ * anyone noticing, which is the regression this constant exists to make loud.
+ */
+export const POSE_MATERIAL_FLAT_SHADING = false;
 
 /* ── the mannequin framing regions (MASTER D4) ────────────────────────────── */
 
@@ -397,7 +474,7 @@ export function buildGeometry(
 }
 
 /**
- * A flat, readable material in `color`.
+ * A smoothly shaded, readable material in `color`.
  *
  * `MeshLambertMaterial`, not a PBR one: this is pose *reference*, and what
  * helps is a clean diffuse falloff whose bands you can read off and copy.
@@ -405,9 +482,43 @@ export function buildGeometry(
  * detail that does not survive being rasterised to a handful of texels, at the
  * cost of a shader that is harder to reason about.
  *
- * `flatShading` is on so each facet is one tone — with the low-poly counts
- * above, that turns the sphere into a readable set of discrete planes rather
- * than a smooth gradient, which is the form pixel art actually wants.
+ * ## `flatShading: false` — the shading decision (owner, 2026-09-03)
+ *
+ * ⚠️ **This used to be `true`, and the comment used to argue for it** ("each
+ * facet is one tone… which is the form pixel art actually wants"). The owner
+ * overruled that: *"it's rendering the normals for the faces orthogonal to the
+ * face: we need to do normal blending at the vertices so the light blends
+ * better."*
+ *
+ * With `flatShading: true` three discards the geometry's per-vertex normals and
+ * derives a single face normal per triangle in the fragment shader — the
+ * "orthogonal to the face" look. With it **off**, three interpolates the
+ * per-vertex normals across each triangle, and the Lambert term is evaluated
+ * per fragment from that blended normal. That interpolation *is* the requested
+ * vertex normal blending; there is no separate switch for it.
+ *
+ * **The flag is written explicitly as `false` rather than omitted.** `false` is
+ * already three's default (verified against three 0.185.1), so omitting it
+ * would behave identically — but this is a line someone has now flipped once
+ * in each direction, and a stated `false` next to this comment is a much
+ * clearer "we chose this" than an absence. It also gives the guard test in
+ * `__tests__/poseMeshes.test.ts` something unambiguous to assert.
+ *
+ * **No `computeVertexNormals()` is needed anywhere.** Verified against three
+ * 0.185.1 rather than assumed: `SphereGeometry` writes an analytic
+ * `normal` attribute (`normal.copy(vertex).normalize()`) and `CylinderGeometry`
+ * writes `(sinθ, slope, cosθ).normalize()` for the side and `(0, ±1, 0)` for
+ * the caps. Measured on the shipped tessellation: the sphere has 1,521
+ * distinct unit normals across 1,617 vertices and the three corners of a given
+ * triangle carry *different* normals, which is what makes the interpolation
+ * meaningful. Calling `computeVertexNormals()` would only *degrade* these — it
+ * area-averages adjacent faces and would round off the cylinder's cap rims.
+ *
+ * **The cube is unaffected, and that is by design.** `BoxGeometry` does not
+ * share vertices between faces: it emits 24 vertices with 6 distinct normals,
+ * so all three corners of each triangle already carry the same face normal.
+ * Smooth shading of an already-hard normal set is still hard, so the cube's
+ * edges stay crisp with no special case here.
  */
 export function buildMaterial(
   three: ThreeNamespace,
@@ -419,7 +530,7 @@ export function buildMaterial(
       clamp01(color.g / 255),
       clamp01(color.b / 255),
     ),
-    flatShading: true,
+    flatShading: POSE_MATERIAL_FLAT_SHADING,
     // Both sides: a low-poly mesh viewed from inside (or a mannequin with
     // single-sided sleeves) should not show holes in a reference render.
     side: three.DoubleSide,

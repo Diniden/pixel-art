@@ -2,12 +2,19 @@
  * Tests for the mesh library's PURE half — the framing region table and the
  * normalised-sub-box maths.
  *
- * ⚠️ **Nothing here constructs a three geometry**, by design. jsdom has no
- * WebGL (MASTER risk register) and `buildMesh` / `buildMaterial` /
+ * ⚠️ **Nothing here constructs a three geometry or material**, by design. jsdom
+ * has no WebGL (MASTER risk register) and `buildMesh` / `buildMaterial` /
  * `normalizeToUnitBox` all need the real namespace, so they are covered by
  * task 08's manual checks instead. What IS testable — and worth testing — is
  * the region table, because a bad region silently frames the wrong part of
  * the body and looks like a mislabelled button rather than like bad data.
+ *
+ * That constraint is why the shading and tessellation decisions (plan 07 task
+ * 02, 2026-09-03) are asserted as **exported constants** —
+ * `POSE_MATERIAL_FLAT_SHADING` and the segment counts — rather than by
+ * building a material and reading `.flatShading` off it. See
+ * `describe("smooth shading")` at the bottom for what that does and does not
+ * catch.
  *
  * `loadMannequin` IS exercised, because its whole contract is *failing
  * gracefully* when task 09 has not vendored the asset yet, and that path can
@@ -22,6 +29,7 @@ import {
   MANNEQUIN_URL,
   MannequinUnavailableError,
   POSE_FRAMING_ORDER,
+  POSE_MATERIAL_FLAT_SHADING,
   SPHERE_HEIGHT_SEGMENTS,
   SPHERE_WIDTH_SEGMENTS,
   UNIT_BOUNDS,
@@ -154,24 +162,114 @@ describe("UNIT_BOUNDS", () => {
   });
 });
 
+/**
+ * ⚠️ **These bounds were raised deliberately on 2026-09-03, not regenerated.**
+ *
+ * The previous version of this block asserted `<= 24` on all three rounded
+ * counts under the heading "stays low-poly on purpose", reasoning that
+ * segments beyond ~16 are invisible after rasterising and that a faceted
+ * sphere reads *better* as pixel reference than a smooth one.
+ *
+ * The owner overruled that reasoning: *"we need to do normal blending at the
+ * vertices so the light blends better. Also, you can up the polys for the
+ * rounded primitives. We're dealing with barely any pixels."* The old argument
+ * was an argument about **silhouettes under flat shading**, where each facet is
+ * one flat tone and segment count is purely a silhouette knob. With
+ * `flatShading` off, segment count is also the sampling rate of the light
+ * **gradient**, and that lands in pixel *values* rather than in the outline —
+ * so it does survive rasterising to 32×32, and 16×12 visibly bands across the
+ * terminator.
+ *
+ * The bounds below therefore invert their intent: the lower bound is now the
+ * interesting one (high enough for a smooth gradient) and the upper bound is
+ * only a runaway guard.
+ */
 describe("segment counts", () => {
-  it("stays low-poly on purpose", () => {
-    // The output is a handful of pixels wide; segments beyond this are
-    // invisible after rasterising, and a smoother sphere reads WORSE as pixel
-    // reference than a faceted one.
-    expect(SPHERE_WIDTH_SEGMENTS).toBeLessThanOrEqual(24);
-    expect(SPHERE_HEIGHT_SEGMENTS).toBeLessThanOrEqual(24);
-    expect(CYLINDER_RADIAL_SEGMENTS).toBeLessThanOrEqual(24);
+  it("is tessellated finely enough for a smooth light gradient", () => {
+    // This is the assertion that carries the owner's instruction. With smooth
+    // normals the facet width sets how coarsely the Lambert falloff is
+    // sampled: at 16 around (22.5° per segment) the terminator bands visibly
+    // even at 32×32. 32 around (11.25°) is roughly where that stops being
+    // readable as steps, so it is the floor; the shipped value is 48 (7.5°).
+    expect(SPHERE_WIDTH_SEGMENTS).toBeGreaterThanOrEqual(32);
+    expect(SPHERE_HEIGHT_SEGMENTS).toBeGreaterThanOrEqual(24);
+    expect(CYLINDER_RADIAL_SEGMENTS).toBeGreaterThanOrEqual(32);
   });
 
-  it("stays high enough that the silhouette is not obviously a polygon", () => {
+  it("keeps the rounded silhouettes from reading as polygons", () => {
+    // Distinct from the gradient bound above: this one is about the OUTLINE,
+    // which is the constraint the old `>= 8/6/8` floor encoded. Kept as a
+    // separate, weaker assertion so that if the gradient floor is ever
+    // revisited, the silhouette requirement does not vanish with it.
     expect(SPHERE_WIDTH_SEGMENTS).toBeGreaterThanOrEqual(8);
     expect(SPHERE_HEIGHT_SEGMENTS).toBeGreaterThanOrEqual(6);
     expect(CYLINDER_RADIAL_SEGMENTS).toBeGreaterThanOrEqual(8);
   });
 
-  it("does not subdivide the cylinder along its height, which needs none", () => {
+  it("matches the sphere's and cylinder's resolution to each other", () => {
+    // The two solids sit side by side in the rail; if one is markedly finer
+    // than the other they read as different-quality objects rather than as the
+    // same reference kit.
+    expect(CYLINDER_RADIAL_SEGMENTS).toBe(SPHERE_WIDTH_SEGMENTS);
+  });
+
+  it("still has an upper bound, so nobody ships 512 segments by accident", () => {
+    // Smooth normals removed the reason to stay LOW; they did not remove the
+    // reason to stay FINITE. Nothing here would look wrong at 512 segments —
+    // it would just quietly waste vertices — so only this assertion stops it.
+    // 96 is two doublings of headroom above the shipped 48, which is room to
+    // re-tune without room to be absurd.
+    expect(SPHERE_WIDTH_SEGMENTS).toBeLessThanOrEqual(96);
+    expect(SPHERE_HEIGHT_SEGMENTS).toBeLessThanOrEqual(96);
+    expect(CYLINDER_RADIAL_SEGMENTS).toBeLessThanOrEqual(96);
+  });
+
+  it("keeps the segment counts multiples of 4, to land seams on the axes", () => {
+    // A multiple of 4 puts a vertex seam on each cardinal axis instead of a
+    // facet centred on it, so a front-on view never shows a flat plate aimed
+    // straight at the camera.
+    expect(SPHERE_WIDTH_SEGMENTS % 4).toBe(0);
+    expect(SPHERE_HEIGHT_SEGMENTS % 4).toBe(0);
+    expect(CYLINDER_RADIAL_SEGMENTS % 4).toBe(0);
+  });
+
+  it("does not subdivide the cylinder along its height, which provably needs none", () => {
+    // Kept at 1, and the reason is measured rather than assumed. This cylinder
+    // is straight (both radii equal), so three's side normal is (sinθ, 0, cosθ)
+    // — independent of y. Measured against three 0.185.1 at 8 radial segments,
+    // height segments of 1, 2 and 4 all yield exactly 9 distinct side-normal
+    // directions while vertex count grows 52 → 61 → 79. Lambert is evaluated
+    // per fragment from the interpolated normal, and interpolating between two
+    // identical normals gives that same normal, so the side is uniform along
+    // its length whatever the light does. Subdividing buys nothing observable.
     expect(CYLINDER_HEIGHT_SEGMENTS).toBe(1);
+  });
+});
+
+/* ══ the shading decision (owner, 2026-09-03) ════════════════════════════ */
+
+describe("smooth shading", () => {
+  it("does not flat-shade the reference material", () => {
+    // The regression this guards: `flatShading: true` makes three discard the
+    // geometry's per-vertex normals and use one face normal per triangle —
+    // the "normals orthogonal to the face" the owner asked us to stop doing.
+    // With it false, three interpolates the per-vertex normals across each
+    // triangle, which IS the requested vertex-normal blending.
+    //
+    // ⚠️ This asserts the exported CONSTANT, not a constructed material. jsdom
+    // has no WebGL and this suite constructs no three objects by design (see
+    // the file header), so `new three.MeshLambertMaterial(...)` is not
+    // available to read `.flatShading` back off. The constant is what
+    // `buildMaterial` passes, so the two cannot drift without an edit to the
+    // constructor call itself — which a reviewer sees.
+    expect(POSE_MATERIAL_FLAT_SHADING).toBe(false);
+  });
+
+  it("keeps the flag a boolean, not a truthy stand-in", () => {
+    // `flatShading: undefined` would also disable flat shading today, by
+    // falling through to three's default — but it would do so by accident and
+    // would silently change meaning if that default ever moved. Pin the type.
+    expect(typeof POSE_MATERIAL_FLAT_SHADING).toBe("boolean");
   });
 });
 
