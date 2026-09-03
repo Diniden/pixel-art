@@ -1,5 +1,5 @@
 /**
- * The tool dispatch table — one entry per member of the 16-tool union.
+ * The tool dispatch table — one entry per member of the 18-tool union.
  *
  * ## What this replaces
  *
@@ -32,9 +32,18 @@
  * sampler takes precedence over the selected tool entirely, which is why the
  * legacy handlers tested `isReferenceTraceActive` before reading `currentTool`.
  * `normal-pencil`, `auto-normal` and `height-map` belong to the lighting studio
- * (`LightingCanvas.tsx`) and never reach this surface. All four are present with
- * explicit no-op entries so the `Record<Tool, ...>` is exhaustive and adding a
- * 17th tool is a type error rather than a silent gap.
+ * (`LightingCanvas.tsx`) and never reach this surface.
+ *
+ * `origin`, `reflection` and `pose` are GESTURE tools: `CanvasContainer`
+ * arbitrates their pointer gestures ahead of this table, so a gesture never
+ * opens a history stroke or writes a pixel through a handler. `pose` in
+ * particular is a 3D reference overlay — its drag pans the model and its
+ * double-click stamps the rendered texels through a store action of its own
+ * (`docs/06-pose-tool/`), neither of which is a pointer-tool effect.
+ *
+ * All of them are present with explicit no-op entries so the
+ * `Record<Tool, ...>` is exhaustive and adding a 19th tool is a type error
+ * rather than a silent gap.
  */
 
 import { stampAt, stampSegment } from "./brushStamp";
@@ -254,6 +263,8 @@ export const toolHandlers = {
   origin: {},
   // arbitrated by `CanvasContainer`, like `origin` — see docs/03-reflection-tool/07
   reflection: {},
+  // arbitrated by `CanvasContainer`, like `reflection` — see docs/06-pose-tool/01
+  pose: {},
 
   // A mode, not a pointer tool — see the module comment.
   "reference-trace": {},

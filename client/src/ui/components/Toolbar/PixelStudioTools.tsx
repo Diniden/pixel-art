@@ -29,6 +29,7 @@ import {
   Circle,
   Move,
   BoxSelect,
+  Box,
   Crosshair,
   FlipHorizontal,
   FlipHorizontal2,
@@ -120,6 +121,7 @@ const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
     label: "Origin (set anchor point)",
     hotkey: "O",
   },
+  { id: "pose", icon: Box, label: "Pose (3D reference)", hotkey: "P" },
 ];
 
 /**

@@ -345,6 +345,9 @@ export type Tool =
   | "selection"
   | "origin"
   | "reflection"
+  // A gesture/reference tool: it renders a 3D reference above the layers and
+  // never writes pixels through the tool table. See docs/06-pose-tool/.
+  | "pose"
   | "normal-pencil"
   | "auto-normal"
   | "height-map";
