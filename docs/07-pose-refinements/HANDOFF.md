@@ -1,8 +1,8 @@
 # HANDOFF — Pose tool refinements
 
-**Current position:** W3 IN PROGRESS
+**Current position:** W3 DONE — W4 next (task 06 closes the type hole)
 **Branch:** `feat/07-pose-refinements`
-**Last commit:** `b5ece14`
+**Last commit:** `fdb4574`
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `54d6501` (branch `feat/06-pose-tool`)
 
 ## Wave ledger
@@ -11,7 +11,7 @@
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02 | DONE | 2026-09-03 | `774b0a2` | tsc 0 · eslint 0 err/65 warn · vitest 145 files / 2755 tests pass · boundaries OK · no lockfile |
 | W2 | 03, 04 | DONE | 2026-09-03 | `b5ece14` | tsc 0 · eslint 0 err · vitest 146 files / 2818 pass · boundaries OK · stylelint exactly 2 err · storybook exit 0 · no lockfile |
-| W3 | 05 | IN PROGRESS | 2026-09-03 | | |
+| W3 | 05 | DONE | 2026-09-03 | `fdb4574` | ⚠️ `tsc` RED **by design** — 3 errors, all task-06-owned, listed below · eslint 0 err · vitest 146 files / 2857 pass · boundaries OK · no lockfile |
 | W4 | 06 | TODO | | | |
 | W5 | 07 | TODO | | | |
 
@@ -25,7 +25,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 02 | Smooth normals + tesselation | W1 | DONE | `774b0a2` | sphere 48×32, cyl radial 48, height segs 1 (measured); `POSE_MATERIAL_FLAT_SHADING=false` |
 | 03 | Panel: colours, Fit, edge slider | W2 | DONE | `868424f` | Native pickers gone; edge width 0–4 (0=off); slider cap removed. ⚠️ Leaves a marked placeholder for task 06 |
 | 04 | Outline post-pass | W2 | DONE | `b5ece14` | `applyOutline()`, Chebyshev, mutates in place, 48 tests |
-| 05 | Mannequin part meshes; delete framing | W3 | IN PROGRESS | | ⚠️ May legitimately leave `tsc` red |
+| 05 | Mannequin part meshes; delete framing | W3 | DONE | `fdb4574` | Exact partition: 9,636 tris across 5 parts, none empty. ⚠️ Leaves `tsc` red for task 06 |
 | 06 | Container integration | W4 | TODO | | Closes task 05's type hole |
 | 07 | Full gate, QA, handoff | W5 | TODO | | Likely ends `PARTIAL` |
 
@@ -190,6 +190,116 @@ correctly stayed out of the store even though it needed `edgeWidth`.
 
 Everything else in the pose block is already fully wired to the store.
 
+
+## W3 gate — verified by the coordinator, 2026-09-03
+
+⚠️ **`tsc` is RED and that is the PLAN, not a failure** (MASTER §5). Task 05 owns the `ui/`
+half of the framing deletion; task 06 owns the store/container half. W3's gate therefore
+**excludes `tsc`** and requires instead: boundaries OK, task 05's suites pass, every part
+proven non-empty, and the exact errors listed.
+
+**The 3 `tsc` errors, verified by the coordinator to be confined to task-06-owned files:**
+
+```
+src/containers/CanvasContainer.tsx(282,3): error TS2305:
+  Module '"../ui/canvas/pose/poseMeshes"' has no exported member 'getFramingBounds'.
+src/containers/PixelStudioPanelContainer.tsx(201,50): error TS2345:
+  Argument of type 'PoseMeshId' is not assignable to parameter of type 'PoseMeshId | null'.
+  Type '"head"' is not assignable to type 'PoseMeshId | null'.
+src/ui/components/PosePanel/PoseSection.tsx(73,3): error TS2305:
+  Module '"../../canvas/pose/poseTypes"' has no exported member 'PoseFraming'.
+TSC_EXIT=2
+```
+
+⚠️ **`PixelStudioPanelContainer.tsx:201` is NOT a framing error — it is union widening.**
+The panel prop is still typed against the narrow union, so the wider `PoseMeshId` no longer
+fits. Mirroring the union (E20) fixes it.
+
+**Everything else, run by the coordinator from `client/`:**
+
+```
+$ bunx eslint .
+✖ 65 problems (0 errors, 65 warnings)          # exactly the MASTER §4 baseline
+
+$ bunx vitest run
+ Test Files  146 passed (146)
+      Tests  2857 passed (2857)               # W2 was 146/2818; +39 (task 05's suite 33 → 71)
+
+$ bunx vitest run src/ui/canvas/pose/__tests__/poseMeshes.test.ts
+ Test Files  1 passed (1)
+      Tests  71 passed (71)
+
+$ bun run lint:boundaries
+check-boundaries: OK — all 5 boundary rules hold.
+
+$ find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules
+(empty)
+```
+
+**Diff scope:** 3 files (+1154 / −332) — a *subset* of task 05's 5-file `Touches`.
+`poseCamera.ts` and its test were correctly left alone (deviation 1 below).
+
+**Asset integrity verified by the coordinator:**
+`shasum -a 256 client/public/models/mannequin.gltf` →
+`d936e4b7602147f05b4fe5a6d712eebf0a575be154e66834c9a9e0e0ebabef44` — **matches the recorded
+hash exactly**, and `git diff b682b61..HEAD -- client/public/models/` is empty.
+
+**E2 deletion verified:** no live export of `PoseFraming` / `MANNEQUIN_REGIONS` /
+`getFramingBounds` remains anywhere under `ui/canvas/pose/`. `poseTypes.ts` mentions
+`PoseFraming` only in prose explaining what was removed. The remaining code references are in
+exactly the 3 task-06-owned files above.
+
+## The part triangle counts — the number that mattered most
+
+**Measured from the real vendored asset. No part is empty.** The coordinator confirmed these
+are *asserted* in the suite (not merely computed), that non-emptiness carries a `> 100`
+"not a sliver" guard, and that disjointness and totality are asserted separately:
+
+| Part | Triangles | Normalised y | Normalised AX |
+| --- | ---: | --- | --- |
+| head | **336** | 0.838–0.996 | 0.004–0.048 |
+| torso | **2,912** | 0.472–0.838 | 0.002–0.110 |
+| arm | **1,062** | 0.761–0.815 | 0.105–0.395 |
+| leg | **1,346** | 0.000–0.471 | 0.020–0.128 |
+| hand | **3,980** | 0.775–0.795 | 0.396–0.500 |
+| **sum** | **9,636** | = the whole mesh | **0 duplicates** |
+
+The five parts are an **exact partition** — disjoint *and* total. Counts are pinned exactly,
+so retuning a landmark for any reason cannot pass silently. This is the anti-regression for
+pose-tool task 09's T-pose bug, which put Arm and Hand over **zero** vertices.
+
+## The exact union text task 06 must mirror (E20)
+
+From `poseTypes.ts`, **verbatim**:
+
+```ts
+export type PosePartId = "head" | "torso" | "arm" | "leg" | "hand";
+
+export type PoseMeshId =
+  | "cube"
+  | "sphere"
+  | "cylinder"
+  | "mannequin"
+  | PosePartId;
+```
+
+`"mannequin"` is the whole figure — what the rail labels **Full** and what the old
+`PoseFraming` called `"full"`. The five part ids are spelled **identically to their old
+framing names**, so a stale session value for a body part still resolves to the same body
+part. Only `"full"` has no counterpart; a test asserts `isPosePartId("full")` is `false`.
+
+## Segmentation rule
+
+**By triangle, by centroid, exactly once.** The three positions are averaged into a centroid,
+normalised once, and tested against `MANNEQUIN_LANDMARKS`. **A straddling triangle goes
+wholly to the part its centroid falls in — never duplicated, never dropped.** Each cut edge
+is therefore ragged by up to one triangle (sub-pixel at 32×32) and each part is open at the
+cut, which `DoubleSide` already renders as surface.
+
+⚠️ **Arm/hand are tested BEFORE the head/leg split**, because the arm bar (y 0.74–0.84)
+straddles the neck line (0.838); testing head first would hand the outer shoulders to the
+head. `torso` is the remainder, which makes the partition total by construction.
+
 ## Deviations
 
 **W1 — task 01 (both within latitude the spec explicitly delegated; accepted):**
@@ -255,6 +365,49 @@ Everything else in the pose block is already fully wired to the store.
     Not a live hazard (each frame reads back fresh), but it would surface as "the slider is
     one notch too thick" if a buffer were ever cached. **Task 06: call it exactly once per
     rendered buffer.**
+
+**W3 — task 05:**
+
+12. **`poseCamera.ts` / `poseCamera.test.ts` were NOT modified**, though they are in the
+    `Touches` list. They contain **no framing code** — `fitCameraToMesh` takes `bounds`
+    directly and no framing parameter was ever threaded through; the only "framing"
+    occurrences are three prose uses of the ordinary camera sense. Editing them would have
+    been change for its own sake. **Coordinator confirms:** W3's diff is 3 files, a subset
+    of the 5-file `Touches`. Under-reaching scope is not a violation.
+13. **Arm/hand/leg each cover BOTH sides.** `AX = |x - 0.5|`, so "arm" is both arms. This
+    satisfies **E1's "no left/right variants"** by not offering the choice, and is what makes
+    the exact partition possible. A one-sided cut was measured as viable (arm 531, hand
+    1,990, leg 673 — also non-empty) but discards half the mesh and loses the partition.
+14. **⚠️ An `armYMin`/`armYMax` band was ADDED beyond the recorded landmarks, and it is
+    load-bearing.** Without it, `AX >= 0.105` also catches the **feet**, which splay to
+    AX 0.128 — measured: the arm silently acquires two feet and the leg loses them
+    (leg 876 / arm 1,538 without the band, versus leg 1,346 / arm 1,062 with it). Pinned by
+    a test named "does NOT call a splayed foot an arm". This is a *new* instance of exactly
+    the class of bug task 09 hit, caught by measurement rather than by eye.
+15. **A `normalize` parameter was added to `loadMannequin`.** A part must be segmented on the
+    **raw** scene, because `normalizeToUnitBox` writes to the transform and leaves vertex
+    buffers in asset units. `buildPartMesh` passes `false`; every other caller takes the
+    default, so no existing caller changes.
+16. **Part geometry is non-indexed.** An indexed part would need every index renumbered and
+    unreferenced vertices pruned — a mistake there is exactly the dangling-index hole this
+    task exists to avoid. Cost is duplicated shared vertices across a few thousand triangles.
+17. **Boundary probes use `±1e-9` rather than exact-on-the-line.** Two first-draft tests
+    failed; the agent **measured rather than adjusted the code** and found the test helper's
+    fraction→units→fraction round trip is not exact in IEEE 754 (`0.472` returns as
+    `0.47199999999999986`). That is a property of floating point, not of the segmentation.
+    **The implementation was not changed to accommodate a test** — the right call.
+18. **`buildGeometry`'s parameter was narrowed** to a new exported `PosePrimitiveId`, so
+    `buildGeometry(three, "head")` is a compile error rather than falling out of the switch
+    as `undefined`.
+
+**Smooth normals (task 02) survive on parts — verified.** `buildPartGeometry` **copies the
+source `NORMAL` attribute** triangle by triangle (transformed by the node's normal matrix).
+`computeVertexNormals()` is a **fallback only**, for a source carrying no normals at all —
+deliberate, because on a *non-indexed* geometry it assigns each vertex its own face normal
+and would **silently reintroduce exactly the flat faceting task 02 removed**. A test asserts
+the asset really does carry `NORMAL` accessors, so swapping in one without them is loud
+rather than quietly flat. Task 02's segment counts and `POSE_MATERIAL_FLAT_SHADING = false`
+are untouched and its pinning tests are carried forward verbatim.
 
 **W1 — process incident (task 02, disclosed by the agent, independently verified by the
 coordinator):** the agent ran `git stash push`/`pop` on its own two files; the pop resolved
@@ -346,6 +499,21 @@ the same rotation. The owner must know.
 **W2 — task 04: none required, none skipped.** Deliberately pure so it needs none; the
 visual result is verified in task 06 once wired. The coordinator confirms the module imports
 only a type.
+
+**W3 — task 05: all 5 OWED, none performed.** No browser, no GPU:
+
+1. Each part button loads only that part, centred and fitted.
+2. ⚠️ **Highest risk of the five** — the head looks like a head, the arm like an arm. **The
+   T-pose makes "arm" a horizontal bar reaching to BOTH sides**; confirm that reads correctly
+   when framed alone. The segmentation is proven correct *numerically*, but **nobody has
+   looked at it.**
+3. A part rotates, lights, pans and stamps exactly like a primitive.
+4. Parts still shade smoothly (task 02 not undone) — the normal-copying path is reasoned and
+   tested for *presence*, but never rendered.
+5. "Full" still loads the whole mannequin.
+
+⚠️ **Checks 1–4 cannot be exercised at all until task 06 lands**, since the container half of
+the wiring does not yet exist.
 
 These compound with the **30 still-unperformed checks from `docs/06-pose-tool/`**, including
 the GPU depth-derived heights that share the readback path this plan adds the outline to.
