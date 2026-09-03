@@ -1,8 +1,8 @@
 # HANDOFF — Pose tool refinements
 
-**Current position:** W4 IN PROGRESS
+**Current position:** W4 DONE — W5 next (task 07: gate, QA sweep, handoff)
 **Branch:** `feat/07-pose-refinements`
-**Last commit:** `fdb4574`
+**Last commit:** `0ebccce`
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `54d6501` (branch `feat/06-pose-tool`)
 
 ## Wave ledger
@@ -12,7 +12,7 @@
 | W1 | 01, 02 | DONE | 2026-09-03 | `774b0a2` | tsc 0 · eslint 0 err/65 warn · vitest 145 files / 2755 tests pass · boundaries OK · no lockfile |
 | W2 | 03, 04 | DONE | 2026-09-03 | `b5ece14` | tsc 0 · eslint 0 err · vitest 146 files / 2818 pass · boundaries OK · stylelint exactly 2 err · storybook exit 0 · no lockfile |
 | W3 | 05 | DONE | 2026-09-03 | `fdb4574` | ⚠️ `tsc` RED **by design** — 3 errors, all task-06-owned, listed below · eslint 0 err · vitest 146 files / 2857 pass · boundaries OK · no lockfile |
-| W4 | 06 | IN PROGRESS | 2026-09-03 | | |
+| W4 | 06 | DONE | 2026-09-03 | `0ebccce` | **`bun run verify` exit 0** · tsc 0 (hole CLOSED) · eslint 0 err · vitest 146 files / 2866 pass · boundaries OK · stylelint exactly 2 err · UIStore diff empty · no snapshot changed · no lockfile |
 | W5 | 07 | TODO | | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
@@ -26,7 +26,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 03 | Panel: colours, Fit, edge slider | W2 | DONE | `868424f` | Native pickers gone; edge width 0–4 (0=off); slider cap removed. ⚠️ Leaves a marked placeholder for task 06 |
 | 04 | Outline post-pass | W2 | DONE | `b5ece14` | `applyOutline()`, Chebyshev, mutates in place, 48 tests |
 | 05 | Mannequin part meshes; delete framing | W3 | DONE | `fdb4574` | Exact partition: 9,636 tris across 5 parts, none empty. ⚠️ Leaves `tsc` red for task 06 |
-| 06 | Container integration | W4 | IN PROGRESS | | Closes task 05's type hole |
+| 06 | Container integration | W4 | DONE | `00e5a7e`, `5e0055e`, `0ebccce` | ⭐ Found the REAL zoom cap (~1.12, not 10). Outline NOT stamped (E7) |
 | 07 | Full gate, QA, handoff | W5 | TODO | | Likely ends `PARTIAL` |
 
 ## Known state at planning time (2026-09-03)
@@ -74,9 +74,24 @@ honest, risk-ordered checklist for the owner.
 
 ## Open questions for the owner
 
-1. **Does the outline get stamped?** Default per **E7** is **no** — display-only, because an
-   edge pixel has no meaningful normal or height. Task 06 implements the default unless it
-   argues otherwise, and must surface the result here. **STILL OPEN — task 06 (W4) answers it.**
+1. ~~**Does the outline get stamped?**~~ **CLOSED by task 06 (W4).**
+   **Decision: NO — the outline is display-only and is NOT stamped** (the E7 default).
+   `renderPose` calls `applyOutline` on the buffer it blits to the overlay; `poseStamp` takes
+   its **own** `engine.render()` read-back and never calls it, so `buildStampCells` sees the
+   pre-outline silhouette. Reasoning, written out in full at `poseStamp`'s header:
+   - **An outline pixel has no surface.** Every stamped cell carries colour + normal + height.
+     The outline is a 2D dilation of a silhouette — no geometry beneath it, so no normal to
+     encode and no depth to normalise. Any invention (nearest model normal? face the viewer?)
+     is a lie the lighting studio would shade as if real.
+   - **`height: 0` is already the "no data" sentinel**, so the only honest height for an
+     outline pixel means "not part of the model" — leaving a bare colour with a fabricated
+     normal, which is worse than not writing it.
+   - **The owner asked for a reference affordance** — silhouette readability while tracing.
+     The artwork's own edge is something they draw.
+   - **It stays reversible.** Adding it later is one call; un-committing edge pixels with
+     invented normals from 151 real projects is not.
+   ⚠️ **If the owner wants the outline stamped**, the normal/height channels must be
+   *defined*, not defaulted, and E6's shared `>= 128` keeps both silhouettes in step.
 2. ~~**Light colour** is not a Fill/Edge concept.~~ **CLOSED by task 03 (W2).**
    **Decision: it keeps its own control, but the native OS swatch is gone.** It is now a
    five-preset tint row — **Neutral / Warm / Cool / Amber / Moon** (`LIGHT_TINTS`) — still
@@ -300,6 +315,104 @@ cut, which `DoubleSide` already renders as surface.
 straddles the neck line (0.838); testing head first would hand the outer shoulders to the
 head. `torso` is the remainder, which makes the partition total by construction.
 
+
+## W4 gate — verified by the coordinator, 2026-09-03
+
+`tsc` is **GREEN again** — the hole task 05 deliberately left is closed.
+
+```
+$ cd client && bunx tsc --noEmit
+TSC_EXIT=0                                      # all 3 W3 errors closed
+
+$ bunx eslint .
+✖ 65 problems (0 errors, 65 warnings)          # exactly the MASTER §4 baseline
+
+$ bunx vitest run
+ Test Files  146 passed (146)
+      Tests  2866 passed (2866)                # W3 was 146/2857; +9 net
+
+$ bun run lint:boundaries
+check-boundaries: OK — all 5 boundary rules hold.
+
+$ bunx stylelint "src/**/*.css"
+✖ 70 problems (2 errors, 68 warnings)          # the same 2 baseline errors
+
+$ bun run verify        (repo root — the plan's final gate)
+VERIFY_EXIT=0
+ Test Files  146 passed (146) / Tests 2866 passed (2866)
+✓ built in 2.06s
+```
+
+**Data-safety checks, all run by the coordinator:**
+
+```
+$ git diff b682b61..HEAD -- client/src/stores/ui/UIStore.ts   → EMPTY   (wire format intact)
+$ git status --short -- '*__snapshots__*'                     → EMPTY   (no snapshot changed)
+$ git diff b682b61..HEAD --stat -- server/                    → EMPTY   (owner's data untouched)
+$ find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules → EMPTY
+```
+
+**Diff scope:** the 7 `Touches` files + the one **pre-authorized** `ApplicationStore.ts`
+stale-comment fix, committed separately as `0ebccce` exactly as instructed (+646 / −177).
+
+**`PoseFraming` is gone from the entire repo** — verified independently by the coordinator:
+`grep -rnE 'PoseFraming|MANNEQUIN_REGIONS|getFramingBounds|setFraming|onSelectFraming'`
+over `client/src` and `server/src`, excluding comment lines → **no matches**.
+
+**Bundle:** main **793.89 kB / 231.22 kB gz** (baseline 788.56 / 229.15 — **+5.33 kB,
++0.9%**). `three.module` (734.33 / 189.46 gz) and `GLTFLoader` (45.56 / 13.70 gz) are both
+**still lazy chunks**; `three` is **not** in the main bundle. The coordinator confirmed this
+in the `bun run verify` build output.
+
+## ⭐ The real cause of the owner's headline complaint — found in W4, verified by the coordinator
+
+**The cap was ≈1.12, not the `POSE_ZOOM_MAX = 10` everyone assumed.** Pose-tool task 08 folded
+zoom into the fit's padding:
+
+```ts
+padding: 1 - (1 - DEFAULT_POSE_FIT_PADDING) * poseZoom,   // = 1 - 0.9 * zoom
+```
+
+`fitCameraToMesh` clamps padding to `[0, 0.95)`. The coordinator re-derived the arithmetic
+independently:
+
+| zoom | raw padding | clamped | model fills |
+| ---: | ---: | ---: | ---: |
+| 1.00 | 0.100 | 0.100 | 90.0% |
+| 1.11 | 0.001 | 0.001 | 99.9% |
+| **1.12** | −0.008 | **0.000** | **100.0%** |
+| 10 | −8.000 | 0.000 | 100.0% |
+| 100 | −89.00 | 0.000 | 100.0% |
+
+**Every zoom from ≈1.12 upward framed identically at 100% fill.** This is why removing the
+store clamp (task 01) and the slider cap (task 03) changed *nothing the owner could see* —
+and it vindicates E12's insistence that unclamping was necessary but **not sufficient**.
+
+**The fix — two explicit steps:**
+
+```ts
+// step 1: FIT, at a FIXED padding, at the CURRENT rotation
+const fitted = fitCameraToMesh({ bounds: UNIT_BOUNDS, …, padding: DEFAULT_POSE_FIT_PADDING });
+// step 2: ZOOM, as a free multiplier over the fitted frame
+const params = scaleCameraParams(fitted, poseZoom);
+```
+
+`scaleCameraParams` is a new pure function returning a **new** object, scaling the **frustum**
+— never the model, never the camera distance:
+
+- **orthographic** — divides `left/right/top/bottom` by `zoom`. A dolly would change only
+  clipping, not size; `near`/`far` stay untouched and still bracket a smaller frustum.
+- **perspective** — `atan(tan(fov/2) / zoom) * 2`. **`tan`, not the angle**, because screen
+  size is proportional to `tan(fov/2)` — halving the angle does *not* double the model.
+  Clamped to a legal FOV purely as a degeneracy guard (the 1e-4° end is ~10⁶× the fitted
+  size, so it is not a cap).
+- Non-finite, non-positive, and `zoom === 1` return `params` unchanged.
+
+Linear and unbounded: **zoom 100 → the model fills 9,000% of the shorter axis.**
+**Fit resets neither zoom nor pan** (E15) — the effect writes neither; pan is not mentioned
+in it at all. `fitGeneration` is a dependency, and its monotonicity makes two presses
+idempotent.
+
 ## Deviations
 
 **W1 — task 01 (both within latitude the spec explicitly delegated; accepted):**
@@ -409,6 +522,38 @@ the asset really does carry `NORMAL` accessors, so swapping in one without them 
 rather than quietly flat. Task 02's segment counts and `POSE_MATERIAL_FLAT_SHADING = false`
 are untouched and its pinning tests are carried forward verbatim.
 
+**W4 — task 06:**
+
+19. **`PoseSection.tsx` imports `MANNEQUIN_PART_ORDER` from `poseMeshes.ts`** rather than
+    re-declaring the six labels — what MASTER §8 asks for ("part ids exactly as task 05
+    reports them"), the same anti-drift device the viewpoint table already uses.
+    ⚠️ **Cost: it pulls `poseMeshes.ts` (~900 lines of pure JS) into the main bundle — the
+    +5.33 kB.** `three` is `import type` only there and `GLTFLoader` is dynamic, so nothing
+    heavy follows. **A bundle-conscious follow-up could invert this by moving
+    `MANNEQUIN_PART_ORDER` into `poseTypes.ts`.**
+20. **The Model row offers three primitives, not four.** `"mannequin"` moved to the new
+    Mannequin row as its **Full** button, beside the five parts.
+21. **`setMesh` deliberately KEEPS `edgeWidth`.** It is an outline preference, not a property
+    of the mesh; snapping it to Off on every part button would make comparing two parts at the
+    same thickness impossible. Pinned by a test.
+22. **⚠️ `pose.modelColor` is now DEAD STATE.** The container reads
+    `ui.tool.fillColorOrSelected` instead (E8). Task 06 kept the field, its action and its
+    `clear()` line rather than removing them — deleting an `observableRef` field is a
+    store-shape change with its own risk. Documented in the store header with a "do not wire
+    a new reader to it" warning. **Flagged for task 07 as an optional cleanup.**
+23. **`poseModelColor`/`poseEdgeColor` are `useMemo`'d on their four channels.** A fresh
+    literal per render would re-materialise the mesh on every unrelated re-render of this
+    5,300-line container. Not a `useState`, not on a pointer path — **D11 holds.**
+24. **One deliberately redundant assertion** in the part-order DOM test (derived list *and*
+    literal list): the derived form catches drift, the literal form catches both sides
+    drifting together.
+
+**Guard added against the unverified GPU ground (as the task asked).** The `applyOutline`
+call site states explicitly that it touches **only the colour read-back**, and that the depth
+and normal passes render their own frames with their own materials and are unreachable from
+it — so the outline **cannot perturb the never-GPU-verified depth-derived heights**.
+⚠️ That is still *reasoning, not observation*.
+
 **W1 — process incident (task 02, disclosed by the agent, independently verified by the
 coordinator):** the agent ran `git stash push`/`pop` on its own two files; the pop resolved
 against a **pre-existing unrelated stash** from `feat/03-reflection-tool` and left conflict
@@ -515,8 +660,33 @@ only a type.
 ⚠️ **Checks 1–4 cannot be exercised at all until task 06 lands**, since the container half of
 the wiring does not yet exist.
 
+**W4 — task 06: all 15 OWED, none performed.** No browser, no GPU, no device:
+
+1. ⚠️ **HIGHEST VALUE — zoom past the old cap.** The model can be made much larger than the
+   canvas and keeps going, nothing clamping it. **This is the owner's headline complaint, and
+   the fix is arithmetic that has never been rendered.**
+2. **Pan fully off canvas** in every direction; the model may leave entirely.
+3. **Fit to canvas** re-frames at the *current* rotation without resetting zoom or pan; two
+   presses idempotent.
+4. **Initial load still auto-fits** with padding — the behaviour the owner liked.
+5. **Resize the object** — the render target follows and the model re-fits.
+6. Model colour follows **Fill**; changing Fill in the main picker recolours it live.
+7. Outline colour follows **Edge**.
+8. Thickness slider 1→4 gives a visibly thicker, **hard-edged** outline with no soft
+   fringing; 0 removes it.
+9. The outline hugs the silhouette exactly — no gap, no overlap onto the model.
+10. **Each part button** (Head/Torso/Arm/Leg/Hand/Full) loads that part alone, centred.
+11. A part rotates/lights/pans/stamps like a primitive.
+12. Smooth shading visible on sphere, cylinder and the mannequin parts.
+13. **Stamp** — still one undo entry, and the outline is **absent** from it (the documented
+    decision above).
+14. **Touch/iPad** — pan and double-tap still work; the sliders are usable; the rail does not
+    scroll while dragging.
+15. **WebGL** — switch tools and meshes ~20× with no `Too many active WebGL contexts`.
+
 These compound with the **30 still-unperformed checks from `docs/06-pose-tool/`**, including
 the GPU depth-derived heights that share the readback path this plan adds the outline to.
+**Running total owed by this plan: 33** (5 + 8 + 5 + 15), plus plan 06's 30.
 Task 07 merges both lists into one risk-ordered checklist.
 
 ## Notes for the next session
