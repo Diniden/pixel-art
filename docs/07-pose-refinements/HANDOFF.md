@@ -1,8 +1,12 @@
 # HANDOFF — Pose tool refinements
 
-**Current position:** W5 IN PROGRESS
+**Current position:** **ALL CODE COMPLETE — W5 PARTIAL, 41 manual checks owed.**
+All 7 tasks landed and `bun run verify` exits **0**. The plan is NOT marked `COMPLETE`
+because 41 de-duplicated manual checks remain **unperformed** — no agent in this plan or in
+`docs/06-pose-tool/` has had a browser, a GPU or a device. That is an honest outcome, not a
+failure. **The owner's headline zoom fix is arithmetic that has never been rendered.**
 **Branch:** `feat/07-pose-refinements`
-**Last commit:** `0ebccce`
+**Last commit:** `4899666` (last CODE commit: `0ebccce`)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `54d6501` (branch `feat/06-pose-tool`)
 
 ## Wave ledger
@@ -13,7 +17,7 @@
 | W2 | 03, 04 | DONE | 2026-09-03 | `b5ece14` | tsc 0 · eslint 0 err · vitest 146 files / 2818 pass · boundaries OK · stylelint exactly 2 err · storybook exit 0 · no lockfile |
 | W3 | 05 | DONE | 2026-09-03 | `fdb4574` | ⚠️ `tsc` RED **by design** — 3 errors, all task-06-owned, listed below · eslint 0 err · vitest 146 files / 2857 pass · boundaries OK · no lockfile |
 | W4 | 06 | DONE | 2026-09-03 | `0ebccce` | **`bun run verify` exit 0** · tsc 0 (hole CLOSED) · eslint 0 err · vitest 146 files / 2866 pass · boundaries OK · stylelint exactly 2 err · UIStore diff empty · no snapshot changed · no lockfile |
-| W5 | 07 | IN PROGRESS | 2026-09-03 | | |
+| W5 | 07 | **PARTIAL** | 2026-09-03 | `4899666` | `bun run verify` **exit 0** · stylelint 2 err · boundaries OK · storybook 0 · UIStore diff empty · no snapshot · no lockfile · bundle +5.33 kB explained. **PARTIAL: 41 manual checks unperformed** |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
