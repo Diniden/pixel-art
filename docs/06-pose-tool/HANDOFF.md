@@ -12,7 +12,7 @@
 | W1 | 01, 02, 03, 04, 05 | DONE | 2026-09-02 | `2073de6` | tsc 0 · eslint 0 err/65 warn · vitest 140 files 2571 tests · boundaries OK · stylelint 2 err · no lockfile |
 | W2 | 06, 07 | DONE | 2026-09-03 | `f4ef0de` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · no lockfile |
 | W3 | 08 | DONE | 2026-09-03 | `2dcdd42` | tsc 0 · eslint 0 err/65 warn · vitest 145 files 2737 tests · boundaries OK · stylelint 2 err · build OK · no lockfile · **24 manual checks OWED** |
-| W4 | 09 | IN PROGRESS | 2026-09-03 | | |
+| W4 | 09 | DONE | 2026-09-03 | `16e1645` | **NOT blocked** — CC0 re-verified, asset vendored. tsc 0 · eslint 0 err · vitest 145/2737 · boundaries OK · stylelint 2 err · no lockfile |
 | W5 | 10 | TODO | | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
@@ -29,7 +29,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 06 | Meshes, camera, auto-fit, stamp math | W2 | DONE | `f4ef0de` | 133 tests. Fuzzed applyEulerXYZ vs three (2.2e-15). ⚠️ setCamera widening owed to 08. |
 | 07 | Pose rail section + orbs | W2 | DONE | `5193dfd` | 33 tests. One DirectionOrb used twice. Added a Clear-pose button. 9 manual checks owed. |
 | 08 | `CanvasContainer` integration | W3 | DONE | `2dcdd42` | Own `useCanvasRender`; lazy engine + token guard; 3-pass stamp. **Depth fallback NOT needed.** 24 manual checks owed. |
-| 09 | Vendor the CC0 mannequin | W4 | TODO | | May legitimately end BLOCKED |
+| 09 | Vendor the CC0 mannequin | W4 | DONE | `16e1645` | CC0 re-verified 2026-09-03. **Mesh is a T-POSE** — old arm/hand regions framed 0 vertices. 6 manual checks owed. |
 | 10 | Full gate, QA, handoff | W5 | TODO | | |
 
 ## Known state at planning time (2026-09-02)
@@ -405,6 +405,46 @@ and normal intact, the pan offset, and fresh per-cell `color`/`normal` objects.
 `CanvasContainer.tsx` 200, with `poseCanvasRef` present in the transformed output. The full
 three-process `bun run dev` under mprocs was **not** run.
 
+### W4 — verified by the coordinator, 2026-09-03
+
+Gate at `16e1645`, identical to the W2/W3 baseline:
+
+```
+bunx tsc --noEmit              exit 0
+bunx eslint .                  ✖ 65 problems (0 errors, 65 warnings)
+bunx vitest run                Test Files 145 passed (145) · Tests 2737 passed (2737)
+bun run lint:boundaries        check-boundaries: OK — all 5 boundary rules hold.
+bunx stylelint "src/**/*.css"  ✖ 70 problems (2 errors, 68 warnings)
+find . -maxdepth 2 -name 'bun.lock*' → empty · snapshots untouched
+git check-ignore …/mannequin.gltf → exit 1 (tracked, correct)
+```
+
+**The coordinator independently verified the asset rather than trusting the report**, because
+this is a third-party binary entering the owner's repo:
+
+- **SHA-256 `d936e4b7…babef44`, 380,956 bytes** — matches the reported checksum exactly.
+- **It is a real glTF 2.0**, not an error page saved under the right name: generator
+  `Khronos glTF Blender I/O v3.2.43`, 2 meshes, 2 materials, **0 skins, 0 animations**
+  (confirming D4's unrigged premise), **0 images, 0 textures** — no sidecars, nothing can 404.
+- **The T-pose claim was re-derived from the vertex buffer by the coordinator**, not accepted
+  on report: decoded bounds are x `[-0.760, 0.760]`, y `[-0.004, 1.708]` — width 1.519 vs
+  height 1.712, **aspect 0.887** (arms-down would be ≈0.3), and the maximum |x| occurs in the
+  upper band at shoulder height. **Unambiguously a T-pose.** Task 06's arms-at-sides estimates
+  really did frame empty space, and this would have presented as a broken feature rather than
+  a bad constant.
+- `LICENSE.md` records source, author, itch.io user id, the verbatim licence statement, both
+  verification dates, checksums and the free-download evidence — traceable without re-finding
+  the page.
+
+**The out-of-`Touches` test edit was inspected and is sound.** Task 09 modified two
+`getFramingBounds` tests in `poseMeshes.test.ts`. Their subject is the fraction→world-space
+**mapping arithmetic**, but they hardcoded the old head fractions as fixtures, coupling them
+to the very values this task was assigned to re-tune. They now derive expectations from
+`MANNEQUIN_REGIONS`. The coordinator confirmed the region VALUES remain pinned by separate
+invariant tests, which assert **anatomical relationships** (hand at the end of the arm on the
+same side, leg in the bottom half, every value finite) rather than constants — the right way
+to pin a re-tunable measurement. **No invariant was weakened.**
+
 ## OWNER DECISIONS (2026-09-03)
 
 The coordinator put two questions to the owner directly. Both are answered:
@@ -419,6 +459,22 @@ The coordinator put two questions to the owner directly. Both are answered:
    leave the behaviour alone for now and revisit after using the tool on real work. **Not a
    deviation — a deliberate decision.** Task 10 should surface it in the QA notes, not
    "fix" it.
+
+### ⚠️ Manual checks OWED — W4 (6 more; nobody has performed these)
+
+25. The Mannequin button loads a visible human figure, pixelated like the primitives.
+26. **Each of the six framing buttons frames the right region on screen** — Full / Head /
+    Torso / Arm / Leg / Hand. *The regions are proven numerically against real vertex data,
+    which is stronger than eyeballing for correctness, but nobody has seen them framed.*
+27. The model-colour control affects the mannequin.
+28. Rotation, light, camera, pan and stamp all work on the mannequin as on a primitive.
+29. The stamped silhouette matches the on-screen figure, in one undo entry.
+30. Switching meshes repeatedly does not leak (watch for WebGL context warnings).
+
+Task 09 did substitute evidence where it could: graceful failure was tested by renaming the
+asset away and confirming `MannequinUnavailableError` (restored, checksum re-matched), and
+the lazy chunk was confirmed from the build — `three.module` 734 kB and `GLTFLoader` 45.6 kB
+are separate chunks, so **D2 still holds with the loader added.**
 
 ## ⚠️ THREE QUESTIONS FOR THE OWNER, RAISED BY TASK 08 (not blockers)
 
