@@ -1,14 +1,15 @@
 /**
- * Pose tool — the reference-solid library and the mannequin framing regions.
+ * Pose tool — the reference-solid library and the mannequin part segmentation.
  *
  * Two halves, split along the line jsdom draws:
  *
- * - **Pure data and maths** — {@link MANNEQUIN_REGIONS}, {@link getFramingBounds},
+ * - **Pure data and maths** — {@link MANNEQUIN_LANDMARKS},
+ *   {@link classifyMannequinTriangle}, {@link selectPartTriangles},
  *   {@link UNIT_BOUNDS} — plain numbers, fully unit-tested in the node lane.
- * - **Geometry construction** — {@link buildMesh}, {@link loadMannequin} — needs
- *   three, and therefore cannot run where there is no WebGL (MASTER risk
- *   register). Kept deliberately THIN, with every decision that could be wrong
- *   pushed into the pure half above it.
+ * - **Geometry construction** — {@link buildMesh}, {@link loadMannequin},
+ *   {@link buildPartGeometry} — needs three, and therefore cannot run where
+ *   there is no WebGL (MASTER risk register). Kept deliberately THIN, with
+ *   every decision that could be wrong pushed into the pure half above it.
  *
  * three is never imported at module level as a runtime value (MASTER D2): the
  * namespace arrives as a **parameter**, resolved once by `poseEngine.loadThree()`
@@ -40,9 +41,10 @@
  * ## Normalised size
  *
  * Every primitive is built to fit the **unit bounding box centred on the
- * origin** — `[-0.5, 0.5]` on all three axes. `fitCameraToMesh` then has ONE
- * job instead of four special cases, and the framing regions below can be
- * expressed as fractions that mean the same thing for every mesh.
+ * origin** — `[-0.5, 0.5]` on all three axes. So is each mannequin part, via
+ * the same {@link normalizeToUnitBox}. `fitCameraToMesh` therefore has ONE job
+ * instead of a special case per mesh, and a head arrives framed exactly like a
+ * cube.
  *
  * ## Purity
  *
@@ -52,8 +54,8 @@
 import type { BufferGeometry, Material, Object3D } from "three";
 import type {
   PoseColor,
-  PoseFraming,
   PoseMeshId,
+  PosePartId,
   PoseVector,
 } from "@/ui/canvas/pose/poseTypes";
 
@@ -160,156 +162,255 @@ export const CYLINDER_HEIGHT_SEGMENTS = 1;
  */
 export const POSE_MATERIAL_FLAT_SHADING = false;
 
-/* ── the mannequin framing regions (MASTER D4) ────────────────────────────── */
+/* ── the mannequin part segmentation (MASTER E1/E2) ───────────────────────── */
 
 /**
- * Which slice of the mannequin each "body part" button frames.
+ * The anatomical landmarks the part segmentation cuts on, as **fractions of
+ * the mannequin's own bounding box**: `0` is min on that axis, `1` is max.
  *
- * ⚠️ **These are camera framing presets over ONE mesh, not separate meshes.**
- * The CC0 asset (MASTER D3) is a single *unrigged* mesh, so there is no way to
- * isolate a limb as geometry. Framing the region the limb occupies delivers
- * the buttons the request asked for without inventing a rigged asset.
+ * ⚠️ **These are fractions, not model units.** The raw glTF is authored in its
+ * own scale — measured bounds x `[-0.7597, 0.7597]`, y `[-0.0039, 1.7083]`,
+ * z `[-0.0686, 0.1609]`, i.e. a span of `1.5193 × 1.7122 × 0.2296`. Comparing
+ * a fraction against a raw coordinate is the single easiest way to produce a
+ * part that is either empty or the whole body, so the conversion happens in
+ * exactly one place — {@link normalizeTriangleCentroid} — and every threshold
+ * below is consumed only after it.
  *
- * Each region is a **normalised sub-box of the mannequin's own bounding box**:
- * `0` is min on that axis, `1` is max. `y` is up, so `y: 1` is the crown of
- * the head and `y: 0` the soles. `x` is left-right (`0.5` is the centreline)
- * and `z` is front-back.
+ * ✅ **MEASURED against the real asset, twice.** These are pose-tool task 09's
+ * landmarks, re-derived from the vertex buffer on 2026-09-03 for this task and
+ * found to agree. `AX` below means `|x - 0.5|`: the *normalised* distance from
+ * the figure's centreline, so `0` is the spine and `0.5` is a fingertip.
  *
- * ✅ **MEASURED against the real asset (task 09, 2026-09-03)**, not estimated.
- * The vendored `mannequin.gltf` was parsed and its vertex buffer decoded, and
- * each region below is the actual bounding box of that body part's vertices,
- * expressed as a fraction of the whole mesh's bounds, plus a small margin.
- * See `client/public/models/LICENSE.md` for the mesh's raw dimensions.
+ * ## Why this asset needs landmarks at all
  *
- * ⚠️ **The asset is in a T-POSE, and that changed almost every region.** The
- * earlier estimates assumed a relaxed figure with the arms hanging at the
- * sides, so `arm` and `hand` were placed low and to the side — where this mesh
- * has nothing but empty space. The arms are in fact a horizontal bar at
- * shoulder height (y 0.76–0.81) reaching the full width of the mesh, and the
- * hands are at the far outer ends of it. The T-pose also makes the mesh nearly
- * as wide as it is tall (1.52 × 1.71), so the figure's own torso is much
- * narrower relative to the total width than a hanging-arms figure would be —
- * which is why `torso` and `leg` are far tighter in x than the estimates.
+ * The mesh is a **T-POSE** (aspect 0.887 — arms-down would be ≈0.3) with only
+ * two nodes, `mannequin_joints` (1,544 tris) and `mannequin_body` (8,092 tris),
+ * **both of which span the entire figure**. There is no skeleton, no per-limb
+ * node and no named sub-object, so a part can only be cut out spatially.
  *
- * How the numbers were derived: vertices were segmented into parts using the
- * mesh's own structure — the crotch split (two disjoint x-clusters below
- * y 0.47), the neck pinch (|x| collapses to < 0.06 at y 0.84), and the arm bar
- * (|x| > 0.25, which only occurs at y 0.76–0.81) — then each part's min/max was
- * normalised against the full bounds. A margin of 5–10% of the part's own span
- * is added so a region reads as a framed shot rather than a tight crop.
- *
- * Note these stack with `fitCameraToMesh`'s own 10% padding (MASTER D7); the
- * margin here is a second, smaller one that keeps a thin region such as `hand`
- * off the edge of the frame.
- *
- * `"full"` is exactly the whole box, which is what a primitive always uses.
+ * ⚠️ **Task 09's first estimates put Arm and Hand over empty space**, because
+ * they assumed a relaxed figure with the arms hanging at the sides. On a
+ * T-pose the arms are a horizontal bar at shoulder height and the maximum
+ * `|x|` occurs *there*, not at the hips. That bug is why every part is
+ * asserted non-empty in the tests, with the real triangle counts pinned.
  */
-export const MANNEQUIN_REGIONS: Record<PoseFraming, PoseMeshBounds> = {
-  /** The whole mesh — the unit-normalised bounding box, unchanged. */
-  full: {
-    min: { x: 0, y: 0, z: 0 },
-    max: { x: 1, y: 1, z: 1 },
-  },
+export const MANNEQUIN_LANDMARKS = {
   /**
-   * Head: measured y 0.864–1.000, x 0.452–0.548 — the crown down to the neck
-   * pinch. Genuinely narrow: the head is under 10% of this T-posed mesh's
-   * total width, so framing it needs a much tighter x than a hanging-arms
-   * figure would.
-   */
-  head: {
-    min: { x: 0.443, y: 0.856, z: 0 },
-    max: { x: 0.557, y: 1, z: 1 },
-  },
-  /**
-   * Torso: measured y 0.472–0.839, x 0.343–0.657 — shoulders down to the
-   * crotch split. The x span is the torso column only; the arms are excluded
-   * deliberately, because including them would make this identical to `full`
-   * on a T-pose.
-   */
-  torso: {
-    min: { x: 0.325, y: 0.454, z: 0 },
-    max: { x: 0.675, y: 0.858, z: 1 },
-  },
-  /**
-   * Arm: measured y 0.761–0.812, x 0.642–1.000 — the figure's outstretched
-   * RIGHT arm as the model faces us, from where it leaves the shoulder out to
-   * the fingertips. A wide, short region, because a T-posed arm is horizontal.
-   */
-  arm: {
-    min: { x: 0.624, y: 0.744, z: 0 },
-    max: { x: 1, y: 0.83, z: 1 },
-  },
-  /**
-   * Leg: measured y 0.000–0.480, x 0.517–0.629 — the sole up to the crotch,
-   * one leg's width, taken on the same side as `arm` so switching between the
-   * two does not jump across the body.
+   * **Neck pinch — head starts here.** `y = 0.838`.
    *
-   * The top is left at the measured crotch (0.48) rather than padded upward:
-   * the margin is only there to avoid a tight crop, and above the crotch there
-   * is no leg to crop — padding into the torso would just frame the hips. It
-   * also keeps the leg strictly in the bottom half of the figure, which the
-   * region invariants assert.
+   * Measured: `AX` collapses across this line. Immediately below it the body
+   * still reaches `AX 0.083` (y 0.82–0.83) and `0.062` (0.83–0.84); above it
+   * nothing exceeds `AX 0.048` all the way to the crown. That collapse is the
+   * neck, and it is the sharpest horizontal feature on the figure.
    */
-  leg: {
-    min: { x: 0.493, y: 0, z: 0 },
-    max: { x: 0.653, y: 0.48, z: 1 },
-  },
+  neckY: 0.838,
+
   /**
-   * Hand: measured y 0.775–0.796, x 0.879–1.000 — the outer end of the `arm`
-   * bar. The smallest and thinnest region by a wide margin, so it carries the
-   * largest relative margin (10%) to keep it off the edge of the frame.
+   * **Crotch split — legs start below here.** `y = 0.472`.
+   *
+   * Measured by the widening gap around the centreline: scanning the largest
+   * x-gap per y-band gives 0.011 at y 0.47–0.50 (one solid pelvis), 0.042 at
+   * 0.45–0.47, 0.059 at 0.30–0.40 and 0.148 below y 0.10 — two disjoint
+   * clusters that get further apart the lower you go. 0.472 is where the
+   * single column becomes two.
    */
-  hand: {
-    min: { x: 0.867, y: 0.762, z: 0 },
-    max: { x: 1, y: 0.808, z: 1 },
-  },
-};
+  crotchY: 0.472,
 
-/**
- * The world-space bounds of `framing` within `meshBounds`.
- *
- * Maps the normalised sub-box above onto whatever box the mesh actually
- * occupies, so the same table works for the mannequin, a primitive, or a
- * future asset of any size. `"full"` returns `meshBounds` unchanged (to within
- * floating point), and an unknown framing falls back to `"full"` rather than
- * producing a degenerate frame.
- *
- * Pure — this is the function {@link fitCameraToMesh}'s `bounds` argument comes
- * from, and it is what makes the framing buttons testable without GL.
- */
-export function getFramingBounds(
-  framing: PoseFraming,
-  meshBounds: PoseMeshBounds = UNIT_BOUNDS,
-): PoseMeshBounds {
-  const region = MANNEQUIN_REGIONS[framing] ?? MANNEQUIN_REGIONS.full;
-  const span: PoseVector = {
-    x: meshBounds.max.x - meshBounds.min.x,
-    y: meshBounds.max.y - meshBounds.min.y,
-    z: meshBounds.max.z - meshBounds.min.z,
-  };
-  return {
-    min: {
-      x: meshBounds.min.x + region.min.x * span.x,
-      y: meshBounds.min.y + region.min.y * span.y,
-      z: meshBounds.min.z + region.min.z * span.z,
-    },
-    max: {
-      x: meshBounds.min.x + region.max.x * span.x,
-      y: meshBounds.min.y + region.max.y * span.y,
-      z: meshBounds.min.z + region.max.z * span.z,
-    },
-  };
-}
+  /**
+   * **Shoulder — arm starts outboard of here.** `AX = 0.105`.
+   *
+   * Measured: the torso column's own half-width. Outside the arm band the mesh
+   * never exceeds `AX 0.128` (the feet, which splay), and within the shoulder
+   * band the triangle count per `AX` bin drops to a thin, even trickle beyond
+   * 0.105 — that trickle is the arm tube. Below this the triangle is torso.
+   */
+  shoulderAX: 0.105,
 
-/** The framing ids in the order the rail should render them (task 07). */
-export const POSE_FRAMING_ORDER: readonly PoseFraming[] = [
-  "full",
+  /**
+   * **Wrist — hand starts outboard of here.** `AX = 0.395`.
+   *
+   * Measured from where the arm bar *stops being a tube and becomes a hand*,
+   * on two independent signals that agree:
+   *
+   * - **The bar thins.** Its y-span per `AX` bin runs ≈0.042 from the shoulder
+   *   out to `AX 0.32`, then tapers: 0.029 (0.34–0.36), 0.023 (0.36–0.38),
+   *   0.018 (0.38–0.40) and stays ≈0.012–0.018 to the fingertips.
+   * - **The mesh densifies and spreads in z.** Triangles per bin go 36 → 64 →
+   *   152 → 254 → 344 → 1,010 → 1,398 across `AX 0.34…0.48`, and the z-span
+   *   jumps from 0.21 to 0.44 at `AX 0.40` — fingers, which spread front-to-back
+   *   as an arm tube does not.
+   *
+   * 0.395 sits in the middle of that transition. It is by far the largest part
+   * by triangle count (3,980 of 9,636) because the hands carry the asset's
+   * finest detail.
+   */
+  wristAX: 0.395,
+
+  /**
+   * **The arm bar's vertical extent** — `y ∈ [0.740, 0.840]`.
+   *
+   * ⚠️ **Load-bearing, not decorative.** `AX >= shoulderAX` on its own also
+   * catches the **feet**, which splay outward to `AX 0.128` at y ≈ 0. Without
+   * this band the "arm" part quietly acquires two feet and the "leg" part
+   * loses them — measured: leg 876 tris and arm 1,538 without the band,
+   * versus leg 1,346 and arm 1,062 with it.
+   *
+   * Measured extent of the bar itself: `AX > 0.25` occurs **only** in
+   * y 0.764–0.811, and the shoulder's own attachment reaches y 0.761–0.815.
+   * The band is padded to 0.740–0.840 so the whole shoulder joint travels with
+   * the arm rather than being sliced off at the socket.
+   */
+  armYMin: 0.74,
+  armYMax: 0.84,
+} as const;
+
+/** The part ids in the order the rail should render them. */
+export const MANNEQUIN_PART_ORDER: readonly PosePartId[] = [
   "head",
   "torso",
   "arm",
   "leg",
   "hand",
 ];
+
+/** Every mesh the rail can load, in rail order. `"mannequin"` is **Full**. */
+export const POSE_MESH_ORDER: readonly PoseMeshId[] = [
+  "cube",
+  "sphere",
+  "cylinder",
+  "mannequin",
+  ...MANNEQUIN_PART_ORDER,
+];
+
+/** Type guard: is `id` one of the five mannequin parts? */
+export function isPosePartId(id: PoseMeshId): id is PosePartId {
+  return (MANNEQUIN_PART_ORDER as readonly string[]).includes(id);
+}
+
+/**
+ * A triangle's centroid expressed as a fraction of `bounds` on each axis.
+ *
+ * ⚠️ **This is the ONE place raw model units become normalised fractions**, and
+ * it is deliberately not inlined: the landmark table above is in fractions and
+ * the glTF is in model units, so anywhere those two meet without this call is
+ * a bug that presents as an empty part or as the whole body (MASTER §9).
+ *
+ * A zero-extent axis yields `0.5` for that axis rather than `NaN` or
+ * `Infinity`. A flat mesh has no meaningful fraction along its flat axis, and
+ * a `NaN` centroid would silently fail every comparison and drop the triangle
+ * out of *every* part — turning a degenerate asset into a blank screen instead
+ * of a squashed one.
+ */
+export function normalizeTriangleCentroid(
+  centroid: PoseVector,
+  bounds: PoseMeshBounds,
+): PoseVector {
+  const frac = (v: number, min: number, max: number): number => {
+    const span = max - min;
+    if (!Number.isFinite(span) || span <= 0) return 0.5;
+    return (v - min) / span;
+  };
+  return {
+    x: frac(centroid.x, bounds.min.x, bounds.max.x),
+    y: frac(centroid.y, bounds.min.y, bounds.max.y),
+    z: frac(centroid.z, bounds.min.z, bounds.max.z),
+  };
+}
+
+/**
+ * Which part a triangle belongs to, from its centroid and the mesh's bounds.
+ *
+ * ## The segmentation rule: **by triangle, by centroid, exactly once**
+ *
+ * ⚠️ **Segmentation is per TRIANGLE, never per vertex.** Selecting vertices
+ * and keeping the indices that survive leaves dangling indices and tears holes
+ * along every seam, because a triangle whose three corners land in three
+ * different parts belongs to none of them. Here the *triangle* is the atom:
+ * its three positions are averaged into a centroid, the centroid is normalised
+ * once by {@link normalizeTriangleCentroid}, and the resulting fraction is
+ * tested against {@link MANNEQUIN_LANDMARKS}.
+ *
+ * ## Straddling triangles
+ *
+ * **A triangle that crosses a boundary goes wholly to the part its centroid
+ * falls in, and is never duplicated or dropped.** The consequences are worth
+ * stating plainly, because they are the design and not an oversight:
+ *
+ * - Each part's cut edge is **ragged by up to one triangle**, following the
+ *   tessellation rather than the mathematical plane. At this asset's density
+ *   that is well under a pixel once rasterised to a 32×32 target, and the
+ *   alternative — clipping each triangle against the plane — would generate
+ *   new vertices whose normals must be interpolated, for a seam nobody sees.
+ * - Each part is therefore **open at the cut**: a head has no cap where the
+ *   neck was. `buildMaterial` already renders `DoubleSide`, so the interior
+ *   reads as surface rather than as a hole.
+ * - The parts form an **exact partition**: every one of the 9,636 triangles
+ *   lands in exactly one part, so they are disjoint and their union is the
+ *   whole mannequin. That is a much stronger property than "roughly right",
+ *   and the tests assert both halves of it.
+ *
+ * ## Order of tests, and why arm/hand are checked first
+ *
+ * The arm band is tested **before** the head/leg split so that the outstretched
+ * limb is claimed by `arm`/`hand` rather than by whatever vertical slice it
+ * happens to sit in. On this T-pose the arm bar (y 0.74–0.84) straddles the
+ * neck line (0.838), so testing `head` first would hand the outer shoulders to
+ * the head. Everything not claimed is `torso`, which makes `torso` the
+ * remainder and guarantees the partition is total by construction.
+ *
+ * ## No left/right variants (E1)
+ *
+ * `AX` is `|x - 0.5|`, so both arms and both hands are one part, as are both
+ * legs. The asset is a symmetric T-pose; two mirror images of the same tube
+ * are not two references.
+ */
+export function classifyMannequinTriangle(
+  centroid: PoseVector,
+  bounds: PoseMeshBounds,
+): PosePartId {
+  const n = normalizeTriangleCentroid(centroid, bounds);
+  const ax = Math.abs(n.x - 0.5);
+  const L = MANNEQUIN_LANDMARKS;
+
+  const inArmBar = n.y >= L.armYMin && n.y <= L.armYMax;
+  if (inArmBar && ax >= L.wristAX) return "hand";
+  if (inArmBar && ax >= L.shoulderAX) return "arm";
+  if (n.y >= L.neckY) return "head";
+  if (n.y < L.crotchY) return "leg";
+  return "torso";
+}
+
+/**
+ * Indices of the triangles belonging to `part`, as offsets into `triangles`.
+ *
+ * Returns triangle indices — `0` is the first triangle, not the first vertex —
+ * so a caller multiplies by 3 to reach the index buffer. Pure: no three, no
+ * allocation beyond the result, deterministic for a given input.
+ */
+export function selectPartTriangles(
+  part: PosePartId,
+  triangles: readonly PoseVector[],
+  bounds: PoseMeshBounds,
+): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < triangles.length; i++) {
+    if (classifyMannequinTriangle(triangles[i], bounds) === part) out.push(i);
+  }
+  return out;
+}
+
+/** The average of three positions — a triangle's centroid. */
+export function triangleCentroid(
+  a: PoseVector,
+  b: PoseVector,
+  c: PoseVector,
+): PoseVector {
+  return {
+    x: (a.x + b.x + c.x) / 3,
+    y: (a.y + b.y + c.y) / 3,
+    z: (a.z + b.z + c.z) / 3,
+  };
+}
 
 /* ── the mannequin loading path (asset vendored by task 09) ──────────────── */
 
@@ -372,10 +473,19 @@ export class MannequinUnavailableError extends Error {
  * Failure modes all funnel into the same rejection: the loader module missing,
  * the file 404ing, the file being malformed, or the parsed scene being empty.
  * None of them should crash the tool; the caller falls back to a primitive.
+ *
+ * ⚠️ **`normalize` must be `false` when a part is about to be cut out of the
+ * result.** {@link normalizeToUnitBox} writes a scale and a position onto the
+ * scene's *transform*, leaving the vertex buffers in the asset's own units, so
+ * a part cut afterwards would be measured in raw units and then re-normalised
+ * a second time by its own fit. Segmenting the raw scene and normalising only
+ * the finished part keeps exactly one normalisation on the path.
+ * {@link buildPartMesh} passes `false`; everything else takes the default.
  */
 export async function loadMannequin(
   three: ThreeNamespace,
   url: string = MANNEQUIN_URL,
+  normalize = true,
 ): Promise<Object3D> {
   let LoaderCtor: new () => {
     loadAsync(url: string): Promise<{ scene?: Object3D }>;
@@ -408,8 +518,181 @@ export async function loadMannequin(
     );
   }
 
-  normalizeToUnitBox(three, scene);
+  if (normalize) normalizeToUnitBox(three, scene);
   return scene;
+}
+
+/* ── part construction (E1) ───────────────────────────────────────────────── */
+
+/**
+ * Cut `part` out of an already-loaded mannequin scene, as its own mesh.
+ *
+ * The thin construction half of the segmentation: every decision lives in
+ * {@link classifyMannequinTriangle} above, and this walks the scene applying
+ * it. jsdom has no WebGL, so what is testable is the pure classifier — this is
+ * kept as close to mechanical as it can be.
+ *
+ * ## What it does, in order
+ *
+ * 1. **Measure the whole figure's bounds** from `scene`, in the asset's own
+ *    units. This is the box the normalised landmark fractions are relative to,
+ *    so it must be the box of the *whole* mannequin, never of one part.
+ * 2. **Walk every mesh under the scene**, and for each triangle compute its
+ *    world-space centroid and classify it. Positions are transformed by the
+ *    node's world matrix first, so a scene with nested transforms segments in
+ *    the same space its bounds were measured in.
+ * 3. **Emit the kept triangles as a new non-indexed `BufferGeometry`.** Going
+ *    non-indexed is what makes the extraction total: an indexed part would have
+ *    to renumber every index and prune the unreferenced vertices, and a
+ *    mistake there is exactly the "dangling index" hole this task exists to
+ *    avoid. The cost is duplicated shared vertices in a part of at most a few
+ *    thousand triangles, which is nothing at this scale.
+ * 4. **Copy the source normals across** rather than recomputing them — see
+ *    below.
+ * 5. **Normalise the finished mesh into the unit box** with the same
+ *    {@link normalizeToUnitBox} every primitive uses, so a head arrives
+ *    centred and auto-fitted exactly like a cube.
+ *
+ * ## ⚠️ Smooth normals are PRESERVED, not recomputed
+ *
+ * The source `NORMAL` attribute is copied through triangle by triangle. That
+ * is deliberate and is the point of the change: plan 07 task 02 turned
+ * `flatShading` off so three interpolates per-vertex normals, and the glTF
+ * already carries smooth authored normals. Copying them keeps a part shading
+ * exactly as the whole figure did.
+ *
+ * `computeVertexNormals()` is called **only as a fallback**, when a source
+ * primitive has no `normal` attribute at all — without it such a part would
+ * render black. It is not the normal path, because on a non-indexed geometry
+ * `computeVertexNormals()` assigns each vertex its own *face* normal: it would
+ * silently reintroduce exactly the flat faceting task 02 removed. The fallback
+ * therefore takes the flat result only where the alternative is no shading at
+ * all.
+ */
+export function buildPartGeometry(
+  three: ThreeNamespace,
+  scene: Object3D,
+  part: PosePartId,
+): BufferGeometry {
+  const box = new three.Box3().setFromObject(scene);
+  const bounds: PoseMeshBounds = {
+    min: { x: box.min.x, y: box.min.y, z: box.min.z },
+    max: { x: box.max.x, y: box.max.y, z: box.max.z },
+  };
+
+  const positions: number[] = [];
+  const normals: number[] = [];
+  let sawNormals = true;
+
+  scene.updateWorldMatrix(true, true);
+  const v = new three.Vector3();
+  const n = new three.Vector3();
+  const normalMatrix = new three.Matrix3();
+
+  scene.traverse((node) => {
+    const mesh = node as Object3D & { isMesh?: boolean; geometry?: BufferGeometry };
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const geometry = mesh.geometry;
+    const position = geometry.getAttribute("position");
+    if (!position) return;
+    const normal = geometry.getAttribute("normal");
+    if (!normal) sawNormals = false;
+
+    const index = geometry.getIndex();
+    const triangleCount = index ? index.count / 3 : position.count / 3;
+    normalMatrix.getNormalMatrix(mesh.matrixWorld);
+
+    // Three vertex slots reused per triangle, so the hot loop allocates nothing.
+    const px = [0, 0, 0];
+    const py = [0, 0, 0];
+    const pz = [0, 0, 0];
+    const nx = [0, 0, 0];
+    const ny = [0, 0, 0];
+    const nz = [0, 0, 0];
+
+    for (let t = 0; t < triangleCount; t++) {
+      for (let c = 0; c < 3; c++) {
+        const vi = index ? index.getX(t * 3 + c) : t * 3 + c;
+        v.fromBufferAttribute(position, vi).applyMatrix4(mesh.matrixWorld);
+        px[c] = v.x;
+        py[c] = v.y;
+        pz[c] = v.z;
+        if (normal) {
+          n.fromBufferAttribute(normal, vi).applyMatrix3(normalMatrix).normalize();
+          nx[c] = n.x;
+          ny[c] = n.y;
+          nz[c] = n.z;
+        }
+      }
+
+      const centroid = triangleCentroid(
+        { x: px[0], y: py[0], z: pz[0] },
+        { x: px[1], y: py[1], z: pz[1] },
+        { x: px[2], y: py[2], z: pz[2] },
+      );
+      if (classifyMannequinTriangle(centroid, bounds) !== part) continue;
+
+      for (let c = 0; c < 3; c++) {
+        positions.push(px[c], py[c], pz[c]);
+        if (normal) normals.push(nx[c], ny[c], nz[c]);
+      }
+    }
+  });
+
+  const geometry = new three.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new three.Float32BufferAttribute(positions, 3),
+  );
+  if (sawNormals && normals.length === positions.length) {
+    geometry.setAttribute("normal", new three.Float32BufferAttribute(normals, 3));
+  } else {
+    // Fallback only — see the header. Flat, but visible.
+    geometry.computeVertexNormals();
+  }
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+/**
+ * Load the mannequin and return `part` alone, in `color`, in the unit box.
+ *
+ * Inherits {@link loadMannequin}'s rejection — the asset can be missing at
+ * runtime — and additionally rejects with {@link MannequinUnavailableError} if
+ * the segmentation yields **no triangles at all**.
+ *
+ * ⚠️ **That empty check is the guard for this task's headline failure mode.**
+ * Pose-tool task 09 shipped landmark estimates that put Arm and Hand over
+ * empty space, because they assumed a figure with its arms at its sides rather
+ * than this asset's T-pose. An empty part renders as a blank canvas with no
+ * error anywhere, which reads as "the tool is broken" rather than as "the
+ * numbers are wrong". Rejecting turns a silent blank into the same
+ * asset-unavailable path the missing-file case already takes, where the caller
+ * falls back rather than showing nothing. The *real* defence is the test suite,
+ * which pins every part's triangle count against the vendored asset — this is
+ * the belt to that suite's braces.
+ */
+export async function buildPartMesh(
+  three: ThreeNamespace,
+  part: PosePartId,
+  color: PoseColor,
+  url: string = MANNEQUIN_URL,
+): Promise<Object3D> {
+  const scene = await loadMannequin(three, url, false);
+  const geometry = buildPartGeometry(three, scene, part);
+
+  const position = geometry.getAttribute("position");
+  if (!position || position.count === 0) {
+    geometry.dispose();
+    throw new MannequinUnavailableError(
+      `the mannequin part "${part}" segmented to zero triangles`,
+    );
+  }
+
+  const mesh = new three.Mesh(geometry, buildMaterial(three, color));
+  normalizeToUnitBox(three, mesh);
+  return mesh;
 }
 
 /* ── primitive construction ───────────────────────────────────────────────── */
@@ -417,10 +700,22 @@ export async function loadMannequin(
 /**
  * Build the reference solid for `id`, in `color`.
  *
- * `"mannequin"` delegates to {@link loadMannequin} and therefore inherits its
- * rejection; the three primitives always resolve. Every result is already
- * normalised to {@link UNIT_BOUNDS}, so the caller can hand it straight to
- * `fitCameraToMesh` with `UNIT_BOUNDS` as the bounds.
+ * Three routes, one contract:
+ *
+ * - the three **primitives** are constructed synchronously and always resolve;
+ * - `"mannequin"` — the rail's **Full** — delegates to {@link loadMannequin};
+ * - a **part id** delegates to {@link buildPartMesh}, which loads the same
+ *   asset and cuts the part out of it (E1).
+ *
+ * Both mannequin routes therefore inherit {@link MannequinUnavailableError}
+ * and the caller must fall back rather than break.
+ *
+ * Every result is already normalised to {@link UNIT_BOUNDS} — a part just as
+ * much as a cube — so the caller hands it straight to `fitCameraToMesh` with
+ * `UNIT_BOUNDS` as the bounds, with no per-part special case anywhere. That
+ * uniformity is what replaced the framing feature (E2): a part is centred and
+ * fitted because it *is* the whole scene, not because a camera was aimed at a
+ * slice of a larger one.
  *
  * ⚠️ The caller takes ownership of the returned object's GPU resources.
  * `PoseEngine.setObject3D()` disposes whatever it replaces, so routing every
@@ -437,8 +732,12 @@ export async function buildMesh(
     applyMaterial(three, object, color);
     return object;
   }
+  if (isPosePartId(id)) return buildPartMesh(three, id, color);
   return new three.Mesh(buildGeometry(three, id), buildMaterial(three, color));
 }
+
+/** The ids {@link buildGeometry} can construct: the primitives, and only those. */
+export type PosePrimitiveId = Exclude<PoseMeshId, "mannequin" | PosePartId>;
 
 /**
  * The geometry for one primitive, sized into the unit box.
@@ -448,10 +747,15 @@ export async function buildMesh(
  * widest axis, so no rescale is needed — the constructor arguments ARE the
  * normalisation, which is why they are written as literals rather than derived
  * from a bounding-box pass.
+ *
+ * ⚠️ Every mannequin id is excluded from the parameter type, parts included:
+ * they come from the asset and cannot be constructed. `tsc` therefore rejects
+ * `buildGeometry(three, "head")` at the call site rather than falling out of
+ * the switch as `undefined`.
  */
 export function buildGeometry(
   three: ThreeNamespace,
-  id: Exclude<PoseMeshId, "mannequin">,
+  id: PosePrimitiveId,
 ): BufferGeometry {
   switch (id) {
     case "cube":

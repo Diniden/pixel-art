@@ -8,7 +8,7 @@
  *
  * ## ⚠️ These unions are structurally identical to `stores/ui/PoseUIStore.ts`
  *
- * `PoseMeshId`, `PoseFraming`, `PoseProjection`, `PoseCameraPreset` and
+ * `PoseMeshId`, `PosePartId`, `PoseProjection`, `PoseCameraPreset` and
  * `PoseVector` are declared with the SAME members in the SAME order as the
  * copies in `PoseUIStore.ts`. That duplication is deliberate: the `ui/`
  * boundary forbids importing anything under `stores/` — type-only imports
@@ -32,15 +32,43 @@
 
 /* ── vocabulary (mirrors PoseUIStore) ─────────────────────────────────────── */
 
-/** The reference solids the rail offers (MASTER D1/D3). */
-export type PoseMeshId = "cube" | "sphere" | "cylinder" | "mannequin";
+/**
+ * One anatomical piece of the mannequin, built as its OWN geometry (E1).
+ *
+ * ⚠️ **These are real sub-meshes, not camera framings.** The `PoseFraming`
+ * union that used to live here — and the `MANNEQUIN_REGIONS` / `getFramingBounds`
+ * machinery in `poseMeshes.ts` that went with it — were **deleted** on
+ * 2026-09-03 (plan 07 task 05, MASTER E2). Framing pointed a camera at a slice
+ * of the whole figure; clicking **Head** still rendered the entire mannequin
+ * and merely zoomed in on its skull, so the torso and arms stayed on screen
+ * wherever the frame was loose and the model still had to be lit and stamped
+ * as a whole body. A part id now selects a **triangle subset**, which is
+ * re-centred and auto-fitted exactly like a cube — nothing else is in the
+ * scene at all.
+ *
+ * **No left/right variants (E1).** `"arm"` is *both* arms and `"hand"` is
+ * *both* hands: the asset is a symmetric T-pose, and splitting them would
+ * double the rail for two mirror images of the same shape. See
+ * `poseMeshes.ts`'s `MANNEQUIN_PART_ORDER` for the rail order.
+ */
+export type PosePartId = "head" | "torso" | "arm" | "leg" | "hand";
 
 /**
- * Which region of the mannequin the camera frames (MASTER D4). The asset is
- * unrigged, so the "body part" buttons are framing presets over one mesh
- * rather than separate meshes. Primitives only ever use `"full"`.
+ * Everything the rail can load: the three primitives (MASTER D1), the whole
+ * mannequin (D3), and each of its parts (E1).
+ *
+ * `"mannequin"` is the *whole* figure — the rail labels it **Full** — and is
+ * what the old `PoseFraming` called `"full"`. The five part ids are spelled
+ * identically to their old framing names, so a stale session value for a body
+ * part still resolves to the same body part; only `"full"` has no direct
+ * counterpart, because it was never a part in the first place.
  */
-export type PoseFraming = "full" | "head" | "torso" | "arm" | "leg" | "hand";
+export type PoseMeshId =
+  | "cube"
+  | "sphere"
+  | "cylinder"
+  | "mannequin"
+  | PosePartId;
 
 /** Camera projection (MASTER D14). */
 export type PoseProjection = "perspective" | "orthographic";
