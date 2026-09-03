@@ -263,6 +263,39 @@ Also unperformed by anyone: the full three-process `bun run dev` under mprocs. E
 started only the Vite client (on a non-default port) to avoid seizing ports from siblings.
 All four confirmed the client serves HTTP 200 and transforms the new modules.
 
+### W3 — verified by the coordinator, 2026-09-03
+
+Gate run by the coordinator against the settled tree at `2dcdd42`:
+
+```
+bunx tsc --noEmit              exit 0
+bunx eslint .                  ✖ 65 problems (0 errors, 65 warnings)
+bunx vitest run                Test Files 145 passed (145) · Tests 2737 passed (2737)
+bun run lint:boundaries        check-boundaries: OK — all 5 boundary rules hold.
+bunx stylelint "src/**/*.css"  ✖ 70 problems (2 errors, 68 warnings)
+find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules   → empty
+git status --short -- '*__snapshots__*'                        → empty
+```
+
+Identical to the W2 baseline on every axis. Diff is exactly 2 files — `CanvasContainer.tsx`
+and the authorised `poseEngine.ts` widening — so the scope extension was used as granted and
+not stretched.
+
+Coordinator spot-checks of the decisions a green gate cannot catch:
+
+- **D11 holds.** The pose overlay has its own `useCanvasRender` (`:2411`) and is absent from
+  the main `render`'s deps. There IS one `useState` in the pose region (`poseEngineTick`,
+  `:2428`) — the coordinator chased it down: it is set exactly once, inside engine creation
+  (`:2468`), and is **not on any pointer path**. Drag state is in refs, as required.
+- **D12 holds.** `"pose"` is in `isGestureTool` (`:363`); the touch branch is placed ahead of
+  the bail with an explicit comment; double-click is `POSE_DOUBLE_CLICK_MS = 400` /
+  `POSE_DOUBLE_CLICK_CELLS = 2`, tracked in a ref, not via `dblclick`.
+- **D5 holds.** `imageSmoothingEnabled = false` is re-set on context acquisition (`:2351`).
+- **The aliasing hazard is handled.** `buildStampCells` allocates a fresh `cellNormal` and
+  `cellHeight` per loop iteration (`poseStamp.ts:285-302`) — no shared object is pushed into
+  more than one cell, so task 05's no-deep-copy contract cannot corrupt a patch.
+- **The D8 fallback is wired** as a clean path (`depth: null` → height 0), not a crash.
+
 ### ⚠️ W3 — task 08's 24 manual checks: **ALL 24 ARE OWED, NONE WERE PERFORMED**
 
 **The executor had no browser and no automation driver.** Chrome, Safari and Firefox are
@@ -371,6 +404,20 @@ and normal intact, the pan offset, and fresh per-cell `color`/`normal` objects.
 **Dev server**: `bunx vite` on port 5279 serves `/` 200 and transforms the modified
 `CanvasContainer.tsx` 200, with `poseCanvasRef` present in the transformed output. The full
 three-process `bun run dev` under mprocs was **not** run.
+
+## ⚠️ THREE QUESTIONS FOR THE OWNER, RAISED BY TASK 08 (not blockers)
+
+Recorded here because task 10's QA sweep should put them in front of the owner:
+
+1. **A camera preset overrides the store's `projection`** — which is D14 as written, but it
+   means the rail's Perspective/Orthographic toggle has no visible effect while a mismatched
+   preset is selected. A UX question, not a bug against the spec.
+2. **In variant-edit mode the overlay spans the expanded view while the stamp targets the
+   smaller variant grid.** Cells outside are filtered, so the model stamps cropped: the
+   visible reference is larger than the stampable area. Correct per the plan, possibly
+   surprising in use.
+3. Viewpoint buttons reach the container only via `pose.rotation`, so manual check 7 is
+   really a task-07 check, not a task-08 one.
 
 ## ⚠️ AUTHORISED SCOPE EXTENSION FOR TASK 08 (coordinator, 2026-09-03)
 
