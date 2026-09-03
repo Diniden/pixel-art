@@ -1,40 +1,66 @@
 /**
  * PoseSection — the Pose tool's right-rail controls (pose-tool 2026-09-02,
- * task 07).
+ * task 07; reworked by pose-refinements task 03, 2026-09-03).
  *
  * PURE. Like every other module under `ui/`, this imports no store, no MobX
  * and no API: every value arrives as a prop and every interaction leaves as a
  * callback. `PixelStudioPanelContainer` is the single `observer()` seam that
- * reads `app.pose` and feeds this section, exactly as it already does for
- * `ReflectionLinesSection`.
+ * reads `app.pose` and `ui.tool` and feeds this section, exactly as it already
+ * does for `ReflectionLinesSection`.
  *
- * ## Six control groups, matching the request
+ * ## Seven control groups
  *
- * | Group        | Controls                                        | Store field           |
+ * | Group        | Controls                                        | Source                |
  * | ------------ | ----------------------------------------------- | --------------------- |
  * | Model        | Cube · Sphere · Cylinder · Mannequin             | `meshId`              |
  * | Framing      | Full · Head · Torso · Arm · Leg · Hand           | `framing`             |
  * | Rotation     | orb + Front/Back/Left/Right/Top/Bottom/¾         | `rotation`            |
- * | Light        | orb + colour                                     | `lightDirection/Color`|
- * | Model colour | colour                                           | `modelColor`          |
- * | Camera       | projection · 5 presets · zoom · FOV              | `projection` …        |
+ * | Light        | orb + light tint presets                         | `lightDirection/Color`|
+ * | Colours      | Fill swatch · Edge swatch (the APP's picker)     | `ui.tool` (E8/E9/E10) |
+ * | Outline      | thickness 0–4 px                                 | `edgeWidth` (E4)      |
+ * | Camera       | projection · 5 presets · zoom · FOV · Fit        | `projection` …        |
  *
- * ## Two disabled states, deliberately not hidden
+ * ## ⚠️ There is NO native colour input here any more (task 03)
  *
- * - **Framing is only meaningful for the mannequin** (MASTER D4: the asset is
- *   unrigged, so the "body part" buttons are camera framing over one mesh).
- *   For a primitive the six buttons are DISABLED rather than removed, so
- *   picking Cube after Mannequin does not make the rail jump by a row.
- * - **FOV is only meaningful in perspective.** Same reasoning; an orthographic
- *   camera has no field of view, and hiding the slider would shuffle the
- *   camera group every time the projection toggles.
+ * The rail used to render two `<input type="color">` elements with local
+ * `toHex`/`fromHex` helpers. The owner asked for the app's own picker instead,
+ * so **MASTER E10** applies: the rail shows **swatches** for the app's two
+ * colour slots and switches which one the main picker is editing. It embeds no
+ * second picker. Per **E8** the model colour is the **Fill** slot (always read
+ * through `fillColorOrSelected` — never seed a default, it is tri-state and a
+ * default would add a key to all 151 corpus snapshots) and per **E9** the
+ * outline colour is the **Edge** slot.
+ *
+ * The swatches are therefore DISPLAY-ONLY here: `modelColor` and `edgeColor`
+ * come in as values, and clicking one emits `onEditModelColor` /
+ * `onEditEdgeColor` so the container can point the main picker at that slot.
+ * There is no `onSetModelColor` any more — the picker sets the colour.
+ *
+ * ## The light colour is a LIGHT RIG property, not an artwork colour
+ *
+ * Fill and Edge describe the artwork. The key light's tint describes the
+ * *studio*, and pointing the artwork picker at it would mean either inventing
+ * a third slot (which E10 forbids) or making "set the fill colour" sometimes
+ * mean "set the lamp", which is worse than the native input it replaces. It
+ * is kept as its own control, but as a small row of TINT PRESETS rather than a
+ * native swatch: a light tint is a choice from a handful of studio whites, not
+ * an arbitrary 24-bit colour, and the presets are reachable by touch on the
+ * iPad in a way the OS colour sheet is not. See `LIGHT_TINTS`.
+ *
+ * ## Outline thickness is 0–4, with 0 meaning "no outline"
+ *
+ * **MASTER E4** fixes whole pixels 1–4 "plus an off state (0 or a toggle —
+ * task 03 decides and documents)". This is the 0 form: one control, no
+ * checkbox that can disagree with the slider, and dragging to the left end is
+ * the fastest possible way to turn the outline off and back on at the width
+ * you had. The slider reads `0 px` as **"Off"** so the state is legible.
  *
  * ## The angle tables are IMPORTED, never re-declared
  *
  * `POSE_CAMERA_PRESETS`, `POSE_VIEWPOINT_ROTATIONS` and `POSE_VIEWPOINT_ORDER`
  * come from `ui/canvas/pose/poseCamera.ts` (task 06). Two sources of truth for
  * the isometric angle is a guaranteed drift, and the buttons here and the
- * camera maths in task 08 must agree by construction, not by coincidence.
+ * camera maths must agree by construction, not by coincidence.
  * `poseCamera.ts` is itself under `ui/`, so importing it crosses no boundary.
  */
 import {
@@ -53,6 +79,31 @@ import type {
 import { DirectionOrb } from "./DirectionOrb";
 import "./PosePanel.css";
 
+/**
+ * Outline thickness, in whole rendered pixels (MASTER E4).
+ *
+ * `0` is the off state — see the header for why it is a slider position rather
+ * than a separate toggle. The store re-clamps, so these bounds are the
+ * affordance and not the guarantee. ⚠️ Task 06 mirrors these when it adds
+ * `edgeWidth` to `PoseUIStore`.
+ */
+export const POSE_EDGE_WIDTH_MIN = 0;
+export const POSE_EDGE_WIDTH_MAX = 4;
+
+/**
+ * The zoom SLIDER's travel — an affordance, **not a limit** (MASTER E11).
+ *
+ * ⚠️ These are deliberately NOT a mirror of a store constant. `POSE_ZOOM_MAX`
+ * was deleted by task 01 precisely because the owner reported the model
+ * capping out, and re-introducing any ceiling on the store's value here would
+ * undo that. An `<input type="range">` must have finite ends to place a thumb,
+ * so the slider covers the comfortable range and the number box beside it
+ * accepts anything the store does — which above `POSE_ZOOM_MIN_SAFE` is
+ * everything.
+ */
+export const POSE_ZOOM_SLIDER_MIN = 0.1;
+export const POSE_ZOOM_SLIDER_MAX = 40;
+
 export interface PoseSectionProps {
   /** The loaded reference solid, or `null` for "no model". */
   meshId: PoseMeshId | null;
@@ -62,11 +113,33 @@ export interface PoseSectionProps {
   rotation: PoseVector;
   /** Key-light direction, a unit-ish vector. */
   lightDirection: PoseVector;
+  /** Key-light tint. Its own concept — NOT the Fill/Edge slots. */
   lightColor: PoseColor;
+  /**
+   * The model's colour: the app's **Fill** slot, read through
+   * `fillColorOrSelected` by the container (MASTER E8). DISPLAY ONLY — the
+   * main colour picker is what changes it.
+   */
   modelColor: PoseColor;
+  /**
+   * The outline's colour: the app's **Edge** slot, `ui.tool.selectedColor`
+   * (MASTER E9). DISPLAY ONLY, same as `modelColor`.
+   */
+  edgeColor: PoseColor;
+  /**
+   * Which slot the app's picker is currently editing, so the rail can mark
+   * the matching swatch — `"edge" | "fill"`, mirroring `ui.tool.colorTarget`.
+   */
+  colorTarget: "edge" | "fill";
+  /** Outline thickness in whole pixels; `0` means no outline (E4). */
+  edgeWidth: number;
   projection: PoseProjection;
   cameraPreset: PoseCameraPreset;
-  /** Scale multiplier over the auto-fit. The store clamps it to 0.1–10. */
+  /**
+   * Scale multiplier over the auto-fit. **Unbounded above** (MASTER E11): the
+   * store only floors it at `POSE_ZOOM_MIN_SAFE`, and this rail must not
+   * reintroduce the cap that task 01 deleted.
+   */
   zoom: number;
   /** Field of view in degrees. The store clamps it to 10–120. */
   fov: number;
@@ -76,11 +149,17 @@ export interface PoseSectionProps {
   onSetRotation: (rotation: PoseVector) => void;
   onSetLightDirection: (direction: PoseVector) => void;
   onSetLightColor: (color: PoseColor) => void;
-  onSetModelColor: (color: PoseColor) => void;
+  /** Point the app's picker at the **Fill** slot (the model colour). */
+  onEditModelColor: () => void;
+  /** Point the app's picker at the **Edge** slot (the outline colour). */
+  onEditEdgeColor: () => void;
+  onSetEdgeWidth: (width: number) => void;
   onSetProjection: (projection: PoseProjection) => void;
   onSelectCameraPreset: (preset: PoseCameraPreset) => void;
   onSetZoom: (zoom: number) => void;
   onSetFov: (fov: number) => void;
+  /** Re-frame the model at its CURRENT rotation and camera (MASTER E14/E15). */
+  onRequestFit: () => void;
   /** Unloads the mesh and returns every setting to its default. */
   onClear: () => void;
 }
@@ -113,33 +192,40 @@ const PROJECTIONS: readonly { id: PoseProjection; label: string }[] = [
   { id: "orthographic", label: "Orthographic" },
 ];
 
+/**
+ * Key-light tints (see the header for why the light keeps its own control).
+ *
+ * Five studio whites rather than a full picker: `Neutral` is the store's
+ * default, and the other four are the conventional key colours — a warm sun, a
+ * cool skylight, a sodium/amber lamp and a moonlit blue. All fully opaque, as
+ * the pose light has always been.
+ */
+const LIGHT_TINTS: readonly { id: string; label: string; color: PoseColor }[] = [
+  { id: "neutral", label: "Neutral", color: { r: 255, g: 255, b: 255, a: 255 } },
+  { id: "warm", label: "Warm", color: { r: 255, g: 226, b: 189, a: 255 } },
+  { id: "cool", label: "Cool", color: { r: 201, g: 226, b: 255, a: 255 } },
+  { id: "amber", label: "Amber", color: { r: 255, g: 183, b: 92, a: 255 } },
+  { id: "moon", label: "Moon", color: { r: 150, g: 176, b: 255, a: 255 } },
+];
+
 /** `"three-quarter"` → `"3/4"`; everything else is its id, title-cased. */
 function viewpointLabel(id: string): string {
   if (id === "three-quarter") return "3/4";
   return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
-/* ── colour <-> hex ────────────────────────────────────────────────────────
- *
- * `<input type="color">` speaks `#rrggbb` only. Transcribed from
- * `PixelStudioPanel`'s `OriginColorPicker`, which does exactly this — the
- * alpha channel is not editable there either, and the pose's light and model
- * colours are both fully opaque by construction.
+/**
+ * A `PoseColor` as a CSS colour. Transcribed from `ColorPicker`'s target-tab
+ * swatch, which renders its two slot colours exactly this way — the rail is
+ * showing the same two colours, so it shows them the same way.
  */
-
-function toHex(c: PoseColor): string {
-  return (
-    "#" + [c.r, c.g, c.b].map((v) => v.toString(16).padStart(2, "0")).join("")
-  );
+function toCss(c: PoseColor): string {
+  return `rgba(${c.r}, ${c.g}, ${c.b}, ${c.a / 255})`;
 }
 
-function fromHex(hex: string): PoseColor {
-  return {
-    r: parseInt(hex.slice(1, 3), 16),
-    g: parseInt(hex.slice(3, 5), 16),
-    b: parseInt(hex.slice(5, 7), 16),
-    a: 255,
-  };
+/** Two colours equal component-wise — used only to mark a tint preset active. */
+function sameColor(a: PoseColor, b: PoseColor): boolean {
+  return a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a;
 }
 
 export function PoseSection({
@@ -149,6 +235,9 @@ export function PoseSection({
   lightDirection,
   lightColor,
   modelColor,
+  edgeColor,
+  colorTarget,
+  edgeWidth,
   projection,
   cameraPreset,
   zoom,
@@ -158,11 +247,14 @@ export function PoseSection({
   onSetRotation,
   onSetLightDirection,
   onSetLightColor,
-  onSetModelColor,
+  onEditModelColor,
+  onEditEdgeColor,
+  onSetEdgeWidth,
   onSetProjection,
   onSelectCameraPreset,
   onSetZoom,
   onSetFov,
+  onRequestFit,
   onClear,
 }: PoseSectionProps) {
   const hasMesh = meshId !== null;
@@ -171,6 +263,10 @@ export function PoseSection({
   const framingEnabled = meshId === "mannequin";
   /* An orthographic camera has no field of view. */
   const fovEnabled = projection === "perspective";
+  /* Rounded because the store holds a number and a fractional width has no
+     meaning at 1:1 — the outline dilates by whole pixels (E4). */
+  const outlineWidth = Math.round(edgeWidth);
+  const outlineOff = outlineWidth <= POSE_EDGE_WIDTH_MIN;
 
   const btn = (active: boolean) =>
     `pose-panel__btn${active ? " pose-panel__btn--active" : ""}`;
@@ -254,29 +350,100 @@ export function PoseSection({
             </button>
           ))}
         </div>
+        {/* The light's TINT. Its own control, deliberately — see the header:
+            a lamp colour is not the artwork's Fill or Edge, and E10 forbids a
+            third picker, so it is a short preset row instead. */}
+        <div className="pose-panel__buttons">
+          {LIGHT_TINTS.map(({ id, label, color }) => (
+            <button
+              key={id}
+              type="button"
+              className={btn(sameColor(lightColor, color))}
+              onClick={() => onSetLightColor(color)}
+              title={`Tint the key light ${label.toLowerCase()}`}
+            >
+              <span
+                className="pose-panel__tint"
+                style={{ backgroundColor: toCss(color) }}
+              />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* ── Colours ─────────────────────────────────────────────────────────
+          MASTER E8/E9/E10. These are the APP's two colour slots, shown here
+          and edited in the app's own picker: clicking a swatch switches
+          `ui.tool.colorTarget` so the picker below is pointed at that slot.
+          No native `<input type="color">`, and no second picker. */}
       <div className="pose-panel__group">
         <span className="pose-panel__group-label">Colours</span>
-        <div className="pose-panel__color-row">
-          <span className="pose-panel__color-label">Light</span>
-          <input
-            type="color"
-            className="pose-panel__color-input"
-            aria-label="Light colour"
-            value={toHex(lightColor)}
-            onChange={(e) => onSetLightColor(fromHex(e.target.value))}
-          />
+        <div className="pose-panel__slots" role="group">
+          {(
+            [
+              ["fill", "Model", modelColor, onEditModelColor] as const,
+              ["edge", "Outline", edgeColor, onEditEdgeColor] as const,
+            ] satisfies readonly (readonly [
+              "edge" | "fill",
+              string,
+              PoseColor,
+              () => void,
+            ])[]
+          ).map(([slot, label, color, onEdit]) => (
+            <button
+              key={slot}
+              type="button"
+              aria-label={`${label} colour`}
+              aria-pressed={colorTarget === slot}
+              className={`pose-panel__slot${
+                colorTarget === slot ? " pose-panel__slot--active" : ""
+              }`}
+              onClick={onEdit}
+              title={
+                slot === "fill"
+                  ? "Edit the model colour in the Fill slot of the colour picker"
+                  : "Edit the outline colour in the Edge slot of the colour picker"
+              }
+            >
+              <span
+                className="pose-panel__slot-swatch"
+                style={{ backgroundColor: toCss(color) }}
+              />
+              {label}
+            </button>
+          ))}
         </div>
-        <div className="pose-panel__color-row">
-          <span className="pose-panel__color-label">Model</span>
+        <p className="pose-panel__hint">
+          The model uses the <strong>Fill</strong> colour and the outline uses{" "}
+          <strong>Edge</strong>. Pick one here, then set it in the colour
+          picker.
+        </p>
+      </div>
+
+      {/* ── Outline ─────────────────────────────────────────────────────────
+          MASTER E4: whole pixels, 0–4, where 0 IS the off state. One control,
+          so a toggle can never disagree with a width. */}
+      <div className="pose-panel__group">
+        <span className="pose-panel__group-label">Outline</span>
+        <div className="pose-panel__slider-row">
+          <span className="pose-panel__slider-label">Width</span>
           <input
-            type="color"
-            className="pose-panel__color-input"
-            aria-label="Model colour"
-            value={toHex(modelColor)}
-            onChange={(e) => onSetModelColor(fromHex(e.target.value))}
+            type="range"
+            className="pose-panel__slider"
+            aria-label="Outline width"
+            min={POSE_EDGE_WIDTH_MIN}
+            max={POSE_EDGE_WIDTH_MAX}
+            /* Integer steps: the outline dilates the silhouette by whole
+               pixels at the 1:1 render target, so a half is not a state. */
+            step={1}
+            value={outlineWidth}
+            onChange={(e) => onSetEdgeWidth(Math.round(Number(e.target.value)))}
+            title="Outline thickness in pixels; 0 turns the outline off"
           />
+          <span className="pose-panel__slider-value">
+            {outlineOff ? "Off" : `${outlineWidth} px`}
+          </span>
         </div>
       </div>
 
@@ -315,15 +482,44 @@ export function PoseSection({
             type="range"
             className="pose-panel__slider"
             aria-label="Zoom"
-            /* The bounds mirror `POSE_ZOOM_MIN`/`MAX`; the store re-clamps, so
-               a stale bound here can never produce an out-of-range value. */
-            min={0.1}
-            max={10}
+            /* ⚠️ THE OLD `max={10}` IS GONE. It mirrored `POSE_ZOOM_MAX`,
+               which task 01 deleted because the owner reported the model
+               capping out; leaving it here would have kept exactly that cap in
+               the one place they touch it. A range input cannot be literally
+               unbounded — it needs finite ends to have a thumb position — so
+               the TRAVEL is widened to `POSE_ZOOM_SLIDER_MAX` for the common
+               case, and the number box beside it takes any value the store
+               accepts, which per MASTER E11 is anything above
+               `POSE_ZOOM_MIN_SAFE` with NO ceiling. The slider is an
+               affordance; it is not the limit. */
+            min={POSE_ZOOM_SLIDER_MIN}
+            max={POSE_ZOOM_SLIDER_MAX}
             step={0.1}
-            value={zoom}
+            value={Math.min(zoom, POSE_ZOOM_SLIDER_MAX)}
             onChange={(e) => onSetZoom(Number(e.target.value))}
           />
-          <span className="pose-panel__slider-value">{zoom.toFixed(1)}×</span>
+          <input
+            type="number"
+            className="pose-panel__number"
+            aria-label="Zoom value"
+            /* No `max`: this is the unbounded path (E11). `min` is the store's
+               safety floor, not a cap. */
+            min={POSE_ZOOM_SLIDER_MIN}
+            step={0.1}
+            value={zoom}
+            onChange={(e) => {
+              /* ⚠️ An EMPTY box must send nothing at all. A number input
+                 sanitises anything unparseable to `""`, and `Number("")` is
+                 `0` — not `NaN` — so a bare `Number.isFinite` guard would let
+                 a half-typed value collapse the camera to the store's safety
+                 floor mid-keystroke. Both cases are rejected here. */
+              const raw = e.target.value.trim();
+              if (raw === "") return;
+              const next = Number(raw);
+              if (Number.isFinite(next)) onSetZoom(next);
+            }}
+            title="Zoom multiplier — type any value; there is no upper limit"
+          />
         </div>
 
         <div className="pose-panel__slider-row">
@@ -346,6 +542,24 @@ export function PoseSection({
           />
           <span className="pose-panel__slider-value">{Math.round(fov)}°</span>
         </div>
+
+        {/* MASTER E14/E15 — a REQUEST, not a computation. The container reacts
+            to the store's `fitGeneration` counter and does the framing; this
+            button only asks. It sits with the camera controls because that is
+            what it re-frames, and it does NOT reset zoom or pan. */}
+        <button
+          type="button"
+          className="pose-panel__btn"
+          onClick={onRequestFit}
+          disabled={!hasMesh}
+          title={
+            hasMesh
+              ? "Re-frame the model to the canvas at its current rotation"
+              : "Load a reference solid first"
+          }
+        >
+          Fit to canvas
+        </button>
       </div>
 
       {hasMesh ? (

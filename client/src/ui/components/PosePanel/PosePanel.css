@@ -102,33 +102,72 @@
   justify-content: space-around;
 }
 
-/* ── a colour swatch row ──────────────────────────────────────────────────── */
+/* ── the app's two colour slots ────────────────────────────────────────────
 
-.pose-panel__color-row {
+   MASTER E8/E9/E10 (pose-refinements task 03). The rail no longer renders a
+   native `<input type="color">`; it shows the app's Fill and Edge colours and
+   switches which one the main picker edits. The skin is COPIED from
+   `color-picker__targets` / `__target` / `__target-swatch` — the same two
+   colours, shown the same way — rather than reused, because a `ui/` block may
+   not reach into another block's classes. */
+
+.pose-panel__slots {
   display: flex;
+  gap: var(--space-px);
+  padding: var(--space-px);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.pose-panel__slot {
+  display: flex;
+  flex: 1;
   gap: var(--space-1);
   align-items: center;
-}
-
-.pose-panel__color-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
+  justify-content: center;
+  padding: var(--space-1) var(--space-1-5);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: var(--text-65);
-  text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition-base);
 }
 
-.pose-panel__color-input {
+.pose-panel__slot:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.pose-panel__slot--active {
+  background: var(--accent-primary-20);
+  color: var(--text-primary);
+}
+
+/* The swatch keeps a border so a colour matching the tray behind it — white,
+   or the panel's own grey — is still visible. Same reasoning, and the same
+   border token, as `color-picker__target-swatch`. */
+.pose-panel__slot-swatch {
   flex: none;
-  width: var(--space-8);
-  height: var(--space-5);
-  padding: 0;
-  background: transparent;
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
+  width: var(--space-3);
+  height: var(--space-3);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-xs);
+}
+
+/* A key-light tint chip, inside a `__btn`. Smaller than a slot swatch: the
+   tint presets are a row of five in a 240px rail, so the label carries the
+   meaning and the chip only confirms it. */
+.pose-panel__tint {
+  display: inline-block;
+  width: var(--space-2);
+  height: var(--space-2);
+  margin-right: var(--space-0-5);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-xs);
+  vertical-align: middle;
 }
 
 /* ── a slider row ─────────────────────────────────────────────────────────── */
@@ -154,6 +193,25 @@
 .pose-panel__slider:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+/* The zoom's UNBOUNDED entry (MASTER E11). It sits where `__slider-value`
+   sits on the other rows and matches its metrics, so the camera group's rows
+   still line up — but it is editable, because the slider's finite travel is an
+   affordance and this is the path with no ceiling. Monospace for the same
+   reason `__slider-value` is: the digits must not jitter the row's width. */
+.pose-panel__number {
+  flex: none;
+  width: var(--space-10);
+  min-width: 0;
+  padding: var(--space-0-5);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  text-align: right;
 }
 
 /* Monospace so the digits do not jitter the row's width as the value changes

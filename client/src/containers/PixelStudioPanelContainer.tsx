@@ -23,7 +23,25 @@
  * already existed and simply grew a prop, which is what the task asked for.
  * The section's values are read straight off the store and its callbacks call
  * the store's actions; no derivation is needed, because the store already
- * clamps zoom and FOV and normalises the light direction on write.
+ * clamps FOV and normalises the light direction on write. (Zoom is no longer
+ * clamped above — MASTER E11.)
+ *
+ * ⚠️ **The pose model's colour is the app's own FILL slot, and its outline's
+ * colour is the EDGE slot** (pose-refinements MASTER E8/E9/E10). The rail used
+ * to render two native `<input type="color">` elements; it now shows swatches
+ * and asks THIS container to point the main picker at a slot, which is
+ * `ui.tool.setColorTarget(...)` — the same seam `ColorPickerContainer` reads.
+ * Two things about that wiring are load-bearing:
+ *
+ * - **`fillColor` is TRI-STATE.** `undefined` means "absent from the project
+ *   file", which is every project saved before the field existed. The read
+ *   goes through `ui.tool.fillColorOrSelected`, which falls back to
+ *   `selectedColor`. **Never seed a default** — a default would add a key to
+ *   all 151 corpus snapshots and change their digests (E8).
+ * - **The domain `Color` is converted to `PoseColor` HERE, explicitly.** `ui/`
+ *   may not import `types/domain.ts`, which is why `PoseColor` exists as a
+ *   structural twin; `toPoseColor` is that conversion, kept at the boundary
+ *   rather than "simplified" into a cross-boundary import.
  *
  * ⚠️ The REFLECTION section's preset geometry is computed HERE, not in the
  * component (MASTER D10). `presetLines()` needs the editable grid's
@@ -31,6 +49,7 @@
  * The component therefore emits only the preset NAME and this container turns
  * it into lines.
  */
+import { useState } from "react";
 import { observer } from "mobx-react-lite";
 import { PixelStudioPanel } from "../ui/components/PixelStudioPanel/PixelStudioPanel";
 import {
@@ -45,10 +64,57 @@ import { OTHER_HAND_SECTIONS } from "./otherHand/otherHandSections";
 /** Transcribed from `OriginColorPicker`'s inline fallback. */
 const DEFAULT_ORIGIN_COLOR = { r: 255, g: 50, b: 50, a: 255 };
 
+/**
+ * The domain `Color` → the pose module's `PoseColor`, at the boundary.
+ *
+ * The two are structurally identical on purpose: `ui/canvas/pose/poseTypes.ts`
+ * declares `PoseColor` rather than importing `types/domain.ts` because nothing
+ * under `ui/` may take that dependency. This copy is therefore not a *cast* —
+ * it is the explicit conversion the plan asks for at the seam, and it also
+ * makes the store's own object unreachable from the pure component, so no
+ * downstream render can mutate observable state by accident.
+ *
+ * ⚠️ Do not "simplify" this away by importing `Color` into `ui/`, or by
+ * passing the store's object through: the first breaks the boundary lint, the
+ * second hands `ui/` a live reference to an `observableRef` value.
+ */
+function toPoseColor(color: {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}): { r: number; g: number; b: number; a: number } {
+  return { r: color.r, g: color.g, b: color.b, a: color.a };
+}
+
+/**
+ * 🚧 **TEMPORARY — task 06 (W4) replaces this whole constant and the
+ * `useState` below with `pose.edgeWidth` / `pose.setEdgeWidth(...)`.**
+ *
+ * The outline's thickness belongs on `PoseUIStore`, and task 06 owns that file
+ * (`edgeWidth` + `setEdgeWidth`, per MASTER §8). Task 03 owns only the rail, so
+ * it ships the pure half — the `edgeWidth` prop and the `onSetEdgeWidth`
+ * callback — over a container-local `useState` so the control is live and
+ * testable now. It is deliberately NOT persisted and NOT shared with the
+ * renderer: while this placeholder stands, dragging the slider moves the
+ * number and nothing else draws an outline.
+ *
+ * Default 0 = "no outline" (MASTER E4, the 0-means-off form task 03 chose), so
+ * the tool behaves exactly as it did before the outline existed until the
+ * owner asks for one. **Task 06 must keep 0 as the store's default** or the
+ * outline appears unbidden on every existing project.
+ */
+const PLACEHOLDER_EDGE_WIDTH = 0;
+
 export const PixelStudioPanelContainer = observer(
   function PixelStudioPanelContainer() {
     const app = useStores();
     const { domain, ui } = app;
+
+    /* 🚧 TEMPORARY — see `PLACEHOLDER_EDGE_WIDTH`. Declared BEFORE the early
+       return below, because hooks may not sit after a conditional exit. Task
+       06 deletes both lines when `pose.edgeWidth` lands. */
+    const [edgeWidth, setEdgeWidth] = useState(PLACEHOLDER_EDGE_WIDTH);
 
     // Transcribed from the component's pre-purification `if (!project) return null`.
     if (!domain.hasProject) return null;
@@ -107,16 +173,27 @@ export const PixelStudioPanelContainer = observer(
         }}
         pose={{
           // Every field is read straight through. `rotation`, `lightDirection`,
-          // `lightColor`, `modelColor` are `observableRef` and replaced
-          // wholesale by their actions, so passing them by reference is safe:
-          // nothing downstream can mutate the store's held object, and identity
-          // changes exactly when the value does.
+          // `lightColor` are `observableRef` and replaced wholesale by their
+          // actions, so passing them by reference is safe: nothing downstream
+          // can mutate the store's held object, and identity changes exactly
+          // when the value does.
           meshId: pose.meshId,
           framing: pose.framing,
           rotation: pose.rotation,
           lightDirection: pose.lightDirection,
           lightColor: pose.lightColor,
-          modelColor: pose.modelColor,
+          // ⚠️ NOT `pose.modelColor` any more (MASTER E8). The model wears the
+          // app's FILL colour, read through `fillColorOrSelected` so a project
+          // saved before the fill/edge split falls back to `selectedColor`
+          // instead of showing an undefined slot. Never seed a default.
+          modelColor: toPoseColor(tool.fillColorOrSelected),
+          // The outline wears the EDGE colour (E9) — `selectedColor`, which is
+          // what the pencil, the line and a shape's outline already use.
+          edgeColor: toPoseColor(tool.selectedColor),
+          // So the rail can mark whichever swatch the picker is pointed at.
+          colorTarget: tool.colorTarget,
+          // 🚧 TEMPORARY — task 06 swaps this for `pose.edgeWidth`.
+          edgeWidth,
           projection: pose.projection,
           cameraPreset: pose.cameraPreset,
           zoom: pose.zoom,
@@ -127,17 +204,37 @@ export const PixelStudioPanelContainer = observer(
           // The store NORMALISES on write, so the orb may emit whatever the
           // drag produced and readers never have to renormalise.
           onSetLightDirection: (direction) => pose.setLightDirection(direction),
+          // The key light's TINT stays pose state: it describes the studio, not
+          // the artwork, so it is neither the Fill nor the Edge slot. See
+          // `PoseSection`'s header for the full reasoning behind keeping it.
           onSetLightColor: (color) => pose.setLightColor(color),
-          onSetModelColor: (color) => pose.setModelColor(color),
+          // ⚠️ Not "set the colour" — "point the PICKER at this slot" (E10).
+          // The rail embeds no picker; `ColorPickerContainer` is already
+          // rendered below it and reads the same `colorTarget`, so switching
+          // the target here is what makes the existing picker edit the pose's
+          // model or outline colour.
+          onEditModelColor: () => tool.setColorTarget("fill"),
+          onEditEdgeColor: () => tool.setColorTarget("edge"),
+          // 🚧 TEMPORARY — task 06 swaps this for `pose.setEdgeWidth(width)`.
+          // Rounded here as well as in the rail: the store field task 06 adds
+          // holds whole pixels, and this placeholder must not accustom anyone
+          // to a fractional one.
+          onSetEdgeWidth: (width) => setEdgeWidth(Math.round(width)),
           onSetProjection: (projection) => pose.setProjection(projection),
           // ⚠️ A preset stores only its ID (MASTER D14). Resolving it to angles
-          // is `poseCamera.ts`'s job in task 08's render, not the rail's —
-          // which is why nothing here reaches for `getCameraPreset()`.
+          // is `poseCamera.ts`'s job in the render, not the rail's — which is
+          // why nothing here reaches for `getCameraPreset()`.
           onSelectCameraPreset: (preset) => pose.setCameraPreset(preset),
-          // Both are re-clamped by the store (0.1–10 and 10–120), so the
-          // slider's own bounds are a convenience, not the guarantee.
+          // ⚠️ Zoom is re-sanitised by the store but NO LONGER CAPPED (MASTER
+          // E11): task 01 deleted `POSE_ZOOM_MAX` and only a `1e-3` safety
+          // floor remains. FOV is still clamped to 10–120.
           onSetZoom: (zoom) => pose.setZoom(zoom),
           onSetFov: (fov) => pose.setFov(fov),
+          // ⚠️ A REQUEST, not a fit (MASTER E14). `requestFit()` only bumps the
+          // store's `fitGeneration` counter and mutates no camera field; the
+          // canvas container reacts to that counter and does the framing. A
+          // counter rather than a boolean, so two presses are two events.
+          onRequestFit: () => pose.requestFit(),
           onClear: () => pose.clear(),
         }}
       />
