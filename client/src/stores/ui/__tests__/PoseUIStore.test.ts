@@ -8,8 +8,10 @@
  * write produces a NEW object identity, which is what lets the overlay painter
  * decide to re-render on identity alone.
  *
- * Also pins MASTER D7 (`setMesh` resets pan and framing) and the zoom/FOV
- * clamps.
+ * Also pins MASTER D7 (`setMesh` resets pan and framing), the FOV clamp, and
+ * — from the refinements plan, 2026-09-03 — that zoom has **no upper bound**
+ * (E11), that pan is **never** clamped (E13), and that `fitGeneration` /
+ * `requestFit()` form an event counter that mutates no camera state (E14/E15).
  *
  * The last block wires a real `ApplicationStore` the way
  * `ReflectionUIStore.test.ts` does (no Zustand, no auto-save) to pin that
@@ -27,8 +29,7 @@ import {
   DEFAULT_POSE_ROTATION,
   POSE_FOV_MAX,
   POSE_FOV_MIN,
-  POSE_ZOOM_MAX,
-  POSE_ZOOM_MIN,
+  POSE_ZOOM_MIN_SAFE,
   PoseUIStore,
 } from "../PoseUIStore";
 import { ApplicationStore } from "@/stores/ApplicationStore";
@@ -54,6 +55,7 @@ describe("PoseUIStore — defaults", () => {
     expect(s.zoom).toBe(1);
     expect(s.fov).toBe(50);
     expect(s.pan).toEqual({ x: 0, y: 0 });
+    expect(s.fitGeneration).toBe(0);
   });
 
   it("the default light direction is a unit vector pointing up/left/front", () => {
@@ -78,6 +80,7 @@ describe("PoseUIStore — defaults", () => {
       "zoom",
       "fov",
       "pan",
+      "fitGeneration",
     ] as const) {
       expect(isObservableProp(s, key)).toBe(true);
     }
@@ -122,6 +125,26 @@ describe("PoseUIStore — setters", () => {
     expect(s.rotation).toEqual({ x: 0.5, y: 0.5, z: 0 });
     expect(s.zoom).toBe(2);
     expect(s.projection).toBe("orthographic");
+  });
+
+  /**
+   * The initial auto-fit (E15: still runs on mesh change) is the container's
+   * job, but it depends on `setMesh` continuing to recentre — so pin the store
+   * half here. An unclamped pan makes this MORE important, not less: without
+   * the reset, an off-canvas pan from the previous mesh would carry over and
+   * the new mesh would auto-fit to a frame the owner cannot see.
+   */
+  it("a new mesh recentres pan even when the old pan was far off canvas", () => {
+    const s = new PoseUIStore();
+    runInAction(() => {
+      s.setMesh("cube");
+      s.setPan({ x: 4000, y: -4000 });
+      s.setZoom(2500);
+    });
+    runInAction(() => s.setMesh("sphere"));
+    expect(s.pan).toEqual({ x: 0, y: 0 });
+    // Zoom is the owner's working setup and survives, uncapped.
+    expect(s.zoom).toBe(2500);
   });
 
   it("setFraming stores the region", () => {
@@ -188,17 +211,72 @@ describe("PoseUIStore — setters", () => {
   });
 });
 
-describe("PoseUIStore — clamping", () => {
-  it("setZoom clamps at both ends", () => {
+/* ── zoom: sanitised, not clamped ─────────────────────────────────────────────
+ *
+ * MASTER E11 (refinements 2026-09-03). The old `POSE_ZOOM_MAX = 10` was the cap
+ * the owner hit; it is deleted and these tests pin its absence. Only a safety
+ * floor survives, because a zero or negative camera scale collapses or mirrors
+ * the projection — arithmetic, not taste.
+ *
+ * ⚠️ These tests prove the STORE stores what it is given. They cannot prove the
+ * owner sees a bigger model: zoom is still folded into `fitCameraToMesh`'s
+ * padding, which task 06 separates (E12).
+ */
+describe("PoseUIStore — zoom sanitising (no upper bound)", () => {
+  it("accepts a huge zoom verbatim — there is no cap", () => {
     const s = new PoseUIStore();
-    runInAction(() => s.setZoom(1000));
-    expect(s.zoom).toBe(POSE_ZOOM_MAX);
-    runInAction(() => s.setZoom(-5));
-    expect(s.zoom).toBe(POSE_ZOOM_MIN);
-    runInAction(() => s.setZoom(2.5));
-    expect(s.zoom).toBe(2.5);
+    runInAction(() => s.setZoom(5000));
+    expect(s.zoom).toBe(5000);
   });
 
+  it("accepts ordinary and very large zooms unchanged", () => {
+    const s = new PoseUIStore();
+    for (const z of [POSE_ZOOM_MIN_SAFE, 0.25, 1, 2.5, 10, 11, 250, 1e6]) {
+      runInAction(() => s.setZoom(z));
+      expect(s.zoom).toBe(z);
+    }
+  });
+
+  it("floors zero and negatives — a non-positive scale collapses or mirrors", () => {
+    const s = new PoseUIStore();
+    runInAction(() => s.setZoom(0));
+    expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
+    runInAction(() => s.setZoom(-5));
+    expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
+    runInAction(() => s.setZoom(-0));
+    expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
+  });
+
+  it("floors a positive value below the safety floor", () => {
+    const s = new PoseUIStore();
+    runInAction(() => s.setZoom(1e-9));
+    expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
+  });
+
+  it("rejects NaN and BOTH infinities — the camera needs a finite scale", () => {
+    const s = new PoseUIStore();
+    // Unlike `setFov`, `+Infinity` cannot clamp to an upper bound here because
+    // there is no longer one; a non-finite scale yields NaN matrices exactly as
+    // NaN itself would, so it is rejected outright.
+    for (const bad of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]) {
+      runInAction(() => s.setZoom(2));
+      runInAction(() => s.setZoom(bad));
+      expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
+      expect(Number.isFinite(s.zoom)).toBe(true);
+    }
+  });
+
+  it("the safety floor is a floor, not a range — it is far below any useful view", () => {
+    expect(POSE_ZOOM_MIN_SAFE).toBeGreaterThan(0);
+    expect(POSE_ZOOM_MIN_SAFE).toBeLessThan(0.01);
+  });
+});
+
+describe("PoseUIStore — FOV clamping", () => {
   it("setFov clamps at both ends", () => {
     const s = new PoseUIStore();
     runInAction(() => s.setFov(400));
@@ -211,18 +289,112 @@ describe("PoseUIStore — clamping", () => {
 
   it("NaN cannot poison the render — it falls back to the minimum", () => {
     const s = new PoseUIStore();
-    runInAction(() => s.setZoom(Number.NaN));
-    expect(s.zoom).toBe(POSE_ZOOM_MIN);
     runInAction(() => s.setFov(Number.NaN));
     expect(s.fov).toBe(POSE_FOV_MIN);
   });
 
-  it("infinities clamp to the bound they run into", () => {
+  it("infinities clamp to the bound they run into — FOV still HAS both", () => {
     const s = new PoseUIStore();
-    runInAction(() => s.setZoom(Number.POSITIVE_INFINITY));
-    expect(s.zoom).toBe(POSE_ZOOM_MAX);
+    runInAction(() => s.setFov(Number.POSITIVE_INFINITY));
+    expect(s.fov).toBe(POSE_FOV_MAX);
     runInAction(() => s.setFov(Number.NEGATIVE_INFINITY));
     expect(s.fov).toBe(POSE_FOV_MIN);
+  });
+});
+
+/* ── pan: never clamped ────────────────────────────────────────────────────── */
+
+describe("PoseUIStore — pan is unbounded (E13)", () => {
+  it("setPan accepts a pan far outside any plausible canvas", () => {
+    const s = new PoseUIStore();
+    runInAction(() => s.setPan({ x: 100000, y: -99999 }));
+    expect(s.pan).toEqual({ x: 100000, y: -99999 });
+  });
+
+  it("nudgePan keeps accumulating past the frame in both directions", () => {
+    const s = new PoseUIStore();
+    runInAction(() => {
+      for (let i = 0; i < 100; i += 1) s.nudgePan(50, -50);
+    });
+    expect(s.pan).toEqual({ x: 5000, y: -5000 });
+    // Dragging back retraces the same path — nothing was discarded on the way.
+    runInAction(() => {
+      for (let i = 0; i < 100; i += 1) s.nudgePan(-50, 50);
+    });
+    expect(s.pan).toEqual({ x: 0, y: 0 });
+  });
+});
+
+/* ── the fit seam ──────────────────────────────────────────────────────────── */
+
+describe("PoseUIStore — fitGeneration / requestFit (E14/E15)", () => {
+  it("starts at 0", () => {
+    const s = new PoseUIStore();
+    expect(s.fitGeneration).toBe(0);
+  });
+
+  it("is observable, so a reaction can watch it", () => {
+    const s = new PoseUIStore();
+    expect(isObservableProp(s, "fitGeneration")).toBe(true);
+  });
+
+  it("increments once per request — two presses are two events", () => {
+    const s = new PoseUIStore();
+    runInAction(() => s.requestFit());
+    expect(s.fitGeneration).toBe(1);
+    runInAction(() => s.requestFit());
+    expect(s.fitGeneration).toBe(2);
+    runInAction(() => {
+      s.requestFit();
+      s.requestFit();
+      s.requestFit();
+    });
+    expect(s.fitGeneration).toBe(5);
+  });
+
+  it("mutates NOTHING else — the fit happens at the CURRENT settings", () => {
+    const s = new PoseUIStore();
+    runInAction(() => {
+      s.setMesh("mannequin");
+      s.setFraming("head");
+      s.setRotation({ x: 0.3, y: 0.6, z: 0.9 });
+      s.setLightDirection({ x: 1, y: 0, z: 0 });
+      s.setLightColor(RED);
+      s.setModelColor(BLUE);
+      s.setProjection("orthographic");
+      s.setCameraPreset("iso");
+      s.setZoom(42);
+      s.setFov(88);
+      s.setPan({ x: -17, y: 23 });
+    });
+
+    const before = { ...s };
+    const rotationRef = s.rotation;
+    const panRef = s.pan;
+
+    runInAction(() => s.requestFit());
+
+    // Every field except the counter is byte-for-byte what it was, and the ref
+    // fields keep their identity too — a re-fit must not look like a new pose.
+    expect({ ...s }).toEqual({ ...before, fitGeneration: before.fitGeneration + 1 });
+    expect(s.rotation).toBe(rotationRef);
+    expect(s.pan).toBe(panRef);
+    expect(s.zoom).toBe(42);
+  });
+
+  it("clear() deliberately does NOT reset the counter", () => {
+    const s = new PoseUIStore();
+    runInAction(() => {
+      s.requestFit();
+      s.requestFit();
+    });
+    runInAction(() => s.clear());
+    // Monotonic on purpose: rewinding it to 0 is a change like any other, so a
+    // reaction watching it would fire a fit at the moment the mesh was
+    // unloaded. Everything else resets; this only ever counts up.
+    expect(s.fitGeneration).toBe(2);
+    expect(s.meshId).toBeNull();
+    expect(s.zoom).toBe(1);
   });
 });
 

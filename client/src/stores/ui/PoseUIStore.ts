@@ -28,8 +28,12 @@
  *   `modelColor` and `pan` are refs and are REPLACED WHOLESALE — never edited
  *   field by field. Readers may therefore compare identity to know whether the
  *   render needs to be re-issued, and no `PoseVector` or `Color` is ever a
- *   MobX proxy. The scalars (`zoom`, `fov`) and the string unions are plain
- *   `observable`, which is safe: they are primitives.
+ *   MobX proxy. The scalars (`zoom`, `fov`, `fitGeneration`) and the string
+ *   unions are plain `observable`, which is safe: they are primitives.
+ * - **Zoom and pan are free** (MASTER E11/E13, refinements 2026-09-03). `zoom`
+ *   has no upper bound and `pan` has no bound at all — the model may be blown
+ *   up far past the canvas and dragged completely off it. `fitGeneration` is
+ *   the seam that brings it back: the rail bumps it, the container re-frames.
  *
  * ── Lifetime (locked D6) ──────────────────────────────────────────────────
  * The pose outlives layer, frame, object and variant switches — switch to
@@ -119,12 +123,36 @@ export const DEFAULT_POSE_MODEL_COLOR: Color = Object.freeze({
   a: 255,
 });
 
-/** Centred. Reset by a mesh change, preserved across a resize (MASTER D7). */
+/**
+ * Centred. Reset by a mesh change, preserved across a resize (MASTER D7).
+ *
+ * ⚠️ **Pan is never clamped** (MASTER E13). The owner asked for "free movement
+ * even off canvas", so a pan that carries the model entirely outside the frame
+ * is INTENTIONAL and must not be bounded — not here, not in `setPan`, not in
+ * `nudgePan`. The only thing that ever resets it is a new mesh.
+ */
 export const DEFAULT_POSE_PAN: PosePan = Object.freeze({ x: 0, y: 0 });
 
-/** Zoom clamp. Below 0.1 the model is sub-pixel; above 10 it is one facet. */
-export const POSE_ZOOM_MIN = 0.1;
-export const POSE_ZOOM_MAX = 10;
+/**
+ * Zoom **safety floor** — deliberately NOT a range (MASTER E11).
+ *
+ * There used to be a `POSE_ZOOM_MAX = 10` alongside this, and it was the thing
+ * the owner hit: it capped how large the model could be drawn. It is gone, and
+ * `zoom` is now unbounded above — any positive finite number is stored verbatim.
+ *
+ * A floor still exists, and the reason is categorically different from a cap. A
+ * cap is a taste judgement about how big is useful; a floor is arithmetic. Zoom
+ * multiplies a camera scale, so `0` collapses the projection to a point (a
+ * degenerate frustum / zero-extent orthographic box, which renders nothing and
+ * can divide by zero downstream) and a negative value MIRRORS it, flipping the
+ * model and inverting its normals. Neither is a view the owner could have asked
+ * for, so both are treated as bad input and floored rather than honoured.
+ *
+ * `1e-3` is chosen to be far below any useful view (at 0.001× a 32-px sprite is
+ * a fraction of one pixel) so it never acts as a limit in practice — it only
+ * catches values that would break the camera.
+ */
+export const POSE_ZOOM_MIN_SAFE = 1e-3;
 
 /** FOV clamp, in degrees. Outside this the perspective camera degenerates. */
 export const POSE_FOV_MIN = 10;
@@ -149,6 +177,28 @@ function normalizeVector(v: PoseVector): PoseVector {
 function clamp(value: number, min: number, max: number): number {
   if (Number.isNaN(value)) return min;
   return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * `value` as a usable zoom multiplier: any positive finite number is returned
+ * UNCHANGED — there is no upper bound (MASTER E11) — and anything the camera
+ * cannot use falls back to `floor`.
+ *
+ * This replaces `clamp()` for zoom, and the difference in how it treats
+ * infinity is the point. `clamp()` deliberately lets `±Infinity` settle on
+ * whichever bound it runs into and reserves the `min` fallback for `NaN`, which
+ * has no ordering and would otherwise propagate straight through into the
+ * render (that reasoning still stands, and `setFov` still relies on it — FOV
+ * has a real maximum for `+Infinity` to land on). Zoom no longer has an upper
+ * bound for `+Infinity` to clamp to, so it cannot be handled by ordering at
+ * all: `Infinity` must be rejected outright, because a non-finite camera scale
+ * produces `NaN` matrices exactly as `NaN` itself would. Hence one predicate,
+ * `Number.isFinite`, which rejects `NaN` and both infinities together, and a
+ * separate `> 0` test for zero and negatives.
+ */
+function sanitizeZoom(value: number, floor: number): number {
+  if (!Number.isFinite(value) || value <= 0) return floor;
+  return Math.max(floor, value);
 }
 
 export class PoseUIStore {
@@ -176,14 +226,38 @@ export class PoseUIStore {
   /** The named camera angle. A preset sets projection + angles, not zoom/pan. */
   cameraPreset: PoseCameraPreset = "2.5d";
 
-  /** Scale multiplier applied on top of the auto-fit. Clamped. */
+  /**
+   * Free scale multiplier applied on top of the auto-fit. Unbounded above;
+   * only floored at `POSE_ZOOM_MIN_SAFE` (MASTER E11).
+   */
   zoom = 1;
 
   /** Field of view in degrees; ignored while `projection` is orthographic. */
   fov = 50;
 
-  /** Screen-space offset of the model, in grid cells. `observableRef`. */
+  /**
+   * Screen-space offset of the model, in grid cells. `observableRef`.
+   *
+   * **Never clamped** — the model may be dragged completely off canvas
+   * (MASTER E13). See `DEFAULT_POSE_PAN`.
+   */
   pan: PosePan = DEFAULT_POSE_PAN;
+
+  /**
+   * Monotonic counter of "please re-fit the model to the canvas" requests
+   * (MASTER E14) — the seam behind the rail's **Fit to canvas** button.
+   *
+   * The store only records THAT a fit was asked for; it holds no opinion on
+   * what fitting means. The container watches this number and does the framing,
+   * because the fit depends on the mesh's bounds and the render target's size,
+   * neither of which lives here.
+   *
+   * A counter rather than a boolean or a flag so that two consecutive presses
+   * are two distinguishable events: a boolean set twice is indistinguishable
+   * from set once, and a MobX reaction on it would fire only for the first.
+   * Never reset — see `clear()`.
+   */
+  fitGeneration = 0;
 
   constructor() {
     makeObservable(this, {
@@ -198,6 +272,7 @@ export class PoseUIStore {
       zoom: observable,
       fov: observable,
       pan: observableRef,
+      fitGeneration: observable,
 
       hasMesh: computed,
 
@@ -213,6 +288,7 @@ export class PoseUIStore {
       setFov: action,
       setPan: action,
       nudgePan: action,
+      requestFit: action,
       clear: action,
     });
   }
@@ -271,9 +347,21 @@ export class PoseUIStore {
     this.cameraPreset = preset;
   }
 
-  /** Clamped to `[POSE_ZOOM_MIN, POSE_ZOOM_MAX]`. */
+  /**
+   * Store any positive finite zoom verbatim — **there is no upper bound**
+   * (MASTER E11). `NaN`, `±Infinity`, zero and negatives fall back to
+   * `POSE_ZOOM_MIN_SAFE`; see `sanitizeZoom` for why that is a safety floor and
+   * not the old range's `min`.
+   *
+   * ⚠️ Unclamping here is **necessary but not sufficient** for the owner's
+   * complaint. Pose-tool task 08 folded zoom into `fitCameraToMesh`'s padding
+   * instead of applying it as a separate camera scale, so the fit keeps
+   * re-normalising whatever multiplier this stores. Separating the two is
+   * MASTER E12, owned by task 06 in `poseCamera.ts` / `CanvasContainer.tsx` —
+   * NOT fixable from this file.
+   */
   setZoom(zoom: number): void {
-    this.zoom = clamp(zoom, POSE_ZOOM_MIN, POSE_ZOOM_MAX);
+    this.zoom = sanitizeZoom(zoom, POSE_ZOOM_MIN_SAFE);
   }
 
   /** Clamped to `[POSE_FOV_MIN, POSE_FOV_MAX]` degrees. */
@@ -281,20 +369,53 @@ export class PoseUIStore {
     this.fov = clamp(fov, POSE_FOV_MIN, POSE_FOV_MAX);
   }
 
-  /** Absolute pan, in grid cells. Wholesale replacement. */
+  /**
+   * Absolute pan, in grid cells. Wholesale replacement.
+   *
+   * Deliberately **unclamped** (MASTER E13): the model is allowed to sit
+   * entirely off canvas, so no bound is applied to either axis. Do not add one.
+   */
   setPan(pan: PosePan): void {
     this.pan = { x: pan.x, y: pan.y };
   }
 
-  /** Relative pan — the drag path's per-sample update. Wholesale replacement. */
+  /**
+   * Relative pan — the drag path's per-sample update. Wholesale replacement.
+   *
+   * Also **unclamped** (MASTER E13): a drag may carry the model off canvas and
+   * keep going, and dragging back must retrace the same path — which a clamp
+   * would break by discarding the overshoot.
+   */
   nudgePan(dx: number, dy: number): void {
     this.pan = { x: this.pan.x + dx, y: this.pan.y + dy };
+  }
+
+  /**
+   * Ask for the model to be re-fitted to the canvas at the **current** camera
+   * settings (MASTER E14/E15) — the rail's "Fit to canvas" button.
+   *
+   * ⚠️ This bumps the counter and does **nothing else**. It must never touch
+   * `zoom`, `pan`, `rotation`, `projection`, `cameraPreset` or `fov`: the whole
+   * point is to re-frame at whatever the owner has already set up, so resetting
+   * any of them here would defeat the feature. The container observes
+   * `fitGeneration` and performs the framing.
+   */
+  requestFit(): void {
+    this.fitGeneration += 1;
   }
 
   /**
    * Return every field to its default, including unloading the mesh. Called by
    * `ApplicationStore`'s `loadGeneration` reaction when a DIFFERENT project is
    * installed, and available to the rail as a "reset" affordance.
+   *
+   * ⚠️ **`fitGeneration` is deliberately NOT reset.** It is a monotonic event
+   * counter, not a piece of state, and it is read by a reaction that treats
+   * *any* change as "fit now". Setting it back to 0 would be a change like any
+   * other, so clearing the pose would spuriously fire a fit — at the exact
+   * moment the mesh has just been unloaded and there is nothing to fit. Leaving
+   * it alone is what makes "a fit was requested" mean only that. Everything
+   * else, `zoom` included, returns to its default.
    */
   clear(): void {
     this.meshId = null;
