@@ -26,6 +26,10 @@ import {
   NORMAL_Z_SCALE,
   type BuildStampCellsParams,
 } from "@/ui/canvas/pose/poseStamp";
+import type {
+  PoseColor,
+  PoseStampCell,
+} from "@/ui/canvas/pose/poseTypes";
 
 const RANGE = { near: 0, far: 1 };
 
@@ -479,5 +483,568 @@ describe("buildStampCells offsets and guards", () => {
     expect(Object.keys(cell).sort()).toEqual(["color", "height", "normal", "x", "y"]);
     expect(Object.keys(cell.color).sort()).toEqual(["a", "b", "g", "r"]);
     expect(Object.keys(cell.normal).sort()).toEqual(["x", "y", "z"]);
+  });
+});
+
+/* ══ the outline in the stamp — plan 08, locked decision F1 ══════════════
+ *
+ * ⚠️ F1 REVERSES plan 07's E7. The outline IS stamped now, and it writes the
+ * **colour channel only**: an outline pixel's normal and height are left
+ * exactly as they already were. The highest-value cases here are the ones
+ * whose failure mode is *plausible artwork* rather than a crash:
+ *
+ *  - **`edgeWidth = 0` is byte-identical to the pre-F1 stamp.** The
+ *    regression pin. If this drifts, every existing stamp changed.
+ *  - **outline cells preserve the existing normal/height.** THE F1
+ *    assertion — get it wrong and the stamp silently flattens the lighting
+ *    data of whatever artwork it lands on, which looks fine in a screenshot.
+ *  - **applied exactly once.** `applyOutline` is not idempotent (width 1
+ *    twice == width 2 once), so a double application shows up only as a
+ *    slider that is one notch too thick.
+ */
+
+/** The Edge colour used throughout this suite. */
+const EDGE: PoseColor = { r: 200, g: 30, b: 90, a: 255 };
+
+/**
+ * An RGBA buffer with a single opaque texel at `(cx, cy)` on a transparent
+ * field — the smallest shape with a well-defined Chebyshev ring.
+ */
+function dot(
+  width: number,
+  height: number,
+  cx: number,
+  cy: number,
+): Uint8Array {
+  const buf = new Uint8Array(width * height * 4);
+  const c = (cy * width + cx) * 4;
+  buf[c] = 10;
+  buf[c + 1] = 20;
+  buf[c + 2] = 30;
+  buf[c + 3] = 255;
+  return buf;
+}
+
+/** Every cell whose colour is the Edge colour. */
+function outlineCells(cells: PoseStampCell[]): PoseStampCell[] {
+  return cells.filter(
+    (cell) =>
+      cell.color.r === EDGE.r && cell.color.g === EDGE.g && cell.color.b === EDGE.b,
+  );
+}
+
+/** Every cell that is NOT the Edge colour — i.e. the model. */
+function modelCells(cells: PoseStampCell[]): PoseStampCell[] {
+  return cells.filter(
+    (cell) =>
+      !(cell.color.r === EDGE.r && cell.color.g === EDGE.g && cell.color.b === EDGE.b),
+  );
+}
+
+describe("buildStampCells — the outline (F1)", () => {
+  /* ── the off state: the regression pin ──────────────────────────────── */
+
+  it("edgeWidth 0 produces cells byte-identical to the pre-F1 stamp", () => {
+    // ⚠️ THE REGRESSION PIN. Passing no outline params at all must equal
+    // passing width 0 explicitly, and both must equal the old behaviour: one
+    // cell per opaque texel and nothing else.
+    const color = dot(5, 5, 2, 2);
+    const base = buildStampCells({
+      color,
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+    });
+    const explicitZero = buildStampCells({
+      color,
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 0,
+      outlineColor: EDGE,
+    });
+
+    expect(base).toHaveLength(1);
+    expect(explicitZero).toEqual(base);
+  });
+
+  it("skips the outline when no colour is supplied rather than guessing one", () => {
+    const cells = buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 2,
+    });
+    expect(cells).toHaveLength(1);
+  });
+
+  it("treats a non-finite outline width as off", () => {
+    for (const width of [Number.NaN, Infinity, -1]) {
+      const cells = buildStampCells({
+        color: dot(5, 5, 2, 2),
+        normal: solid(5, 5, FLAT_Z_TEXEL),
+        depth: null,
+        width: 5,
+        height: 5,
+        heightRange: RANGE,
+        outlineWidth: width,
+        outlineColor: EDGE,
+      });
+      expect(cells).toHaveLength(1);
+    }
+  });
+
+  /* ── the ring itself, widths 1–4 ────────────────────────────────────── */
+
+  it("adds a Chebyshev ring of outline cells at widths 1 through 4", () => {
+    // A single dot at the centre of a canvas large enough to hold width 4.
+    // The Chebyshev ring at width N is the (2N+1)^2 square MINUS the dot.
+    for (const width of [1, 2, 3, 4]) {
+      const size = 2 * 4 + 3; // 11, room for width 4 on every side
+      const centre = Math.floor(size / 2);
+      const cells = buildStampCells({
+        color: dot(size, size, centre, centre),
+        normal: solid(size, size, FLAT_Z_TEXEL),
+        depth: null,
+        width: size,
+        height: size,
+        heightRange: RANGE,
+        outlineWidth: width,
+        outlineColor: EDGE,
+      });
+
+      const ring = outlineCells(cells);
+      const expected = (2 * width + 1) ** 2 - 1;
+      expect(ring).toHaveLength(expected);
+      // And the model cell is still there, exactly one of it.
+      expect(modelCells(cells)).toHaveLength(1);
+    }
+  });
+
+  it("writes outline cells in the Edge colour at full alpha", () => {
+    const cells = buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 1,
+      // ⚠️ `a: 7` — an outline is opaque by construction, whatever the Edge
+      // colour's own alpha says. Same rule `applyOutline` and D8 apply.
+      outlineColor: { ...EDGE, a: 7 },
+    });
+    const ring = outlineCells(cells);
+    expect(ring).toHaveLength(8);
+    for (const cell of ring) {
+      expect(cell.color).toEqual({ r: EDGE.r, g: EDGE.g, b: EDGE.b, a: 255 });
+    }
+  });
+
+  /* ── ⚠️ THE F1 ASSERTION ────────────────────────────────────────────── */
+
+  it("outline cells carry the EXISTING normal and height, untouched", () => {
+    // The destination already holds artwork with a distinctive normal and a
+    // distinctive height. F1 says the stamp's outline must not disturb either.
+    const existingNormal = { x: -40, y: 71, z: 210 };
+    const existingHeight = 137;
+    const cells = buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+      readExistingCell: () => ({
+        normal: existingNormal,
+        height: existingHeight,
+      }),
+    });
+
+    const ring = outlineCells(cells);
+    expect(ring).toHaveLength(8);
+    for (const cell of ring) {
+      expect(cell.normal).toEqual(existingNormal);
+      expect(cell.height).toBe(existingHeight);
+    }
+  });
+
+  it("gives each outline cell a FRESH normal object, never the reader's", () => {
+    // `setPixelCells` stores the caller's objects in its history patch without
+    // deep-copying, so a shared object mutated later would corrupt an
+    // already-recorded undo entry. The reader hands back ONE object; every
+    // cell must get its own copy.
+    const shared = { x: 1, y: 2, z: 3 };
+    const cells = buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+      readExistingCell: () => ({ normal: shared, height: 9 }),
+    });
+
+    const ring = outlineCells(cells);
+    for (const cell of ring) expect(cell.normal).not.toBe(shared);
+    // Distinct from each other too.
+    expect(new Set(ring.map((c) => c.normal)).size).toBe(ring.length);
+    expect(new Set(ring.map((c) => c.color)).size).toBe(ring.length);
+  });
+
+  it("falls back to the 'no data' pair over empty canvas", () => {
+    // An outline pixel on empty canvas gets colour with NO lighting data.
+    // That is F1's stated, correct outcome — not a bug.
+    const withoutReader = buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+    });
+    const withNullReader = buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+      readExistingCell: () => null,
+    });
+
+    for (const cells of [withoutReader, withNullReader]) {
+      const ring = outlineCells(cells);
+      expect(ring).toHaveLength(8);
+      for (const cell of ring) {
+        expect(cell.normal).toEqual({ x: 0, y: 0, z: NORMAL_Z_SCALE });
+        expect(cell.height).toBe(0);
+      }
+    }
+  });
+
+  it("maps the domain's `0` normal sentinel to the straight-at-viewer default", () => {
+    const cells = buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+      // A cell with a colour but no normal — `0` means "no normal", not
+      // "unchanged", and there is nothing to preserve.
+      readExistingCell: () => ({ normal: 0, height: 42 }),
+    });
+    const ring = outlineCells(cells);
+    for (const cell of ring) {
+      expect(cell.normal).toEqual({ x: 0, y: 0, z: NORMAL_Z_SCALE });
+      // The HEIGHT is still preserved — the two channels are independent.
+      expect(cell.height).toBe(42);
+    }
+  });
+
+  it("leaves the MODEL cells byte-identical whatever the outline width", () => {
+    // The other half of F1: the outline must not perturb the model's own
+    // colour, normal or height. The model loop reads the ORIGINAL buffer.
+    const size = 11;
+    const centre = 5;
+    const make = (outlineWidth: number) =>
+      buildStampCells({
+        color: dot(size, size, centre, centre),
+        normal: solid(size, size, FLAT_Z_TEXEL),
+        depth: new Float32Array(size * size).fill(0.25),
+        width: size,
+        height: size,
+        heightRange: RANGE,
+        outlineWidth,
+        outlineColor: EDGE,
+        readExistingCell: () => ({ normal: { x: 5, y: 6, z: 7 }, height: 99 }),
+      });
+
+    const baseline = modelCells(make(0));
+    expect(baseline).toHaveLength(1);
+    for (const width of [1, 2, 3, 4]) {
+      expect(modelCells(make(width))).toEqual(baseline);
+    }
+  });
+
+  /* ── the never-overwrite and exactly-once properties ────────────────── */
+
+  it("never emits an outline cell over a model pixel", () => {
+    // A 3x3 opaque block: every interior and edge texel is model, and no
+    // outline cell may land on any of them.
+    const size = 9;
+    const color = new Uint8Array(size * size * 4);
+    const modelCoords = new Set<string>();
+    for (let y = 3; y <= 5; y++) {
+      for (let x = 3; x <= 5; x++) {
+        const c = (y * size + x) * 4;
+        color[c] = 10;
+        color[c + 1] = 20;
+        color[c + 2] = 30;
+        color[c + 3] = 255;
+        modelCoords.add(`${x},${y}`);
+      }
+    }
+
+    const cells = buildStampCells({
+      color,
+      normal: solid(size, size, FLAT_Z_TEXEL),
+      depth: null,
+      width: size,
+      height: size,
+      heightRange: RANGE,
+      outlineWidth: 2,
+      outlineColor: EDGE,
+    });
+
+    for (const cell of outlineCells(cells)) {
+      expect(modelCoords.has(`${cell.x},${cell.y}`)).toBe(false);
+    }
+    // And no coordinate is emitted twice anywhere in the payload.
+    const keys = cells.map((c) => `${c.x},${c.y}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("applies the outline EXACTLY ONCE — width 1 is not a width-2 ring", () => {
+    // ⚠️ `applyOutline` is deliberately NOT idempotent: it paints at alpha
+    // 255, so a second pass reads its own outline as model and rings it again
+    // (measured: width 1 twice == width 2 once). A double application here
+    // would show up ONLY as a slider one notch too thick.
+    const size = 11;
+    const centre = 5;
+    const at = (outlineWidth: number) =>
+      outlineCells(
+        buildStampCells({
+          color: dot(size, size, centre, centre),
+          normal: solid(size, size, FLAT_Z_TEXEL),
+          depth: null,
+          width: size,
+          height: size,
+          heightRange: RANGE,
+          outlineWidth,
+          outlineColor: EDGE,
+        }),
+      ).length;
+
+    expect(at(1)).toBe(3 * 3 - 1); // 8, not 24
+    expect(at(2)).toBe(5 * 5 - 1); // 24
+    expect(at(1)).not.toBe(at(2));
+  });
+
+  it("does not mutate the caller's colour buffer", () => {
+    // ⚠️ `PoseEngine.render()` reuses ONE readback buffer across frames, and
+    // `applyOutline` writes in place. Outlining the caller's array would let
+    // the overlay and the stamp fight over it, and would double-outline on the
+    // next frame. The pass must run on a private copy.
+    const color = dot(5, 5, 2, 2);
+    const before = Array.from(color);
+    buildStampCells({
+      color,
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 2,
+      outlineColor: EDGE,
+    });
+    expect(Array.from(color)).toEqual(before);
+  });
+
+  it("is stable across repeated calls on the same buffer", () => {
+    // The direct consequence of the copy: calling twice gives the same answer.
+    const color = dot(9, 9, 4, 4);
+    const run = () =>
+      buildStampCells({
+        color,
+        normal: solid(9, 9, FLAT_Z_TEXEL),
+        depth: null,
+        width: 9,
+        height: 9,
+        heightRange: RANGE,
+        outlineWidth: 1,
+        outlineColor: EDGE,
+      });
+    expect(run()).toEqual(run());
+  });
+
+  /* ── the offsets, the threshold, and the single payload ─────────────── */
+
+  it("applies offsetX/offsetY to outline cells exactly as to model cells", () => {
+    const offsetX = 7;
+    const offsetY = -3;
+    const cells = buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      offsetX,
+      offsetY,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+    });
+
+    expect(modelCells(cells)[0]).toMatchObject({
+      x: 2 + offsetX,
+      y: 2 + offsetY,
+    });
+
+    const ring = outlineCells(cells).map((c) => `${c.x},${c.y}`).sort();
+    const expected: string[] = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        expected.push(`${2 + dx + offsetX},${2 + dy + offsetY}`);
+      }
+    }
+    expect(ring).toEqual(expected.sort());
+  });
+
+  it("reads the existing cell at the FINAL, offset coordinate", () => {
+    // ⚠️ Passing render-target coordinates instead would preserve the lighting
+    // data of the WRONG pixel — invisible at pan 0, invisible in any test that
+    // does not pan.
+    const seen: string[] = [];
+    buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      offsetX: 100,
+      offsetY: 200,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+      readExistingCell: (x, y) => {
+        seen.push(`${x},${y}`);
+        return null;
+      },
+    });
+    expect(seen).toHaveLength(8);
+    for (const key of seen) {
+      const [x, y] = key.split(",").map(Number);
+      expect(x).toBeGreaterThanOrEqual(100 + 1);
+      expect(x).toBeLessThanOrEqual(100 + 3);
+      expect(y).toBeGreaterThanOrEqual(200 + 1);
+      expect(y).toBeLessThanOrEqual(200 + 3);
+    }
+  });
+
+  it("shares ONE alpha threshold between the model loop and the outline", () => {
+    // MASTER E6: the outline must trace exactly the silhouette the stamp
+    // commits. Raise the threshold above a texel's alpha and BOTH must stop
+    // seeing it — the model cell vanishes AND so does its ring.
+    const color = dot(5, 5, 2, 2);
+    const c = (2 * 5 + 2) * 4;
+    color[c + 3] = 200;
+
+    const included = buildStampCells({
+      color,
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      alphaThreshold: 150,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+    });
+    expect(modelCells(included)).toHaveLength(1);
+    expect(outlineCells(included)).toHaveLength(8);
+
+    const excluded = buildStampCells({
+      color,
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      alphaThreshold: 220,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+    });
+    // Nothing is model, so there is nothing to outline either.
+    expect(excluded).toEqual([]);
+  });
+
+  it("returns ONE array — the whole stamp is a single setPixelCells payload", () => {
+    // The undo-entry guarantee, expressed as far as a pure function can: model
+    // and outline cells arrive together, in one array, from one call.
+    const cells = buildStampCells({
+      color: dot(5, 5, 2, 2),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: new Float32Array(25).fill(0.5),
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+    });
+    expect(cells).toHaveLength(9);
+    expect(modelCells(cells)).toHaveLength(1);
+    expect(outlineCells(cells)).toHaveLength(8);
+    for (const cell of cells) {
+      expect(Object.keys(cell).sort()).toEqual([
+        "color",
+        "height",
+        "normal",
+        "x",
+        "y",
+      ]);
+    }
+  });
+
+  it("clips the outline at the buffer's edges without wrapping", () => {
+    // A model in the top-left corner has less room for its outline on two
+    // sides — the ring is clipped, never wrapped onto the opposite row.
+    const cells = buildStampCells({
+      color: dot(5, 5, 0, 0),
+      normal: solid(5, 5, FLAT_Z_TEXEL),
+      depth: null,
+      width: 5,
+      height: 5,
+      heightRange: RANGE,
+      outlineWidth: 1,
+      outlineColor: EDGE,
+    });
+    const ring = outlineCells(cells).map((c) => `${c.x},${c.y}`).sort();
+    expect(ring).toEqual(["0,1", "1,0", "1,1"]);
+  });
+
+  it("emits nothing extra when the whole buffer is opaque", () => {
+    // Nowhere to put an outline — `applyOutline`'s all-opaque early exit.
+    const cells = buildStampCells({
+      color: solid(4, 4, [10, 20, 30, 255]),
+      normal: solid(4, 4, FLAT_Z_TEXEL),
+      depth: null,
+      width: 4,
+      height: 4,
+      heightRange: RANGE,
+      outlineWidth: 2,
+      outlineColor: EDGE,
+    });
+    expect(cells).toHaveLength(16);
+    expect(outlineCells(cells)).toHaveLength(0);
   });
 });

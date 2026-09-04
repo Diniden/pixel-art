@@ -2505,8 +2505,12 @@ export const CanvasContainer = observer(function CanvasContainer({
      *    notch.
      *  - **SKIPPED AT WIDTH 0** — the off state (E4) costs one comparison per
      *    frame rather than a full `w*h` silhouette scan.
-     *  - **DISPLAY ONLY, never stamped** (MASTER E7) — see `poseStamp`, which
-     *    takes its own uncoloured read-back and never sees this write.
+     *  - **INDEPENDENT OF THE STAMP.** The stamp DOES include the outline now
+     *    (plan 08 F1 reversed plan 07's E7), but it outlines a **private copy**
+     *    of its own read-back inside `buildStampCells`. This write is never
+     *    seen there, and that separation is load-bearing: `applyOutline` is
+     *    not idempotent, so two passes over one shared buffer would silently
+     *    thicken the ring by a notch.
      *
      * ⚠️ It touches ONLY the colour read-back. The depth and normal passes in
      * `poseStamp` render their own frames with their own materials and are
@@ -3010,38 +3014,55 @@ export const CanvasContainer = observer(function CanvasContainer({
    * an active selection still masks it (manual check 16).
    *
    * ══════════════════════════════════════════════════════════════════════
-   *  ⚠️ THE OUTLINE IS **NOT** STAMPED — DISPLAY ONLY (MASTER E7)
+   *  ⚠️ THE OUTLINE **IS** STAMPED — COLOUR CHANNEL ONLY (plan 08, F1)
    * ══════════════════════════════════════════════════════════════════════
    *
-   * The decision, taken here and recorded in the plan's HANDOFF where it was
-   * left open. `renderPose` runs `applyOutline` on the buffer it blits to the
-   * overlay; this function takes its OWN `engine.render()` read-back and never
-   * calls it, so `buildStampCells` reads the pre-outline silhouette.
+   * ⚠️ **This REVERSES plan 07's E7** ("the outline is display-only, NOT
+   * stamped"), which stood right here until 2026-09-03. The owner reversed it
+   * directly — *"Stamping should definitely include the outline"* — **and
+   * decided how**: locked decision F1, colour channel only, the normal and
+   * height of an outline pixel left **exactly as they were**. Not zeroed, not
+   * invented, not defaulted. Do not re-open it from the old essay's reasoning;
+   * that reasoning argued for *not inventing a normal*, and F1 does not invent
+   * one either — it preserves whatever is already there.
    *
-   * Why display-only:
+   * ── Where the outline is applied, and why here rather than in this file ──
    *
-   *  - **An outline pixel has no surface.** Every cell this writes carries a
-   *    colour, a NORMAL and a HEIGHT, and the outline is a 2D dilation of a
-   *    silhouette — there is no geometry under it, so there is no normal to
-   *    encode and no depth to normalise. Stamping it would mean inventing
-   *    both, and any invention (copy the nearest model normal? face the
-   *    viewer? height 0 = "no data"?) is a lie the lighting studio would then
-   *    shade as if it were real.
-   *  - **`height: 0` is the project's "no data" sentinel**, so the only
-   *    honest height for an outline pixel is the one that means "not part of
-   *    the model" — at which point the cell is a bare colour with a fabricated
-   *    normal, which is worse than not writing it.
-   *  - **The owner asked for a reference affordance.** The outline exists to
-   *    make the silhouette readable against the artwork underneath while
-   *    tracing it; the artwork's own edge is something they draw.
-   *  - **It stays reversible.** Nothing is lost: the outline is one
-   *    `applyOutline` call away, and a future "stamp the outline too" option
-   *    can be added without unpicking anything. Committing edge pixels with
-   *    invented normals into 151 real projects could not be undone as easily.
+   * **Inside `buildStampCells`**, behind its `outlineWidth` / `outlineColor` /
+   * `readExistingCell` parameters — the second of the two options the task
+   * spec offered. The reasons, in order:
    *
-   * ⚠️ If this is ever reversed, the normal and height channels for outline
-   * pixels must be DEFINED, not defaulted, and E6's shared `>= 128` threshold
-   * keeps the two silhouettes in step.
+   *  - It keeps the "**one function builds the cells**" story intact. The
+   *    stamp's entire buffers-to-cells arithmetic stays in one pure module
+   *    with one entry point, rather than half here and half there.
+   *  - It is **exhaustively unit-testable in the node lane**, which is where
+   *    this project's confidence actually comes from. There is no GPU and no
+   *    browser on any agent that has touched the pose tool; a rule living in a
+   *    5,300-line container inside a `useCallback` can only be verified by
+   *    eye, and nobody has had an eye to verify it with.
+   *  - `buildStampCells` already owns the alpha threshold, the offsets and the
+   *    fresh-object-per-cell rule. The outline needs all three, and duplicating
+   *    them at the call site is how they drift.
+   *
+   * The overlay's own `applyOutline` in `renderPose` is **unchanged and
+   * independent** — it outlines the buffer it blits, and the stamp outlines a
+   * private copy of its own read-back. Neither can see the other's writes.
+   *
+   * ── ⚠️ Why `readExistingCell` exists ────────────────────────────────────
+   *
+   * `setPixelCells` is **authoritative on all three channels**: the committed
+   * cell is exactly `{color, normal, height}` whatever was there before, and
+   * `PixelCellWrite` has **no "leave this channel alone" value** — its `0`s
+   * mean *empty* and *no data*, not *unchanged*. So F1's "left exactly as they
+   * were" can only be implemented as **read the existing cell and write it
+   * back**. That reader is supplied from here, closing over the SAME resolved
+   * grid `setPixelCells` will write to (the variant branch included), because
+   * only the container knows which grid that is.
+   *
+   * ⚠️ The reader is called with the **final, offset** coordinate, which is
+   * the space `setPixelCells` indexes. Passing render-target coordinates would
+   * preserve the lighting data of the wrong pixel — an error invisible at
+   * pan 0 and invisible again in any test that does not pan.
    */
   const poseStamp = useCallback(() => {
     const engine = poseEngineRef.current;
@@ -3186,6 +3207,24 @@ export const CanvasContainer = observer(function CanvasContainer({
     const pan = posePanRef.current;
     const stampOx = isEditingVariantResolved ? variantOffset.x : 0;
     const stampOy = isEditingVariantResolved ? variantOffset.y : 0;
+
+    /* ── F1: the grid whose lighting data an outline pixel must preserve ───
+     *
+     * ⚠️ It must be the SAME grid `setPixelCells` resolves, or the outline
+     * would preserve the lighting data of a cell in a different layer. The
+     * variant branch is `PixelStore.resolveTarget`'s, reproduced through the
+     * container's own mirrors — identical to `editableGrid` below, which
+     * cannot be reused here because it is declared later in the render body.
+     *
+     * `pixels` is `observable.ref` (never deep-observed), and this only ever
+     * READS it — index, copy out three numbers, done.
+     */
+    const targetGrid: PixelData[][] | null = !layer
+      ? null
+      : hasVariantData && variantData
+        ? (variantData.variantFrame.layers[0]?.pixels ?? layer.pixels)
+        : layer.pixels;
+
     const cells: PoseStampCell[] = buildStampCells({
       color: colorBuffer,
       normal: normalBuffer,
@@ -3196,6 +3235,18 @@ export const CanvasContainer = observer(function CanvasContainer({
       heightRange: { near: depthNear, far: depthFar },
       offsetX: Math.round(pan.x) - stampOx,
       offsetY: Math.round(pan.y) - stampOy,
+      // ⚠️ The outline, plan 08 F1 — see this callback's header. Width 0 is
+      // the off state and makes this call byte-for-byte the pre-F1 stamp.
+      outlineWidth: poseEdgeWidth,
+      outlineColor: poseEdgeColor,
+      // The reader is handed the FINAL, offset coordinate, which is the space
+      // `setPixelCells` indexes. Out-of-range answers `null`, and the cell
+      // then gets the "no data" pair — the same thing an empty cell holds.
+      readExistingCell: (x, y) => {
+        const cell = targetGrid?.[y]?.[x];
+        if (!cell) return null;
+        return { normal: cell.normal, height: cell.height };
+      },
     });
     if (cells.length === 0) return;
 
@@ -3204,7 +3255,20 @@ export const CanvasContainer = observer(function CanvasContainer({
     // history patch without deep-copying, so a shared object mutated later
     // would corrupt an already-recorded undo entry.
     app.pixels.setPixelCells(cells, app.selectionUI.writeOptions);
-  }, [app, cellWidth, cellHeight, layer, isEditingVariantResolved, variantOffset]);
+  }, [
+    app,
+    cellWidth,
+    cellHeight,
+    layer,
+    isEditingVariantResolved,
+    variantOffset,
+    // F1's inputs: the outline's width and colour, and the grid whose
+    // lighting data an outline pixel preserves.
+    poseEdgeWidth,
+    poseEdgeColor,
+    hasVariantData,
+    variantData,
+  ]);
 
   /**
    * A pointer went down with the pose tool selected.

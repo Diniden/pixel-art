@@ -56,10 +56,66 @@
  * module does the same. Nearer means taller, matching how the lighting
  * renderer casts shadows off the height field.
  *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ THE OUTLINE IS STAMPED, AND IT WRITES THE COLOUR CHANNEL **ONLY**
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Plan 08's locked decision **F1**, owner-decided 2026-09-03. It **reverses**
+ * plan 07's E7 ("the outline is display-only, NOT stamped"), which is why the
+ * container's stamp callback no longer carries that essay.
+ *
+ * The rule, exactly:
+ *
+ * > An outline pixel gets the Edge **colour**. Its **normal and height are
+ * > left exactly as they already were** — not zeroed, not invented, not
+ * > defaulted.
+ *
+ * That is not a cop-out, it is the only honest answer. Every other stamped
+ * cell carries colour + normal + height because there is geometry under it. An
+ * outline pixel is a 2D dilation of a silhouette: there is no surface beneath
+ * it, so there is no normal to encode and no depth to normalise. Writing
+ * colour alone says *"this pixel is this colour, and I know nothing about its
+ * surface"* — which is true. An outline pixel laid over existing artwork keeps
+ * that artwork's lighting data; one laid over empty canvas gets colour with no
+ * lighting response, and that is correct rather than a bug.
+ *
+ * ## ⚠️ Why F1 needs {@link BuildStampCellsParams.readExistingCell}
+ *
+ * `PixelStore.setPixelCells` is **authoritative on all three channels** — the
+ * committed cell is exactly `{color, normal, height}`, whatever was there
+ * before — and `PixelCellWrite` has **no "leave this alone" representation**:
+ * its `0` sentinels mean *empty* and *no data*, not *unchanged*
+ * (`types/domain.ts:18-22`). So "untouched" cannot be expressed by a value;
+ * it has to be expressed by **reading the existing cell and passing it back
+ * through**. `readExistingCell` is that read. It is supplied by the container,
+ * which owns the resolved target grid; this module stays pure and never learns
+ * what a store is.
+ *
+ * When no reader is supplied — or it answers `null` for a coordinate — the
+ * outline cell falls back to the "no data" pair (`normal {0,0,255}`,
+ * `height 0`), which is what an empty cell already holds. Over empty canvas
+ * the two are identical; the reader exists so that over *artwork* the real
+ * values survive.
+ *
+ * ## ⚠️ The outline buffer must be the caller's OWN, applied EXACTLY ONCE
+ *
+ * `applyOutline` mutates in place and is **not idempotent across calls** — it
+ * paints at alpha 255, so a second pass reads its own outline as model and
+ * rings it again (width 1 twice == width 2 once). And `PoseEngine.render()`
+ * **reuses one readback buffer** across frames, so the overlay and the stamp
+ * would fight over it.
+ *
+ * This module therefore **allocates its own copy** of the colour buffer before
+ * outlining it, and applies the pass exactly once per call. The caller's
+ * `color` array is never written. Both properties are pinned by tests.
+ *
  * ## Purity
  *
  * No store, no MobX, no React, no API, no `services/`, no three (MASTER D15).
+ * `readExistingCell` is a plain callback of two numbers; the container closes
+ * over the grid, this module never sees it.
  */
+import { applyOutline } from "@/ui/canvas/pose/poseOutline";
 import type {
   PoseColor,
   PoseNormal,
@@ -129,6 +185,52 @@ export interface BuildStampCellsParams {
   offsetX?: number;
   /** Added to every cell's `y`. */
   offsetY?: number;
+  /**
+   * Outline width in whole pixels, `0` (the default) for **off**.
+   *
+   * At `0` this function is byte-for-byte the pre-F1 function: no copy, no
+   * silhouette scan, no outline cells. That is deliberate — the off state must
+   * cost one comparison, and must be a provable regression pin.
+   */
+  outlineWidth?: number;
+  /**
+   * The Edge colour outline pixels are written in. Required in practice
+   * whenever `outlineWidth > 0`; absent, the outline is skipped rather than
+   * guessed.
+   */
+  outlineColor?: PoseColor;
+  /**
+   * Read the cell already in the destination grid at a **final, offset**
+   * coordinate — the same `(x + offsetX, y + offsetY)` the cell will be
+   * committed at.
+   *
+   * ⚠️ **This is how F1 is expressed.** `setPixelCells` overwrites all three
+   * channels, so "leave the normal and height alone" can only mean "read them
+   * and write them back unchanged". See the module header.
+   *
+   * Return `null` (or omit the callback) for a coordinate with nothing there;
+   * the outline cell then gets the "no data" pair — `normal {0,0,255}`,
+   * `height 0` — which is what an empty cell holds anyway.
+   *
+   * The returned object is **copied**, never retained: this module always
+   * allocates fresh `color`/`normal` per cell (see {@link buildStampCells}).
+   */
+  readExistingCell?: (x: number, y: number) => PoseExistingCell | null;
+}
+
+/**
+ * The lighting data already at a destination coordinate, as
+ * {@link BuildStampCellsParams.readExistingCell} reports it.
+ *
+ * Structurally a subset of the domain `PixelData`, declared here so `ui/` need
+ * not import `types/domain.ts` — the same habit `PoseStampCell` follows. The
+ * `0` in `normal` is the domain's "no normal" sentinel and is mapped to the
+ * straight-at-the-viewer default on the way out, exactly as an absent normal
+ * buffer is.
+ */
+export interface PoseExistingCell {
+  normal: PoseNormal | 0;
+  height: number;
 }
 
 /**
@@ -228,6 +330,30 @@ export function depthToHeight(depth: number, range: PoseHeightRange): number {
  * caller's objects into its history patch (task 05's note), so a shared object
  * mutated afterwards would corrupt an already-recorded undo entry.
  *
+ * ## The outline (F1)
+ *
+ * When `outlineWidth > 0` and an `outlineColor` is given, the silhouette is
+ * dilated by {@link applyOutline} and the resulting ring is emitted as extra
+ * cells **in the same array** — so the whole stamp is still ONE
+ * `setPixelCells` call and therefore ONE undo entry.
+ *
+ * Three properties, all pinned by tests:
+ *
+ *  - **The caller's `color` buffer is never mutated.** `applyOutline` writes
+ *    in place, and the engine reuses its readback array across frames, so this
+ *    function outlines a **private copy** — the overlay and the stamp can
+ *    never fight over one buffer.
+ *  - **Applied exactly once.** `applyOutline` is not idempotent (width 1 twice
+ *    == width 2 once), and a fresh copy per call is what guarantees it.
+ *  - **Outline cells write COLOUR ONLY.** Their normal and height come from
+ *    `readExistingCell`, unchanged. Model cells are entirely unaffected —
+ *    the model loop reads the ORIGINAL buffer, so a stamp at width 4 has
+ *    byte-identical model cells to the same stamp at width 0.
+ *
+ * The alpha threshold is shared: the same `threshold` gates the model loop and
+ * is passed explicitly to `applyOutline`, so the outline traces exactly the
+ * silhouette the stamp commits (MASTER E6).
+ *
  * Returns an empty array — never `null`, never a throw — for an all
  * transparent buffer, a zero-area canvas, or a mismatched colour buffer. A
  * stamp of nothing is a no-op, and the caller has nothing useful to do with an
@@ -245,6 +371,9 @@ export function buildStampCells(
     heightRange,
     offsetX = 0,
     offsetY = 0,
+    outlineWidth = 0,
+    outlineColor,
+    readExistingCell,
   } = params;
 
   if (!Number.isFinite(width) || !Number.isFinite(height)) return [];
@@ -304,7 +433,144 @@ export function buildStampCells(
     }
   }
 
+  appendOutlineCells(cells, {
+    color,
+    w,
+    h,
+    threshold,
+    offsetX,
+    offsetY,
+    outlineWidth,
+    outlineColor,
+    readExistingCell,
+  });
+
   return cells;
+}
+
+/** Everything {@link appendOutlineCells} needs, already validated. */
+interface OutlinePassParams {
+  color: Uint8Array;
+  w: number;
+  h: number;
+  threshold: number;
+  offsetX: number;
+  offsetY: number;
+  outlineWidth: number;
+  outlineColor: PoseColor | undefined;
+  readExistingCell:
+    | ((x: number, y: number) => PoseExistingCell | null)
+    | undefined;
+}
+
+/**
+ * Dilate the silhouette and push the ring onto `cells` as **colour-only**
+ * cells (F1). Mutates `cells`; returns nothing.
+ *
+ * ⚠️ **`work` is a private copy.** `applyOutline` writes in place and the
+ * engine reuses its readback buffer, so outlining `color` directly would both
+ * corrupt the caller's array and let a later frame double-outline it. The copy
+ * is allocated here, used once, and dropped — it never escapes.
+ *
+ * A texel is an outline pixel iff it was **below** the threshold in the
+ * ORIGINAL buffer and is **at or above** it after the pass. That difference is
+ * the ring exactly: `applyOutline` never touches a model pixel (it is the
+ * function's loudest guarantee), so no model cell can be re-emitted here and
+ * the "the outline never overwrites a model pixel" property holds by
+ * construction rather than by a second alpha test.
+ *
+ * The off states are all early returns, in cost order: width `<= 0` (the
+ * documented OFF state), a missing colour, then a non-finite width. At width 0
+ * this costs one comparison and allocates nothing.
+ */
+function appendOutlineCells(
+  cells: PoseStampCell[],
+  params: OutlinePassParams,
+): void {
+  const {
+    color,
+    w,
+    h,
+    threshold,
+    offsetX,
+    offsetY,
+    outlineWidth,
+    outlineColor,
+    readExistingCell,
+  } = params;
+
+  if (!Number.isFinite(outlineWidth) || outlineWidth <= 0) return;
+  // No Edge colour is "skip", not "guess one". The container always supplies
+  // it alongside a non-zero width; a caller that forgets gets the off state.
+  if (!outlineColor) return;
+
+  const texels = w * h;
+
+  // ⚠️ THE COPY. See this function's header — do not outline `color` itself.
+  const work = Uint8Array.from(color.subarray(0, texels * 4));
+  applyOutline(work, w, h, outlineWidth, outlineColor, {
+    // Explicit, so the coupling to the model loop's own cutoff (MASTER E6) is
+    // visible: both silhouettes must be the same silhouette.
+    alphaThreshold: threshold,
+  });
+
+  const r = clampByte(outlineColor.r);
+  const g = clampByte(outlineColor.g);
+  const b = clampByte(outlineColor.b);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const c = (y * w + x) * 4;
+      // Was empty, is now painted → this is a ring texel and nothing else can
+      // be. Model texels are untouched by `applyOutline`, so they fail the
+      // first half of this test.
+      if (color[c + 3] >= threshold) continue;
+      if (work[c + 3] < threshold) continue;
+
+      const cx = x + offsetX;
+      const cy = y + offsetY;
+
+      // ⚠️ F1: the normal and the height are whatever was ALREADY there.
+      // Read at the FINAL coordinate — the grid is indexed in committed
+      // space, not in render-target space.
+      const existing = readExistingCell?.(cx, cy) ?? null;
+      // `0` is the domain's "no normal" sentinel, mapped to the
+      // straight-at-the-viewer default exactly as an absent normal buffer is.
+      const existingNormal =
+        existing && existing.normal !== 0 ? existing.normal : null;
+      // Fresh objects per cell, always: `setPixelCells` keeps the caller's
+      // objects in its history patch without deep-copying them.
+      const cellNormal: PoseNormal = existingNormal
+        ? { x: existingNormal.x, y: existingNormal.y, z: existingNormal.z }
+        : { x: 0, y: 0, z: NORMAL_Z_SCALE };
+      const cellHeight = existing ? existing.height : 0;
+
+      cells.push({
+        x: cx,
+        y: cy,
+        // Alpha 255, matching `applyOutline`'s own rule and D8's habit: an
+        // outline is opaque by construction, whatever `outlineColor.a` says.
+        color: { r, g, b, a: 255 },
+        normal: cellNormal,
+        height: cellHeight,
+      });
+    }
+  }
+}
+
+/**
+ * A colour component forced into `0..255`.
+ *
+ * `PoseColor` carries no runtime validation, so a caller can hand over `-5`,
+ * `300` or `NaN`. `applyOutline` clamps identically before writing its bytes
+ * (`poseOutline.ts`'s own `clampByte`), and the two MUST agree — the cells
+ * emitted here have to carry the same colour the ring in `work` was painted
+ * with, or the stamp and the overlay would disagree on a mis-typed colour.
+ */
+function clampByte(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const v = Math.round(value);
+  return v < 0 ? 0 : v > 255 ? 255 : v;
 }
 
 /** `value` clamped to `[lo, hi]`; a non-finite value falls back to `lo`. */
