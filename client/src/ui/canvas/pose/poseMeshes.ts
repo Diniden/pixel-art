@@ -38,13 +38,28 @@
  * 32×32 because it lands in the pixel *values*, not the outline. Reading bands
  * off the render is the artist's job again, which is what was asked for.
  *
- * ## Normalised size
+ * ## Normalised size, and origin-centred GEOMETRY
  *
  * Every primitive is built to fit the **unit bounding box centred on the
  * origin** — `[-0.5, 0.5]` on all three axes. So is each mannequin part, via
  * the same {@link normalizeToUnitBox}. `fitCameraToMesh` therefore has ONE job
  * instead of a special case per mesh, and a head arrives framed exactly like a
  * cube.
+ *
+ * ⚠️ **Size and origin are two different promises, and only one of them used
+ * to be kept.** {@link normalizeToUnitBox} writes the object *transform*, so a
+ * part looked centred while its **vertices** still carried the mannequin's
+ * origin — the head's own geometry centre measured `y = 1.5666`. It therefore
+ * rotated about the figure's pelvis rather than about itself. Plan 08 task 01
+ * adds {@link centerGeometryOnOrigin}, which translates the **vertex
+ * positions**, and {@link buildPartMesh} runs it before normalising.
+ *
+ * The invariant now is: **every object handed to the engine has its
+ * bounding-box centre at `(0,0,0)` in its own geometry space.** The primitives
+ * satisfy it by construction (three's `BoxGeometry`/`SphereGeometry`/
+ * `CylinderGeometry` are origin-centred), a part satisfies it by the explicit
+ * translation, and the full mannequin scene is the one documented exception —
+ * see {@link normalizeToUnitBox}.
  *
  * ## Purity
  *
@@ -518,7 +533,13 @@ export async function loadMannequin(
     );
   }
 
-  if (normalize) normalizeToUnitBox(three, scene);
+  if (normalize) {
+    // Plan 08 F2 / open question 3: the whole figure gets an origin-centred
+    // GEOMETRY too, not just each part. Vertices first, then scale — the same
+    // order `buildPartMesh` uses, for the same reason.
+    centerSceneGeometryOnOrigin(three, scene);
+    normalizeToUnitBox(three, scene);
+  }
   return scene;
 }
 
@@ -549,9 +570,18 @@ export async function loadMannequin(
  *    thousand triangles, which is nothing at this scale.
  * 4. **Copy the source normals across** rather than recomputing them — see
  *    below.
- * 5. **Normalise the finished mesh into the unit box** with the same
- *    {@link normalizeToUnitBox} every primitive uses, so a head arrives
- *    centred and auto-fitted exactly like a cube.
+ * 5. **Centre the finished geometry on its own origin** with
+ *    {@link centerGeometryOnOrigin}, then **normalise the mesh into the unit
+ *    box** with the same {@link normalizeToUnitBox} every primitive uses, so a
+ *    head arrives centred and auto-fitted exactly like a cube. ⚠️ Steps 5a and
+ *    5b are not interchangeable and 5a is not optional — see
+ *    {@link buildPartMesh}.
+ *
+ * ⚠️ **This function returns the part in the MANNEQUIN's space**, deliberately:
+ * its bounding box is where the part sits on the figure, which is what makes
+ * the segmentation debuggable and what the anatomical tests assert against.
+ * The origin move happens one level up in {@link buildPartMesh}, on the path
+ * that actually reaches the engine.
  *
  * ## ⚠️ Smooth normals are PRESERVED, not recomputed
  *
@@ -690,7 +720,22 @@ export async function buildPartMesh(
     );
   }
 
+  // ⚠️ ORDER MATTERS, and this is the fix for plan 08 item 2/7 (F2).
+  //
+  // The part is cut out of the mannequin in the mannequin's own space, so its
+  // vertices carry the figure's origin with them — measured, the head's box
+  // centre sat at y = 1.5666, the height of a head on a standing figure.
+  // Centring the GEOMETRY here, before the mesh is normalised, is what makes
+  // the part rotate about itself instead of orbiting the mannequin's pelvis.
+  // Doing it by transform instead (`mesh.position.set(...)`) reproduces exactly
+  // the bug: `rotation` is applied before `position`, so the offset becomes an
+  // orbit radius.
+  centerGeometryOnOrigin(three, geometry);
+
   const mesh = new three.Mesh(geometry, buildMaterial(three, color));
+  // Scale only, now: the centre subtraction below is a no-op because the
+  // geometry above is already origin-centred. Pinned by test rather than
+  // assumed — see `describe("buildPartMesh")`.
   normalizeToUnitBox(three, mesh);
   return mesh;
 }
@@ -874,6 +919,245 @@ export function applyMaterial(
 }
 
 /**
+ * Translate `geometry`'s **vertices** so its bounding-box centre is the origin.
+ *
+ * ## ⚠️ Why this exists — the bug it fixes (plan 08, F2)
+ *
+ * {@link normalizeToUnitBox} writes the **object transform**
+ * (`object.scale` / `object.position`). That makes a part *look* centred on
+ * screen while its **geometry origin is still the mannequin's origin**:
+ * measured 2026-09-03 on the vendored asset, the head's own geometry centre
+ * sat at `y = 1.5666` in model space — the height of a head on a standing
+ * figure, not the centre of a head. Consequences:
+ *
+ * - `root.rotation.set(...)` spins the part about the **mannequin's** pelvis,
+ *   not about the part, so the head swings off-screen instead of turning; and
+ * - anything reading vertex positions (a stamp, a fit, a future exporter) sees
+ *   model-space coordinates rather than part-space ones.
+ *
+ * A transform cannot fix either: `Object3D.rotation` is applied **before**
+ * `position` in the local matrix, so an offset written into `position` rotates
+ * *with* the mesh and becomes an orbit radius. The vertices themselves have to
+ * move. The owner's instruction was unqualified — *"Make sure all models loaded
+ * and utilized ALL have their origin set to the middle of the bounding volume
+ * of the model"*.
+ *
+ * ## What it touches, and what it deliberately does not
+ *
+ * - **`position` only**, written by hand through the attribute's `setXYZ`.
+ *
+ * - ⚠️ **`BufferGeometry.translate()` IS NOT USED, and must not be
+ *   reintroduced.** It looks like the obvious tool and it is the wrong one.
+ *   **Measured 2026-09-03** against three 0.185.1: `translate()` delegates to
+ *   `applyMatrix4()`, which does *not* stop at `position` — it also takes the
+ *   normal matrix of the translation and calls `normal.applyNormalMatrix()`,
+ *   whose final step is `.normalize()` on **every normal in the buffer**.
+ *
+ *   For a pure translation the normal matrix is the identity, so no normal
+ *   changes *direction*. But the asset's authored normals are not exactly unit
+ *   length, so re-normalising rewrites them: a hand-built `(0.1, 0.2, 0.3)`
+ *   came back as `(0.267, 0.535, 0.802)`, and the real torso's normals moved
+ *   in their last float digits (`0.4748470187` → `0.4748469889`). That is a
+ *   silent mutation of the exact data plan 07 task 05 went out of its way to
+ *   **copy** rather than recompute — the same class of regression as calling
+ *   `computeVertexNormals()`, arriving through a function whose name promises
+ *   it only moves vertices.
+ *
+ *   Writing `position` directly is therefore not a micro-optimisation; it is
+ *   the only way to keep the "normals are untouched" promise. The tests assert
+ *   the normal attribute is the **same object** and **byte-identical**, so a
+ *   future edit back to `translate()` fails loudly.
+ * - **Bounds are recomputed whenever vertices move**, never left stale:
+ *   {@link buildPartGeometry} promises its caller a computed box, and three's
+ *   culling and raycasting read the sphere. Recomputing costs one pass over an
+ *   array that was just written and removes a whole class of "the bounds say
+ *   one thing and the vertices another" bug. When nothing moves — the
+ *   already-centred case — the caches are correct as they stand and are left
+ *   alone.
+ *
+ * A geometry with no `position` attribute, or one whose box centre is not
+ * usable, is left **exactly** as it was — see {@link usableCentre} for which
+ * cases those are and why bailing is the right answer for each. A *single*
+ * vertex is not one of them: its box centre is the vertex itself, so it
+ * translates to the origin like anything else.
+ *
+ * Pure, exported and exhaustively tested — it is array maths with no WebGL in
+ * it, so the node lane can prove it rather than owing it as a manual check.
+ */
+export function centerGeometryOnOrigin(
+  three: ThreeNamespace,
+  geometry: BufferGeometry,
+): void {
+  const position = geometry.getAttribute("position");
+  if (!position || position.count === 0) return;
+
+  geometry.computeBoundingBox();
+  if (!geometry.boundingBox) return;
+  const centre = usableCentre(geometry.boundingBox.getCenter(new three.Vector3()));
+  // A zero centre skips the write entirely, which is what makes the helper
+  // idempotent on the exact float values rather than merely "close enough".
+  if (!centre) return;
+
+  translatePositions(geometry, -centre.x, -centre.y, -centre.z);
+}
+
+/**
+ * `centre` if it is finite and not already the origin, otherwise `null`.
+ *
+ * The shared bail for both centring helpers, and the reason each one is a
+ * no-op rather than a hazard on its degenerate inputs:
+ *
+ * - **Non-finite** — `x - NaN` is `NaN`, so subtracting a poisoned centre
+ *   turns the *whole* buffer into `NaN` and blanks the render with no error
+ *   anywhere. Leaving the damage where it already was is strictly better.
+ * - **Already the origin** — writing `x + 0` back over every vertex would be a
+ *   float round-trip per call, so a helper run repeatedly (a future re-fit,
+ *   say) could walk a mesh off the origin one epsilon at a time.
+ */
+function usableCentre<T extends { x: number; y: number; z: number }>(
+  centre: T,
+): T | null {
+  const { x, y, z } = centre;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+    return null;
+  }
+  return x === 0 && y === 0 && z === 0 ? null : centre;
+}
+
+/**
+ * Add `(dx, dy, dz)` to every vertex of `geometry`'s `position` attribute, and
+ * refresh its cached bounds.
+ *
+ * ⚠️ **The whole point is what it does NOT touch.** See
+ * {@link centerGeometryOnOrigin} for the measurement: three's own
+ * `BufferGeometry.translate()` re-normalises the `normal` attribute as a side
+ * effect, which silently rewrites the smooth authored normals a part is
+ * careful to copy. This writes `position` and nothing else.
+ *
+ * `needsUpdate` is set because the buffer may already be uploaded to the GPU
+ * when this runs; without it a re-centred mesh would render at its old
+ * vertices until something else happened to dirty the attribute.
+ */
+function translatePositions(
+  geometry: BufferGeometry,
+  dx: number,
+  dy: number,
+  dz: number,
+): void {
+  const position = geometry.getAttribute("position");
+  if (!position) return;
+
+  for (let i = 0; i < position.count; i++) {
+    position.setXYZ(
+      i,
+      position.getX(i) + dx,
+      position.getY(i) + dy,
+      position.getZ(i) + dz,
+    );
+  }
+  position.needsUpdate = true;
+
+  // ⚠️ Moving vertices invalidates both caches, and callers read them —
+  // `buildPartGeometry` promises a computed box, and three's raycasting and
+  // frustum culling read the sphere.
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+}
+
+/**
+ * Translate every geometry under `object` so the **scene's** bounding-box
+ * centre is the origin, in world space.
+ *
+ * The node-tree counterpart of {@link centerGeometryOnOrigin}, and the answer
+ * to plan 08's open question 3: *is the full mannequin's geometry centred too,
+ * or only the parts?* It is, and this is how — the owner's instruction (*"ALL
+ * have their origin set to the middle of the bounding volume"*) does not carve
+ * out the whole figure, and the whole figure is exactly the mesh whose
+ * rotation the orb drives most often.
+ *
+ * ## ⚠️ Why this is not just `centerGeometryOnOrigin` in a `traverse`
+ *
+ * A glTF scene is a **node tree**. Each mesh's vertices are in its own local
+ * space and reach world space through its ancestors' matrices, so centring
+ * each geometry on *its own* centre would explode the figure into five
+ * separately-centred pieces stacked on the origin. The figure has exactly one
+ * centre, and every geometry must be shifted by that **same world-space
+ * vector**.
+ *
+ * A world vector is not a local vector, though. So the shift is converted per
+ * node: the inverse of the node's world matrix maps the world offset into that
+ * node's local frame, and only the **rotation/scale** part of that inverse
+ * applies to a *direction* — hence `transformDirection`-style handling via a
+ * pair of point transforms rather than `applyMatrix4` on the offset itself.
+ * That is exact for arbitrary nesting, rotation and non-uniform scale.
+ *
+ * ## What it deliberately does NOT do
+ *
+ * - It does **not** bake node transforms flat. The tree keeps its shape,
+ *   `applyMaterial`'s traverse still finds the same nodes, and nothing that
+ *   depends on node names or ordering moves.
+ * - It does **not** touch `normal` attributes. Same mechanism as
+ *   {@link centerGeometryOnOrigin}: it goes through
+ *   {@link translatePositions} rather than `BufferGeometry.translate()`,
+ *   because the latter re-normalises the normal buffer as a side effect.
+ * - It does **not** run on the segmentation path.
+ *   {@link buildPartMesh} calls `loadMannequin(..., false)`, so the raw scene a
+ *   part is cut from is untouched and every landmark fraction still measures
+ *   against the same box it was derived from. ⚠️ Do not "simplify" by moving
+ *   this above the `normalize` guard.
+ *
+ * A shared geometry reached through two nodes with **different** world
+ * matrices would be translated twice. That cannot occur in this asset (two
+ * nodes, two distinct meshes, no transforms) and cannot occur in any glTF
+ * where instancing implies distinct nodes over one mesh — but the visited set
+ * makes it structurally impossible rather than merely unlikely.
+ */
+export function centerSceneGeometryOnOrigin(
+  three: ThreeNamespace,
+  object: Object3D,
+): void {
+  object.updateWorldMatrix(true, true);
+
+  const box = new three.Box3().setFromObject(object);
+  if (box.isEmpty()) return;
+
+  const centre = usableCentre(box.getCenter(new three.Vector3()));
+  if (!centre) return;
+
+  const inverse = new three.Matrix4();
+  const origin = new three.Vector3();
+  const shifted = new three.Vector3();
+  const visited = new Set<BufferGeometry>();
+
+  object.traverse((node) => {
+    const holder = node as Object3D & {
+      isMesh?: boolean;
+      geometry?: BufferGeometry;
+    };
+    const geometry = holder.geometry;
+    if (!holder.isMesh || !geometry) return;
+    if (!geometry.getAttribute("position")) return;
+    if (visited.has(geometry)) return;
+    visited.add(geometry);
+
+    // The world offset `-centre`, expressed in this node's local frame: map
+    // both the world origin and the world origin displaced by `-centre` into
+    // local space, and take the difference. Differencing two mapped POINTS is
+    // what strips the inverse's translation column, leaving only the
+    // rotation/scale acting on the direction — which is the correct treatment
+    // for an offset and the reason this is not a bare `applyMatrix4`.
+    inverse.copy(node.matrixWorld).invert();
+    origin.set(0, 0, 0).applyMatrix4(inverse);
+    shifted.set(-centre.x, -centre.y, -centre.z).applyMatrix4(inverse);
+    shifted.sub(origin);
+
+    // ⚠️ Not `geometry.translate()` — it rewrites the normal attribute. See
+    // {@link translatePositions}.
+    translatePositions(geometry, shifted.x, shifted.y, shifted.z);
+  });
+}
+
+/**
  * Scale and recentre `object` so its bounding box is {@link UNIT_BOUNDS}.
  *
  * The primitives do not need this — their constructors already produce it —
@@ -885,6 +1169,30 @@ export function applyMaterial(
  * A zero-extent object (an empty scene, or one whose geometry failed to load)
  * is left alone: there is no finite scale that maps a point onto a unit box,
  * and dividing by zero would push it to infinity and blank the render.
+ *
+ * ## What this still does after plan 08 task 01, and what it no longer does
+ *
+ * **Scale is its remaining job**, and the only one that matters on the part
+ * path. {@link buildPartMesh} now runs {@link centerGeometryOnOrigin} on the
+ * part's geometry *first*, so by the time this sees the mesh the box centre is
+ * already `(0,0,0)` and `position.sub(centre·scale)` subtracts a zero vector —
+ * a measured no-op, pinned by test.
+ *
+ * The full-mannequin path is the same: {@link loadMannequin}'s `normalize`
+ * branch runs {@link centerSceneGeometryOnOrigin} first, so the subtraction is
+ * a no-op there too. **Both production call sites now pre-centre**, which means
+ * the line is measurably dead on both.
+ *
+ * ⚠️ **It is kept anyway, deliberately** — it is the general contract of the
+ * function, which is "make this object's bounds `UNIT_BOUNDS`". Deleting it
+ * would make that contract conditional on the caller having centred first, and
+ * a future third call site would silently inherit an off-centre mesh with no
+ * error anywhere. A no-op subtraction of a zero vector costs nothing; a
+ * missing one costs a bug of exactly the kind this task exists to fix.
+ *
+ * ⚠️ It writes `object.position`, so it is **the** writer of that property on
+ * this path. Plan 08 F3 implements pan through the **camera** precisely so a
+ * second writer never appears; do not introduce one.
  */
 export function normalizeToUnitBox(
   three: ThreeNamespace,
@@ -899,6 +1207,8 @@ export function normalizeToUnitBox(
   const scale = 1 / largest;
 
   object.scale.multiplyScalar(scale);
+  // A no-op for a part (its geometry is already origin-centred); load-bearing
+  // for the full mannequin scene. See the header.
   object.position.sub(centre.multiplyScalar(scale));
 }
 

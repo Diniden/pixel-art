@@ -2,12 +2,27 @@
  * Tests for the mesh library's PURE half — the mannequin part segmentation and
  * the tessellation/shading constants.
  *
- * ⚠️ **Nothing here constructs a three geometry or material**, by design. jsdom
- * has no WebGL (MASTER risk register) and `buildMesh` / `buildMaterial` /
- * `buildPartGeometry` / `normalizeToUnitBox` all need the real namespace. What
- * IS testable — and is where a silent error is most expensive — is the pure
- * **decision**: which triangles belong to which part. So the classifier is
- * driven two ways:
+ * ⚠️ **This used to say "nothing here constructs a three geometry or
+ * material". That is no longer true, and the reason it changed matters.**
+ *
+ * The old rule was "jsdom has no WebGL" (MASTER risk register). Measured
+ * 2026-09-03 while executing plan 08 task 01: **WebGL is needed only by
+ * `WebGLRenderer`.** `BufferGeometry`, `BoxGeometry`, `SphereGeometry`,
+ * `Box3`, `Vector3` and `Matrix4` are TypedArray-and-float maths with no GPU
+ * anywhere in them — and the lane these tests run in is **node**, not jsdom
+ * (`vitest.config.ts`, `projects[0].environment: "node"`). So the blocks at
+ * the end of this file construct real geometries and assert on real vertex
+ * data.
+ *
+ * That was not gold-plating: plan 08's F2 is a claim about **vertex
+ * positions**, and a claim about vertex positions asserted on exported
+ * constants is not asserted at all. `buildMaterial` and `buildMesh` are still
+ * pinned by constant, because a material's shading only becomes observable
+ * under a renderer.
+ *
+ * What was ALWAYS testable — and is where a silent error is most expensive —
+ * is the pure **decision**: which triangles belong to which part. So the
+ * classifier is driven two ways:
  *
  * 1. against **synthetic** vertex arrays, where a hand-placed centroid pins one
  *    rule at a time and a failure names the rule; and
@@ -32,9 +47,13 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { BufferGeometry, Object3D } from "three";
 import {
   buildGeometry,
+  buildPartGeometry,
+  centerGeometryOnOrigin,
+  centerSceneGeometryOnOrigin,
   classifyMannequinTriangle,
   CYLINDER_HEIGHT_SEGMENTS,
   CYLINDER_RADIAL_SEGMENTS,
@@ -43,6 +62,7 @@ import {
   MANNEQUIN_PART_ORDER,
   MANNEQUIN_URL,
   MannequinUnavailableError,
+  normalizeToUnitBox,
   normalizeTriangleCentroid,
   POSE_MATERIAL_FLAT_SHADING,
   POSE_MESH_ORDER,
@@ -52,6 +72,7 @@ import {
   triangleCentroid,
   UNIT_BOUNDS,
   type PoseMeshBounds,
+  type ThreeNamespace,
 } from "@/ui/canvas/pose/poseMeshes";
 import type { PoseMeshId, PosePartId, PoseVector } from "@/ui/canvas/pose/poseTypes";
 
@@ -875,5 +896,669 @@ describe("loadMannequin", () => {
     );
     expect(error).toBeInstanceOf(MannequinUnavailableError);
     expect(error.message).toContain("zero triangles");
+  });
+});
+
+/* ══ ⚠️ MODEL-SPACE ORIGINS — plan 08 task 01, F2 ════════════════════════ */
+
+/**
+ * ⚠️ **These blocks DO construct real three objects, and the file header's
+ * "nothing here constructs a three geometry" no longer covers them.**
+ *
+ * That rule was written for a reason that turned out to be narrower than it
+ * looked: jsdom has no WebGL. But **WebGL is only needed by `WebGLRenderer`**.
+ * `BufferGeometry`, `BoxGeometry`, `Vector3`, `Matrix4` and `Box3` are plain
+ * TypedArray-and-float maths with no GPU in them, and the unit lane runs in
+ * **node**, not jsdom (`vitest.config.ts` — `projects[0].environment: "node"`).
+ * Measured this session: `new three.SphereGeometry(0.5, 48, 32)` constructs and
+ * reports `boundingBox = [-0.5,-0.5,-0.5]..[0.5,0.5,0.5]` in this lane.
+ *
+ * This matters because F2 is precisely a claim about **vertex data**, and a
+ * claim about vertex data asserted on constants instead of vertices is not
+ * asserted at all. So the origin invariant is proven on real geometries:
+ *
+ * - the pure helper, exhaustively, on synthetic buffers;
+ * - the three **primitives**, as actually constructed by `buildGeometry`
+ *   (item 7 says *all* models — this is the assertion, not the comment); and
+ * - the five **real mannequin parts**, cut out of the vendored asset by the
+ *   real `buildPartGeometry`, which is the evidence the owner's bug is fixed.
+ *
+ * `three` is imported **dynamically inside the tests**, never at module level,
+ * mirroring the production rule (D2/D15) so this file cannot become the thing
+ * that drags three into an eager chunk.
+ */
+const loadThree = async (): Promise<ThreeNamespace> => await import("three");
+
+/** A geometry's bounding-box centre, recomputed from the live vertex data. */
+function geometryCentre(
+  three: ThreeNamespace,
+  geometry: BufferGeometry,
+): PoseVector {
+  const box = new three.Box3().setFromBufferAttribute(
+    geometry.getAttribute("position") as never,
+  );
+  const c = box.getCenter(new three.Vector3());
+  return { x: c.x, y: c.y, z: c.z };
+}
+
+/** A non-indexed triangle-soup geometry from a flat position array. */
+function soup(three: ThreeNamespace, positions: number[]): BufferGeometry {
+  const geometry = new three.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new three.Float32BufferAttribute(positions, 3),
+  );
+  return geometry;
+}
+
+describe("centerGeometryOnOrigin", () => {
+  it("brings a geometry offset far from the origin back to the centre", async () => {
+    const three = await loadThree();
+    // A unit triangle-ish blob translated 1000 units away on every axis. The
+    // magnitude is deliberate: a helper that "mostly" centres would still show
+    // a residual here, where an epsilon on a unit-scale test would hide it.
+    const g = soup(three, [
+      1000, 2000, 3000, 1001, 2000, 3000, 1000, 2001, 3000, 1000, 2000, 3001,
+    ]);
+    centerGeometryOnOrigin(three, g);
+    const c = geometryCentre(three, g);
+    for (const axis of AXES) expect(c[axis], axis).toBeCloseTo(0, 6);
+  });
+
+  it("leaves an already-centred geometry EXACTLY unchanged — idempotent", async () => {
+    const three = await loadThree();
+    const g = soup(three, [-1, -1, -1, 1, 1, 1, -1, 1, -1, 1, -1, 1]);
+    const before = Array.from(
+      g.getAttribute("position").array as Float32Array,
+    );
+
+    centerGeometryOnOrigin(three, g);
+    const once = Array.from(g.getAttribute("position").array as Float32Array);
+    // ⚠️ `toEqual`, not `toBeCloseTo`: an already-centred geometry must not
+    // drift by a float epsilon per call. Running the helper in a hot path (a
+    // future re-fit, say) would otherwise walk the mesh off the origin.
+    expect(once).toEqual(before);
+
+    centerGeometryOnOrigin(three, g);
+    centerGeometryOnOrigin(three, g);
+    expect(Array.from(g.getAttribute("position").array as Float32Array)).toEqual(
+      before,
+    );
+  });
+
+  it("is idempotent on an OFF-centre geometry too — the second call is a no-op", async () => {
+    const three = await loadThree();
+    const g = soup(three, [10, 20, 30, 12, 20, 30, 10, 24, 30, 10, 20, 36]);
+    centerGeometryOnOrigin(three, g);
+    const once = Array.from(g.getAttribute("position").array as Float32Array);
+    centerGeometryOnOrigin(three, g);
+    expect(Array.from(g.getAttribute("position").array as Float32Array)).toEqual(
+      once,
+    );
+  });
+
+  it("does not divide by zero or produce NaN on a single vertex", async () => {
+    const three = await loadThree();
+    // A degenerate geometry: one vertex, so the box has zero extent on every
+    // axis. Its centre is still well-defined (the vertex itself), so the
+    // correct answer is "translate it to the origin", NOT "bail". What must
+    // never happen is a NaN — `normalizeToUnitBox` bails on zero extent for
+    // the scale, but there is no division here at all.
+    const g = soup(three, [7, -3, 11]);
+    centerGeometryOnOrigin(three, g);
+    const p = Array.from(g.getAttribute("position").array as Float32Array);
+    for (const value of p) expect(Number.isNaN(value)).toBe(false);
+    for (const value of p) expect(value).toBeCloseTo(0, 6);
+  });
+
+  it("survives an empty position attribute without throwing", async () => {
+    const three = await loadThree();
+    const g = soup(three, []);
+    expect(() => centerGeometryOnOrigin(three, g)).not.toThrow();
+    expect(g.getAttribute("position").count).toBe(0);
+  });
+
+  it("survives a geometry with NO position attribute at all", async () => {
+    const three = await loadThree();
+    const g = new three.BufferGeometry();
+    expect(() => centerGeometryOnOrigin(three, g)).not.toThrow();
+  });
+
+  it("leaves a NaN-poisoned geometry alone rather than spreading the NaN", async () => {
+    const three = await loadThree();
+    // ⚠️ A non-finite centre must NOT be subtracted: `x - NaN` is NaN, so a
+    // single bad vertex would turn the whole buffer into NaN and blank the
+    // render with no error. Bailing keeps the damage where it already was.
+    const g = soup(three, [0, 0, 0, 1, 1, 1, Number.NaN, 2, 2]);
+    // three's `computeBoundingBox` warns on a NaN position — which is correct
+    // and is exactly how the helper detects the condition. Silenced so the
+    // suite's output stays readable; asserted so the warning is not lost.
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      centerGeometryOnOrigin(three, g);
+    } finally {
+      warn.mockRestore();
+    }
+    const p = Array.from(g.getAttribute("position").array as Float32Array);
+    expect(p[0]).toBe(0);
+    expect(p[3]).toBe(1);
+  });
+
+  it("does not change the vertex COUNT", async () => {
+    const three = await loadThree();
+    const g = soup(three, [5, 5, 5, 6, 7, 8, 9, 10, 11, 1, 2, 3]);
+    const before = g.getAttribute("position").count;
+    centerGeometryOnOrigin(three, g);
+    expect(g.getAttribute("position").count).toBe(before);
+  });
+
+  it("⚠️ does NOT touch the normal attribute — smooth shading survives", async () => {
+    const three = await loadThree();
+    // THE regression guard for plan 07 task 05. A translation does not affect
+    // normals mathematically, so the only way they could change is if this
+    // helper called `computeVertexNormals()` — which on a non-indexed geometry
+    // assigns per-FACE normals and would silently restore flat shading. Assert
+    // the array is the SAME OBJECT and byte-identical.
+    const g = soup(three, [100, 100, 100, 101, 100, 100, 100, 101, 100]);
+    const normals = new three.Float32BufferAttribute(
+      [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+      3,
+    );
+    g.setAttribute("normal", normals);
+    const before = Array.from(normals.array as Float32Array);
+
+    centerGeometryOnOrigin(three, g);
+
+    expect(g.getAttribute("normal")).toBe(normals);
+    expect(Array.from(g.getAttribute("normal").array as Float32Array)).toEqual(
+      before,
+    );
+  });
+
+  it("⚠️ does not re-normalise non-unit normals the way three's translate() does", async () => {
+    // ⚠️ THE finding of plan 08 task 01, pinned as its own test because the
+    // wrong implementation is the OBVIOUS one.
+    //
+    // `BufferGeometry.translate()` delegates to `applyMatrix4()`, which also
+    // runs `normal.applyNormalMatrix(...)` — and that ends in `.normalize()`
+    // on every normal in the buffer. A translation's normal matrix is the
+    // identity, so no direction changes, but re-normalising still REWRITES
+    // every value. Measured against three 0.185.1 while writing this: the real
+    // torso's normals moved from 0.4748470187187195 to 0.4748469889163971.
+    //
+    // The guard is a deliberately NON-unit normal. If `centerGeometryOnOrigin`
+    // ever goes back to `translate()`, this comes back normalised and fails.
+    const three = await loadThree();
+    const g = soup(three, [10, 10, 10, 11, 10, 10, 10, 11, 10]);
+    g.setAttribute(
+      "normal",
+      new three.Float32BufferAttribute([2, 0, 0, 0, 3, 0, 0, 0, 4], 3),
+    );
+    centerGeometryOnOrigin(three, g);
+    const after = Array.from(g.getAttribute("normal").array as Float32Array);
+    // Still 2, 3, 4 — NOT normalised to 1.
+    expect(after).toEqual([2, 0, 0, 0, 3, 0, 0, 0, 4]);
+  });
+
+  it("recomputes the bounds rather than leaving them stale", async () => {
+    const three = await loadThree();
+    const g = soup(three, [50, 50, 50, 52, 50, 50, 50, 54, 50, 50, 50, 56]);
+    // Seed a bounding box from the PRE-translation vertices, so a helper that
+    // forgot to recompute would leave these reading the old, far-away box.
+    g.computeBoundingBox();
+    g.computeBoundingSphere();
+    expect(g.boundingBox!.min.x).toBe(50);
+
+    centerGeometryOnOrigin(three, g);
+
+    // ⚠️ Read the CACHED box, not a freshly computed one — a stale cache is
+    // exactly the bug, and recomputing here would hide it.
+    const cached = g.boundingBox!.getCenter(new three.Vector3());
+    for (const axis of AXES) expect(cached[axis], axis).toBeCloseTo(0, 6);
+    expect(g.boundingSphere!.center.length()).toBeCloseTo(0, 6);
+  });
+
+  it("centres a lopsided box on its BOX centre, not on its centroid", async () => {
+    const three = await loadThree();
+    // 1,000 vertices bunched at x = 0 and one lone vertex at x = 100. The
+    // centroid is ≈ 0.1; the bounding-box centre is 50. F2 says bounding
+    // VOLUME, and the camera fit measures a box — so the box centre is the
+    // right answer and this pins which one was implemented.
+    const positions: number[] = [];
+    for (let i = 0; i < 1000; i++) positions.push(0, 0, 0);
+    positions.push(100, 0, 0);
+    const g = soup(three, positions);
+    centerGeometryOnOrigin(three, g);
+    const array = g.getAttribute("position").array as Float32Array;
+    expect(array[0]).toBeCloseTo(-50, 4);
+    expect(array[3000]).toBeCloseTo(50, 4);
+  });
+});
+
+/* ══ item 7: the PRIMITIVES, asserted rather than assumed ════════════════ */
+
+describe("every primitive's geometry is already origin-centred", () => {
+  /**
+   * ⚠️ The comment at `buildGeometry` claims "the constructor arguments ARE
+   * the normalisation". The owner's instruction was *all* models, so plan 08
+   * task 01 item 6 requires that claim be **tested**, not trusted. It is
+   * tested on the real constructed geometry, in the node lane, because three's
+   * geometry constructors need no WebGL.
+   */
+  const PRIMITIVES = ["cube", "sphere", "cylinder"] as const;
+
+  it.each(PRIMITIVES)("centres %s's vertices on the origin", async (id) => {
+    const three = await loadThree();
+    const g = buildGeometry(three, id);
+    const c = geometryCentre(three, g);
+    for (const axis of AXES) expect(c[axis], `${id}.${axis}`).toBeCloseTo(0, 6);
+  });
+
+  it.each(PRIMITIVES)("fits %s inside UNIT_BOUNDS exactly", async (id) => {
+    const three = await loadThree();
+    const g = buildGeometry(three, id);
+    const box = new three.Box3().setFromBufferAttribute(
+      g.getAttribute("position") as never,
+    );
+    // Not just centred — the unit box, which is the promise `fitCameraToMesh`
+    // is written against (it is passed a constant `UNIT_BOUNDS`).
+    for (const axis of AXES) {
+      expect(box.min[axis], `${id}.min.${axis}`).toBeCloseTo(
+        UNIT_BOUNDS.min[axis],
+        5,
+      );
+      expect(box.max[axis], `${id}.max.${axis}`).toBeCloseTo(
+        UNIT_BOUNDS.max[axis],
+        5,
+      );
+    }
+  });
+
+  it.each(PRIMITIVES)(
+    "leaves %s unchanged when centred again — it was already centred",
+    async (id) => {
+      const three = await loadThree();
+      const g = buildGeometry(three, id);
+      const before = Array.from(
+        g.getAttribute("position").array as Float32Array,
+      );
+      centerGeometryOnOrigin(three, g);
+      // The strongest form of "already centred": the helper is a literal no-op
+      // on it. If a constructor argument were ever changed to something
+      // off-centre, this fails rather than being silently corrected.
+      expect(
+        Array.from(g.getAttribute("position").array as Float32Array),
+      ).toEqual(before);
+    },
+  );
+});
+
+/* ══ ⚠️ THE REAL PARTS — the evidence the owner's bug is fixed ═══════════ */
+
+/**
+ * Rebuild the vendored asset as a real three scene, WITHOUT `GLTFLoader`.
+ *
+ * The suite already decodes the glTF's embedded base64 buffer by hand
+ * (see {@link decodeMannequin}); this reuses that technique to hand the real
+ * `buildPartGeometry` a real `Object3D`, so the **production segmentation
+ * code** runs on the **production asset** in the node lane. That is what makes
+ * the "the part is origin-centred" claim evidence rather than a restatement.
+ *
+ * Both nodes carry no transform in this asset (`nodes` is
+ * `[{mesh:0}, {mesh:1}]`), so a flat `Group` of two `Mesh`es is faithful.
+ */
+async function buildRealScene(): Promise<{
+  three: ThreeNamespace;
+  scene: Object3D;
+}> {
+  const three = await loadThree();
+  const path = fileURLToPath(
+    new URL("../../../../../public/models/mannequin.gltf", import.meta.url),
+  );
+  const gltf = JSON.parse(readFileSync(path, "utf8")) as {
+    meshes: { primitives: { attributes: Record<string, number>; indices: number }[] }[];
+    accessors: {
+      bufferView: number;
+      byteOffset?: number;
+      componentType: number;
+      count: number;
+      type: string;
+    }[];
+    bufferViews: { byteOffset?: number }[];
+    buffers: { uri: string }[];
+  };
+  const bytes = Buffer.from(gltf.buffers[0].uri.split(",")[1], "base64");
+  const read = (accessorIndex: number): Float32Array | Uint16Array => {
+    const a = gltf.accessors[accessorIndex];
+    const offset =
+      (gltf.bufferViews[a.bufferView].byteOffset ?? 0) + (a.byteOffset ?? 0);
+    const stride = a.type === "VEC3" ? 3 : a.type === "VEC2" ? 2 : 1;
+    if (a.componentType === 5126 /* FLOAT */) {
+      const out = new Float32Array(a.count * stride);
+      for (let i = 0; i < out.length; i++) out[i] = bytes.readFloatLE(offset + i * 4);
+      return out;
+    }
+    const out = new Uint16Array(a.count * stride);
+    for (let i = 0; i < out.length; i++) out[i] = bytes.readUInt16LE(offset + i * 2);
+    return out;
+  };
+
+  const scene = new three.Group();
+  for (const mesh of gltf.meshes) {
+    for (const primitive of mesh.primitives) {
+      const geometry = new three.BufferGeometry();
+      geometry.setAttribute(
+        "position",
+        new three.Float32BufferAttribute(
+          read(primitive.attributes.POSITION) as Float32Array,
+          3,
+        ),
+      );
+      if (typeof primitive.attributes.NORMAL === "number") {
+        geometry.setAttribute(
+          "normal",
+          new three.Float32BufferAttribute(
+            read(primitive.attributes.NORMAL) as Float32Array,
+            3,
+          ),
+        );
+      }
+      geometry.setIndex(
+        new three.BufferAttribute(read(primitive.indices) as Uint16Array, 1),
+      );
+      scene.add(new three.Mesh(geometry));
+    }
+  }
+  return { three, scene };
+}
+
+describe("⚠️ every real mannequin part has its geometry origin at its own centre", () => {
+  /**
+   * ⚠️ **MEASURED BEFORE THE FIX, 2026-09-03** — the bug, in numbers.
+   *
+   * These are the bounding-box centres `buildPartGeometry` produced when its
+   * output went straight into `normalizeToUnitBox`. Every one of them is a
+   * position on the *mannequin*, not a part-local centre: `head` at
+   * `y = 1.5666` is the height of a head on a standing figure. That is what
+   * "the pieces are in the mannequin's model space still" means, and it is why
+   * `root.rotation.set(...)` swung a head about the figure's pelvis.
+   *
+   * Kept as documentation of the defect, and asserted as a **guard**: the
+   * segmentation must still select the same geometry, so these numbers must
+   * still be what the raw part measures. If they move, the landmarks moved and
+   * this task broke something it was told not to touch.
+   */
+  const BEFORE: Record<PosePartId, PoseVector> = {
+    head: { x: 0, y: 1.566564, z: 0.05202 },
+    torso: { x: 0, y: 1.112343, z: 0.044983 },
+    arm: { x: 0, y: 1.341685, z: 0.034952 },
+    leg: { x: 0, y: 0.421285, z: 0.05949 },
+    hand: { x: 0, y: 1.340209, z: 0.086856 },
+  };
+
+  it.each(MANNEQUIN_PART_ORDER)(
+    "still cuts %s out in the mannequin's space, at the measured centre",
+    async (part) => {
+      const { three, scene } = await buildRealScene();
+      const g = buildPartGeometry(three, scene, part);
+      const c = geometryCentre(three, g);
+      // The "before" half of the evidence, and a landmark tripwire: if the
+      // segmentation changed, the part being centred below is a different part.
+      for (const axis of AXES) {
+        expect(c[axis], `${part}.${axis}`).toBeCloseTo(BEFORE[part][axis], 4);
+      }
+    },
+  );
+
+  it.each(MANNEQUIN_PART_ORDER)(
+    "⚠️ centres %s's VERTICES on the origin — F2, the headline assertion",
+    async (part) => {
+      const { three, scene } = await buildRealScene();
+      const g = buildPartGeometry(three, scene, part);
+      centerGeometryOnOrigin(three, g);
+      const c = geometryCentre(three, g);
+      // THE assertion this task exists for. Not the mesh's transform — the
+      // vertex data. A head now rotates about the head.
+      for (const axis of AXES) {
+        expect(c[axis], `${part}.${axis}`).toBeCloseTo(0, 5);
+      }
+    },
+  );
+
+  it.each(MANNEQUIN_PART_ORDER)(
+    "keeps %s's triangle count and normals intact through the centring",
+    async (part) => {
+      const { three, scene } = await buildRealScene();
+      const g = buildPartGeometry(three, scene, part);
+      const triangles = g.getAttribute("position").count / 3;
+      const normals = g.getAttribute("normal");
+      const before = Array.from(normals.array as Float32Array);
+
+      centerGeometryOnOrigin(three, g);
+
+      // ⚠️ Not "unchanged", but "not touched at all" — same attribute object.
+      expect(g.getAttribute("normal")).toBe(normals);
+      expect(Array.from(g.getAttribute("normal").array as Float32Array)).toEqual(
+        before,
+      );
+      expect(g.getAttribute("position").count / 3).toBe(triangles);
+    },
+  );
+
+  it("holds the pinned triangle counts through the real construction path", async () => {
+    // The counts the segmentation is pinned to, re-asserted on the geometry
+    // this file now builds for real rather than on the pure classifier alone.
+    // If centring ever moved a vertex across a landmark it would show here.
+    const { three, scene } = await buildRealScene();
+    const EXPECTED: Record<PosePartId, number> = {
+      head: 336,
+      torso: 2912,
+      arm: 1062,
+      leg: 1346,
+      hand: 3980,
+    };
+    let total = 0;
+    for (const part of MANNEQUIN_PART_ORDER) {
+      const g = buildPartGeometry(three, scene, part);
+      centerGeometryOnOrigin(three, g);
+      const count = g.getAttribute("position").count / 3;
+      expect(count, part).toBe(EXPECTED[part]);
+      total += count;
+    }
+    expect(total).toBe(9636);
+  });
+
+  it("⚠️ makes normalizeToUnitBox's position.sub a NO-OP for a centred part", async () => {
+    // Step 3 of the task: "assert that rather than assuming it."
+    //
+    // This is the property that proves the two mechanisms are not fighting.
+    // Before the fix the mesh's `position` carried the whole model-space
+    // offset (head: y = -5.5258, measured). After it, the transform is pure
+    // scale — which is exactly what plan 08 F3 needs, because pan must be the
+    // ONLY thing that ever moves a position and it lives on the camera.
+    const { three, scene } = await buildRealScene();
+    for (const part of MANNEQUIN_PART_ORDER) {
+      const g = buildPartGeometry(three, scene, part);
+      centerGeometryOnOrigin(three, g);
+      const mesh = new three.Mesh(g);
+      normalizeToUnitBox(three, mesh);
+      expect(mesh.position.x, `${part}.x`).toBeCloseTo(0, 6);
+      expect(mesh.position.y, `${part}.y`).toBeCloseTo(0, 6);
+      expect(mesh.position.z, `${part}.z`).toBeCloseTo(0, 6);
+      // Scale is still doing its job — the part IS resized into the unit box.
+      expect(mesh.scale.x, `${part}.scale`).toBeGreaterThan(0);
+    }
+  });
+
+  it("lands every centred, normalised part inside UNIT_BOUNDS", async () => {
+    // The end-to-end promise `fitCameraToMesh` is written against: it is
+    // handed a constant `UNIT_BOUNDS` and must not be lied to.
+    const { three, scene } = await buildRealScene();
+    for (const part of MANNEQUIN_PART_ORDER) {
+      const g = buildPartGeometry(three, scene, part);
+      centerGeometryOnOrigin(three, g);
+      const mesh = new three.Mesh(g);
+      normalizeToUnitBox(three, mesh);
+      const box = new three.Box3().setFromObject(mesh);
+      for (const axis of AXES) {
+        expect(box.min[axis], `${part}.min.${axis}`).toBeGreaterThanOrEqual(
+          UNIT_BOUNDS.min[axis] - 1e-5,
+        );
+        expect(box.max[axis], `${part}.max.${axis}`).toBeLessThanOrEqual(
+          UNIT_BOUNDS.max[axis] + 1e-5,
+        );
+      }
+      // The largest axis reaches the box exactly — it is a fit, not a shrink.
+      const size = box.getSize(new three.Vector3());
+      expect(Math.max(size.x, size.y, size.z), part).toBeCloseTo(1, 5);
+    }
+  });
+});
+
+/* ══ open question 3: the FULL mannequin scene ═══════════════════════════ */
+
+describe("centerSceneGeometryOnOrigin — the whole figure, not just the parts", () => {
+  it("⚠️ centres the real mannequin scene's VERTICES, tree and all", async () => {
+    // Plan 08 open question 3, answered YES. The owner said ALL models; the
+    // full figure is the mesh whose rotation the orb drives most often, so
+    // leaving it orbiting its own pelvis would have reproduced the reported
+    // bug on the one mesh most likely to show it.
+    const { three, scene } = await buildRealScene();
+    const before = new three.Box3().setFromObject(scene).getCenter(
+      new three.Vector3(),
+    );
+    // The asset really is off-centre to begin with, so this is a real test.
+    expect(before.length()).toBeGreaterThan(0.5);
+
+    centerSceneGeometryOnOrigin(three, scene);
+
+    const after = new three.Box3().setFromObject(scene).getCenter(
+      new three.Vector3(),
+    );
+    for (const axis of AXES) expect(after[axis], axis).toBeCloseTo(0, 5);
+  });
+
+  it("shifts every node by the SAME vector — it does not explode the figure", async () => {
+    // ⚠️ The mistake this guards: running `centerGeometryOnOrigin` in a
+    // `traverse` would centre each mesh on ITS OWN centre, stacking the pieces
+    // on the origin and destroying the figure. Each geometry must move by one
+    // shared world-space offset, so the offset between the two nodes' own
+    // centres must be preserved exactly.
+    const { three, scene } = await buildRealScene();
+    const centres = (): PoseVector[] => {
+      const out: PoseVector[] = [];
+      scene.traverse((node) => {
+        const holder = node as Object3D & {
+          isMesh?: boolean;
+          geometry?: BufferGeometry;
+        };
+        if (!holder.isMesh || !holder.geometry) return;
+        out.push(geometryCentre(three, holder.geometry));
+      });
+      return out;
+    };
+    const before = centres();
+    expect(before.length).toBe(2);
+    const gap = {
+      x: before[1].x - before[0].x,
+      y: before[1].y - before[0].y,
+      z: before[1].z - before[0].z,
+    };
+
+    centerSceneGeometryOnOrigin(three, scene);
+
+    const after = centres();
+    for (const axis of AXES) {
+      expect(after[1][axis] - after[0][axis], axis).toBeCloseTo(gap[axis], 5);
+    }
+  });
+
+  it("keeps the scene's triangle count and node structure intact", async () => {
+    const { three, scene } = await buildRealScene();
+    const count = (): { nodes: number; triangles: number } => {
+      let nodes = 0;
+      let triangles = 0;
+      scene.traverse((node) => {
+        const holder = node as Object3D & {
+          isMesh?: boolean;
+          geometry?: BufferGeometry;
+        };
+        if (!holder.isMesh || !holder.geometry) return;
+        nodes++;
+        const index = holder.geometry.getIndex();
+        triangles += (index?.count ?? holder.geometry.getAttribute("position").count) / 3;
+      });
+      return { nodes, triangles };
+    };
+    const before = count();
+    expect(before.triangles).toBe(9636);
+    centerSceneGeometryOnOrigin(three, scene);
+    expect(count()).toEqual(before);
+  });
+
+  it("respects a node transform rather than assuming a flat tree", async () => {
+    // The vendored asset has no node transforms, so the general correctness of
+    // the world→local offset conversion would otherwise be untested. A rotated,
+    // scaled, translated child proves the maths: whatever the node's matrix, the
+    // scene's WORLD box must end up centred on the origin.
+    const three = await loadThree();
+    const scene = new three.Group();
+    const child = new three.Object3D();
+    child.position.set(3, -4, 5);
+    child.rotation.set(0.3, -0.7, 1.1);
+    child.scale.set(2, 0.5, 3);
+    scene.add(child);
+    child.add(
+      new three.Mesh(soup(three, [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1])),
+    );
+    scene.updateWorldMatrix(true, true);
+    expect(
+      new three.Box3().setFromObject(scene).getCenter(new three.Vector3()).length(),
+    ).toBeGreaterThan(1);
+
+    centerSceneGeometryOnOrigin(three, scene);
+
+    scene.updateWorldMatrix(true, true);
+    const after = new three.Box3().setFromObject(scene).getCenter(
+      new three.Vector3(),
+    );
+    for (const axis of AXES) expect(after[axis], axis).toBeCloseTo(0, 5);
+  });
+
+  it("⚠️ leaves the real scene's normals byte-identical", async () => {
+    // The whole-figure counterpart of the `translate()` finding: the full
+    // mannequin is the mesh the owner looks at most, so restoring flat shading
+    // on it would be the most visible possible regression.
+    const { three, scene } = await buildRealScene();
+    const snapshot = (): number[][] => {
+      const out: number[][] = [];
+      scene.traverse((node) => {
+        const holder = node as Object3D & {
+          isMesh?: boolean;
+          geometry?: BufferGeometry;
+        };
+        if (!holder.isMesh || !holder.geometry) return;
+        const normal = holder.geometry.getAttribute("normal");
+        out.push(Array.from(normal.array as Float32Array));
+      });
+      return out;
+    };
+    const before = snapshot();
+    expect(before.length).toBe(2);
+    centerSceneGeometryOnOrigin(three, scene);
+    expect(snapshot()).toEqual(before);
+  });
+
+  it("is idempotent and safe on an empty scene", async () => {
+    const three = await loadThree();
+    const empty = new three.Group();
+    expect(() => centerSceneGeometryOnOrigin(three, empty)).not.toThrow();
+
+    const { three: t2, scene } = await buildRealScene();
+    centerSceneGeometryOnOrigin(t2, scene);
+    const once = new t2.Box3().setFromObject(scene).getCenter(new t2.Vector3());
+    centerSceneGeometryOnOrigin(t2, scene);
+    const twice = new t2.Box3().setFromObject(scene).getCenter(new t2.Vector3());
+    for (const axis of AXES) expect(twice[axis], axis).toBeCloseTo(once[axis], 6);
   });
 });
