@@ -1,8 +1,8 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W7 IN PROGRESS (task 09 — final gate + closing D08-16)
+**Current position:** ⚠️ **COMPLETE (PARTIAL)** — all 9 tasks code-complete and gate-green; **0 of 60 manual checks observed**
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
-**Last commit:** `a2aa8cc` (W6 complete)
+**Last commit:** `fa3df31` (W7 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
 
 ## Wave ledger
@@ -15,7 +15,7 @@
 | W4 | 05 | **DONE** | 2026-09-04 | `673f5fe` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2984 tests pass** · boundaries OK all 5 · snapshots **unmoved** · `UIStore.ts` diff EMPTY · no lockfile |
 | W5 | 06, 07 | **DONE** | 2026-09-04 | `64d6629` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3047 tests pass** · boundaries OK · **stylelint exactly 2 errors** (`:338`/`:359`, pre-existing) · **storybook build 0** · snapshots unmoved · `UIStore.ts` EMPTY |
 | W6 | 08 | **DONE** (⚠️ one gap, D08-16) | 2026-09-04 | `a2aa8cc` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3102 tests pass** · boundaries OK · stylelint exactly 2 · storybook 0 · ⚠️ **corpus digest `e448764a…` UNCHANGED, verified by coordinator against a pre-dispatch baseline** · `server/` untouched · no lockfile |
-| W7 | 09 | IN PROGRESS (agent 1 hit a rate limit mid-task; resumed) | 2026-09-04 | | |
+| W7 | 09 | **DONE** (plan status **PARTIAL**) | 2026-09-04 | `fa3df31` | ⚠️ **`bun run verify` EXIT 0**, coordinator-run · vitest **148 files / 3137 tests** · eslint 0 errors/65 warn · boundaries OK · stylelint exactly 2 · storybook 0 · **digest `e448764a…` UNMOVED** · `three` still lazy (**1×/26×** positive control holds) |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
@@ -31,7 +31,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 06 | Advanced camera mode | W5 | **DONE** | `bd81268` | Standalone `CameraAdvanced.tsx`; F16 caveat rendered on screen. **Task 08 must mirror `CameraAdvancedProps` exactly** |
 | 07 | Exact Euler entry | W5 | **DONE** | `64d6629` | F11 CLOSED: **two fields (azimuth/elevation), no roll box.** ⚠️ Found a quiet composition bug — verified |
 | 08 | Saved scene presets, persisted | W6 | **DONE** (⚠️ D08-16) | `a2aa8cc` | F13/F14 held; digest unmoved. Split `PoseSection.tsx`. ⚠️ `onChange` reaches only `fov` |
-| 09 | Full gate, QA, handoff | W7 | TODO | | Likely ends `PARTIAL` |
+| 09 | Full gate, QA, handoff | W7 | **DONE** | `037f288`, `fa18514`, `fa3df31` | **Closed D08-16** (all 6 advanced fields reach the camera); split `poseCamera.ts`; **60-check QA list** in §9 |
 
 ## Known state at planning time (2026-09-03)
 
