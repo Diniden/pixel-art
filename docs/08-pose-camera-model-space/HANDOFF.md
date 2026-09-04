@@ -1,6 +1,6 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W1 DONE — W2 next
+**Current position:** W2 IN PROGRESS (task 03)
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
 **Last commit:** `19c8538` (W1 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
@@ -10,7 +10,7 @@
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02 | **DONE** | 2026-09-04 | `19c8538` | tsc 0 · eslint **0 errors**/65 warn (baseline) · vitest **146 files / 2931 tests pass** · boundaries OK all 5 · snapshots **unmoved** · no lockfile |
-| W2 | 03 | TODO | | | |
+| W2 | 03 | IN PROGRESS | 2026-09-04 | | |
 | W3 | 04 | TODO | | | |
 | W4 | 05 | TODO | | | |
 | W5 | 06, 07 | TODO | | | |
