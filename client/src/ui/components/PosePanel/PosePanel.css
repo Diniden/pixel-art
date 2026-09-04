@@ -184,10 +184,27 @@
   font-size: var(--text-65);
 }
 
+/* ⚠️ `touch-action: none` IS THE TOUCH FIX HERE TOO, not a nicety — the same
+   line, for the same reason, as `.direction-orb__sphere` below (MASTER D13).
+   Without it the browser claims a finger drag on the thumb as a scroll
+   gesture: the rail scrolls, the pointer events never reach the input, and
+   the slider does not move. The owner works on an iPad, so this is
+   load-bearing.
+
+   ⚠️ THIS WAS A CONFIRMED, MEASURED DEFECT, not a precaution. Plan 07 found
+   the orb had the line and the slider did not, and deliberately left it for
+   plan 08 task 08 (2026-09-04), which added more sliders and numeric rows to
+   this panel — task 07's degree boxes reuse `__slider-row` and inherited the
+   same gap.
+
+   ⚠️ It remains UNVERIFIED. No agent in plans 06, 07 or 08 has had a device,
+   and no automated test in this repo can observe a browser deciding to scroll
+   instead of dispatching a pointermove. It is an owed manual check. */
 .pose-panel__slider {
   flex: 1;
   min-width: 0;
   cursor: pointer;
+  touch-action: none;
 }
 
 .pose-panel__slider:disabled {
@@ -404,4 +421,96 @@
 .direction-orb__label {
   color: var(--text-tertiary);
   font-size: var(--text-60);
+}
+
+/* ── saved scene presets (plan 08 task 08) ────────────────────────────────
+
+   ⚠️ THE ONE PERSISTED CONTROL IN THIS PANEL. Everything else on the pose rail
+   is session state (MASTER D6); a saved scene goes into the project file.
+
+   The list is a real `<ul>` so a screen reader announces how many scenes there
+   are, and each row is a two-button flex line: the name applies, the `×`
+   deletes. The name button takes all the slack and truncates rather than
+   wrapping, because a 240px rail cannot afford a row whose height depends on
+   how long the owner's label is — the full name is in the `title`.
+
+   No numeric `z-index` anywhere in this block; nothing here stacks. */
+
+.pose-panel__preset-save {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+/* ⚠️ `.pose-panel__preset-name` is NOT re-declared here. Task 06 already
+   styles it for the advanced panel's own save box, identically — same flex,
+   same padding, same tokens — and a second block would be both a
+   `no-duplicate-selectors` stylelint ERROR and a second place to keep in
+   sync. The two boxes are the same control doing the same job. */
+
+.pose-panel__presets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pose-panel__preset {
+  display: flex;
+  gap: var(--space-0-5);
+  align-items: stretch;
+}
+
+/* `min-width: 0` plus the ellipsis is what keeps a long name from pushing the
+   delete button off the rail — a flex item's default `min-width: auto` would
+   let the text set the row's width. */
+.pose-panel__preset-apply {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--space-0-5) var(--space-1);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-65);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.pose-panel__preset-apply:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-secondary);
+}
+
+.pose-panel__preset-delete {
+  flex: none;
+  padding: var(--space-0-5) var(--space-1);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-65);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.pose-panel__preset-delete:hover {
+  color: var(--text-primary);
+}
+
+/* ⚠️ The ARMED state must be unmistakable: it is one press from destroying a
+   scene the owner set up by hand, and there is no undo for UI state (the pose
+   is not in history, MASTER D6). It is deliberately the loudest thing in the
+   panel. */
+.pose-panel__preset-delete--armed {
+  background: var(--bg-secondary);
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+  font-weight: var(--weight-semibold);
 }

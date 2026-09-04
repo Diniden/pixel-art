@@ -263,6 +263,28 @@ export interface UIState {
   theme?: string;
 
   /**
+   * The user's saved POSE SCENE presets (plan 08 task 08, 2026-09-04 — owner
+   * item 10: *"a way to save ALL orientations of camera settings and model to
+   * a preset that I can reload easily"*).
+   *
+   * Optional and, exactly like `layoutPresets` above, **absent until the user
+   * saves one**. That conditionality is not a style choice — it is the whole
+   * mechanism that keeps the owner's 151 backup snapshots byte-identical
+   * (plan 08 **F13**). `PoseUIStore.toPersistedPosePresets()` returns
+   * `undefined` for an empty list and the builder emits it through
+   * `assign()`, so an untouched project gains no key. **Never write it as
+   * `posePresets: undefined`** — measured, that form changed all 11 corpus
+   * digests, because "present with value undefined" is still a key.
+   *
+   * ⚠️ **Only the presets persist. The LIVE pose does not.** `rotation`,
+   * `scale`, `pan`, `edgeWidth`, `meshId` and the light stay session-only
+   * (MASTER D6) — the reference model is not part of the document until it is
+   * stamped. A preset is a thing the owner deliberately named and kept, which
+   * is a different claim entirely.
+   */
+  posePresets?: PersistedPosePreset[];
+
+  /**
    * The canvas VIEW transform's scale (pinch/wheel), distinct from `zoom`
    * which is the pixel scale. Persisted so the view follows the project
    * across devices — `panOffset`, its other half, always has been.
@@ -328,6 +350,91 @@ export interface PersistedLayoutPreset {
   id: string;
   name: string;
   layout: PersistedRailLayout;
+}
+
+/**
+ * One POSE SCENE the user saved and named, as persisted (plan 08, **F15**).
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ EVERY FIELD IS WIDE, AND EVERY FIELD BUT `id`/`name` IS OPTIONAL
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Wide (`string`, not the `PoseMeshId` union; `number`, not a clamped range)
+ * for the same reason `PersistedRailLayout` and `PersistedLayoutPreset` are:
+ * this is the **wire format**, and a file on disk may legitimately carry a
+ * value this build does not know — a preset written by a newer version with a
+ * mesh id that did not exist yet, or a hand-edited file. `types/` must never
+ * assume the data matches the current build. The narrowing happens exactly
+ * once, in `PoseUIStore.narrowPosePresets()`, where an unknown value is
+ * dropped to the field's default rather than poisoning the store with an
+ * impossible union member.
+ *
+ * Optional beyond `id`/`name` for the forward-compatibility half of the same
+ * rule: a preset written by an OLDER build has fewer fields, and an older
+ * build reading a newer preset must ignore what it does not understand rather
+ * than crash. `?? default` on read (F14) is what makes both directions work
+ * with **no migration** — there is none, and none is needed.
+ *
+ * ## What a preset carries, and what it deliberately does not
+ *
+ * **Open question 4, decided 2026-09-04 by task 08.** The owner asked to save
+ * *"ALL orientations of camera settings and model"*, so the test applied was:
+ * **would the owner recognise the view this restores?**
+ *
+ * | Field | In? | Why |
+ * | --- | --- | --- |
+ * | `meshId` | ✅ | A scene without its subject is not a scene. Restoring a torso's angles onto a loaded sphere is not the picture that was saved. |
+ * | `rotation` | ✅ | The literal "orientation of the model" the owner named. |
+ * | `projection`, `cameraPreset`, `fov` | ✅ | The literal "camera settings" the owner named. |
+ * | `scale` | ✅ | How big the model reads IS most of the picture, and unlike a camera preset (open question 1) a **scene** preset is a whole remembered view rather than a change of angle. See below. |
+ * | `lightDirection`, `lightColor` | ✅ | The light is what makes a 3D reference legible; two identical geometries under different keys read as different references. |
+ * | `edgeWidth` | ✅ | The outline is part of how the reference LOOKS, and it is one integer. |
+ * | `pan` | ❌ | Framing, not orientation — see below. |
+ *
+ * ## ⚠️ `pan` is excluded, and `scale` is included — the asymmetry is deliberate
+ *
+ * Both were left alone by a **camera preset** (open question 1, task 05), so
+ * including `scale` here needs a reason rather than an assumption.
+ *
+ * The two questions are genuinely different. A **camera preset** is a verb —
+ * *"put me at the isometric angle"* — and it fires while the owner is working
+ * at a scale and a pan they chose; taking those away would punish them for
+ * changing angle. A **scene preset** is a noun — *"the setup I saved"* — and
+ * the owner asked for it so they could *"reload it easily"*. Restoring
+ * everything except how big the model was gives back a view they did not
+ * save, which is the failure mode the feature exists to prevent.
+ *
+ * `pan` is excluded even so, because it is the one field whose meaning does
+ * not survive the trip: it is measured in **grid cells** of whatever canvas
+ * was open, so a pan saved on a 64×64 sprite lands somewhere else entirely on
+ * a 32×32 one — and a pan is unbounded (MASTER E13), so a restored preset
+ * could put the model completely off screen with no visible cause. Scale is
+ * canvas-independent; pan is not. If the owner disagrees, the change is one
+ * field here and three lines in `applyPosePreset`.
+ */
+export interface PersistedPosePreset {
+  /** Unique within the list. Generated on save; never re-used. */
+  id: string;
+  /** What the owner typed. Trimmed, never empty. */
+  name: string;
+  /** `PoseMeshId` on the wire as a bare string — see the header. */
+  meshId?: string;
+  /** Model orientation, **euler radians** (the store's unit, not degrees). */
+  rotation?: { x: number; y: number; z: number };
+  /** `"perspective"` | `"orthographic"`, wide. */
+  projection?: string;
+  /** A `PoseCameraPreset` id, wide. */
+  cameraPreset?: string;
+  /** Field of view in DEGREES, as the store holds it. */
+  fov?: number;
+  /** The model's own scale multiplier about its own origin. */
+  scale?: number;
+  /** Key-light direction. Re-normalised on apply, so drift is harmless. */
+  lightDirection?: { x: number; y: number; z: number };
+  /** Key-light tint, as plain 0–255 components. */
+  lightColor?: { r: number; g: number; b: number; a: number };
+  /** Outline thickness in whole pixels; `0` means no outline. */
+  edgeWidth?: number;
 }
 
 export type Tool =

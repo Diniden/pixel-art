@@ -138,9 +138,19 @@ function byText(container: HTMLElement, text: string): HTMLButtonElement {
 }
 
 describe("PoseSection — mounts every story with no provider", () => {
-  it("exposes exactly the four stories the task requires", () => {
+  it("exposes exactly the five stories the task requires", () => {
+    // +1 (2026-09-04, plan 08 task 08): `SavedPresets` — the state in which
+    // the project file gains a `posePresets` key at all. Every other story
+    // has `presets: []`, and that absence is what keeps the owner's 151
+    // backup snapshots byte-identical (F13).
     expect(Object.keys(composed).sort()).toEqual(
-      ["NoMesh", "Primitive", "Mannequin", "Orthographic"].sort(),
+      [
+        "NoMesh",
+        "Primitive",
+        "Mannequin",
+        "Orthographic",
+        "SavedPresets",
+      ].sort(),
     );
   });
 
@@ -157,6 +167,12 @@ describe("PoseSection — mounts every story with no provider", () => {
       "Colours",
       "Outline",
       "Camera",
+      // Plan 08 task 08. ⚠️ The **Camera** group is now rendered by
+      // `PoseCameraGroup`, split out because this file sat at 399 of the 400
+      // code-line `ui/` ERROR ceiling — this assertion is the pin that the
+      // split changed no markup: the group is still here, still labelled
+      // "Camera", still in the same position.
+      "Scene presets",
     ]);
   });
 
@@ -833,3 +849,219 @@ describe("PoseSection — clear", () => {
     expect(composed.Primitive.args.onClear).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * Saved scene presets (plan 08 task 08) — the rail half.
+ *
+ * ⚠️ **What a preset HOLDS is not asserted here, deliberately.** That is
+ * `PoseUIStore`'s and `PersistedPosePreset`'s business, and it is pinned in
+ * `stores/ui/__tests__/PoseUIStore.test.ts`. `PosePresetList` renders
+ * `{id, name}` and emits ids; asserting the field list at this level would be
+ * a second place to update every time the preset shape changed, in a
+ * component that cannot see it.
+ */
+describe("PoseSection — saved scene presets", () => {
+  it("shows a hint and no list when nothing is saved", () => {
+    const { container } = render(<composed.Primitive />);
+    expect(container.querySelector(".pose-panel__presets")).toBeNull();
+    expect(container.textContent).toContain("No saved scenes yet");
+  });
+
+  it("lists every saved preset by name", () => {
+    const { container } = render(<composed.SavedPresets />);
+    expect(
+      Array.from(
+        container.querySelectorAll(".pose-panel__preset-apply"),
+      ).map((el) => el.textContent),
+    ).toEqual([
+      "Hero 3/4",
+      "Top-down for tiles",
+      "Isometric, long name that must wrap",
+    ]);
+  });
+
+  it("clicking a preset applies it BY ID", () => {
+    const { container } = render(<composed.SavedPresets />);
+    const apply = spy(composed.SavedPresets.args.onApplyPreset);
+    const before = apply.mock.calls.length;
+    fireEvent.click(
+      container.querySelectorAll(".pose-panel__preset-apply")[1],
+    );
+    expect(apply.mock.calls.length).toBe(before + 1);
+    expect(apply.mock.lastCall).toEqual(["pose-2"]);
+  });
+
+  it("⭐ save TRIMS the name", () => {
+    const { container } = render(<composed.SavedPresets />);
+    const save = spy(composed.SavedPresets.args.onSavePreset);
+    const before = save.mock.calls.length;
+    const box = byLabel(container, "Preset name");
+    fireEvent.change(box, { target: { value: "   Padded   " } });
+    fireEvent.click(byText(container, "Save"));
+    expect(save.mock.calls.length).toBe(before + 1);
+    expect(save.mock.lastCall).toEqual(["Padded"]);
+  });
+
+  it("⭐ the Save button is DISABLED — and emits nothing — for an empty name", () => {
+    const { container } = render(<composed.SavedPresets />);
+    const save = spy(composed.SavedPresets.args.onSavePreset);
+    const before = save.mock.calls.length;
+    const button = byText(container, "Save");
+    expect(button.disabled).toBe(true);
+
+    // And whitespace only is still empty.
+    fireEvent.change(byLabel(container, "Preset name"), {
+      target: { value: "   " },
+    });
+    expect(byText(container, "Save").disabled).toBe(true);
+    fireEvent.click(byText(container, "Save"));
+    expect(save.mock.calls.length).toBe(before);
+  });
+
+  it("Enter in the name box saves, so the button is not the only path", () => {
+    const { container } = render(<composed.SavedPresets />);
+    const save = spy(composed.SavedPresets.args.onSavePreset);
+    const before = save.mock.calls.length;
+    const box = byLabel(container, "Preset name");
+    fireEvent.change(box, { target: { value: "Typed" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(save.mock.calls.length).toBe(before + 1);
+    expect(save.mock.lastCall).toEqual(["Typed"]);
+  });
+
+  it("clears the name box after a save, so the next one is not a duplicate", () => {
+    const { container } = render(<composed.SavedPresets />);
+    const box = byLabel(container, "Preset name");
+    fireEvent.change(box, { target: { value: "Once" } });
+    fireEvent.click(byText(container, "Save"));
+    expect(box.value).toBe("");
+  });
+
+  it("⭐ DELETE needs a second press — one tap cannot destroy a saved scene", () => {
+    const { container } = render(<composed.SavedPresets />);
+    const del = spy(composed.SavedPresets.args.onDeletePreset);
+    const before = del.mock.calls.length;
+    const button = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Delete Hero 3/4"]',
+    );
+    if (!button) throw new Error("no delete button");
+
+    fireEvent.click(button);
+    // Armed, not deleted. There is no undo for UI state (MASTER D6).
+    expect(del.mock.calls.length).toBe(before);
+    const armed = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Confirm deleting Hero 3/4"]',
+    );
+    if (!armed) throw new Error("delete did not arm");
+    expect(armed.className).toContain("pose-panel__preset-delete--armed");
+
+    fireEvent.click(armed);
+    expect(del.mock.calls.length).toBe(before + 1);
+    expect(del.mock.lastCall).toEqual(["pose-1"]);
+  });
+
+  it("an armed delete DISARMS when a preset is applied instead", () => {
+    const { container } = render(<composed.SavedPresets />);
+    const del = spy(composed.SavedPresets.args.onDeletePreset);
+    const before = del.mock.calls.length;
+    const button = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Delete Hero 3/4"]',
+    );
+    if (!button) throw new Error("no delete button");
+    fireEvent.click(button);
+    fireEvent.click(
+      container.querySelectorAll(".pose-panel__preset-apply")[0],
+    );
+    expect(
+      container.querySelector('[aria-label="Confirm deleting Hero 3/4"]'),
+    ).toBeNull();
+    expect(del.mock.calls.length).toBe(before);
+  });
+});
+
+/**
+ * The advanced camera panel, MOUNTED (task 06 shipped it standalone; task 08
+ * mounts it).
+ *
+ * ⚠️ Its own behaviour — the drafts, the validation, the `Number("")` guard —
+ * is pinned exhaustively in `CameraAdvanced.dom.test.tsx`. These cases pin
+ * only that it is **actually on the rail**, inside the Camera group, showing
+ * the live projection's fields, and that its save path reaches the same
+ * `onSavePreset` the preset list's does.
+ */
+describe("PoseSection — the advanced camera panel is mounted", () => {
+  it("⭐ renders inside the Camera group, collapsed by default", () => {
+    const { container } = render(<composed.Primitive />);
+    const camera = group(container, "Camera");
+    const disclosure =
+      camera.querySelector<HTMLButtonElement>(".pose-panel__disclosure");
+    if (!disclosure) throw new Error("the advanced panel is not mounted");
+    // Collapsed: "advanced" means not always on screen, and the rail is 240px.
+    expect(camera.querySelector(".pose-panel__advanced")).toBeNull();
+  });
+
+  it("opens to the PERSPECTIVE fields for a perspective camera", () => {
+    const { container } = render(<composed.Primitive />);
+    const camera = group(container, "Camera");
+    fireEvent.click(
+      camera.querySelector<HTMLButtonElement>(".pose-panel__disclosure")!,
+    );
+    expect(byLabel(camera, "Near")).toBeTruthy();
+    expect(byLabel(camera, "Far")).toBeTruthy();
+    expect(byLabel(camera, "Aspect")).toBeTruthy();
+    // ⚠️ No ortho box: showing fields a perspective camera provably ignores
+    // would invite the owner to type a value that does nothing (F16).
+    expect(camera.querySelector('[aria-label="Left"]')).toBeNull();
+  });
+
+  it("opens to the ORTHOGRAPHIC box for an orthographic camera", () => {
+    const { container } = render(<composed.Orthographic />);
+    const camera = group(container, "Camera");
+    fireEvent.click(
+      camera.querySelector<HTMLButtonElement>(".pose-panel__disclosure")!,
+    );
+    for (const field of ["Left", "Right", "Top", "Bottom", "Near", "Far"]) {
+      expect(byLabel(camera, field)).toBeTruthy();
+    }
+    expect(camera.querySelector('[aria-label="Aspect"]')).toBeNull();
+  });
+
+  it("⭐ its save-as-preset reaches the SAME callback the preset list uses", () => {
+    const { container } = render(<composed.SavedPresets />);
+    const save = spy(composed.SavedPresets.args.onSavePreset);
+    const before = save.mock.calls.length;
+    const camera = group(container, "Camera");
+    fireEvent.click(
+      camera.querySelector<HTMLButtonElement>(".pose-panel__disclosure")!,
+    );
+    // ⚠️ Scoped to `.pose-panel__advanced`, because BOTH save buttons read
+    // "Save" — the panel's and the preset list's. That they look and read the
+    // same is correct: they are the same feature.
+    const advanced = camera.querySelector<HTMLElement>(
+      ".pose-panel__advanced",
+    );
+    if (!advanced) throw new Error("the advanced panel did not open");
+    fireEvent.change(byLabel(advanced, "Preset name"), {
+      target: { value: "  From advanced  " },
+    });
+    fireEvent.click(byText(advanced, "Save"));
+    // ⚠️ One feature, not two: the owner asked for "save that matrix into a
+    // preset" and "save ALL orientations ... to a preset" as two halves of the
+    // same thing, and two save paths writing two shapes would be two kinds of
+    // preset in one list.
+    expect(save.mock.calls.length).toBe(before + 1);
+    expect(save.mock.lastCall).toEqual(["From advanced"]);
+  });
+});
+
+/**
+ * ⚠️ The iPad `touch-action` fix (plan 07's confirmed defect, fixed by task 08)
+ * is **NOT tested here, and cannot be.** jsdom has no layout, no compositor and
+ * no touch scrolling, so nothing in this repo can observe a browser deciding to
+ * scroll the rail instead of dispatching `pointermove` to a slider thumb. The
+ * fix is one CSS line (`.pose-panel__slider { touch-action: none; }`) with the
+ * `.direction-orb__sphere` precedent beside it, and it stays an **owed manual
+ * check on a real device**. A test asserting the class name is present would
+ * assert only that a string was typed, which is worse than no test because it
+ * reads like coverage.
+ */

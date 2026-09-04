@@ -22,15 +22,37 @@
  * new reader to it. The model's colour is the Fill slot.
  *
  * ══════════════════════════════════════════════════════════════════════════
- *  ⚠️ NOTHING HERE IS PERSISTED, AND NOTHING HERE MAY BE DEEP
+ *  ⚠️ EXACTLY ONE FIELD IS PERSISTED: `posePresets`. NOTHING HERE MAY BE DEEP
  * ══════════════════════════════════════════════════════════════════════════
  *
- * - **Session-only.** No field here is read by `UIStore.toPersistedUIState()`
- *   (`stores/ui/UIStore.ts`). That builder is an explicit field-by-field list
- *   and ABSENCE FROM IT IS THE MECHANISM: adding a key would extend the wire
- *   format across the owner's 151-snapshot backup corpus and change their
- *   digests. The pose was never asked to be saved (MASTER D6) — the model is
- *   never part of the document until it is stamped.
+ * ⚠️ **This paragraph changed on 2026-09-04 (plan 08 task 08, F12) and the
+ * change is narrow.** It used to read "nothing here is persisted", and for
+ * every field except {@link PoseUIStore.posePresets} it still does.
+ *
+ * - **The LIVE pose is session-only.** `meshId`, `rotation`, `scale`, `pan`,
+ *   `edgeWidth`, `projection`, `cameraPreset`, `fov`, `lightDirection`,
+ *   `lightColor` and `modelColor` are **not** read by
+ *   `UIStore.toPersistedUIState()` (`stores/ui/UIStore.ts`). That builder is
+ *   an explicit field-by-field list and ABSENCE FROM IT IS THE MECHANISM.
+ *   The pose was never asked to be saved (MASTER D6) — the model is not part
+ *   of the document until it is stamped.
+ * - **`posePresets` IS persisted**, because the owner asked for it directly:
+ *   *"I want a way to save ALL orientations of camera settings and model to a
+ *   preset that I can reload easily"* — and "reload" means across a restart,
+ *   which session state cannot do. It follows the `layoutPresets` precedent
+ *   piece for piece (`LayoutUIStore.ts:500-570` + `UIStore.ts`).
+ * - ⚠️ **The key is emitted CONDITIONALLY, and that is a data-safety
+ *   mechanism, not a tidiness one** (plan 08 **F13**).
+ *   {@link PoseUIStore.toPersistedPosePresets} returns `undefined` for an
+ *   empty list and the builder emits it through `assign()`. Measured: writing
+ *   `posePresets: undefined` instead would ADD the key — "present with value
+ *   undefined" is still a key to `Object.keys()` and to the corpus digest —
+ *   and that form changed all 11 of the owner's corpus digests. The
+ *   conditional form leaves every one of the 151 snapshots byte-identical.
+ * - **No migration, and none is needed** (**F14**). Absent keys are handled
+ *   by `?? default` on read, and the wire type
+ *   (`types/domain.ts` `PersistedPosePreset`) is wide and optional in both
+ *   directions.
  * - **Never in history.** Loading a mesh, tumbling it, or moving the light is
  *   not a command and never opens a history stroke. Only the *stamp* (tasks
  *   05/08) is undoable, and it is undoable as a pixel write, not as pose state.
@@ -57,11 +79,25 @@
  * `clear()`. It deliberately does NOT hook `adoptProject()`, which also runs on
  * snapshot undo/redo and would wipe the pose on every undo.
  *
+ * ⚠️ **`clear()` MUST NOT touch `posePresets`, AND THE ORDER IS WHY** (plan
+ * 08 task 08). On a real project load the sequence is
+ * `installTree()` → `host.installProject()` → `ApplicationStore.adoptProject()`
+ * → `ui.hydrate(uiState)` → **then** `loadGeneration += 1` → this store's
+ * `clear()`. The clear therefore runs **after** the hydrate, so resetting the
+ * presets there would wipe the presets the load had just restored, every
+ * single time, and the bug would present as *"my presets do not survive a
+ * reload"* — the exact thing the feature exists to do. The presets are
+ * project data and their lifetime is owned by
+ * {@link PoseUIStore.hydratePosePresets}, which is assigned UNCONDITIONALLY
+ * so absent-stays-absent and a project switch cannot carry one project's
+ * presets into another. `fitGeneration` is excluded from `clear()` for a
+ * different reason; see its own note.
+ *
  * Construction order is unconstrained: no dependencies in either direction,
  * exactly like `ReflectionUIStore` and `CanvasViewsUIStore`.
  */
 import { action, computed, makeObservable, observable, observableRef } from "mobx";
-import type { Color } from "@/types/domain";
+import type { Color, PersistedPosePreset } from "@/types/domain";
 
 /* ── local type declarations ───────────────────────────────────────────────
  *
@@ -303,6 +339,140 @@ function sanitizeScale(value: number, floor: number): number {
   return Math.max(floor, value);
 }
 
+/* ── preset validators (plan 08, F15) ───────────────────────────────────────
+ *
+ * ⚠️ These are the ONE narrowing point between the wide wire format and this
+ * store's unions. `PersistedPosePreset` is deliberately wide and every field
+ * but `id`/`name` is optional, because a file on disk may have been written
+ * by a newer build, hand-edited, or truncated — `types/` must never assume
+ * the data matches the current build. The narrowing is here rather than in
+ * `types/` for the same reason `LayoutUIStore.narrowPresets` is.
+ *
+ * ⚠️ Every one of them must survive `null`, `undefined`, a primitive where an
+ * object was expected, and an object with the wrong member types, WITHOUT
+ * throwing. `typeof null === "object"` is the trap they all guard first.
+ */
+
+/**
+ * The mesh ids this build knows. ⚠️ **Mirrors `PoseMeshId` above and must
+ * change with it** — a member added to the union and not here is silently
+ * unloadable from a preset, which fails as "that one preset does not restore
+ * its model" long after the union changed.
+ */
+const POSE_MESH_IDS: readonly string[] = [
+  "cube",
+  "sphere",
+  "cylinder",
+  "mannequin",
+  "head",
+  "torso",
+  "arm",
+  "leg",
+  "hand",
+];
+
+/** ⚠️ Mirrors `PoseCameraPreset` above and must change with it. */
+const POSE_CAMERA_PRESET_IDS: readonly string[] = [
+  "2d",
+  "2.5d",
+  "iso",
+  "top-down",
+  "oblique",
+];
+
+function isPoseMeshId(value: unknown): value is PoseMeshId {
+  return typeof value === "string" && POSE_MESH_IDS.includes(value);
+}
+
+function isPoseCameraPreset(value: unknown): value is PoseCameraPreset {
+  return typeof value === "string" && POSE_CAMERA_PRESET_IDS.includes(value);
+}
+
+/**
+ * A usable 3-component vector: an object with three FINITE numbers.
+ *
+ * Finiteness rather than merely `typeof === "number"` because `NaN` and the
+ * infinities are what a hand-edited or truncated file produces, and either
+ * one reaching `rotation` or `lightDirection` poisons the whole render with
+ * `NaN` matrices — a blank frame with no error, which is the failure mode
+ * this whole validator layer exists to prevent.
+ */
+function isVector(value: unknown): value is { x: number; y: number; z: number } {
+  if (!value || typeof value !== "object") return false;
+  const v = value as { x?: unknown; y?: unknown; z?: unknown };
+  return (
+    typeof v.x === "number" &&
+    typeof v.y === "number" &&
+    typeof v.z === "number" &&
+    Number.isFinite(v.x) &&
+    Number.isFinite(v.y) &&
+    Number.isFinite(v.z)
+  );
+}
+
+/** A usable RGBA colour: four finite numbers. Range is not enforced — the
+ *  engine clamps, and rejecting a `300` would lose a preset over a rounding
+ *  artefact rather than over anything the owner would notice. */
+function isColor(
+  value: unknown,
+): value is { r: number; g: number; b: number; a: number } {
+  if (!value || typeof value !== "object") return false;
+  const c = value as { r?: unknown; g?: unknown; b?: unknown; a?: unknown };
+  return (
+    typeof c.r === "number" &&
+    typeof c.g === "number" &&
+    typeof c.b === "number" &&
+    typeof c.a === "number" &&
+    Number.isFinite(c.r) &&
+    Number.isFinite(c.g) &&
+    Number.isFinite(c.b) &&
+    Number.isFinite(c.a)
+  );
+}
+
+/**
+ * Narrow a loaded project's presets — the hydrate-side validator (F15).
+ *
+ * ⚠️ **Same field-by-field spirit as `LayoutUIStore.narrowPresets`: an entry
+ * without a usable `id` and `name` is DROPPED, and everything else is
+ * KEPT AS IT IS.** An entry is unusable in a keyed list without those two,
+ * but a preset whose `fov` is nonsense is still the preset the owner named —
+ * {@link PoseUIStore.applyPosePreset} validates each field at the moment it
+ * is used and simply skips what it cannot use, which loses one setting rather
+ * than the whole entry.
+ *
+ * ⚠️ **Unknown fields are preserved, deliberately.** A preset written by a
+ * newer build carrying a field this one does not know must still be that
+ * preset after a round trip through this build — dropping it would silently
+ * downgrade the owner's file the first time an older version opened it. The
+ * entries are therefore passed through rather than reconstructed.
+ */
+function narrowPosePresets(
+  persisted: PersistedPosePreset[] | undefined,
+): PersistedPosePreset[] {
+  if (!Array.isArray(persisted)) return [];
+  return persisted.filter(
+    (preset): preset is PersistedPosePreset =>
+      !!preset &&
+      typeof preset === "object" &&
+      typeof preset.id === "string" &&
+      typeof preset.name === "string",
+  );
+}
+
+/**
+ * The next unused `pose-N` id. Transcribed from `customPresetId`
+ * (`ui/layout/layoutPresets.ts:371-376`) — start past the current length and
+ * walk until the id is free, so deleting the middle of a list cannot produce
+ * a duplicate.
+ */
+function nextPosePresetId(existing: readonly PersistedPosePreset[]): string {
+  const taken = new Set(existing.map((preset) => preset.id));
+  let n = existing.length + 1;
+  while (taken.has(`pose-${n}`)) n += 1;
+  return `pose-${n}`;
+}
+
 export class PoseUIStore {
   /** Which reference solid is loaded, or `null` for "no model" (the default). */
   meshId: PoseMeshId | null = null;
@@ -383,6 +553,29 @@ export class PoseUIStore {
    */
   fitGeneration = 0;
 
+  /**
+   * The owner's saved SCENE presets — **the one persisted field on this
+   * store** (plan 08, **F12**; owner item 10).
+   *
+   * `observableRef` and REPLACED WHOLESALE on every edit, exactly like
+   * `LayoutUIStore.layoutPresets`: per-entry proxies would buy nothing when
+   * the array identity changes on every save and delete, and a `PoseVector`
+   * inside a preset must never become a MobX proxy for the same reason the
+   * live `rotation` must not.
+   *
+   * ⚠️ **Its wire key is CONDITIONAL and that is a data-safety mechanism**
+   * (F13) — see {@link PoseUIStore.toPersistedPosePresets} and the file
+   * header. ⚠️ **`clear()` does not reset it** — see the header's Lifetime
+   * note for the load-order reason, which is not a nicety either.
+   *
+   * The stored entries are the WIDE wire type (`PersistedPosePreset`), not a
+   * narrowed store type, so what is held is exactly what is written and a
+   * preset from a newer build survives a round trip through an older one
+   * unmangled. Narrowing happens where the values are USED
+   * ({@link PoseUIStore.applyPosePreset}), never where they are stored.
+   */
+  posePresets: PersistedPosePreset[] = [];
+
   constructor() {
     makeObservable(this, {
       meshId: observable,
@@ -397,6 +590,7 @@ export class PoseUIStore {
       fov: observable,
       pan: observableRef,
       fitGeneration: observable,
+      posePresets: observableRef,
 
       hasMesh: computed,
 
@@ -414,6 +608,10 @@ export class PoseUIStore {
       setPan: action,
       nudgePan: action,
       requestFit: action,
+      saveCurrentAsPosePreset: action,
+      deletePosePreset: action,
+      applyPosePreset: action,
+      hydratePosePresets: action,
       clear: action,
     });
   }
@@ -613,6 +811,198 @@ export class PoseUIStore {
    */
   requestFit(): void {
     this.fitGeneration += 1;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+   *  SAVED SCENE PRESETS (plan 08 task 08, F12/F13/F15) — the persisted half
+   *
+   *  Mirrors `LayoutUIStore`'s `layoutPresets` surface piece for piece:
+   *  save (trims, no-ops on empty, snapshots BY VALUE) · delete (filters,
+   *  early-returns when nothing changed) · hydrate (assigned
+   *  UNCONDITIONALLY) · serialize (returns `undefined` when empty — the F13
+   *  mechanism). `applyPosePreset` has no `layoutPresets` counterpart and is
+   *  the one addition: a layout preset is applied by a `ui/` module, a scene
+   *  preset is applied to these very fields.
+   * ══════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * Keep the CURRENT scene under a user-typed name.
+   *
+   * The name is trimmed and an empty one is a **no-op**, not an error — the
+   * `saveCurrentAsPreset` precedent (`LayoutUIStore.ts:500-513`). A rail
+   * cannot usefully report a failure here and an unnamed preset is unusable
+   * in a keyed list, so refusing quietly is the whole contract.
+   *
+   * ⚠️ **Snapshotted BY VALUE, not by reference.** `rotation`,
+   * `lightDirection` and `lightColor` are `observableRef` values that are
+   * replaced wholesale; storing the held object would make the preset follow
+   * every later edit, which is the opposite of what a preset is. Each is
+   * copied component by component.
+   *
+   * ⚠️ **`pan` is deliberately absent** — see `PersistedPosePreset`'s header
+   * in `types/domain.ts` for that decision (open question 4) and for why
+   * `scale` IS included even though a *camera* preset leaves it alone.
+   *
+   * `meshId` is omitted rather than written as `null` when nothing is loaded:
+   * the wire type's fields are optional, and an absent key round-trips
+   * through `?? default` identically while keeping the file smaller and the
+   * "absent means unknown" rule uniform.
+   */
+  saveCurrentAsPosePreset(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const preset: PersistedPosePreset = {
+      id: nextPosePresetId(this.posePresets),
+      name: trimmed,
+      rotation: { x: this.rotation.x, y: this.rotation.y, z: this.rotation.z },
+      projection: this.projection,
+      cameraPreset: this.cameraPreset,
+      fov: this.fov,
+      scale: this.scale,
+      lightDirection: {
+        x: this.lightDirection.x,
+        y: this.lightDirection.y,
+        z: this.lightDirection.z,
+      },
+      lightColor: {
+        r: this.lightColor.r,
+        g: this.lightColor.g,
+        b: this.lightColor.b,
+        a: this.lightColor.a,
+      },
+      edgeWidth: this.edgeWidth,
+    };
+    if (this.meshId !== null) preset.meshId = this.meshId;
+    this.posePresets = [...this.posePresets, preset];
+  }
+
+  /**
+   * Forget one saved scene. Filters by id and **early-returns when nothing
+   * changed**, so deleting an unknown id is a harmless no-op that does not
+   * churn the array identity — `deleteLayoutPreset`'s exact shape. That
+   * matters beyond tidiness: a new identity would bump `persistedUIVersion`
+   * and schedule a save for a change that did not happen.
+   */
+  deletePosePreset(id: string): void {
+    const next = this.posePresets.filter((preset) => preset.id !== id);
+    if (next.length === this.posePresets.length) return;
+    this.posePresets = next;
+  }
+
+  /**
+   * Restore a saved scene — **every field it carries, as ONE action**.
+   *
+   * ⚠️ **One action for the same reason `applyCameraPreset` is one**: nine
+   * writes in a single MobX transaction means every reaction and `observer`
+   * sees the finished scene exactly once. Nine separate setter calls from a
+   * container would be nine observable writes, and `CanvasContainer`'s fit
+   * effect reads several of these together — a camera holding the new
+   * projection with the old rotation is a real frame, not a theoretical one.
+   *
+   * ⚠️ **THE NARROWING HAPPENS HERE, not on hydrate, and every field is
+   * validated against the SETTERS' OWN RULES** (F15). The wire type is
+   * deliberately wide, so a file may carry `fov: 1e9`, `scale: -1`,
+   * `projection: "isometric"` or a mesh id this build has never heard of. A
+   * preset must never be able to put a value into the store that the setter
+   * for that field would have rejected — otherwise applying a preset becomes
+   * the one way to get illegal state in. Anything unrecognised or unusable
+   * leaves the current value **untouched** rather than resetting it to a
+   * default: a preset from a newer build should restore what it can and
+   * quietly skip the rest, which is what "a newer file must not crash an
+   * older build" means in practice.
+   *
+   * An unknown `id` is a no-op.
+   */
+  applyPosePreset(id: string): void {
+    const preset = this.posePresets.find((entry) => entry.id === id);
+    if (!preset) return;
+
+    if (isPoseMeshId(preset.meshId)) {
+      // ⚠️ NOT `setMesh()` — that resets `pan` (MASTER D7), and a preset that
+      // silently re-centred the model would fight the pan the owner has set.
+      // The preset carries no pan (open question 4), so it changes none.
+      this.meshId = preset.meshId;
+    }
+    if (isVector(preset.rotation)) {
+      this.rotation = {
+        x: preset.rotation.x,
+        y: preset.rotation.y,
+        z: preset.rotation.z,
+      };
+    }
+    if (preset.projection === "perspective" || preset.projection === "orthographic") {
+      this.projection = preset.projection;
+    }
+    if (isPoseCameraPreset(preset.cameraPreset)) {
+      this.cameraPreset = preset.cameraPreset;
+    }
+    if (typeof preset.fov === "number") {
+      this.fov = clamp(preset.fov, POSE_FOV_MIN, POSE_FOV_MAX);
+    }
+    if (typeof preset.scale === "number") {
+      this.scale = sanitizeScale(preset.scale, POSE_SCALE_MIN_SAFE);
+    }
+    if (isVector(preset.lightDirection)) {
+      // Re-normalised exactly as `setLightDirection` would, so a hand-edited
+      // or drifted vector in a file cannot reach the shader un-normalised.
+      this.lightDirection = normalizeVector(preset.lightDirection);
+    }
+    if (isColor(preset.lightColor)) {
+      this.lightColor = {
+        r: preset.lightColor.r,
+        g: preset.lightColor.g,
+        b: preset.lightColor.b,
+        a: preset.lightColor.a,
+      };
+    }
+    if (typeof preset.edgeWidth === "number") {
+      this.edgeWidth = Math.round(
+        clamp(preset.edgeWidth, POSE_EDGE_WIDTH_MIN, POSE_EDGE_WIDTH_MAX),
+      );
+    }
+  }
+
+  /**
+   * Adopt a loaded project's saved presets.
+   *
+   * ⚠️ **Assigned UNCONDITIONALLY**, exactly like `LayoutUIStore.hydrate`, and
+   * that is what makes "absent stays absent" survive a project switch: a
+   * project with no `posePresets` must hydrate to `[]` and must NOT inherit
+   * the previously-loaded project's presets, or the next autosave would write
+   * one project's presets into another's file.
+   *
+   * ⚠️ Called from `UIStore.hydrate`'s fan-out, which runs BEFORE the
+   * `loadGeneration` reaction calls {@link PoseUIStore.clear} — see the file
+   * header's Lifetime note for why `clear()` must therefore leave the presets
+   * alone.
+   */
+  hydratePosePresets(ui: { posePresets?: PersistedPosePreset[] }): void {
+    this.posePresets = narrowPosePresets(ui.posePresets);
+  }
+
+  /**
+   * The persisted record for `UIStore.toPersistedUIState()`.
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ `undefined` UNTIL THE USER SAVES ONE — THIS IS THE F13 MECHANISM
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * This return value is the entire reason the owner's 151 backup snapshots
+   * stay byte-identical. `toPersistedUIState()` emits the key through
+   * `assign()`, which writes nothing for `undefined`, so a project in which
+   * nobody has saved a pose preset gains **no key at all** — as opposed to
+   * gaining `posePresets: undefined`, which measurably changed all 11 corpus
+   * digests, because "present with value undefined" is still a key to
+   * `Object.keys()` and to the digest.
+   *
+   * ⚠️ **Do not "simplify" this to return the array directly.** An empty
+   * array is a value and would be emitted, adding a key to every one of the
+   * owner's real projects the moment it was next saved. The
+   * `toPersistedLayoutPresets()` precedent is identical and identically
+   * load-bearing.
+   */
+  toPersistedPosePresets(): PersistedPosePreset[] | undefined {
+    return this.posePresets.length > 0 ? this.posePresets : undefined;
   }
 
   /**

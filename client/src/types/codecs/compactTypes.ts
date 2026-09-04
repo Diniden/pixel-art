@@ -2,6 +2,7 @@ import type {
   BitDepth,
   EyedropperMode,
   PersistedLayoutPreset,
+  PersistedPosePreset,
   PersistedRailLayout,
   SelectionBehavior,
   SelectionMode,
@@ -163,6 +164,15 @@ export interface CompactUIState {
    * saves one, so an untouched project's key set is unchanged.
    */
   layoutPresets?: { [deviceClass: string]: PersistedLayoutPreset[] };
+  /**
+   * The user's saved POSE SCENE presets (plan 08, 2026-09-04). Conditional
+   * for exactly the same reason as `layoutPresets`, and the reason is the
+   * owner's 151 backup snapshots: `PoseUIStore.toPersistedPosePresets()`
+   * returns `undefined` until one is saved and the builder emits it through
+   * `assign()`, so an untouched project gains no key and no digest moves
+   * (**F13**). ⚠️ Only the PRESETS persist — the live pose is session-only.
+   */
+  posePresets?: PersistedPosePreset[];
   theme?: string;
   /** Canvas view-transform scale. Conditional: absent until the user zooms. */
   viewZoom?: number;

@@ -34,7 +34,7 @@
  * reaches the persisted wire format.
  */
 import { describe, expect, it } from "vitest";
-import { isObservableProp, reaction, runInAction } from "mobx";
+import { isObservable, isObservableProp, reaction, runInAction } from "mobx";
 import {
   DEFAULT_POSE_LIGHT_COLOR,
   DEFAULT_POSE_LIGHT_DIRECTION,
@@ -748,6 +748,472 @@ describe("PoseUIStore — clear()", () => {
 
 /* ── ApplicationStore wiring ─────────────────────────────────────────────── */
 
+/* ══════════════════════════════════════════════════════════════════════════
+ *  SAVED SCENE PRESETS (plan 08 task 08 — F12/F13/F15)
+ *
+ *  ⚠️ THE ORDER OF THESE BLOCKS IS THE ORDER OF THEIR IMPORTANCE TO THE
+ *  OWNER'S DATA. The serializer's `undefined` return comes first because it
+ *  is the single mechanism that keeps 151 real backup snapshots
+ *  byte-identical, and everything else here is a feature test.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+describe("PoseUIStore — toPersistedPosePresets is the DIGEST GUARD (F13)", () => {
+  it("⭐ returns undefined when NO preset has been saved", () => {
+    const pose = new PoseUIStore();
+    expect(pose.toPersistedPosePresets()).toBeUndefined();
+  });
+
+  it("⭐ still returns undefined after a REJECTED save — an empty name saves nothing", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.saveCurrentAsPosePreset("");
+      pose.saveCurrentAsPosePreset("   ");
+      pose.saveCurrentAsPosePreset("\t\n ");
+    });
+    expect(pose.posePresets).toEqual([]);
+    expect(pose.toPersistedPosePresets()).toBeUndefined();
+  });
+
+  it("⭐ returns undefined again once the LAST preset is deleted", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => pose.saveCurrentAsPosePreset("Only one"));
+    expect(pose.toPersistedPosePresets()).toBeDefined();
+    runInAction(() => pose.deletePosePreset(pose.posePresets[0].id));
+    // A project the owner saved a preset in and then removed must go back to
+    // having NO key, not to `posePresets: []`.
+    expect(pose.toPersistedPosePresets()).toBeUndefined();
+  });
+
+  it("returns the array once one exists", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => pose.saveCurrentAsPosePreset("Hero"));
+    const persisted = pose.toPersistedPosePresets();
+    expect(persisted).toHaveLength(1);
+    expect(persisted?.[0].name).toBe("Hero");
+  });
+});
+
+describe("PoseUIStore — saveCurrentAsPosePreset", () => {
+  it("trims the name", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => pose.saveCurrentAsPosePreset("  Hero 3/4  "));
+    expect(pose.posePresets[0].name).toBe("Hero 3/4");
+  });
+
+  it("no-ops on an empty or whitespace-only name — the layoutPresets precedent", () => {
+    const pose = new PoseUIStore();
+    const before = pose.posePresets;
+    runInAction(() => pose.saveCurrentAsPosePreset("   "));
+    // Same IDENTITY, not merely the same length: a no-op must not churn the
+    // ref, or `persistedUIVersion` would bump and schedule a save for nothing.
+    expect(pose.posePresets).toBe(before);
+  });
+
+  it("snapshots the whole scene — open question 4's field list", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.setMesh("torso");
+      pose.setRotation({ x: 0.1, y: 0.2, z: 0.3 });
+      pose.setProjection("orthographic");
+      pose.setCameraPreset("iso");
+      pose.setFov(77);
+      pose.setScale(3.5);
+      pose.setLightDirection({ x: 0, y: 1, z: 0 });
+      pose.setLightColor(RED);
+      pose.setEdgeWidth(3);
+      pose.setPan({ x: 9, y: -9 });
+      pose.saveCurrentAsPosePreset("Everything");
+    });
+    const preset = pose.posePresets[0];
+    expect(preset.meshId).toBe("torso");
+    expect(preset.rotation).toEqual({ x: 0.1, y: 0.2, z: 0.3 });
+    expect(preset.projection).toBe("orthographic");
+    expect(preset.cameraPreset).toBe("iso");
+    expect(preset.fov).toBe(77);
+    expect(preset.scale).toBe(3.5);
+    expect(preset.lightDirection).toEqual({ x: 0, y: 1, z: 0 });
+    expect(preset.lightColor).toEqual(RED);
+    expect(preset.edgeWidth).toBe(3);
+    // ⚠️ `pan` is EXCLUDED — open question 4, decided 2026-09-04. It is
+    // measured in grid cells of whatever canvas was open, so it does not
+    // survive the trip to a different sprite size. See `PersistedPosePreset`.
+    expect(preset).not.toHaveProperty("pan");
+  });
+
+  it("⭐ snapshots BY VALUE — a later edit cannot reach into the saved preset", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.setRotation({ x: 1, y: 2, z: 3 });
+      pose.saveCurrentAsPosePreset("Frozen");
+      pose.setRotation({ x: 9, y: 9, z: 9 });
+      pose.setLightColor(BLUE);
+      pose.setScale(42);
+    });
+    const preset = pose.posePresets[0];
+    expect(preset.rotation).toEqual({ x: 1, y: 2, z: 3 });
+    expect(preset.lightColor).toEqual(DEFAULT_POSE_LIGHT_COLOR);
+    expect(preset.scale).toBe(1);
+  });
+
+  it("omits meshId entirely when nothing is loaded, rather than writing null", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => pose.saveCurrentAsPosePreset("Empty stage"));
+    expect(pose.posePresets[0]).not.toHaveProperty("meshId");
+  });
+
+  it("generates a fresh id per save, and never reuses one after a delete", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.saveCurrentAsPosePreset("a");
+      pose.saveCurrentAsPosePreset("b");
+      pose.saveCurrentAsPosePreset("c");
+    });
+    expect(pose.posePresets.map((p) => p.id)).toEqual([
+      "pose-1",
+      "pose-2",
+      "pose-3",
+    ]);
+    runInAction(() => {
+      // Remove the MIDDLE one, then save: `existing.length + 1` would collide
+      // with `pose-3` if it did not walk past taken ids.
+      pose.deletePosePreset("pose-2");
+      pose.saveCurrentAsPosePreset("d");
+    });
+    const ids = pose.posePresets.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain("pose-3");
+  });
+
+  it("replaces the array wholesale — the observableRef contract", () => {
+    const pose = new PoseUIStore();
+    const before = pose.posePresets;
+    runInAction(() => pose.saveCurrentAsPosePreset("x"));
+    expect(pose.posePresets).not.toBe(before);
+    expect(before).toEqual([]);
+  });
+});
+
+describe("PoseUIStore — deletePosePreset", () => {
+  it("removes the named preset and leaves the others", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.saveCurrentAsPosePreset("a");
+      pose.saveCurrentAsPosePreset("b");
+      pose.deletePosePreset("pose-1");
+    });
+    expect(pose.posePresets.map((p) => p.name)).toEqual(["b"]);
+  });
+
+  it("⭐ is a no-op for an unknown id — same identity, so no save is scheduled", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => pose.saveCurrentAsPosePreset("a"));
+    const before = pose.posePresets;
+    runInAction(() => pose.deletePosePreset("nope"));
+    expect(pose.posePresets).toBe(before);
+  });
+
+  it("is a no-op on an empty list", () => {
+    const pose = new PoseUIStore();
+    const before = pose.posePresets;
+    runInAction(() => pose.deletePosePreset("pose-1"));
+    expect(pose.posePresets).toBe(before);
+  });
+});
+
+describe("PoseUIStore — applyPosePreset", () => {
+  /** A store with one preset saved off a deliberately distinctive scene. */
+  function withPreset(): PoseUIStore {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.setMesh("head");
+      pose.setRotation({ x: 0.5, y: 1.5, z: -0.25 });
+      pose.setProjection("orthographic");
+      pose.setCameraPreset("top-down");
+      pose.setFov(95);
+      pose.setScale(6.25);
+      pose.setLightDirection({ x: 1, y: 0, z: 0 });
+      pose.setLightColor(BLUE);
+      pose.setEdgeWidth(4);
+      pose.saveCurrentAsPosePreset("Saved");
+      // Now move EVERYTHING away, so a restore is unambiguous.
+      pose.clear();
+    });
+    return pose;
+  }
+
+  it("⭐ restores every field the preset carries", () => {
+    const pose = withPreset();
+    runInAction(() => pose.applyPosePreset("pose-1"));
+    expect(pose.meshId).toBe("head");
+    expect(pose.rotation).toEqual({ x: 0.5, y: 1.5, z: -0.25 });
+    expect(pose.projection).toBe("orthographic");
+    expect(pose.cameraPreset).toBe("top-down");
+    expect(pose.fov).toBe(95);
+    expect(pose.scale).toBe(6.25);
+    expect(pose.lightDirection).toEqual({ x: 1, y: 0, z: 0 });
+    expect(pose.lightColor).toEqual(BLUE);
+    expect(pose.edgeWidth).toBe(4);
+  });
+
+  it("⭐ is ONE action — no reaction can observe a torn half-restored scene", () => {
+    const pose = withPreset();
+    const seen: string[] = [];
+    const dispose = reaction(
+      () => `${pose.meshId}|${pose.projection}|${pose.rotation.y}|${pose.scale}`,
+      (value) => seen.push(value),
+    );
+    try {
+      runInAction(() => pose.applyPosePreset("pose-1"));
+      // ONE observation, not nine — the same guarantee `applyCameraPreset`
+      // gives, and for the same reason: `CanvasContainer`'s fit effect reads
+      // several of these together.
+      expect(seen).toEqual(["head|orthographic|1.5|6.25"]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it("leaves the PAN alone — a preset carries none (open question 4)", () => {
+    const pose = withPreset();
+    runInAction(() => pose.setPan({ x: 11, y: -4 }));
+    runInAction(() => pose.applyPosePreset("pose-1"));
+    // ⚠️ And specifically NOT via `setMesh`, which resets the pan (MASTER D7).
+    expect(pose.pan).toEqual({ x: 11, y: -4 });
+  });
+
+  it("is a no-op for an unknown id", () => {
+    const pose = withPreset();
+    const before = {
+      meshId: pose.meshId,
+      rotation: pose.rotation,
+      scale: pose.scale,
+    };
+    runInAction(() => pose.applyPosePreset("nope"));
+    expect(pose.meshId).toBe(before.meshId);
+    expect(pose.rotation).toBe(before.rotation);
+    expect(pose.scale).toBe(before.scale);
+  });
+
+  it("COPIES the vectors rather than holding the preset's objects", () => {
+    const pose = withPreset();
+    runInAction(() => pose.applyPosePreset("pose-1"));
+    expect(pose.rotation).not.toBe(pose.posePresets[0].rotation);
+    expect(pose.lightColor).not.toBe(pose.posePresets[0].lightColor);
+  });
+
+  it("re-NORMALISES the light exactly as setLightDirection would", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.posePresets = [
+        // A hand-edited or drifted file: length 3, not 1.
+        { id: "p", name: "drifted", lightDirection: { x: 0, y: 3, z: 0 } },
+      ];
+      pose.applyPosePreset("p");
+    });
+    expect(pose.lightDirection).toEqual({ x: 0, y: 1, z: 0 });
+  });
+
+  it("⭐ clamps and sanitises through the SETTERS' OWN rules (F15)", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.posePresets = [
+        {
+          id: "p",
+          name: "illegal",
+          // Every one of these is a value the matching setter would reject.
+          fov: 1e9,
+          scale: -4,
+          edgeWidth: 99,
+        },
+      ];
+      pose.applyPosePreset("p");
+    });
+    expect(pose.fov).toBe(POSE_FOV_MAX);
+    expect(pose.scale).toBe(POSE_SCALE_MIN_SAFE);
+    expect(pose.edgeWidth).toBe(POSE_EDGE_WIDTH_MAX);
+  });
+
+  it("⭐ SKIPS what it cannot understand and leaves that field untouched", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.setMesh("cube");
+      pose.setScale(7);
+      pose.posePresets = [
+        {
+          id: "p",
+          name: "from a newer build",
+          // A mesh and a camera preset this build has never heard of, and a
+          // projection that is not one of the two.
+          meshId: "dragon",
+          projection: "isometric",
+          cameraPreset: "worm's-eye",
+          // Structurally wrong values, the kind a truncated file produces.
+          rotation: { x: 1, y: 2 } as never,
+          lightColor: "red" as never,
+        },
+      ];
+      pose.applyPosePreset("p");
+    });
+    // Nothing was reset to a default — the current scene simply survived.
+    expect(pose.meshId).toBe("cube");
+    expect(pose.projection).toBe("perspective");
+    expect(pose.cameraPreset).toBe("2.5d");
+    expect(pose.scale).toBe(7);
+    expect(pose.rotation).toEqual(DEFAULT_POSE_ROTATION);
+    expect(pose.lightColor).toEqual(DEFAULT_POSE_LIGHT_COLOR);
+  });
+
+  it("⭐ survives NaN, Infinity and null in every numeric slot without throwing", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.posePresets = [
+        {
+          id: "p",
+          name: "poison",
+          rotation: { x: NaN, y: 0, z: 0 },
+          lightDirection: { x: Infinity, y: 0, z: 0 },
+          lightColor: null as never,
+          fov: NaN,
+          scale: NaN,
+          edgeWidth: -Infinity,
+        },
+      ];
+      expect(() => pose.applyPosePreset("p")).not.toThrow();
+    });
+    // ⚠️ A `NaN` rotation would poison the render with NaN matrices — a blank
+    // frame with no error, the exact failure the validators exist to prevent.
+    expect(pose.rotation).toEqual(DEFAULT_POSE_ROTATION);
+    expect(pose.lightDirection).toEqual(DEFAULT_POSE_LIGHT_DIRECTION);
+    expect(pose.lightColor).toEqual(DEFAULT_POSE_LIGHT_COLOR);
+    expect(Number.isFinite(pose.fov)).toBe(true);
+    expect(Number.isFinite(pose.scale)).toBe(true);
+    expect(Number.isFinite(pose.edgeWidth)).toBe(true);
+  });
+});
+
+describe("PoseUIStore — hydratePosePresets (the validator, F15)", () => {
+  it("⭐ is assigned UNCONDITIONALLY — absent stays absent across a project switch", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => pose.saveCurrentAsPosePreset("from project A"));
+    expect(pose.posePresets).toHaveLength(1);
+    // Project B has no `posePresets` key at all.
+    runInAction(() => pose.hydratePosePresets({}));
+    // ⚠️ NOT project A's preset. Inheriting it would write one project's
+    // presets into another's file on the next autosave.
+    expect(pose.posePresets).toEqual([]);
+    expect(pose.toPersistedPosePresets()).toBeUndefined();
+  });
+
+  it("round-trips a saved preset through the wire shape", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.setMesh("leg");
+      pose.setScale(2.5);
+      pose.saveCurrentAsPosePreset("Round trip");
+    });
+    const wire = JSON.parse(
+      JSON.stringify({ posePresets: pose.toPersistedPosePresets() }),
+    );
+    const other = new PoseUIStore();
+    runInAction(() => {
+      other.hydratePosePresets(wire);
+      other.applyPosePreset("pose-1");
+    });
+    expect(other.posePresets).toEqual(pose.posePresets);
+    expect(other.meshId).toBe("leg");
+    expect(other.scale).toBe(2.5);
+  });
+
+  it("drops entries with no usable id or name — they are unusable in a keyed list", () => {
+    const pose = new PoseUIStore();
+    runInAction(() =>
+      pose.hydratePosePresets({
+        posePresets: [
+          { id: "ok", name: "keep me" },
+          { name: "no id" } as never,
+          { id: "no name" } as never,
+          { id: 7, name: "numeric id" } as never,
+          null as never,
+          "a string" as never,
+        ],
+      }),
+    );
+    expect(pose.posePresets.map((p) => p.id)).toEqual(["ok"]);
+  });
+
+  it("⭐ KEEPS an entry whose other fields are nonsense — applyPosePreset skips them", () => {
+    const pose = new PoseUIStore();
+    runInAction(() =>
+      pose.hydratePosePresets({
+        posePresets: [
+          { id: "p", name: "half broken", fov: "wide" as never, scale: null as never },
+        ],
+      }),
+    );
+    // Losing one setting is better than losing the preset the owner named.
+    expect(pose.posePresets).toHaveLength(1);
+    expect(pose.posePresets[0].name).toBe("half broken");
+  });
+
+  it("⭐ PRESERVES unknown fields — a newer build's preset must survive an older one", () => {
+    const pose = new PoseUIStore();
+    runInAction(() =>
+      pose.hydratePosePresets({
+        posePresets: [
+          {
+            id: "p",
+            name: "from 2027",
+            scale: 3,
+            fromTheFuture: { depthOfField: 2.8 },
+          } as never,
+        ],
+      }),
+    );
+    // Dropping it would silently downgrade the owner's file the first time an
+    // older version opened it.
+    expect(
+      (pose.posePresets[0] as unknown as Record<string, unknown>)
+        .fromTheFuture,
+    ).toEqual({ depthOfField: 2.8 });
+  });
+
+  it("survives a non-array, null and undefined without throwing", () => {
+    const pose = new PoseUIStore();
+    for (const bad of [undefined, null, 42, "nope", {}]) {
+      runInAction(() =>
+        pose.hydratePosePresets({ posePresets: bad as never }),
+      );
+      expect(pose.posePresets).toEqual([]);
+    }
+  });
+});
+
+describe("PoseUIStore — presets vs clear() and the observableRef contract", () => {
+  it("⭐⭐ clear() does NOT drop the presets — the LOAD ORDER depends on it", () => {
+    const pose = new PoseUIStore();
+    runInAction(() => {
+      pose.setMesh("cube");
+      pose.saveCurrentAsPosePreset("survives");
+      pose.clear();
+    });
+    // ⚠️ On a real load the sequence is hydrate THEN clear (the
+    // `loadGeneration` reaction fires after `adoptProject`), so a `clear()`
+    // that reset the presets would wipe the ones the load had just restored
+    // — every single time. See the store's header.
+    expect(pose.meshId).toBeNull();
+    expect(pose.posePresets.map((p) => p.name)).toEqual(["survives"]);
+  });
+
+  it("posePresets is observable and NOT deep — no entry is a MobX proxy", () => {
+    const pose = new PoseUIStore();
+    expect(isObservableProp(pose, "posePresets")).toBe(true);
+    runInAction(() => pose.saveCurrentAsPosePreset("a"));
+    const rotation = pose.posePresets[0].rotation;
+    expect(isObservable(rotation)).toBe(false);
+    expect(isObservable(pose.posePresets)).toBe(false);
+  });
+});
+
 /**
  * The cheapest possible real `ApplicationStore` — same recipe as
  * `ReflectionUIStore.test.ts`: no auto-save, no Zustand, a host that just
@@ -847,6 +1313,95 @@ describe("ApplicationStore — app.pose", () => {
       expect(Object.keys(persisted)).not.toContain("poseMesh");
       expect(JSON.stringify(persisted)).not.toContain("mannequin");
       expect(JSON.stringify(persisted)).not.toContain("cameraPreset");
+    } finally {
+      app.dispose();
+    }
+  });
+});
+
+/**
+ * The presets against a REAL `ApplicationStore` (plan 08 task 08).
+ *
+ * ⚠️ **These exist because the unit tests above cannot see the ORDER.** On a
+ * real project load the sequence is
+ * `installTree()` → `host.installProject()` → `adoptProject()` →
+ * `ui.hydrate(uiState)` → **then** `DomainStore.loadGeneration += 1` → the
+ * reaction → `pose.clear()`. The clear runs AFTER the hydrate, so a `clear()`
+ * that reset `posePresets` would wipe the presets the load had just restored,
+ * every single time, and present to the owner as *"my presets do not survive
+ * a reload"* — the exact thing the feature exists to do. No unit test of
+ * `clear()` alone can catch that; only wiring the real reaction can.
+ */
+describe("ApplicationStore — pose presets and the load order", () => {
+  it("⭐⭐ a preset SURVIVES the loadGeneration clear, while the live pose does not", () => {
+    const app = makeApp();
+    try {
+      runInAction(() => {
+        app.pose.setMesh("mannequin");
+        app.pose.setScale(6);
+        app.pose.saveCurrentAsPosePreset("keep me");
+      });
+
+      // The reaction the real load fires last.
+      runInAction(() => {
+        app.domain.loadGeneration += 1;
+      });
+
+      expect(app.pose.meshId).toBeNull();
+      expect(app.pose.scale).toBe(1);
+      // ⚠️ THE ASSERTION THIS WHOLE BLOCK EXISTS FOR.
+      expect(app.pose.posePresets.map((p) => p.name)).toEqual(["keep me"]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("⭐ hydrate-then-clear, in the real order, keeps the hydrated presets", () => {
+    const app = makeApp();
+    try {
+      // Exactly what `adoptProject` does, then exactly what the reaction does.
+      runInAction(() => {
+        app.ui.hydrate({
+          ...tinyProject().uiState,
+          posePresets: [{ id: "pose-1", name: "from the file", scale: 3 }],
+        });
+        app.domain.loadGeneration += 1;
+      });
+      expect(app.pose.posePresets.map((p) => p.name)).toEqual([
+        "from the file",
+      ]);
+      runInAction(() => app.pose.applyPosePreset("pose-1"));
+      expect(app.pose.scale).toBe(3);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("⭐ a saved preset REACHES the persisted wire format", () => {
+    const app = makeApp();
+    try {
+      runInAction(() => {
+        app.pose.setMesh("torso");
+        app.pose.saveCurrentAsPosePreset("Hero");
+      });
+      const persisted = app.ui.toPersistedUIState();
+      expect(persisted.posePresets).toHaveLength(1);
+      expect(persisted.posePresets?.[0].name).toBe("Hero");
+      expect(persisted.posePresets?.[0].meshId).toBe("torso");
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("⭐ `app.pose` and the store `UIStore` reads are the SAME instance (R6)", () => {
+    const app = makeApp();
+    try {
+      // A second `PoseUIStore` inside `UIStore` would be one nobody writes
+      // to, and the presets would silently never reach the file.
+      runInAction(() => app.pose.saveCurrentAsPosePreset("one"));
+      expect(app.ui.toPersistedUIState().posePresets).toHaveLength(1);
+      runInAction(() => app.ui.hydrate({ ...tinyProject().uiState }));
+      expect(app.pose.posePresets).toEqual([]);
     } finally {
       app.dispose();
     }

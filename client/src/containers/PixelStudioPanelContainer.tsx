@@ -59,6 +59,11 @@ import { ColorPickerContainer } from "./ColorPickerContainer";
 import { PaletteManagerContainer } from "./PaletteManagerContainer";
 import { useStores } from "../stores/context";
 import { OTHER_HAND_SECTIONS } from "./otherHand/otherHandSections";
+import {
+  fitCameraToMesh,
+  getCameraPreset,
+} from "../ui/canvas/pose/poseCamera";
+import { UNIT_BOUNDS } from "../ui/canvas/pose/poseMeshes";
 
 /** Transcribed from `OriginColorPicker`'s inline fallback. */
 const DEFAULT_ORIGIN_COLOR = { r: 255, g: 50, b: 50, a: 255 };
@@ -102,6 +107,23 @@ export const PixelStudioPanelContainer = observer(
     // floor, which is exactly the fallback presets want: with no resolvable
     // layer a preset still produces a definite line rather than one at NaN.
     const gridDims = app.selectionDims;
+
+    // ⚠️ The pose camera's FRUSTUM, derived rather than stored — see the
+    // `pose` block below for why, and for how far the advanced panel's edits
+    // currently reach. Transcribed from `CanvasContainer`'s fit effect so the
+    // two cannot disagree: a preset OVERRIDES the projection and supplies the
+    // orbit, and the store's own `projection` is the fallback for a preset id
+    // that no longer exists.
+    const poseFrustumPreset = getCameraPreset(pose.cameraPreset);
+    const poseFrustum = fitCameraToMesh({
+      bounds: UNIT_BOUNDS,
+      canvasWidth: gridDims.width,
+      canvasHeight: gridDims.height,
+      projection: poseFrustumPreset?.projection ?? pose.projection,
+      fov: pose.fov,
+      pitch: poseFrustumPreset?.pitch ?? 0,
+      yaw: poseFrustumPreset?.yaw ?? 0,
+    });
 
     return (
       <PixelStudioPanel
@@ -220,6 +242,55 @@ export const PixelStudioPanelContainer = observer(
           // canvas container reacts to that counter and does the framing. A
           // counter rather than a boolean, so two presses are two events.
           onRequestFit: () => pose.requestFit(),
+          // ── the advanced camera panel (task 06, mounted by task 08) ───────
+          //
+          // ⚠️ `near`, `far`, the ortho box and the aspect ratio are NOT
+          // store fields. They are DERIVED, and they are derived HERE by the
+          // same call `CanvasContainer`'s fit effect makes — same
+          // `UNIT_BOUNDS` (every mesh is normalised into it before it reaches
+          // the engine), same preset-overrides-projection rule, same fov — so
+          // the numbers on screen are the numbers the camera is actually
+          // using rather than a second, drifting estimate.
+          //
+          // ⚠️ **`onAdvancedChange` reaches only `fov` today, and that is a
+          // reported limitation, not an oversight.** There is no seam that
+          // can override a derived frustum value without editing
+          // `CanvasContainer.tsx` — the fit effect recomputes all four every
+          // time it runs — and that file is not in task 08's `Touches` list.
+          // `fov` IS a store field, so the one patch key the store can honour
+          // is honoured; the rest are accepted and dropped rather than
+          // written somewhere nothing reads. See `HANDOFF.md`.
+          near: poseFrustum.near,
+          far: poseFrustum.far,
+          orthographic: poseFrustum.orthographic,
+          perspective: poseFrustum.perspective,
+          onAdvancedChange: (patch) => {
+            if (patch.fov !== undefined) pose.setFov(patch.fov);
+          },
+          // ── saved scene presets (plan 08 task 08, F12) ────────────────────
+          //
+          // ⚠️ THE ONE PERSISTED FIELD ON THIS STORE. `posePresets` reaches
+          // the project file through `UIStore.toPersistedUIState()`, and only
+          // when at least one exists (F13) — every other pose field here is
+          // session-only (MASTER D6).
+          //
+          // `posePresets` is `observableRef` and replaced wholesale, so this
+          // map re-runs only when the array identity changes, never per
+          // preset. It projects to `{id, name}` deliberately: `PosePresetList`
+          // is a `ui/` module and may not see `types/domain.ts`'s
+          // `PersistedPosePreset`, and it has no use for the contents.
+          presets: pose.posePresets.map((preset) => ({
+            id: preset.id,
+            name: preset.name,
+          })),
+          // The store trims and no-ops on an empty name; the rail disables
+          // the button as well. Store = the guarantee, rail = the affordance.
+          onSavePreset: (name) => pose.saveCurrentAsPosePreset(name),
+          // ⚠️ ONE action (see `applyPosePreset`): nine fields land in a
+          // single MobX transaction, so `CanvasContainer`'s fit effect cannot
+          // observe a torn half-restored scene.
+          onApplyPreset: (id) => pose.applyPosePreset(id),
+          onDeletePreset: (id) => pose.deletePosePreset(id),
           onClear: () => pose.clear(),
         }}
       />

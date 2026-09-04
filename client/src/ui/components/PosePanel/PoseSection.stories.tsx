@@ -49,6 +49,13 @@ const handlers = {
   onSetScale: fn(),
   onSetFov: fn(),
   onRequestFit: fn(),
+  // Plan 08 task 08: the advanced camera panel and the saved scene presets.
+  // `onSavePreset` is ONE callback for two buttons on purpose — the advanced
+  // panel's "save as preset" and the preset list's Save are the same feature.
+  onAdvancedChange: fn(),
+  onSavePreset: fn(),
+  onApplyPreset: fn(),
+  onDeletePreset: fn(),
   onClear: fn(),
 };
 
@@ -74,6 +81,16 @@ const defaults = {
   cameraPreset: "2.5d" as const,
   scale: 1,
   fov: 50,
+  /* The advanced panel's values. ⚠️ NOT store fields — `CanvasContainer`
+     derives them from `fitCameraToMesh`, and these are the shape it produces
+     for a perspective camera at the default fit. */
+  near: 0.1,
+  far: 100,
+  perspective: { fov: 50, aspect: 1 },
+  /* No saved scenes: the state every project is in before the owner saves
+     one, and the state in which NO `posePresets` key is written to the file
+     at all (plan 08 F13). `SavedPresets` below is the other half. */
+  presets: [],
 };
 
 const meta = {
@@ -113,7 +130,10 @@ const meta = {
           "slot, MASTER E8/E9/E10), the outline width (0–4 px, 0 = off), and " +
           "the camera group (projection, five presets, an **uncapped** model " +
           "**Scale**, " +
-          "FOV and **Fit to canvas**). FOV is disabled in orthographic — " +
+          "FOV, **Fit to canvas** and the collapsed **advanced** panel of " +
+          "exact projection values), and the **saved scene presets** — the " +
+          "one persisted thing on this rail (plan 08 F12; everything else " +
+          "here is session-only). FOV is disabled in orthographic — " +
           "disabled rather than hidden, so the layout never jumps. The " +
           "mannequin row is never disabled: every part is loadable from any " +
           "state. Camera preset and viewpoint ANGLES are " +
@@ -174,5 +194,32 @@ export const Orthographic: Story = {
        is `scale` now, and it scales the MODEL, not the frustum (plan 08 F6). */
     scale: 18,
     edgeWidth: 2,
+    /* An orthographic camera shows the FOUR box fields instead of fov/aspect
+       — the advanced panel renders only the live projection's fields (F16). */
+    orthographic: { left: -1.1, right: 1.1, top: 1.1, bottom: -1.1 },
+    perspective: undefined,
+  },
+};
+
+/**
+ * Three saved scenes (plan 08 task 08) — the preset list at its **realistic
+ * worst case for 240 px**: a long name that must wrap or truncate rather than
+ * push the delete button off the rail.
+ *
+ * ⚠️ This is also the state in which the project file gains a `posePresets`
+ * key at all. With `presets: []` — every other story — the key is absent, and
+ * that absence is what leaves the owner's 151 backup snapshots byte-identical
+ * (F13).
+ */
+export const SavedPresets: Story = {
+  args: {
+    ...defaults,
+    ...handlers,
+    meshId: "mannequin",
+    presets: [
+      { id: "pose-1", name: "Hero 3/4" },
+      { id: "pose-2", name: "Top-down for tiles" },
+      { id: "pose-3", name: "Isometric, long name that must wrap" },
+    ],
   },
 };

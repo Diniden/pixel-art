@@ -657,6 +657,17 @@ export class ApplicationStore {
       tool,
       lighting: lightingUI,
       reference: referenceUI,
+      // Plan 08 task 08: `UIStore` reads exactly ONE field off the pose store
+      // — `posePresets`, the owner's saved scenes (F12). Injected rather than
+      // constructed there because THIS is the pose store the whole app writes
+      // to (the `loadGeneration` reaction below clears it), and a second one
+      // inside `UIStore` would be a store nobody writes to, so the presets
+      // would silently never reach the file. Construction order holds: `pose`
+      // is built above, at the `reflection` block.
+      //
+      // ⚠️ The LIVE pose is still session-only (MASTER D6). Only the presets
+      // cross into the wire format, and only when at least one exists (F13).
+      pose: this.pose,
     });
     const uiRef = this.ui;
     // ⚠️ INJECTED, not imported: `DomainStore` may not depend on

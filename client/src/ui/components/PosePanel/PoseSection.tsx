@@ -79,7 +79,6 @@
  *   `poseCamera.ts` — do not "correct" a label here.
  */
 import {
-  POSE_CAMERA_PRESETS,
   POSE_VIEWPOINT_ORDER,
   POSE_VIEWPOINT_ROTATIONS,
 } from "../../canvas/pose/poseCamera";
@@ -93,8 +92,16 @@ import type {
   PoseCameraPreset,
   PoseVector,
 } from "../../canvas/pose/poseTypes";
+import type {
+  CameraAdvancedOrthographic,
+  CameraAdvancedPatch,
+  CameraAdvancedPerspective,
+} from "./CameraAdvanced";
 import { DirectionOrb } from "./DirectionOrb";
 import { LightAnglesInput, RotationEulerInput } from "./EulerInput";
+import { PoseCameraGroup } from "./PoseCameraGroup";
+import { PosePresetList } from "./PosePresetList";
+import type { PosePresetEntry } from "./PosePresetList";
 import "./PosePanel.css";
 
 /**
@@ -163,6 +170,29 @@ export interface PoseSectionProps {
   /** Field of view in degrees. The store clamps it to 10–120. */
   fov: number;
 
+  /* ── the advanced camera panel's values (task 06, mounted by task 08) ────
+   *
+   * ⚠️ These four are NOT store fields. `CanvasContainer` derives them inside
+   * its fit effect from `fitCameraToMesh`, and the container computes the same
+   * numbers for display here. See `PoseCameraGroup`'s header for exactly how
+   * far `onAdvancedChange` reaches today. */
+
+  /** Near clip plane. Shared by both projections. */
+  near: number;
+  /** Far clip plane. Shared by both projections. */
+  far: number;
+  /** The orthographic frustum, when one is live. */
+  orthographic?: CameraAdvancedOrthographic;
+  /** The perspective lens, when one is live. */
+  perspective?: CameraAdvancedPerspective;
+
+  /**
+   * The owner's saved scene presets — **the one persisted thing this rail
+   * shows** (plan 08, F12). `{id, name}` only; what a preset HOLDS is decided
+   * by `PoseUIStore` and `PersistedPosePreset`, not here.
+   */
+  presets: readonly PosePresetEntry[];
+
   /**
    * Load a reference solid — a primitive, the whole mannequin, or one of its
    * parts. ⚠️ **The part buttons route through THIS**, not a separate framing
@@ -204,6 +234,27 @@ export interface PoseSectionProps {
    * pan is still untouched.
    */
   onRequestFit: () => void;
+  /**
+   * One advanced-camera field edited to a finite, legal value. ⚠️ Never fires
+   * for an empty, unparseable or illegal entry — `CameraAdvanced` rejects
+   * locally and emits nothing.
+   */
+  onAdvancedChange: (patch: CameraAdvancedPatch) => void;
+  /**
+   * Save the CURRENT scene under a name. Already trimmed and never empty.
+   *
+   * ⚠️ One callback, two buttons: the advanced panel's "save as preset" and
+   * the preset list's Save do the same thing, because they are the same
+   * thing — the owner asked for *"save that matrix into a preset I can
+   * select"* and *"save ALL orientations … to a preset"* as two halves of one
+   * feature, and two save paths writing two different shapes would be two
+   * kinds of preset in one list.
+   */
+  onSavePreset: (name: string) => void;
+  /** Restore one saved scene, by id. */
+  onApplyPreset: (id: string) => void;
+  /** Forget one saved scene, by id. */
+  onDeletePreset: (id: string) => void;
   /** Unloads the mesh and returns every setting to its default. */
   onClear: () => void;
 }
@@ -242,11 +293,6 @@ const MANNEQUIN_PARTS: readonly { id: PoseMeshId; label: string }[] = [
     id: id as PoseMeshId,
     label: id.charAt(0).toUpperCase() + id.slice(1),
   })),
-];
-
-const PROJECTIONS: readonly { id: PoseProjection; label: string }[] = [
-  { id: "perspective", label: "Perspective" },
-  { id: "orthographic", label: "Orthographic" },
 ];
 
 /**
@@ -341,6 +387,11 @@ export function PoseSection({
   cameraPreset,
   scale,
   fov,
+  near,
+  far,
+  orthographic,
+  perspective,
+  presets,
   onSelectMesh,
   onSetRotation,
   onSetLightDirection,
@@ -353,11 +404,13 @@ export function PoseSection({
   onSetScale,
   onSetFov,
   onRequestFit,
+  onAdvancedChange,
+  onSavePreset,
+  onApplyPreset,
+  onDeletePreset,
   onClear,
 }: PoseSectionProps) {
   const hasMesh = meshId !== null;
-  /* An orthographic camera has no field of view. */
-  const fovEnabled = projection === "perspective";
   /* Rounded because the store holds a number and a fractional width has no
      meaning at 1:1 — the outline dilates by whole pixels (E4). */
   const outlineWidth = Math.round(edgeWidth);
@@ -556,124 +609,44 @@ export function PoseSection({
         </div>
       </div>
 
-      <div className="pose-panel__group">
-        <span className="pose-panel__group-label">Camera</span>
-        <div className="pose-panel__buttons">
-          {PROJECTIONS.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              className={btn(projection === id)}
-              onClick={() => onSetProjection(id)}
-              title={`Use a ${label.toLowerCase()} camera`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="pose-panel__buttons">
-          {POSE_CAMERA_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              className={btn(cameraPreset === preset.id)}
-              /* ⚠️ Hands over the WHOLE preset (F7), not its id: pressing
-                 this sets projection, pitch, yaw, FOV, the clip policy AND
-                 the model's rotation, in one action. */
-              onClick={() => onApplyCameraPreset(preset)}
-              title={`${preset.label} — ${preset.projection}; sets the camera and the model's rotation`}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
+      {/* ── Camera ──────────────────────────────────────────────────────────
+          Extracted to `PoseCameraGroup` by plan 08 task 08: this file sat at
+          399 of the 400 code-line `ui/` ERROR ceiling and had to grow two
+          more surfaces. The cut follows a real seam — everything in there is
+          a camera property and nothing in there reads the mesh, the light,
+          the colours or the outline — and it still renders exactly one
+          `.pose-panel__group`, so the rail's markup is unchanged. */}
+      <PoseCameraGroup
+        projection={projection}
+        cameraPreset={cameraPreset}
+        scale={scale}
+        fov={fov}
+        hasMesh={hasMesh}
+        near={near}
+        far={far}
+        orthographic={orthographic}
+        perspective={perspective}
+        onSetProjection={onSetProjection}
+        onApplyCameraPreset={onApplyCameraPreset}
+        onSetScale={onSetScale}
+        onSetFov={onSetFov}
+        onRequestFit={onRequestFit}
+        onAdvancedChange={onAdvancedChange}
+        onSaveAsPreset={onSavePreset}
+      />
 
-        <div className="pose-panel__slider-row">
-          <span className="pose-panel__slider-label">Scale</span>
-          <input
-            type="range"
-            className="pose-panel__slider"
-            aria-label="Scale"
-            /* ⚠️ THE OLD `max={10}` IS GONE. It mirrored `POSE_ZOOM_MAX`,
-               deleted because the owner reported the model capping out;
-               leaving it here would have kept exactly that cap in the one
-               place they touch it. A range input cannot be literally
-               unbounded — it needs finite ends to have a thumb position — so
-               the TRAVEL is widened to `POSE_SCALE_SLIDER_MAX` for the common
-               case, and the number box beside it takes any value the store
-               accepts, which per MASTER E11 is anything above
-               `POSE_SCALE_MIN_SAFE` with NO ceiling. The slider is an
-               affordance; it is not the limit. */
-            min={POSE_SCALE_SLIDER_MIN}
-            max={POSE_SCALE_SLIDER_MAX}
-            step={0.1}
-            value={Math.min(scale, POSE_SCALE_SLIDER_MAX)}
-            onChange={(e) => onSetScale(Number(e.target.value))}
-          />
-          <input
-            type="number"
-            className="pose-panel__number"
-            aria-label="Scale value"
-            /* No `max`: this is the unbounded path (E11). `min` is the store's
-               safety floor, not a cap. */
-            min={POSE_SCALE_SLIDER_MIN}
-            step={0.1}
-            value={scale}
-            onChange={(e) => {
-              /* ⚠️ An EMPTY box must send nothing at all. A number input
-                 sanitises anything unparseable to `""`, and `Number("")` is
-                 `0` — not `NaN` — so a bare `Number.isFinite` guard would let
-                 a half-typed value collapse the camera to the store's safety
-                 floor mid-keystroke. Both cases are rejected here. */
-              const raw = e.target.value.trim();
-              if (raw === "") return;
-              const next = Number(raw);
-              if (Number.isFinite(next)) onSetScale(next);
-            }}
-            title="Model scale multiplier — type any value; there is no upper limit"
-          />
-        </div>
-
-        <div className="pose-panel__slider-row">
-          <span className="pose-panel__slider-label">FOV</span>
-          <input
-            type="range"
-            className="pose-panel__slider"
-            aria-label="Field of view"
-            min={10}
-            max={120}
-            step={1}
-            value={fov}
-            disabled={!fovEnabled}
-            onChange={(e) => onSetFov(Number(e.target.value))}
-            title={
-              fovEnabled
-                ? "Field of view, in degrees"
-                : "An orthographic camera has no field of view"
-            }
-          />
-          <span className="pose-panel__slider-value">{Math.round(fov)}°</span>
-        </div>
-
-        {/* MASTER E14/E15 — a REQUEST, not a computation. The container reacts
-            to the store's `fitGeneration` counter and does the framing; this
-            button only asks. ⚠️ Since plan 08 (F4) the fit sets the MODEL's
-            scale rather than moving the camera, so a press returns Scale to
-            the fitted size — but it still does NOT touch the pan. */}
-        <button
-          type="button"
-          className="pose-panel__btn"
-          onClick={onRequestFit}
-          disabled={!hasMesh}
-          title={
-            hasMesh
-              ? "Return the model to the fitted size; the pan is left alone"
-              : "Load a reference solid first"
-          }
-        >
-          Fit to canvas
-        </button>
-      </div>
+      {/* ── Saved scene presets (plan 08 task 08, owner item 10) ─────────────
+          ⚠️ THE ONE PERSISTED THING ON THIS RAIL. Everything else here is
+          session state (MASTER D6); a saved scene is written into the project
+          file, and only ever when at least one exists (F13). This component
+          renders `{id, name}` and knows nothing about what a preset holds —
+          see `PosePresetList`'s header. */}
+      <PosePresetList
+        presets={presets}
+        onSave={onSavePreset}
+        onApply={onApplyPreset}
+        onDelete={onDeletePreset}
+      />
 
       {hasMesh ? (
         <button type="button" className="pose-panel__btn" onClick={onClear}>

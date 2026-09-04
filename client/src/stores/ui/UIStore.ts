@@ -118,6 +118,7 @@ import {
 } from "../../ui/layout/railVisibility";
 import type { SessionStore } from "../session/SessionStore";
 import type { ReferenceUIStore } from "./ReferenceUIStore";
+import type { PoseUIStore } from "./PoseUIStore";
 
 /**
  * The lighting/studio fields in their COMPACT (packed) form.
@@ -224,6 +225,21 @@ export interface UIStoreDeps {
    * lets `UIStore` construct it.
    */
   layout?: LayoutUIStore;
+  /**
+   * Plan 08 task 08: the pose store, injected for its **one persisted field**
+   * — `posePresets`.
+   *
+   * ⚠️ **Injected rather than constructed, and that is not the `layout`
+   * pattern.** `ApplicationStore` already owns an `app.pose` (it wires the
+   * `loadGeneration` → `clear()` reaction to it) and the whole app reads that
+   * one, so constructing a second here would give the builder a store nobody
+   * writes to and the presets would silently never be saved. It is OPTIONAL
+   * for the same reason `lighting` and `reference` are: the task-24 wire-format
+   * suites build a bare `UIStore`, and with none supplied the builder falls
+   * back to {@link UIStore.ownPosePresets} — which keeps those suites, the R3
+   * gate over the owner's 151 snapshots, byte-unmodified.
+   */
+  pose?: PoseUIStore;
 }
 
 export class UIStore {
@@ -291,6 +307,28 @@ export class UIStore {
   readonly referenceUI: ReferenceUIStore | null;
 
   /**
+   * Plan 08: the pose store, or `null` in the task-24 suites. Read by the
+   * builder for `posePresets` and by `hydrate` — nothing else here touches
+   * the pose, which stays session-only apart from that one field.
+   */
+  readonly poseUI: PoseUIStore | null;
+
+  /**
+   * The task-24-suite fallback for `posePresets`, mirroring
+   * {@link UIStore.lighting} and {@link UIStore.ownTraceNudgeAmount}.
+   *
+   * ⚠️ It exists so the R3 wire-format suites — the gate that reruns the
+   * owner's 151 real snapshots through this builder — can populate and read
+   * the field without constructing a `PoseUIStore` they otherwise have no use
+   * for. When a real pose store IS injected there is exactly one storage
+   * location (R6): the accessors below delegate and this stays untouched.
+   *
+   * `observableRef` and replaced wholesale, exactly like the store's own.
+   */
+  /** @internal Not `private`: MobX's `AnnotationsMap` cannot name a private field. */
+  ownPosePresets: import("../../types").PersistedPosePreset[] = [];
+
+  /**
    * Bumped by a reaction over every persisted field. `AutoSaveController`
    * adds it to its trigger tuple — **a missed bump is silent data loss**, so
    * `persistedUIVersion.test.ts` asserts both directions: every persisted
@@ -308,9 +346,11 @@ export class UIStore {
     this.lightingUI = deps.lighting ?? null;
     this.referenceUI = deps.reference ?? null;
     this.layout = deps.layout ?? new LayoutUIStore();
+    this.poseUI = deps.pose ?? null;
 
     makeObservable(this, {
       lighting: observableRef,
+      ownPosePresets: observableRef,
       ownTraceNudgeAmount: observable,
       persistedUIVersion: observable,
       persistedSignature: computedStruct,
@@ -519,6 +559,26 @@ export class UIStore {
       "layoutPresets",
       this.layout.toPersistedLayoutPresets(),
     );
+    // ⚠️ CONDITIONAL, AND THIS ONE IS THE PLAN-08 DATA-SAFETY LINE (F13).
+    //
+    // `posePresets` is the pose store's ONE persisted field — everything else
+    // about the pose (mesh, rotation, scale, pan, light, outline) is
+    // deliberately session-only (MASTER D6). `toPersistedPosePresets()`
+    // returns `undefined` until the owner has actually saved a scene, so
+    // `assign` writes nothing and a project nobody has saved a pose preset in
+    // gains NO KEY — which is what leaves the owner's 151 backup snapshots
+    // byte-identical.
+    //
+    // ⚠️ NEVER write this as `posePresets: <expr>` in the unconditional block
+    // above, and never as `posePresets: undefined`. Measured while adding
+    // `fillColor`: the `key: undefined` form still adds the key — to
+    // `Object.keys()` and to the corpus digest — and changed all 11 digests.
+    // The conditional form left every snapshot byte-identical.
+    //
+    // No migration accompanies this key and none is needed (F14): absent is
+    // handled by `?? default` on read, and the wire type is optional in both
+    // directions.
+    /* 46c */ assign(persisted, "posePresets", this.toPersistedPosePresets());
     // Conditional for the same reason as the two above: a project that has
     // never been pinch/wheel-zoomed must not gain the key.
     /* 47 */ assign(persisted, "viewZoom", viewport.viewZoom);
@@ -559,6 +619,20 @@ export class UIStore {
   }
 
   /**
+   * `posePresets` for the builder — `undefined` until one is saved (F13).
+   *
+   * Delegates to the injected pose store when there is one, which is always
+   * in the app; the fallback field serves the task-24 suites only. Exactly
+   * the {@link UIStore.traceNudgeAmount} shape: one storage location at
+   * runtime, so the two can never disagree (R6).
+   */
+  private toPersistedPosePresets():
+    import("../../types").PersistedPosePreset[] | undefined {
+    if (this.poseUI) return this.poseUI.toPersistedPosePresets();
+    return this.ownPosePresets.length > 0 ? this.ownPosePresets : undefined;
+  }
+
+  /**
    * Adopt a loaded project's `uiState`. The inverse of the builder: the flat
    * 7 panel keys are re-grouped, the lighting block is captured wholesale,
    * and each sub-store takes its own fields.
@@ -567,6 +641,16 @@ export class UIStore {
     this.tool.hydrate(ui);
     this.viewport.hydrate(ui);
     this.layout.hydrate(ui);
+    // Plan 08: the pose's ONE persisted field. Assigned UNCONDITIONALLY by
+    // `hydratePosePresets`, so "absent stays absent" survives a project
+    // switch and one project's presets can never be written into another's
+    // file. ⚠️ The live pose is NOT hydrated here and must not be — it stays
+    // session-only (MASTER D6).
+    if (this.poseUI) {
+      this.poseUI.hydratePosePresets(ui);
+    } else {
+      this.ownPosePresets = ui.posePresets ?? [];
+    }
     // Task 29: routes through the accessor into `ReferenceUIStore` when one is
     // injected, so a loaded project hydrates the single owner.
     this.traceNudgeAmount = ui.traceNudgeAmount ?? 10;

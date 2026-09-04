@@ -40,6 +40,7 @@ import { runInAction } from "mobx";
 
 import { UIStore } from "@/stores/ui/UIStore";
 import { LayoutUIStore } from "@/stores/ui/LayoutUIStore";
+import { PoseUIStore } from "@/stores/ui/PoseUIStore";
 import { SelectionMirror } from "@/stores/SelectionMirror";
 import { SessionStore } from "@/stores/session/SessionStore";
 import {
@@ -191,6 +192,26 @@ function fullyPopulatedProject(): Project {
     theme: "light-cozy",
     viewZoom: 2.5,
     eyedropperMode: "stay",
+    // ⚠️ Present here because the every-field-reachable assertion below
+    // compares this project's built key set against `CompactUIState`'s
+    // declared fields: a conditional key that no fixture populates would read
+    // as a builder line that does not exist. The values are the WIDE wire
+    // shape a real file carries.
+    posePresets: [
+      {
+        id: "pose-1",
+        name: "Hero three-quarter",
+        meshId: "mannequin",
+        rotation: { x: 0.26, y: 0.79, z: 0 },
+        projection: "orthographic",
+        cameraPreset: "iso",
+        fov: 50,
+        scale: 2.5,
+        lightDirection: { x: -0.4, y: 0.8, z: 0.45 },
+        lightColor: { r: 255, g: 226, b: 189, a: 255 },
+        edgeWidth: 2,
+      },
+    ],
   });
   return project;
 }
@@ -264,7 +285,16 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     // undefined" still counts as a key to `Object.keys()` and to the corpus
     // digest. Measured — the plain `: undefined` form changed all 11 digests;
     // the spread leaves every one of the owner's snapshots byte-identical.
-    expect(declared).toHaveLength(52);
+    // +1 (2026-09-04): `posePresets`, the owner's saved pose SCENES — camera
+    // settings plus the model's orientation, kept under a name and reloadable
+    // (plan 08, F12). Conditional on exactly the same terms as the six above,
+    // and for exactly the same reason: `toPersistedPosePresets()` returns
+    // `undefined` until one is saved, so no existing snapshot gains the key
+    // and no digest moves. ⚠️ Only the PRESETS persist — the live pose
+    // (mesh, rotation, scale, pan, light, outline) stays session-only, which
+    // `PoseUIStore.test.ts`'s "is NOT part of the persisted wire format" case
+    // still pins unmodified.
+    expect(declared).toHaveLength(53);
 
     // A FULLY-POPULATED project, because 11 of the 44 keys are
     // conditionally present by design: the legacy `...project.uiState`
@@ -688,5 +718,125 @@ describe("pencilOnly — absent stays absent", () => {
       ui.viewport.hydrate({ pencilOnly: stored });
       expect(ui.toPersistedUIState().pencilOnly).toBe(stored);
     }
+  });
+});
+
+/**
+ * Saved pose scene presets (2026-09-04, plan 08 task 08) — the wire-format
+ * half.
+ *
+ * ⚠️ **THE POINT OF THESE IS THE OWNER'S DATA.** `posePresets` is the only
+ * wire-format change in plan 08, and the mechanism that makes it safe is that
+ * the key is **absent** until a preset exists (F13). An unconditional key —
+ * or the `posePresets: undefined` form, which measurably added the key and
+ * changed all 11 corpus digests when `fillColor` was written that way — would
+ * fail `R3 — the builder against the real corpus` above on all 151 snapshots.
+ *
+ * The cases below pin that absence at both ends: from a store nobody has
+ * touched, and from a project that carried no such key through a full
+ * hydrate → build round trip.
+ */
+describe("posePresets — absent stays absent (plan 08, F13)", () => {
+  /** A bare store WITH a pose store, since that is where the field lives. */
+  const bare = () => {
+    const pose = new PoseUIStore();
+    const ui = new UIStore({
+      session: new SessionStore(),
+      selection: new SelectionMirror(),
+      layout: new LayoutUIStore("desktop"),
+      pose,
+    });
+    return { ui, pose };
+  };
+
+  it("⭐ is NOT emitted by a store in which no preset has been saved", () => {
+    const { ui } = bare();
+    expect("posePresets" in ui.toPersistedUIState()).toBe(false);
+  });
+
+  it("⭐ is NOT emitted merely because the LIVE pose has been used", () => {
+    const { ui, pose } = bare();
+    runInAction(() => {
+      pose.setMesh("mannequin");
+      pose.setRotation({ x: 1, y: 2, z: 3 });
+      pose.setScale(12);
+      pose.setEdgeWidth(4);
+      pose.setCameraPreset("iso");
+    });
+    // MASTER D6: only the PRESETS persist. Tumbling the model, scaling it and
+    // turning the outline on must leave the project file untouched.
+    expect("posePresets" in ui.toPersistedUIState()).toBe(false);
+  });
+
+  it("⭐ a project with no such key round-trips WITHOUT gaining one", () => {
+    const { ui } = bare();
+    const project = createDefaultProject();
+    expect("posePresets" in project.uiState).toBe(false);
+    runInAction(() => ui.hydrate(project.uiState));
+    const built = ui.toPersistedUIState();
+    expect("posePresets" in built).toBe(false);
+    // And the legacy serializer agrees — which is the property the 151-snapshot
+    // corpus case above generalises.
+    expect("posePresets" in legacyUIState(project)).toBe(false);
+  });
+
+  it("appears once a preset is saved, and round-trips through hydrate", () => {
+    const { ui, pose } = bare();
+    runInAction(() => {
+      pose.setMesh("head");
+      pose.setScale(4);
+      pose.saveCurrentAsPosePreset("  Hero 3/4  ");
+    });
+
+    const built = ui.toPersistedUIState();
+    expect(built.posePresets).toHaveLength(1);
+    expect(built.posePresets?.[0].name).toBe("Hero 3/4");
+    expect(built.posePresets?.[0].meshId).toBe("head");
+    expect(built.posePresets?.[0].scale).toBe(4);
+
+    // Through a real JSON trip, into a DIFFERENT store.
+    const wire = JSON.parse(JSON.stringify(built)) as CompactUIState;
+    const second = bare();
+    runInAction(() =>
+      second.ui.hydrate({
+        ...createDefaultProject().uiState,
+        posePresets: wire.posePresets,
+      }),
+    );
+    expect(second.pose.posePresets).toEqual(pose.posePresets);
+    expect(second.ui.toPersistedUIState().posePresets).toEqual(
+      built.posePresets,
+    );
+  });
+
+  it("⭐ goes back to being ABSENT when the last preset is deleted", () => {
+    const { ui, pose } = bare();
+    runInAction(() => pose.saveCurrentAsPosePreset("only"));
+    expect("posePresets" in ui.toPersistedUIState()).toBe(true);
+    runInAction(() => pose.deletePosePreset(pose.posePresets[0].id));
+    // Not `posePresets: []` — no key at all, which is what
+    // `toPersistedPosePresets()` returning `undefined` buys.
+    expect("posePresets" in ui.toPersistedUIState()).toBe(false);
+  });
+
+  it("⭐ hydrating a project WITHOUT the key clears a previous project's presets", () => {
+    const { ui, pose } = bare();
+    runInAction(() => pose.saveCurrentAsPosePreset("project A"));
+    runInAction(() => ui.hydrate(createDefaultProject().uiState));
+    // Otherwise the next autosave would write project A's presets into
+    // project B's file.
+    expect(pose.posePresets).toEqual([]);
+    expect("posePresets" in ui.toPersistedUIState()).toBe(false);
+  });
+
+  it("bumps persistedUIVersion, so a saved preset actually schedules a save", () => {
+    const { ui, pose } = bare();
+    const before = ui.persistedUIVersion;
+    runInAction(() => pose.saveCurrentAsPosePreset("wake the autosave"));
+    // A missed bump here is SILENT DATA LOSS: the preset would live only in
+    // memory and vanish on reload, which is the one thing the feature exists
+    // to prevent.
+    expect(ui.persistedUIVersion).toBeGreaterThan(before);
+    ui.dispose();
   });
 });
