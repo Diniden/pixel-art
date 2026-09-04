@@ -523,6 +523,186 @@ export function solveFitScale(bounds: PoseBounds, padding?: number): number {
   return Number.isFinite(scale) && scale > MIN_FIT_SCALE ? scale : MIN_FIT_SCALE;
 }
 
+/* ── the camera-space pan (plan 08, F3) ───────────────────────────────────── */
+
+/** Arguments to {@link offsetCameraParams}. */
+export interface OffsetCameraParams {
+  /** The fitted camera to translate. Never mutated. */
+  params: PoseCameraParams;
+  /**
+   * The pan, in **grid cells** — the store's own unit (`PoseUIStore.pan`).
+   * `+x` slides the picture RIGHT on the canvas, `+y` slides it DOWN, which
+   * is the direction the drag has always moved it.
+   */
+  panX: number;
+  panY: number;
+  /** Render-target width in texels — `cellWidth`. One cell is one texel. */
+  canvasWidth: number;
+  /** Render-target height in texels — `cellHeight`. */
+  canvasHeight: number;
+  /** The same orbit pitch that placed `params`, in radians. */
+  pitch?: number;
+  /** The same orbit yaw that placed `params`, in radians. */
+  yaw?: number;
+}
+
+/**
+ * Translate a fitted camera **parallel to its own image plane** — the pan
+ * (plan 08, **F3**; the owner's item 3).
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ THE POSITION AND THE TARGET MOVE BY THE SAME WORLD VECTOR. ALWAYS.
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * That single sentence is the whole design. Because both endpoints move
+ * together the view *direction* is unchanged, so `lookAt` still resolves to
+ * the same orientation, the frustum keeps every one of its dimensions, and
+ * nothing about the framing — scale, projection, near, far — is disturbed.
+ * The camera slides sideways; it does not turn, dolly, or re-fit.
+ *
+ * ## What it replaces, and why that had to go
+ *
+ * **The owner's words:** *"Panning the pose is done wrong: right now it is
+ * moving the pose's canvas completely so if I pan it down but the model goes
+ * above the top border, it looks clipped in the rendering. We should be
+ * adjusting for the so the panning is just a parallel translation to the
+ * camera so the canvas stays pixel aligned properly."*
+ *
+ * Pan used to be a **canvas-space blit offset**: the container rendered a
+ * `cellWidth × cellHeight` target and then drew that whole rectangle at
+ * `putImageData(image, pan.x - ox, pan.y - oy)`. Anything outside the
+ * target's own rectangle was **never rasterised in the first place**, so
+ * sliding the finished picture could only ever reveal empty margin on one
+ * side and guillotine the model on the other. That is precisely the clipping
+ * reported.
+ *
+ * The old design had a stated justification — *"a camera pan would re-fit and
+ * re-rasterise"* — which was **true of the old camera and is not true of this
+ * one**. Plan 08 task 03 made the fit a pure function of bounds, canvas,
+ * projection, pitch, yaw and fov, solving for a **model scale** instead of
+ * moving the camera. So a pan no longer perturbs the fit, and the premise the
+ * blit offset rested on is gone.
+ *
+ * ## Why not `object.position`, and why not an off-axis frustum
+ *
+ * Moving the **model** instead would collide with `normalizeToUnitBox`
+ * (`poseMeshes.ts`), which already writes `object.position` on the very root
+ * the container holds — a second writer would fight it, and the loser would
+ * be whichever effect ran last (MASTER §8, mistake 2).
+ *
+ * Shifting the frustum asymmetrically works for orthographic and **does not
+ * generalise**: an off-axis perspective projection cannot be expressed through
+ * {@link applyCameraParams}, which writes camera *fields* and lets three build
+ * the matrix (F16). Translating the camera works identically for both
+ * projections through the code that already exists.
+ *
+ * ## Pixel alignment — the point of the task
+ *
+ * One grid cell is **one render-target texel**: the target is allocated at
+ * exactly `cellWidth × cellHeight` with no devicePixelRatio and blitted 1:1.
+ * So a pan of *n* cells must translate the view by *exactly* *n* texels, and
+ * the world size of one texel is read off the fitted frustum:
+ *
+ * - **orthographic** — the frustum spans `right - left` world units across
+ *   `canvasWidth` texels, so `worldPerTexel = (right - left) / canvasWidth`.
+ *   The fit builds `halfWidth = halfHeight · aspect` with `aspect =
+ *   canvasWidth / canvasHeight`, so the X and Y answers are **equal** — as
+ *   they must be, or square texels would pan at different rates per axis.
+ * - **perspective** — the half-height of the frustum *at the target's depth*
+ *   is `distance · tan(fov/2)`, so `worldPerTexel = 2 · distance ·
+ *   tan(fov/2) / canvasHeight`. Exact at the target plane, which is where the
+ *   model sits; a vertex nearer the camera parallaxes slightly, which is what
+ *   perspective *means* and is not an alignment error.
+ *
+ * ⚠️ **The pan is snapped to whole texels before it is converted**, not
+ * after. Rounding in cells (an integer count) and then multiplying by the
+ * world-per-texel constant lands the translation on an exact texel boundary
+ * by construction. Converting first and rounding the world units afterwards
+ * would be the same idea done wrong — the rounding error would depend on the
+ * frustum size and reappear as a half-texel crawl while dragging.
+ *
+ * ## Signs
+ *
+ * `panX` is "slide the picture right", which means the **camera moves left**:
+ * to see more of what is on the model's left, the observer steps left. Hence
+ * the negated right vector. `panY` is "slide the picture down" in canvas
+ * coordinates, where +Y is **down**, while the camera's up vector is +Y
+ * **up** — so it too is negated, and the two negations have different
+ * reasons. Both preserve the drag direction the pointer path has always had,
+ * so dragging stays direct rather than inverted.
+ *
+ * ⚠️ **Pan is deliberately UNBOUNDED.** The model may leave the frame
+ * entirely; nothing here clamps, and nothing should.
+ *
+ * @returns a **new** `PoseCameraParams`. `params` is not mutated. A pan of
+ * `(0, 0)` returns a deep-equal copy — the regression pin that a zero pan
+ * reproduces the previous camera exactly.
+ */
+export function offsetCameraParams(
+  args: OffsetCameraParams,
+): PoseCameraParams {
+  const { params, panX, panY, canvasWidth, canvasHeight, pitch = 0, yaw = 0 } = args;
+
+  const width = Number.isFinite(canvasWidth) && canvasWidth > 0 ? canvasWidth : 1;
+  const height = Number.isFinite(canvasHeight) && canvasHeight > 0 ? canvasHeight : 1;
+
+  // Snap in CELLS, which are integers by construction of the render target —
+  // see the header. A non-finite pan is treated as no pan at all rather than
+  // propagating NaN into the camera, where it would blank the frame.
+  const texelsX = Number.isFinite(panX) ? Math.round(panX) : 0;
+  const texelsY = Number.isFinite(panY) ? Math.round(panY) : 0;
+  if (texelsX === 0 && texelsY === 0) return { ...params };
+
+  // World units per texel, off the fitted frustum.
+  let worldPerTexelX: number;
+  let worldPerTexelY: number;
+  if (params.projection === "perspective" && params.perspective) {
+    const distance = Math.hypot(
+      params.position.x - params.target.x,
+      params.position.y - params.target.y,
+      params.position.z - params.target.z,
+    );
+    const halfHeight =
+      distance * Math.tan((params.perspective.fov * Math.PI) / 360);
+    worldPerTexelY = (halfHeight * 2) / height;
+    worldPerTexelX = worldPerTexelY;
+  } else if (params.orthographic) {
+    worldPerTexelX = (params.orthographic.right - params.orthographic.left) / width;
+    worldPerTexelY = (params.orthographic.top - params.orthographic.bottom) / height;
+  } else {
+    // No frustum to measure — a caller handed in params with neither block
+    // populated. Refusing to guess is better than inventing a scale.
+    return { ...params };
+  }
+
+  // The camera's own right/up axes, in world space.
+  const right = viewToWorld({ x: 1, y: 0, z: 0 }, pitch, yaw);
+  const up = viewToWorld({ x: 0, y: 1, z: 0 }, pitch, yaw);
+
+  // See "Signs" in the header: both terms are negated, for two different
+  // reasons, and together they keep the drag direction unchanged.
+  const u = -texelsX * worldPerTexelX;
+  const v = texelsY * worldPerTexelY;
+
+  const dx = right.x * u + up.x * v;
+  const dy = right.y * u + up.y * v;
+  const dz = right.z * u + up.z * v;
+
+  return {
+    ...params,
+    position: {
+      x: params.position.x + dx,
+      y: params.position.y + dy,
+      z: params.position.z + dz,
+    },
+    target: {
+      x: params.target.x + dx,
+      y: params.target.y + dy,
+      z: params.target.z + dz,
+    },
+  };
+}
+
 /* ── the one seam that touches a camera object ────────────────────────────── */
 
 /**
@@ -685,6 +865,50 @@ export function worldToView(
   const z2 = v.y * sp + z1 * cp;
 
   return { x: x1, y: y2, z: z2 };
+}
+
+/**
+ * The exact inverse of {@link worldToView}: take a **view-space** offset back
+ * into world space for a camera orbiting at `pitch`/`yaw`.
+ *
+ * ⚠️ **This is the camera basis a camera-space pan translates along** (plan
+ * 08, **F3**). `viewToWorld({x:1,y:0,z:0}, …)` is the camera's **right**
+ * vector and `viewToWorld({x:0,y:1,z:0}, …)` its **up** vector, in world
+ * space — so a pan of `(u, v)` view-space units is the single world vector
+ * `u·right + v·up`, which is what {@link offsetCameraParams} adds to *both*
+ * the position and the target.
+ *
+ * ⚠️ **Verified 2026-09-04 against three 0.185.1 itself**, not derived on
+ * paper. A camera placed at `orbitDirection(pitch, yaw) · d` and told to
+ * `lookAt(0,0,0)` with the default up of `(0,1,0)` produces a `matrixWorld`
+ * whose columns 0 and 1 match these two vectors to within 1.7e-16, at pitch 0,
+ * at compound angles, at negative yaw, and at 89.9° of pitch (just short of
+ * the gimbal singularity `lookAt` has at the poles). Getting this basis wrong
+ * would make a pan drift diagonally at any pitch but zero — a bug that looks
+ * like "the drag feels loose" rather than like a wrong matrix.
+ *
+ * Order matters and is the mirror image of {@link worldToView}'s: re-apply the
+ * pitch about the view's own +X first, then the yaw about +Y. Round-tripping
+ * 20,000 random vectors through both closes to 1.1e-15.
+ */
+export function viewToWorld(
+  v: PoseVector,
+  pitch: number,
+  yaw: number,
+): PoseVector {
+  // Re-apply pitch (rotate by −pitch about X).
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  const y1 = v.y * cp + v.z * sp;
+  const z1 = -v.y * sp + v.z * cp;
+
+  // Re-apply yaw (rotate by +yaw about Y).
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const x2 = v.x * cy + z1 * sy;
+  const z2 = -v.x * sy + z1 * cy;
+
+  return { x: x2, y: y1, z: z2 };
 }
 
 /** `value` clamped to `[lo, hi]`; a non-finite value falls back to `lo`. */

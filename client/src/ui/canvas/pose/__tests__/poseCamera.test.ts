@@ -36,6 +36,7 @@ import {
   DEFAULT_FIT_PADDING,
   fitCameraToMesh,
   getCameraPreset,
+  offsetCameraParams,
   orbitDirection,
   POSE_CAMERA_PRESETS,
   POSE_VIEWPOINT_ORDER,
@@ -43,6 +44,7 @@ import {
   radiansToDegrees,
   solveFitScale,
   TRUE_ISOMETRIC_PITCH_RADIANS,
+  viewToWorld,
   worldToView,
   type FitCameraParams,
   type PoseBounds,
@@ -1035,5 +1037,499 @@ describe("applyCameraParams", () => {
     applyCameraParams(camera as never, fit());
     expect(order.indexOf("left")).toBeLessThan(order.indexOf("update"));
     expect(order.indexOf("lookAt")).toBeLessThan(order.indexOf("update"));
+  });
+});
+
+/* ══ viewToWorld — the camera basis a pan translates along (F3) ══════════ */
+
+describe("viewToWorld", () => {
+  const ANGLES: [number, number][] = [
+    [0, 0],
+    [0.3, 0.9],
+    [TRUE_ISOMETRIC_PITCH_RADIANS, Math.PI / 4],
+    [-0.4, -2],
+    [1.5, 0],
+    [0.7, 4.2],
+  ];
+
+  it("is the exact inverse of worldToView", () => {
+    // The round trip is the property the pan depends on: `offsetCameraParams`
+    // asks for the camera's right/up axes in WORLD space, and gets them by
+    // sending the view-space unit axes back out through this.
+    for (const [pitch, yaw] of ANGLES) {
+      for (const v of boxCorners({
+        min: { x: -1.5, y: 0.25, z: -3 },
+        max: { x: 2, y: 1.75, z: 0.5 },
+      })) {
+        const back = viewToWorld(worldToView(v, pitch, yaw), pitch, yaw);
+        expect(back.x).toBeCloseTo(v.x, 12);
+        expect(back.y).toBeCloseTo(v.y, 12);
+        expect(back.z).toBeCloseTo(v.z, 12);
+      }
+    }
+  });
+
+  it("takes the view-space forward axis to orbitDirection", () => {
+    // If this drifted, the pan basis would be rotated relative to the camera
+    // the fit actually placed, and a drag would slide the model diagonally.
+    for (const [pitch, yaw] of ANGLES) {
+      const fwd = viewToWorld({ x: 0, y: 0, z: 1 }, pitch, yaw);
+      const orbit = orbitDirection(pitch, yaw);
+      expect(fwd.x).toBeCloseTo(orbit.x, 12);
+      expect(fwd.y).toBeCloseTo(orbit.y, 12);
+      expect(fwd.z).toBeCloseTo(orbit.z, 12);
+    }
+  });
+
+  it("produces an orthonormal right/up/forward basis", () => {
+    for (const [pitch, yaw] of ANGLES) {
+      const r = viewToWorld({ x: 1, y: 0, z: 0 }, pitch, yaw);
+      const u = viewToWorld({ x: 0, y: 1, z: 0 }, pitch, yaw);
+      const f = viewToWorld({ x: 0, y: 0, z: 1 }, pitch, yaw);
+      const dot = (a: PoseVector, b: PoseVector) => a.x * b.x + a.y * b.y + a.z * b.z;
+      expect(Math.hypot(r.x, r.y, r.z)).toBeCloseTo(1, 12);
+      expect(Math.hypot(u.x, u.y, u.z)).toBeCloseTo(1, 12);
+      expect(dot(r, u)).toBeCloseTo(0, 12);
+      expect(dot(r, f)).toBeCloseTo(0, 12);
+      expect(dot(u, f)).toBeCloseTo(0, 12);
+    }
+  });
+
+  it("at pitch 0 / yaw 0 the right axis is +X and up is +Y", () => {
+    expect(viewToWorld({ x: 1, y: 0, z: 0 }, 0, 0)).toEqual({ x: 1, y: 0, z: 0 });
+    expect(viewToWorld({ x: 0, y: 1, z: 0 }, 0, 0)).toEqual({ x: 0, y: 1, z: 0 });
+  });
+});
+
+/* ══ offsetCameraParams — the camera-space pan (plan 08, F3) ═════════════ */
+
+describe("offsetCameraParams — pan is a camera-space translation (F3)", () => {
+  /** The camera's world-space right/up axes for a given orbit. */
+  function basis(pitch: number, yaw: number) {
+    return {
+      right: viewToWorld({ x: 1, y: 0, z: 0 }, pitch, yaw),
+      up: viewToWorld({ x: 0, y: 1, z: 0 }, pitch, yaw),
+    };
+  }
+
+  function pan(
+    overrides: Partial<Parameters<typeof offsetCameraParams>[0]> = {},
+  ): PoseCameraParams {
+    return offsetCameraParams({
+      params: fit({ canvasWidth: 32, canvasHeight: 32 }),
+      panX: 0,
+      panY: 0,
+      canvasWidth: 32,
+      canvasHeight: 32,
+      ...overrides,
+    });
+  }
+
+  /* ── the regression pin ─────────────────────────────────────────────── */
+
+  it("pan (0,0) reproduces the fitted camera EXACTLY", () => {
+    // ⚠️ THE REGRESSION PIN. Everything task 03 proved about the fit — the
+    // rotation invariance above especially — is only still true of the camera
+    // that actually renders if a zero pan is the identity.
+    for (const projection of ["orthographic", "perspective"] as const) {
+      for (const [pitch, yaw] of [
+        [0, 0],
+        [0.5, 1.2],
+      ] as [number, number][]) {
+        const fitted = fit({ projection, pitch, yaw, canvasWidth: 48, canvasHeight: 24 });
+        expect(
+          offsetCameraParams({
+            params: fitted,
+            panX: 0,
+            panY: 0,
+            canvasWidth: 48,
+            canvasHeight: 24,
+            pitch,
+            yaw,
+          }),
+        ).toEqual(fitted);
+      }
+    }
+  });
+
+  it("never mutates the params it was given", () => {
+    const fitted = fit();
+    const before = JSON.parse(JSON.stringify(fitted)) as PoseCameraParams;
+    pan({ params: fitted, panX: 7, panY: -3 });
+    expect(fitted).toEqual(before);
+  });
+
+  /* ── the core invariant ─────────────────────────────────────────────── */
+
+  it("moves the position and the target by the SAME world vector", () => {
+    // ⚠️ This IS F3. If the two ever diverge the camera has turned rather
+    // than slid, and the framing changes with the pan.
+    for (const projection of ["orthographic", "perspective"] as const) {
+      for (const [pitch, yaw] of [
+        [0, 0],
+        [0.4, -1.1],
+        [TRUE_ISOMETRIC_PITCH_RADIANS, Math.PI / 4],
+      ] as [number, number][]) {
+        const fitted = fit({ projection, pitch, yaw, canvasWidth: 40, canvasHeight: 24 });
+        const moved = offsetCameraParams({
+          params: fitted,
+          panX: 5,
+          panY: -9,
+          canvasWidth: 40,
+          canvasHeight: 24,
+          pitch,
+          yaw,
+        });
+        const dPos = {
+          x: moved.position.x - fitted.position.x,
+          y: moved.position.y - fitted.position.y,
+          z: moved.position.z - fitted.position.z,
+        };
+        const dTgt = {
+          x: moved.target.x - fitted.target.x,
+          y: moved.target.y - fitted.target.y,
+          z: moved.target.z - fitted.target.z,
+        };
+        expect(dPos.x).toBeCloseTo(dTgt.x, 12);
+        expect(dPos.y).toBeCloseTo(dTgt.y, 12);
+        expect(dPos.z).toBeCloseTo(dTgt.z, 12);
+        // …and the offset is genuinely non-zero, or the assertion above is
+        // vacuous.
+        expect(Math.hypot(dPos.x, dPos.y, dPos.z)).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("translates PARALLEL to the image plane — no component along the view axis", () => {
+    // A pan that changed the distance to the target would change the framing
+    // for a perspective camera and the depth bracket for both.
+    for (const projection of ["orthographic", "perspective"] as const) {
+      for (const [pitch, yaw] of [
+        [0, 0],
+        [0.9, 2.4],
+        [-0.6, -0.2],
+      ] as [number, number][]) {
+        const fitted = fit({ projection, pitch, yaw });
+        const moved = offsetCameraParams({
+          params: fitted,
+          panX: 11,
+          panY: 4,
+          canvasWidth: 32,
+          canvasHeight: 32,
+          pitch,
+          yaw,
+        });
+        const delta = {
+          x: moved.position.x - fitted.position.x,
+          y: moved.position.y - fitted.position.y,
+          z: moved.position.z - fitted.position.z,
+        };
+        const view = worldToView(delta, pitch, yaw);
+        expect(view.z).toBeCloseTo(0, 12);
+
+        // The camera-to-target distance is therefore preserved exactly.
+        const d = (p: PoseCameraParams) =>
+          Math.hypot(
+            p.position.x - p.target.x,
+            p.position.y - p.target.y,
+            p.position.z - p.target.z,
+          );
+        expect(d(moved)).toBeCloseTo(d(fitted), 10);
+      }
+    }
+  });
+
+  /* ── the frustum is untouched: a pan is NOT a fit ────────────────────── */
+
+  it("changes NO frustum dimension, clip plane or projection (a pan never re-fits)", () => {
+    for (const projection of ["orthographic", "perspective"] as const) {
+      const fitted = fit({ projection, canvasWidth: 64, canvasHeight: 32 });
+      const moved = offsetCameraParams({
+        params: fitted,
+        panX: -17,
+        panY: 23,
+        canvasWidth: 64,
+        canvasHeight: 32,
+      });
+      expect(moved.projection).toBe(fitted.projection);
+      expect(moved.near).toBe(fitted.near);
+      expect(moved.far).toBe(fitted.far);
+      expect(moved.orthographic).toEqual(fitted.orthographic);
+      expect(moved.perspective).toEqual(fitted.perspective);
+    }
+  });
+
+  /* ── one cell == one texel ───────────────────────────────────────────── */
+
+  it("orthographic: a pan of n cells moves the camera exactly n texels", () => {
+    const canvasWidth = 48;
+    const canvasHeight = 32;
+    const fitted = fit({ canvasWidth, canvasHeight });
+    const o = fitted.orthographic!;
+    const perTexelX = (o.right - o.left) / canvasWidth;
+    const perTexelY = (o.top - o.bottom) / canvasHeight;
+    // Square texels: the fit builds halfWidth = halfHeight * aspect, so the
+    // two must agree or a pan would run at different rates per axis.
+    expect(perTexelX).toBeCloseTo(perTexelY, 14);
+
+    for (const [px, py] of [
+      [1, 0],
+      [0, 1],
+      [7, -13],
+      [-100, 250],
+    ] as [number, number][]) {
+      const moved = offsetCameraParams({
+        params: fitted,
+        panX: px,
+        panY: py,
+        canvasWidth,
+        canvasHeight,
+      });
+      const delta = {
+        x: moved.position.x - fitted.position.x,
+        y: moved.position.y - fitted.position.y,
+        z: moved.position.z - fitted.position.z,
+      };
+      // At pitch 0 / yaw 0 the basis is +X right, +Y up, so the world delta
+      // reads off directly. `panX` slides the PICTURE right, i.e. the camera
+      // LEFT; `panY` slides the picture down, i.e. the camera UP.
+      expect(delta.x).toBeCloseTo(-px * perTexelX, 12);
+      expect(delta.y).toBeCloseTo(py * perTexelY, 12);
+      expect(delta.z).toBeCloseTo(0, 12);
+    }
+  });
+
+  it("perspective: a pan of n cells moves the camera n texels measured AT THE TARGET plane", () => {
+    const canvasWidth = 40;
+    const canvasHeight = 40;
+    const fitted = fit({ projection: "perspective", fov: 45, canvasWidth, canvasHeight });
+    const distance = Math.hypot(
+      fitted.position.x - fitted.target.x,
+      fitted.position.y - fitted.target.y,
+      fitted.position.z - fitted.target.z,
+    );
+    const halfHeight = distance * Math.tan((fitted.perspective!.fov * Math.PI) / 360);
+    const perTexel = (halfHeight * 2) / canvasHeight;
+
+    const moved = offsetCameraParams({
+      params: fitted,
+      panX: 6,
+      panY: 6,
+      canvasWidth,
+      canvasHeight,
+    });
+    expect(moved.position.x - fitted.position.x).toBeCloseTo(-6 * perTexel, 12);
+    expect(moved.position.y - fitted.position.y).toBeCloseTo(6 * perTexel, 12);
+  });
+
+  /* ── the rendered model really does move by n texels ─────────────────── */
+
+  it("the model's rendered position shifts by exactly n texels (NDC arithmetic)", () => {
+    // ⚠️ Asserted through `projectToNdc`, the file's independent
+    // reimplementation of the GPU's projection, NOT through the module's own
+    // arithmetic — a claim about the picture has to be checked against
+    // something other than the code that produced it.
+    //
+    // NDC spans [-1, 1] across `canvasWidth` texels, so one texel is
+    // `2 / canvasWidth` of NDC.
+    const canvasWidth = 32;
+    const canvasHeight = 32;
+    for (const projection of ["orthographic", "perspective"] as const) {
+      const fitted = fit({ projection, canvasWidth, canvasHeight });
+      const centre = boundsCentre(UNIT);
+      const before = projectToNdc(centre, fitted, NO_ROTATION, 0, 0);
+      for (const [px, py] of [
+        [1, 0],
+        [0, 4],
+        [-3, 9],
+      ] as [number, number][]) {
+        const moved = offsetCameraParams({
+          params: fitted,
+          panX: px,
+          panY: py,
+          canvasWidth,
+          canvasHeight,
+        });
+        const after = projectToNdc(centre, moved, NO_ROTATION, 0, 0);
+        expect(after.x - before.x).toBeCloseTo((2 * px) / canvasWidth, 10);
+        // Canvas +Y is DOWN and NDC +Y is UP, so a positive `panY` (picture
+        // slides down) must LOWER the NDC y. If this sign ever flips the
+        // drag inverts vertically.
+        expect(after.y - before.y).toBeCloseTo((-2 * py) / canvasHeight, 10);
+      }
+    }
+  });
+
+  it("moves the picture in the SAME direction the old blit offset did", () => {
+    // The pointer path is unchanged (`posePanRef` still accumulates the same
+    // signed cell delta), so the drag can only stay direct rather than
+    // inverted if these signs match the blit's: `putImageData(image, +pan.x,
+    // +pan.y)` moved the picture right and down.
+    const canvasWidth = 32;
+    const canvasHeight = 32;
+    const fitted = fit({ canvasWidth, canvasHeight });
+    const centre = boundsCentre(UNIT);
+    const before = projectToNdc(centre, fitted, NO_ROTATION, 0, 0);
+    const moved = offsetCameraParams({
+      params: fitted,
+      panX: 5,
+      panY: 5,
+      canvasWidth,
+      canvasHeight,
+    });
+    const after = projectToNdc(centre, moved, NO_ROTATION, 0, 0);
+    expect(after.x).toBeGreaterThan(before.x); // right on screen
+    expect(after.y).toBeLessThan(before.y); // DOWN on screen (NDC +y is up)
+  });
+
+  /* ── pixel alignment ─────────────────────────────────────────────────── */
+
+  it("snaps a fractional pan to whole texels — no half-texel crawl", () => {
+    // ⚠️ This is the difference between "pans smoothly" and "shimmers while
+    // dragging". `poseScreenToCellDelta` produces FRACTIONAL cell deltas at
+    // pointer rate, so without the snap the model would land on a fractional
+    // texel on most frames.
+    const canvasWidth = 32;
+    const canvasHeight = 32;
+    const fitted = fit({ canvasWidth, canvasHeight });
+    const at = (px: number, py: number) =>
+      offsetCameraParams({ params: fitted, panX: px, panY: py, canvasWidth, canvasHeight });
+
+    // Everything that rounds to 3 gives byte-identical params.
+    expect(at(3.0, 0)).toEqual(at(3.4, 0));
+    expect(at(3.0, 0)).toEqual(at(2.5, 0)); // Math.round(2.5) === 3
+    expect(at(0, -7)).toEqual(at(0, -7.4));
+    // And a pan that rounds to zero is the identity.
+    expect(at(0.49, -0.5)).toEqual({ ...fitted });
+
+    // The world offset is an exact integer multiple of the texel size.
+    const o = fitted.orthographic!;
+    const perTexel = (o.right - o.left) / canvasWidth;
+    const moved = at(6.7, 0);
+    const ratio = (fitted.position.x - moved.position.x) / perTexel;
+    expect(ratio).toBeCloseTo(7, 10);
+    expect(Math.abs(ratio - Math.round(ratio))).toBeLessThan(1e-9);
+  });
+
+  /* ── unbounded ───────────────────────────────────────────────────────── */
+
+  it("is UNBOUNDED — the model may leave the frame entirely", () => {
+    // Nothing clamps, by design (task 04 constraint: "Do not clamp pan").
+    const canvasWidth = 32;
+    const canvasHeight = 32;
+    const fitted = fit({ canvasWidth, canvasHeight });
+    const centre = boundsCentre(UNIT);
+    const far = offsetCameraParams({
+      params: fitted,
+      panX: 5000,
+      panY: -5000,
+      canvasWidth,
+      canvasHeight,
+    });
+    const ndc = projectToNdc(centre, far, NO_ROTATION, 0, 0);
+    expect(Math.abs(ndc.x)).toBeGreaterThan(1); // well outside the frame
+    expect(Math.abs(ndc.y)).toBeGreaterThan(1);
+    expect(Number.isFinite(ndc.x)).toBe(true);
+  });
+
+  /* ── degenerate inputs ───────────────────────────────────────────────── */
+
+  it("treats a non-finite pan as no pan rather than propagating NaN", () => {
+    // A NaN reaching the camera blanks the frame, which reads as "the pose
+    // tool broke" rather than as a bad number.
+    const fitted = fit();
+    expect(pan({ params: fitted, panX: Number.NaN, panY: 4 }).position.x).toBeCloseTo(
+      fitted.position.x,
+      12,
+    );
+    expect(pan({ params: fitted, panX: 3, panY: Number.POSITIVE_INFINITY })).toBeDefined();
+    for (const v of Object.values(pan({ params: fitted, panX: Number.NaN, panY: Number.NaN }).position)) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+
+  it("falls back to a square canvas rather than dividing by zero", () => {
+    const fitted = fit();
+    const moved = pan({ params: fitted, panX: 2, panY: 2, canvasWidth: 0, canvasHeight: -5 });
+    expect(Number.isFinite(moved.position.x)).toBe(true);
+    expect(Number.isFinite(moved.position.y)).toBe(true);
+  });
+
+  it("returns the params untouched when neither frustum block is populated", () => {
+    const bare: PoseCameraParams = {
+      projection: "orthographic",
+      position: { x: 0, y: 0, z: 5 },
+      target: { x: 0, y: 0, z: 0 },
+      near: 1,
+      far: 10,
+    };
+    expect(
+      offsetCameraParams({ params: bare, panX: 9, panY: 9, canvasWidth: 32, canvasHeight: 32 }),
+    ).toEqual(bare);
+  });
+
+  /* ── it composes with the orbit ──────────────────────────────────────── */
+
+  it("pans along the CAMERA's axes, not the world's, at a non-zero orbit", () => {
+    // At iso the camera's right vector has no +Y component but its up vector
+    // does, so a horizontal-only pan must leave world Y alone while a
+    // vertical one must not.
+    const pitch = TRUE_ISOMETRIC_PITCH_RADIANS;
+    const yaw = Math.PI / 4;
+    const fitted = fit({ pitch, yaw });
+    const { right, up } = basis(pitch, yaw);
+    expect(right.y).toBeCloseTo(0, 12);
+    expect(Math.abs(up.y)).toBeGreaterThan(0.5);
+
+    const horizontal = offsetCameraParams({
+      params: fitted,
+      panX: 8,
+      panY: 0,
+      canvasWidth: 32,
+      canvasHeight: 32,
+      pitch,
+      yaw,
+    });
+    expect(horizontal.position.y - fitted.position.y).toBeCloseTo(0, 12);
+
+    const vertical = offsetCameraParams({
+      params: fitted,
+      panX: 0,
+      panY: 8,
+      canvasWidth: 32,
+      canvasHeight: 32,
+      pitch,
+      yaw,
+    });
+    expect(Math.abs(vertical.position.y - fitted.position.y)).toBeGreaterThan(0);
+  });
+
+  it("a pan composes additively — two pans of n equal one pan of 2n", () => {
+    const canvasWidth = 32;
+    const canvasHeight = 32;
+    const fitted = fit({ canvasWidth, canvasHeight });
+    const once = offsetCameraParams({
+      params: fitted,
+      panX: 6,
+      panY: -4,
+      canvasWidth,
+      canvasHeight,
+    });
+    const twice = offsetCameraParams({
+      params: once,
+      panX: 6,
+      panY: -4,
+      canvasWidth,
+      canvasHeight,
+    });
+    const direct = offsetCameraParams({
+      params: fitted,
+      panX: 12,
+      panY: -8,
+      canvasWidth,
+      canvasHeight,
+    });
+    expect(twice.position.x).toBeCloseTo(direct.position.x, 12);
+    expect(twice.position.y).toBeCloseTo(direct.position.y, 12);
   });
 });

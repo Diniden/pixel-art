@@ -274,8 +274,10 @@ import {
   applyCameraParams,
   fitCameraToMesh,
   getCameraPreset,
+  offsetCameraParams,
   solveFitScale,
 } from "../ui/canvas/pose/poseCamera";
+import type { PoseCameraParams } from "../ui/canvas/pose/poseCamera";
 import {
   UNIT_BOUNDS,
   applyMaterial,
@@ -2419,6 +2421,73 @@ export const CanvasContainer = observer(function CanvasContainer({
    */
   const posePanRef = useRef<{ x: number; y: number }>(pose.pan);
 
+  /**
+   * The **un-panned** fitted camera, plus the orbit that placed it (plan 08,
+   * F3).
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THE PAN IS APPLIED AT PAINT TIME, NOT IN THE FIT EFFECT.
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * Pan is now a camera translation, so the camera has to be re-applied
+   * whenever it changes — and it changes at **pointer rate**. Making
+   * `pose.pan` a dependency of the fit effect would therefore put a React
+   * render, and a full effect re-run, on every pointer sample: exactly the
+   * regression D11 exists to prevent, and the reason `posePanRef` exists at
+   * all.
+   *
+   * So the fit effect stores its result HERE, unmodified, and the painter
+   * composes `offsetCameraParams(fit, panRef)` onto the camera immediately
+   * before `engine.render()`. That keeps the two concerns properly split:
+   *
+   *  - **a fit** re-runs only for its real inputs (mesh, projection, preset,
+   *    fov, canvas size, `fitGeneration`) and produces the reference camera;
+   *  - **a pan** re-applies that reference camera at a new offset and touches
+   *    nothing else — it cannot change the model scale, the frustum, or the
+   *    clip planes, because it never re-enters the fit.
+   *
+   * ⚠️ The orbit angles are carried alongside the params because
+   * `offsetCameraParams` needs the camera's right/up basis and cannot recover
+   * it from `position`/`target` alone once the pan has already moved them —
+   * the fit's `preset?.pitch`/`yaw` are the authority.
+   */
+  const poseFitParamsRef = useRef<{
+    params: PoseCameraParams;
+    pitch: number;
+    yaw: number;
+  } | null>(null);
+
+  /**
+   * Compose the current pan onto the fitted camera and hand it to the engine.
+   *
+   * Called from the painter and from the stamp so the two can never disagree
+   * about where the model is — the stamp renders through the same engine and
+   * must see the same camera the overlay just drew with (manual check 5).
+   *
+   * A no-op before the first fit has run, which is the only state where
+   * `poseFitParamsRef` is null.
+   */
+  const poseApplyPannedCamera = useCallback(() => {
+    const fitted = poseFitParamsRef.current;
+    const camera = poseCameraRef.current;
+    const engine = poseEngineRef.current;
+    if (!fitted || !camera || !engine || engine.isDisposed) return;
+    const pan = posePanRef.current;
+    applyCameraParams(
+      camera,
+      offsetCameraParams({
+        params: fitted.params,
+        panX: pan.x,
+        panY: pan.y,
+        canvasWidth: cellWidth,
+        canvasHeight: cellHeight,
+        pitch: fitted.pitch,
+        yaw: fitted.yaw,
+      }),
+    );
+    engine.setCamera(camera);
+  }, [cellWidth, cellHeight]);
+
   /** Filled once the pose scheduler exists; see `invalidateHoverRef`. */
   const invalidatePoseRef = useRef<(() => void) | null>(null);
 
@@ -2456,6 +2525,13 @@ export const CanvasContainer = observer(function CanvasContainer({
     // the paint path costs nothing and guarantees the target can never be out
     // of step with the canvas even if an effect has not run yet.
     engine.resize(cellWidth, cellHeight);
+
+    // ⚠️ THE PAN IS A CAMERA TRANSLATION AND IS COMPOSED HERE, per frame
+    // (plan 08, F3) — see `poseFitParamsRef`. It reads the REF, so a drag
+    // moves the camera at pointer rate without a React render. Idempotent:
+    // it recomposes from the stored, un-panned fit every time rather than
+    // accumulating onto the live camera.
+    poseApplyPannedCamera();
 
     const frame = engine.render();
     if (frame.length !== cellWidth * cellHeight * 4) return;
@@ -2530,14 +2606,36 @@ export const CanvasContainer = observer(function CanvasContainer({
     const ox = isEditingVariantResolved ? viewMinX : 0;
     const oy = isEditingVariantResolved ? viewMinY : 0;
 
-    // The pan is applied HERE, as a whole-image translation, rather than by
-    // moving the camera: a camera pan would re-fit and re-rasterise, and the
-    // whole point of the drag is that it slides the picture the user is
-    // already looking at. Rounded to whole cells so the reference stays
-    // aligned to the pixel grid at every pan offset (manual check 3).
-    const pan = posePanRef.current;
-    const px = Math.round(pan.x) - ox;
-    const py = Math.round(pan.y) - oy;
+    /* ── A FIXED ORIGIN. THE PAN IS NOT HERE ANY MORE (plan 08, F3) ───────
+     *
+     * ⚠️ The only term left is the variant-edit shift. **There is no pan
+     * term, and adding one back would restore the bug this replaced.**
+     *
+     * **What used to be here, and why it was wrong.** The pan was applied as
+     * a whole-image translation: `putImageData(image, round(pan.x) - ox,
+     * round(pan.y) - oy)`. The render target is exactly `cellWidth ×
+     * cellHeight`, so anything that would fall outside *its* rectangle was
+     * never rasterised at all — sliding the finished picture could only
+     * reveal blank margin on one side while guillotining the model on the
+     * other. The owner reported exactly that: *"if I pan it down but the
+     * model goes above the top border, it looks clipped in the rendering."*
+     *
+     * **Why the old comment's justification no longer holds.** It read *"a
+     * camera pan would re-fit and re-rasterise"*, and against the OLD camera
+     * that was true: the fit was re-derived from the rotated model and moved
+     * the camera on every change. Plan 08 task 03 removed that premise — the
+     * fit is now a pure function of bounds, canvas, projection, pitch, yaw and
+     * fov, and it solves for the MODEL's scale rather than moving the camera.
+     * A pan can therefore translate the camera without touching the framing,
+     * which is what `poseApplyPannedCamera` above does, one texel per cell.
+     *
+     * The picture is re-rasterised — that is the *point*. It is re-rasterised
+     * from a camera looking somewhere else, so the model that slides toward
+     * the border is genuinely rendered there rather than cropped to a moving
+     * rectangle, and it can leave the frame entirely without clipping.
+     */
+    const px = -ox;
+    const py = -oy;
 
     ctx.putImageData(image, px, py);
   }, [
@@ -2549,6 +2647,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     viewMinY,
     poseEdgeWidth,
     poseEdgeColor,
+    poseApplyPannedCamera,
   ]);
 
   /**
@@ -2813,6 +2912,8 @@ export const CanvasContainer = observer(function CanvasContainer({
     // own `projection` is the fallback for a preset id that no longer exists.
     const preset = getCameraPreset(poseCameraPreset);
     const projection = preset?.projection ?? poseProjection;
+    const pitch = preset?.pitch ?? 0;
+    const yaw = preset?.yaw ?? 0;
 
     // Every mesh — primitive, whole mannequin, or a single part — is normalised
     // into the unit box by `poseMeshes.ts` before it reaches the scene, so one
@@ -2823,8 +2924,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       canvasHeight: cellHeight,
       projection,
       fov: poseFov,
-      pitch: preset?.pitch ?? 0,
-      yaw: preset?.yaw ?? 0,
+      pitch,
+      yaw,
     });
 
     // Rebuild the camera only on a genuine projection change.
@@ -2846,8 +2947,16 @@ export const CanvasContainer = observer(function CanvasContainer({
 
     const camera = poseCameraRef.current;
     if (!camera) return;
-    applyCameraParams(camera, params);
-    engine.setCamera(camera);
+
+    // ⚠️ The **un-panned** reference camera is what gets stored (plan 08, F3).
+    // The pan is composed onto it at paint time by `poseApplyPannedCamera`, so
+    // this effect deliberately does NOT depend on `pose.pan` — a pan changes
+    // the camera at pointer rate, and re-running a fit for each sample would
+    // put a React render on the drag (D11). Splitting the two here is what
+    // makes "a pan re-applies the camera but never re-runs the fit" true by
+    // construction rather than by discipline.
+    poseFitParamsRef.current = { params, pitch, yaw };
+    poseApplyPannedCamera();
     invalidatePoseRef.current?.();
   }, [
     poseEngineTick,
@@ -2858,6 +2967,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     poseFov,
     cellWidth,
     cellHeight,
+    poseApplyPannedCamera,
   ]);
 
   /**
@@ -3130,6 +3240,17 @@ export const CanvasContainer = observer(function CanvasContainer({
     // Copied, because the engine REUSES its readback buffer across frames and
     // two more passes are about to overwrite it.
     engine.resize(cellWidth, cellHeight);
+
+    // ⚠️ THE SAME PANNED CAMERA THE PAINTER JUST DREW WITH (plan 08, F3).
+    // Explicit rather than inherited: the camera object persists between
+    // frames, so all three passes below would in practice pick up whatever
+    // `renderPose` last set — but "in practice" is not a guarantee, and a
+    // stamp rendered through a stale camera lands the pixels somewhere the
+    // owner never saw. Recomposing here from the same ref makes the two
+    // agree by construction (manual check 5). It is idempotent and costs one
+    // matrix update.
+    poseApplyPannedCamera();
+
     const colorBuffer = Uint8Array.from(engine.render());
     if (colorBuffer.length !== texels * 4) return;
 
@@ -3237,26 +3358,32 @@ export const CanvasContainer = observer(function CanvasContainer({
     // ⚠️ THE OFFSET MUST MATCH THE PAINTER'S, EXACTLY — this is manual check
     // 14 ("the stamped pixels land exactly where the model was drawn").
     //
-    // Two terms, and BOTH are needed:
+    // ⚠️ **THERE IS NO PAN TERM ANY MORE** (plan 08, F3). It used to be two
+    // terms; it is now one, and dropping the pan is the *correction*, not an
+    // omission. Pan became a **camera** translation, so the model is already
+    // rendered in its panned place inside the target — the very buffer this
+    // callback re-renders and reads back through the same
+    // `poseApplyPannedCamera` the painter used. Adding `round(pan)` here as
+    // well would displace the stamp by the pan a SECOND time, putting it
+    // exactly one pan away from the picture the owner is looking at.
     //
-    //  - the PAN, rounded to whole cells the same way `renderPose` rounds it.
-    //    Rounding in only one of the two places would put the stamp up to a
-    //    cell away from the picture at half-integer pans.
-    //  - the VARIANT-EDIT SHIFT, which is `variantOffset` and NOT `viewMin`.
-    //    Derived, not guessed, from `placeHoverCells` — the one place that
-    //    already converts between these two spaces:
+    // The ONE remaining term is the VARIANT-EDIT SHIFT, which is
+    // `variantOffset` and NOT `viewMin`. Derived, not guessed, from
+    // `placeHoverCells` — the one place that already converts between these
+    // two spaces:
     //
-    //      canvasX = gridX + (variantOffset.x - viewMinX)
+    //   canvasX = gridX + (variantOffset.x - viewMinX)
     //
-    //    The painter puts the render target's texel (0,0) at canvas column
-    //    `round(pan.x) - viewMinX`, so inverting the line above gives that
-    //    texel a GRID column of `round(pan.x) - variantOffset.x` — the
-    //    `viewMinX` terms cancel exactly. `setPixelCells` writes the VARIANT's
-    //    own grid while editing one (`PixelStore.resolveTarget`'s variant
-    //    branch), which is that space. Using `viewMin` here instead would be
-    //    wrong by `variantOffset - viewMin` and visible only while editing a
-    //    variant — exactly the kind of offset bug that ships.
-    const pan = posePanRef.current;
+    // The painter puts the render target's texel (0,0) at canvas column
+    // `-viewMinX`, so inverting the line above gives that texel a GRID column
+    // of `-variantOffset.x` — the `viewMinX` terms cancel exactly.
+    // `setPixelCells` writes the VARIANT's own grid while editing one
+    // (`PixelStore.resolveTarget`'s variant branch), which is that space.
+    // Using `viewMin` here instead would be wrong by
+    // `variantOffset - viewMin` and visible only while editing a variant —
+    // exactly the kind of offset bug that ships. ⚠️ That cancellation is
+    // unchanged by F3: removing the pan removed the SAME term from both
+    // sides of it.
     const stampOx = isEditingVariantResolved ? variantOffset.x : 0;
     const stampOy = isEditingVariantResolved ? variantOffset.y : 0;
 
@@ -3285,8 +3412,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       height: cellHeight,
       alphaThreshold: POSE_ALPHA_THRESHOLD,
       heightRange: { near: depthNear, far: depthFar },
-      offsetX: Math.round(pan.x) - stampOx,
-      offsetY: Math.round(pan.y) - stampOy,
+      offsetX: -stampOx,
+      offsetY: -stampOy,
       // ⚠️ The outline, plan 08 F1 — see this callback's header. Width 0 is
       // the off state and makes this call byte-for-byte the pre-F1 stamp.
       outlineWidth: poseEdgeWidth,
@@ -3320,6 +3447,8 @@ export const CanvasContainer = observer(function CanvasContainer({
     poseEdgeColor,
     hasVariantData,
     variantData,
+    // F3: the stamp renders through the same panned camera as the painter.
+    poseApplyPannedCamera,
   ]);
 
   /**
