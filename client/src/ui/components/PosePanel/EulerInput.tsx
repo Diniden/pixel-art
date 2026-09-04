@@ -339,7 +339,9 @@ export function ScaleAxisInput({
   };
 
   return (
-    <div className="pose-panel__slider-row">
+    /* ⚠️ A vertical STACK, not a row. Three slider+number pairs do not fit
+       across a 240px rail — the owner reported Z was not visible at all. */
+    <div className="pose-panel__axis-stack">
       {axes.map(({ label, value }) => (
         <span key={label} className="pose-panel__slider-row">
           <span className="pose-panel__slider-label">{label}</span>

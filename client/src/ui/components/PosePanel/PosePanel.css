@@ -178,6 +178,29 @@
   align-items: center;
 }
 
+/*
+ * A vertical stack of axis rows — the model's per-axis scale.
+ *
+ * ⚠️ Three slider+number pairs DO NOT fit side by side in a 240px rail: the
+ * owner reported the Z axis was not even visible. The rotation boxes above get
+ * away with a single row because they are number-only; each of these carries a
+ * slider as well, so they stack and each axis gets the rail's full width.
+ *
+ * Owner-reported 2026-09-04.
+ */
+.pose-panel__axis-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Each axis gets the full width: the label and number box are fixed, so the
+   slider takes whatever is left rather than being squeezed by its siblings. */
+.pose-panel__axis-stack .pose-panel__slider {
+  flex: 1;
+  min-width: 0;
+}
+
 .pose-panel__slider-label {
   flex: none;
   color: var(--text-secondary);
