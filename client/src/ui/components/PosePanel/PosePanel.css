@@ -219,7 +219,13 @@
    reason `__slider-value` is: the digits must not jitter the row's width. */
 .pose-panel__number {
   flex: none;
-  width: var(--space-10);
+  /* FOUR characters wide, and `ch` is exact here because the font is
+     monospace: 4ch is the advance width of four digits, so `-180` or `1e-6`
+     fills the box and nothing wider forces the row to grow. The padding and
+     border sit outside it via `content-box`, so the field holds four glyphs
+     rather than four-glyphs-minus-the-chrome. Owner-requested 2026-09-04. */
+  box-sizing: content-box;
+  width: 4ch;
   min-width: 0;
   padding: var(--space-0-5);
   background: var(--bg-tertiary);
@@ -229,6 +235,16 @@
   font-family: var(--font-mono);
   font-size: var(--text-65);
   text-align: right;
+}
+
+/* SIX characters for an angle, where the base `__number` is four.
+   An angle needs the room: `-180.0` is six glyphs exactly, and it is the
+   widest value either control produces — the rotation boxes run -180..180 and
+   the light's azimuth canonicalises into the same range, both displayed to
+   tenths. Four would clip the sign or the decimal on precisely the values
+   that matter most. Owner-requested 2026-09-04. */
+.pose-panel__number--angle {
+  width: 6ch;
 }
 
 /* Monospace so the digits do not jitter the row's width as the value changes
@@ -319,8 +335,13 @@
    default intrinsic width that would otherwise overflow a 120px column and
    scroll the 240px rail sideways. */
 .pose-panel__field-input {
-  flex: 1;
-  width: 100%;
+  /* Four characters, matching `__number` — see its note. `flex: none` rather
+     than `flex: 1` because the advanced panel's two-column grid would
+     otherwise stretch these to the column and the four-char rule would only
+     hold at the narrowest rail. */
+  flex: none;
+  box-sizing: content-box;
+  width: 4ch;
   min-width: 0;
   padding: var(--space-0-5);
   background: var(--bg-tertiary);

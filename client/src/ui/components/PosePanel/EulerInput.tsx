@@ -260,7 +260,7 @@ export function EulerInput({
           <span className="pose-panel__slider-label">{axis.label}</span>
           <input
             type="number"
-            className="pose-panel__number"
+            className="pose-panel__number pose-panel__number--angle"
             aria-label={`${name} ${axis.label}`}
             min={axis.min}
             max={axis.max}

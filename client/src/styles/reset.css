@@ -120,6 +120,35 @@ input[type="number"]:focus {
   border-color: var(--accent-primary);
 }
 
+/*
+ * No native spinners on number inputs.
+ *
+ * The up/down stepper sits INSIDE the field's box and overlaps the value in a
+ * narrow rail — the pose rail is 240px and its fields hold things like an
+ * orthographic frustum bound or a euler angle, so the digits are what matters
+ * and the stepper is what covers them. Owner-reported 2026-09-04.
+ *
+ * Two declarations because two engines: WebKit/Blink render the stepper as a
+ * ::-webkit-*-spin-button pseudo-element, Firefox as the input's own
+ * appearance. `margin: 0` is load-bearing on WebKit — `appearance: none`
+ * alone leaves the pseudo-element occupying its inline space, so the value
+ * stays visually short-changed even after the arrows vanish.
+ *
+ * Typing, arrow keys, `step`, `min`/`max` and validation are untouched: this
+ * removes the widget, not the input type.
+ */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
