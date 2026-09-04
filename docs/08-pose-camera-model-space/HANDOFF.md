@@ -1,8 +1,8 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W3 IN PROGRESS (task 04)
+**Current position:** W3 DONE — W4 next
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
-**Last commit:** `4727a53` (W2 complete)
+**Last commit:** `62f3052` (W3 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
 
 ## Wave ledger
@@ -11,7 +11,7 @@
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02 | **DONE** | 2026-09-04 | `19c8538` | tsc 0 · eslint **0 errors**/65 warn (baseline) · vitest **146 files / 2931 tests pass** · boundaries OK all 5 · snapshots **unmoved** · no lockfile |
 | W2 | 03 | **DONE** | 2026-09-04 | `4727a53` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2945 tests pass** · boundaries OK · snapshots unmoved · **`UIStore.ts` diff EMPTY** · no lockfile |
-| W3 | 04 | IN PROGRESS | 2026-09-04 | | |
+| W3 | 04 | **DONE** | 2026-09-04 | `62f3052` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2965 tests pass** · boundaries OK · snapshots unmoved · `UIStore.ts` diff EMPTY · no lockfile |
 | W4 | 05 | TODO | | | |
 | W5 | 06, 07 | TODO | | | |
 | W6 | 08 | TODO | | | ⚠️ the persistence wave — data-safety gate |
@@ -26,7 +26,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 01 | Model-space origins | W1 | **DONE** | `19c8538` | Vertices translated, not transforms (F2). ⚠️ Found `BufferGeometry.translate()` rewrites normals — avoided, pinned |
 | 02 | Outline in the stamp | W1 | **DONE** | `9d89fd9` | Colour-only via `readExistingCell` (F1). See deviation D08-1 |
 | 03 | Camera holds still: fit → scale | W2 | **DONE** | `76ce43f`, `4727a53` | F5 cure = **bounding sphere**. `rotation` REMOVED from `FitCameraParams`. ⚠️ See F5-COST below |
-| 04 | Camera-space pan | W3 | TODO | | |
+| 04 | Camera-space pan | W3 | **DONE** | `62f3052` | **No deviations.** Blit back to fixed origin; `viewToWorld` verified against three itself to 1.7e-16 |
 | 05 | Presets + viewpoint semantics | W4 | TODO | | ⚠️ Records F8: F7 supersedes D14 |
 | 06 | Advanced camera mode | W5 | TODO | | Ships a component; 08 mounts it |
 | 07 | Exact Euler entry | W5 | TODO | | ⚠️ F11 decision required for the light |
@@ -158,6 +158,19 @@ and asserting it on exported constants would not have asserted it at all. The st
 rewritten rather than left in place. Coordinator's assessment: correct, and the 2931-test green run
 confirms it executes.
 
+**Task 04 (W3) reported NO deviations** — its diff was exactly its three Touches files. Two design
+points recorded as *inside* spec, not departures: it chose F3 **option 1** (move position and
+target together) because option 2 cannot express an off-axis perspective through
+`applyCameraParams` (F16); and it composes the pan **at paint time** rather than "splitting the
+effect" as step 7 offered, because splitting still leaves pan a dependency of *something* running
+per pointer sample — the D11 regression. ⚠️ **Two structural facts a later task must not undo:**
+the fit effect deliberately does **not** depend on `pose.pan` (the un-panned result lives in
+`poseFitParamsRef` with the pitch/yaw that placed it, since the basis cannot be recovered once the
+pan has moved position and target), and the stamp calls `poseApplyPannedCamera()` before its three
+passes so it cannot rasterise through a stale camera. ⚠️ The stamp's offset term was **dropped, not
+adjusted** (`Math.round(pan.x) - stampOx` → `-stampOx`): pan now lives in the camera, so keeping it
+would displace the stamp by the pan a second time.
+
 **⚠️ F5-COST — A REAL, OWNER-VISIBLE TRADE-OFF THAT NEEDS THE OWNER'S EYES (task 03).**
 Task 03 chose F5 **option 1, the bounding sphere**, because its rotation-invariance is provable
 by construction rather than approximate: rotating a model about its centre moves every vertex
@@ -265,6 +278,34 @@ revolution (24 steps × 3 axes × 2 bounds × 2 projections, `PoseCameraParams` 
 6. Resizing the object re-fits.
 7. A part and a primitive both scale about their own centres (depends on task 01, whose 4 checks
    are also unobserved).
+
+### W3 — 6 owed, **0 performed**
+
+⚠️ **The most visually-dependent task of the plan so far.** The gate proves the arithmetic and the
+sign conventions — and proves them well — but **the pan fix is almost entirely a claim about a
+picture.** Task 04 verified `viewToWorld` against **three 0.185.1 itself** (camera placed, `lookAt`
+called, `matrixWorld` columns compared) to **1.7e-16**, including at 89.9° pitch just short of
+`lookAt`'s pole singularity; a 20,000-vector round trip closes to 1.1e-15. That is unusually strong
+evidence for the *maths*. It is not evidence about the *render*.
+
+1. ⚠️ **Highest value — the whole point of the task (owner item 3): pan the model toward a border
+   and confirm it does NOT clip.** It should slide out of frame smoothly and be able to leave
+   entirely.
+2. The image stays **pixel-aligned while dragging** — no shimmer, no half-texel crawl. Pinned by
+   the whole-texel snap test, but "no shimmer" is perceptual.
+3. Dragging feels **1:1** with the finger/cursor and is **not inverted**. Pinned in NDC by two sign
+   tests; the pointer path is byte-identical.
+4. **Panning does not change the model's apparent size.** Pinned hard (no frustum dimension
+   changes; distance preserved to 1e-10) — but perspective near-field parallax is real, and only an
+   eye judges whether it reads as wrong.
+5. **A stamp taken after panning lands where the model is drawn.** ⚠️ The variant-editing branch is
+   unit-untested here, as under D08-1.
+6. **Touch/iPad: pan still works, and a pinch still zooms the view** rather than dragging the
+   model. Gesture routing (D12) untouched, but all touch behaviour in this project is unverified.
+
+⚠️ Task 04's note: **F5-COST (the ~0.52 frame fill) will be visible in the same session** as
+anyone who checks pan check 1 — a loosely-framed model makes panning to the border *easier*, not
+harder. Judge the two together.
 
 ## Notes for the next session
 
