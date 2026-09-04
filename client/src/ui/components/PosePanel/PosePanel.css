@@ -232,6 +232,115 @@
   line-height: var(--leading-snug);
 }
 
+/* ── advanced camera mode (plan 08 task 06) ──────────────────────
+
+   Exact numeric entry for the projection fields. Collapsed by default — the
+   rail is 240px and this is not an every-session control — so the disclosure
+   button is the only thing it costs when closed.
+
+   ⚠️ The field grid is TWO columns, not a row per field: six boxes stacked
+   one-per-row would push the Camera group off the rail, and a single flex row
+   would squash `Bottom` to an ellipsis at 240px. Two columns fit `Left`/`Right`
+   and `Bottom`/`Top` as the pairs they actually are.
+
+   No numeric `z-index` here either — nothing in this block stacks. */
+
+.pose-panel__disclosure {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-1) var(--space-1-5);
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.pose-panel__disclosure:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.pose-panel__disclosure-caret {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: var(--text-60);
+}
+
+.pose-panel__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pose-panel__fields {
+  display: grid;
+  gap: var(--space-1);
+  grid-template-columns: 1fr 1fr;
+}
+
+.pose-panel__field {
+  display: flex;
+  gap: var(--space-0-5);
+  align-items: center;
+  min-width: 0;
+}
+
+.pose-panel__field-label {
+  flex: none;
+  min-width: var(--space-8);
+  color: var(--text-secondary);
+  font-size: var(--text-60);
+}
+
+/* `min-width: 0` is load-bearing inside the grid: an `<input>` carries a
+   default intrinsic width that would otherwise overflow a 120px column and
+   scroll the 240px rail sideways. */
+.pose-panel__field-input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-0-5);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  text-align: right;
+}
+
+/* The invalid state is a BORDER, not a background: the value stays legible
+   while it is being corrected, which is the whole reason the draft survives
+   rejection rather than snapping back. */
+.pose-panel__field-input--invalid {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
+
+.pose-panel__error {
+  margin: 0;
+  color: var(--accent-danger);
+  font-size: var(--text-65);
+  line-height: var(--leading-snug);
+}
+
+.pose-panel__preset-name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-0-5) var(--space-1);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-65);
+}
+
 /* ══ block: direction-orb ═══════════════════════════════════════════════════
 
    A flat SVG disc standing in for a sphere, with a draggable handle. Used
