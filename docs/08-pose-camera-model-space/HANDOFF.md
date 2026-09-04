@@ -1,6 +1,6 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W6 DONE (⚠️ **PARTIAL** — see D08-16) — W7 next
+**Current position:** W7 IN PROGRESS (task 09 — final gate + closing D08-16)
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
 **Last commit:** `a2aa8cc` (W6 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
@@ -15,7 +15,7 @@
 | W4 | 05 | **DONE** | 2026-09-04 | `673f5fe` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2984 tests pass** · boundaries OK all 5 · snapshots **unmoved** · `UIStore.ts` diff EMPTY · no lockfile |
 | W5 | 06, 07 | **DONE** | 2026-09-04 | `64d6629` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3047 tests pass** · boundaries OK · **stylelint exactly 2 errors** (`:338`/`:359`, pre-existing) · **storybook build 0** · snapshots unmoved · `UIStore.ts` EMPTY |
 | W6 | 08 | **DONE** (⚠️ one gap, D08-16) | 2026-09-04 | `a2aa8cc` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3102 tests pass** · boundaries OK · stylelint exactly 2 · storybook 0 · ⚠️ **corpus digest `e448764a…` UNCHANGED, verified by coordinator against a pre-dispatch baseline** · `server/` untouched · no lockfile |
-| W7 | 09 | TODO | | | |
+| W7 | 09 | IN PROGRESS | 2026-09-04 | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
