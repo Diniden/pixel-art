@@ -1,8 +1,8 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W4 DONE — ready for W5 (tasks 06, 07)
+**Current position:** W5 IN PROGRESS (tasks 06, 07)
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
-**Last commit:** `673f5fe` (W4 complete)
+**Last commit:** `cee0910` (W4 complete; W5 dispatched)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
 
 ## Wave ledger
@@ -13,7 +13,7 @@
 | W2 | 03 | **DONE** | 2026-09-04 | `4727a53` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2945 tests pass** · boundaries OK · snapshots unmoved · **`UIStore.ts` diff EMPTY** · no lockfile |
 | W3 | 04 | **DONE** | 2026-09-04 | `62f3052` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2965 tests pass** · boundaries OK · snapshots unmoved · `UIStore.ts` diff EMPTY · no lockfile |
 | W4 | 05 | **DONE** | 2026-09-04 | `673f5fe` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2984 tests pass** · boundaries OK all 5 · snapshots **unmoved** · `UIStore.ts` diff EMPTY · no lockfile |
-| W5 | 06, 07 | TODO | | | |
+| W5 | 06, 07 | IN PROGRESS | 2026-09-04 | | |
 | W6 | 08 | TODO | | | ⚠️ the persistence wave — data-safety gate |
 | W7 | 09 | TODO | | | |
 
@@ -196,6 +196,24 @@ are float maths, and the unit lane is **node**, not jsdom (`vitest.config.ts`,
 and asserting it on exported constants would not have asserted it at all. The stale header rule was
 rewritten rather than left in place. Coordinator's assessment: correct, and the 2931-test green run
 confirms it executes.
+
+**⚠️ COORDINATOR'S INDEPENDENT VERIFICATION OF F9 (mistake 6 — the one that has already bitten
+this table twice).** Task 05 claimed it changed *semantics only*, not maths. **I verified that
+claim two ways rather than accepting it:**
+
+1. **The non-comment diff of `poseCamera.ts` for W4 is, in its entirety:** the additive preset
+   fields (`fov`, `rotation`, `clipPolicy`, `DEFAULT_PRESET_FOV`) **plus exactly two lines** —
+   `left` and `right` exchanging their yaw values. **No maths function appears in the diff at all.**
+2. **I re-derived the convention from scratch** in a scratch script, replicating the XYZ-order Y
+   rotation independently of the codebase:
+   - `left` (new yaw **−90°**): model front `(0,0,1)` → **`(−1,0,0)`** = screen-LEFT ✅, and the
+     model's own right `(1,0,0)` → **`(0,0,1)`** = toward the viewer ✅
+   - `right` (new yaw **+90°**): the exact mirror ✅
+   That is **F9 stated exactly**: *left = the model turns to face left, so you see its RIGHT flank.*
+
+**Conclusion: F9 is correctly implemented as a two-line semantic swap. The maths was not touched,
+and the third accidental inversion did not happen.** ⚠️ This does **not** discharge manual check
+W4-1 — see the note there about why no test can close it.
 
 **Task 04 (W3) reported NO deviations** — its diff was exactly its three Touches files. Two design
 points recorded as *inside* spec, not departures: it chose F3 **option 1** (move position and
