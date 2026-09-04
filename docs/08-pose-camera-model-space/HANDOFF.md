@@ -1,6 +1,6 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W2 DONE — W3 next
+**Current position:** W3 IN PROGRESS (task 04)
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
 **Last commit:** `4727a53` (W2 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
@@ -11,7 +11,7 @@
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02 | **DONE** | 2026-09-04 | `19c8538` | tsc 0 · eslint **0 errors**/65 warn (baseline) · vitest **146 files / 2931 tests pass** · boundaries OK all 5 · snapshots **unmoved** · no lockfile |
 | W2 | 03 | **DONE** | 2026-09-04 | `4727a53` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2945 tests pass** · boundaries OK · snapshots unmoved · **`UIStore.ts` diff EMPTY** · no lockfile |
-| W3 | 04 | TODO | | | |
+| W3 | 04 | IN PROGRESS | 2026-09-04 | | |
 | W4 | 05 | TODO | | | |
 | W5 | 06, 07 | TODO | | | |
 | W6 | 08 | TODO | | | ⚠️ the persistence wave — data-safety gate |
