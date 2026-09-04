@@ -1,8 +1,8 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W4 IN PROGRESS (task 05)
+**Current position:** W4 DONE — ready for W5 (tasks 06, 07)
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
-**Last commit:** `62f3052` (W3 complete)
+**Last commit:** `673f5fe` (W4 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
 
 ## Wave ledger
@@ -12,7 +12,7 @@
 | W1 | 01, 02 | **DONE** | 2026-09-04 | `19c8538` | tsc 0 · eslint **0 errors**/65 warn (baseline) · vitest **146 files / 2931 tests pass** · boundaries OK all 5 · snapshots **unmoved** · no lockfile |
 | W2 | 03 | **DONE** | 2026-09-04 | `4727a53` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2945 tests pass** · boundaries OK · snapshots unmoved · **`UIStore.ts` diff EMPTY** · no lockfile |
 | W3 | 04 | **DONE** | 2026-09-04 | `62f3052` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2965 tests pass** · boundaries OK · snapshots unmoved · `UIStore.ts` diff EMPTY · no lockfile |
-| W4 | 05 | IN PROGRESS | 2026-09-04 | | |
+| W4 | 05 | **DONE** | 2026-09-04 | `673f5fe` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2984 tests pass** · boundaries OK all 5 · snapshots **unmoved** · `UIStore.ts` diff EMPTY · no lockfile |
 | W5 | 06, 07 | TODO | | | |
 | W6 | 08 | TODO | | | ⚠️ the persistence wave — data-safety gate |
 | W7 | 09 | TODO | | | |
@@ -27,7 +27,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 02 | Outline in the stamp | W1 | **DONE** | `9d89fd9` | Colour-only via `readExistingCell` (F1). See deviation D08-1 |
 | 03 | Camera holds still: fit → scale | W2 | **DONE** | `76ce43f`, `4727a53` | F5 cure = **bounding sphere**. `rotation` REMOVED from `FitCameraParams`. ⚠️ See F5-COST below |
 | 04 | Camera-space pan | W3 | **DONE** | `62f3052` | **No deviations.** Blit back to fixed origin; `viewToWorld` verified against three itself to 1.7e-16 |
-| 05 | Presets + viewpoint semantics | W4 | TODO | | ⚠️ Records F8: F7 supersedes D14 |
+| 05 | Presets + viewpoint semantics | W4 | **DONE** | `673f5fe` | F7 via one `applyCameraPreset` action; F9 inverts left/right **as a semantic change, maths byte-identical**. ⚠️ Records F8 (below). Open question 1 CLOSED. See deviation D08-8 |
 | 06 | Advanced camera mode | W5 | TODO | | Ships a component; 08 mounts it |
 | 07 | Exact Euler entry | W5 | TODO | | ⚠️ F11 decision required for the light |
 | 08 | Saved scene presets, persisted | W6 | TODO | | ⚠️ **The only wire-format change** |
@@ -92,17 +92,56 @@ added this way before. The remaining real risks are the three traps in task 08's
 
 ## ⚠️ Decisions this plan SUPERSEDES
 
-- **F8 — F7 supersedes plan 06's D14** ("preset overrides projection"). D14 was kept by owner
-  decision on 2026-09-03, *before* F7 existed; F7 subsumes it because a preset now owns
-  projection **and** every other camera field **and** the model's rotation. **Task 05 must record
-  this explicitly** — do not let a later reader think D14 was dropped by accident.
+- **F8 — F7 SUPERSEDES plan 06's D14. RECORDED BY TASK 05, 2026-09-04.**
+
+  ⚠️ **D14 was not dropped by accident, and it was not reversed. It was subsumed.** Plan 06's
+  **D14** read *"a camera preset overrides the projection"*, and it was deliberately **kept** by
+  owner decision on **2026-09-03** — a conscious choice to preserve it, made *before* F7 existed.
+  Plan 08's **F7** then widened the same behaviour: a preset now owns **`projection`, `pitch`,
+  `yaw`, `fov`, the near/far clip policy, the fit, AND the model's `rotation`**, applied as one
+  action. Projection-override is therefore a strict subset of what a preset does today.
+
+  **What this means for a reader of plan 06:** D14's guarantee still holds, unchanged and
+  observable — pressing **Isometric** still forces the projection to orthographic regardless of
+  what the Projection buttons were set to. It is pinned by
+  `PoseUIStore.test.ts` → *"applyCameraPreset writes the id, the projection, the FOV and the
+  model's ROTATION"*. D14 has simply stopped being the **whole** rule; **F7 is now the whole
+  rule, and D14 is the part of it that concerns projection.** If the two ever appear to
+  conflict, **F7 wins** — it is the later owner decision and the wider one.
+
+  **Where it is written in the code:** `PoseCameraPresetSpec`'s header and
+  `PoseUIStore.applyCameraPreset`'s header both name D14 and state the supersession, so a reader
+  arriving from either side finds it without needing this file.
 - **F1 supersedes plan 07's E7** ("the outline is display-only, NOT stamped"). The owner reversed
   it directly: *"Stamping should definitely include the outline"*.
 
 ## Open questions for the owner
 
-1. **Does a camera preset also reset scale and pan?** Task 05 decides and records. Recommended:
-   no — a preset restores orientation and projection, leaving the owner's framing alone.
+1. ~~**Does a camera preset also reset scale and pan?**~~ **CLOSED by task 05 (2026-09-04): NO.
+   A preset sets every camera field and the model's rotation, and leaves `scale` and `pan`
+   exactly as they were.**
+
+   **Reasoning.** The owner's phrase was *"all of the other settings that can be used for the
+   camera"* — and after tasks 03 and 04, **neither of these is a camera setting any more**:
+   `scale` is a **model** transform (F6, `root.scale.setScalar(...)`, the camera does not move
+   for it) and `pan` is a camera *translation* but expresses **framing**, not orientation. The
+   distinction that settles it: **a preset restores which way the scene is POINTING; scale and
+   pan are where the owner has PUT it and how close in they are working.** Rotation is
+   overwritten because a preset is *about* orientation; scale and pan are preserved because a
+   preset is not about framing. Losing your zoom every time you change angle is hostile in a way
+   that losing your angle — the thing you asked to change — is not.
+
+   ⚠️ **The counter-argument, recorded so this is re-decided rather than merely flipped:** a
+   preset that leaves scale and pan alone is **not fully reproducible** — two presses of
+   **Isometric** from different framings give two different pictures, which is in tension with
+   F7's own "fully known state" language. That cost is real. The mitigation already exists and
+   is one press away: **Fit to canvas** restores the scale separately, when that is what the
+   owner actually wanted. If the owner disagrees after seeing it, the change is two lines in
+   `applyCameraPreset` — but the counter-argument must be re-read first.
+
+   Pinned by `PoseUIStore.test.ts` → *"leaves SCALE and PAN alone — open question 1, decided
+   2026-09-04"*. The full reasoning also lives beside `PoseCameraPresetSpec` in
+   `ui/canvas/pose/poseCamera.ts`, so it is found from the code as well as from here.
 2. **How are the light's angles represented?** (F11) The light is a **unit vector** with no Euler
    form today, and vector → Euler is **not unique** (roll is unconstrained). Task 07 decides;
    recommended is a two-field azimuth/elevation control, honestly labelled.
@@ -213,6 +252,69 @@ useful: its first draft folded the (deliberately large, scale-proof) depth allow
 camera **distance**, which for a perspective camera is what sets framing — measured
 `frameOccupancy` fell to **0.02**. The allowance now reaches the **clip planes only**.
 
+**D08-8 — task 05 edited `PoseSection.stories.tsx`, which its own Constraints list forbids.**
+The task file says *"Do not change … `PoseSection.stories.tsx`"*, and `PixelStudioPanelContainer.tsx`
+**is** in its Touches (the known W2 exception). But the stories file spreads a `handlers` object
+into every story's `args`, and it named `onSelectCameraPreset`. Renaming that prop to
+`onApplyCameraPreset` — the rename is *inside* Touches, in `PoseSection.tsx` — left the stories
+file failing `tsc` on **four** stories with *"Property 'onApplyCameraPreset' is missing"*, i.e. a
+**broken build**, which rule 5 forbids outright. The edit is **one renamed key plus its comment**;
+no story, arg, or description changed. Same class as **D08-5**: the collision matrix was not wrong,
+it simply did not enumerate a rename's second consumer. ⚠️ **Note for task 06**, which owns
+`PosePanel/` files in W5: the stories file's `handlers` block is now correct and needs no further
+edit.
+
+**D08-9 — the preset callback carries the SPEC, not the id, and the prop was RENAMED.**
+`onSelectCameraPreset(id)` became `onApplyCameraPreset(spec)`. Two reasons, both load-bearing:
+(1) F7 needs `projection`/`pitch`/`yaw`/`fov`/`rotation`/`clipPolicy` to reach the store in **one**
+action, and an id alone cannot supply them without the container performing a second lookup into a
+table the rail has already resolved; (2) the **rename is deliberately breaking** — a caller still
+wired to the old, half-applying behaviour now fails to compile instead of silently setting only the
+id. ⚠️ `PoseCameraPresetSpec` is a `ui/` type and the store may not import it, so
+`PoseUIStore.ts` declares a **structural duplicate**, `PoseCameraPresetApplication`, under exactly
+the same "these two change together" rule as the existing `poseTypes.ts` unions. It deliberately
+omits `label` (a rail concern); the wider type is assignable to the narrower, so the seam needs no
+cast. **`poseTypes.ts` was NOT touched** — the preset *id* union is unchanged, so the task's
+stop-and-report condition never triggered.
+
+**D08-10 — `setCameraPreset` was KEPT alongside `applyCameraPreset`, not replaced.**
+It now only records the id. It survives because a future caller — session restore, and task 08's
+saved scene presets — may legitimately have written the other fields itself. ⚠️ **A preset
+BUTTON must never call it**: that is precisely the half-applied behaviour F7 exists to remove. Both
+its header and its test say so.
+
+**⚠️ D08-11 — F9 IS A SEMANTIC CHANGE. THE MATHS WAS NOT TOUCHED. HERE IS THE PROOF.**
+The risk register warned that *"item 11 is implemented as a maths fix, re-inverting the buttons a
+**third** time"*. It was not. Evidence, in order of strength:
+
+1. **Every maths function in `poseCamera.ts` is byte-identical to `d4ae2b5`** — verified by
+   extracting each function body and comparing digests: `applyEulerXYZ`, `orbitDirection`,
+   `worldToView`, `viewToWorld`, `fitCameraToMesh`, `solveFitScale`, `offsetCameraParams`,
+   `applyCameraParams`, `boundsRadius`, `boundsCentre`, `boxCorners` — **all UNCHANGED**.
+2. **The entire non-comment diff of that file, outside the preset table, is two lines**:
+   `left` and `right` **exchanged their yaw values** (`+90°` ↔ `−90°`). Nothing else.
+3. **`applyEulerXYZ`'s own `describe` block is untouched**, including its "rotates +X to −Z under
+   a +90 degree yaw" pin — the standing proof that the convention moved and the maths did not.
+4. **Independently re-derived before editing.** With the camera on +Z: yaw `−90°` sends the model's
+   front `(0,0,1)` → `(−1,0,0)` (**it faces screen-left**, as the button says) and its own right
+   `(1,0,0)` → `(0,0,1)` (**toward the camera**). That is F9 exactly, and it is *today's `right`
+   value*. So F9 is a **swap of two table entries**, which is what a change of meaning looks like.
+
+**`three-quarter` was re-examined and deliberately LEFT AS IT WAS** (`{15°, 45°, 0}`). Its name
+describes a **picture**, not a facing, so F9's model-centric/viewer-centric distinction — the thing
+that inverts left/right — has nothing to bite on. Read model-centrically its 45° yaw turns the
+subject to its right, presenting the viewer with its front and its **left shoulder**: the standard
+reference 3/4, and the **same shoulder as before plan 08**. Flipping it would have swapped which
+shoulder is shown for no reason the owner asked for, purely from a false analogy with `left`.
+
+⚠️ **The tests were rewritten to be un-re-invertible.** The viewpoint assertions now read as
+English sentences over **transformed basis vectors** — *"Left turns the model to FACE left, showing
+the viewer its RIGHT flank"* — not over raw angle values. A test asserting `left.y === −90°` can be
+"fixed" by editing the number on both sides; a test asserting which way the model's face points
+cannot. The convention header was **rewritten, and the old "`left` shows the model's LEFT flank"
+claim DELETED** rather than amended — a stale sentence contradicting the table is exactly how this
+got inverted twice.
+
 **D08-4 — `poseMeshes.ts` is now near the `ui/` 400-line ceiling.** Task 01's first draft hit 408
 code lines (1 eslint error) and was resolved by factoring a genuine duplication into `usableCentre`,
 not by padding comments. ⚠️ **Note for a later task adding to this file: it may need to be split.**
@@ -306,6 +408,48 @@ evidence for the *maths*. It is not evidence about the *render*.
 ⚠️ Task 04's note: **F5-COST (the ~0.52 frame fill) will be visible in the same session** as
 anyone who checks pan check 1 — a loosely-framed model makes panning to the border *easier*, not
 harder. Judge the two together.
+
+### W4 — 9 owed, **0 performed**
+
+⚠️ **This task's central claim is about a picture, and no agent has one.** The gate proves that
+the store writes six fields in one action and that the rotation table's transformed basis vectors
+point where the sentences say — it proves **nothing about what appears on screen**.
+
+⚠️⚠️ **CHECK 1 IS THE ONE THAT MATTERS AND IS THE HARDEST OF THE PLAN TO VERIFY WITHOUT EYES.**
+Left/right inversion is *uniquely* resistant to unit testing: the maths is self-consistent under
+**both** conventions, so a test can only ever assert the convention it was written against. This
+table has now been inverted **twice** (once as a genuine bug fix, once as F9's deliberate semantic
+change). The tests were written as English sentences over basis vectors specifically to make a
+third accidental inversion hard — **but nothing in the suite can tell the owner whether the model
+on their screen turns the way they meant.** Only their eyes close this.
+
+1. ⚠️⚠️ **THE DECIDING CHECK. Press Left: the model TURNS TO FACE LEFT**, so you see its **RIGHT**
+   side. Press **Right**: the mirror — it faces right and you see its **LEFT** side. If this feels
+   backwards to the owner, **F9 itself is what needs re-deciding — do NOT flip the signs**, and do
+   not touch `applyEulerXYZ`. Re-read D08-11 first.
+2. **Top** shows the crown; **Bottom** the underside; **Front** and **Back** are unchanged from
+   before plan 08. ⚠️ These are the control group: if left/right look right but top/bottom now look
+   wrong, something *did* change in the maths and D08-11's evidence needs re-reading.
+3. Pressing **Isometric** (or any preset) changes projection, camera angle **and** model rotation
+   in one go, giving an immediately recognisable known view.
+4. ⚠️ **Pressing a preset OVERWRITES a rotation you set with the orb.** This is intended (F7,
+   owner-decided) and will feel destructive the first time. Confirm the owner still wants it after
+   using it.
+5. Pressing the same preset **twice** does nothing the second time.
+6. ⚠️ **Open question 1's decision, seen: a preset does NOT reset Scale or Pan.** Scale the model
+   up, pan it off-centre, press **Isometric** — the angle changes, the size and position do not.
+   Confirm this is the wanted behaviour; the counter-argument is recorded above.
+7. **`three-quarter` still looks like the classic reference pose** and shows the **same shoulder**
+   it did before plan 08 — the check that it was correctly left alone.
+8. **Oblique's model rotation matches the ¾ button.** Pressing **Oblique** then **3/4** should
+   change the camera but leave the model's orientation where it was.
+9. ⚠️ Every preset now writes the **FOV** too, including the four orthographic ones (which ignore
+   it while selected). Press **2D**, then switch to **Perspective**: the FOV should read 50, not
+   whatever it was before. This is the least obvious consequence of "a preset sets everything".
+
+**This agent could not confirm `bun run dev`** (three long-lived mprocs processes). No entry point,
+config or build input was touched, and the client typecheck, lint, boundary scan and full suite all
+pass — that is inference, not observation.
 
 ## Notes for the next session
 
