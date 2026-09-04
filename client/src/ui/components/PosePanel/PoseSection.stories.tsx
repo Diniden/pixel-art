@@ -53,6 +53,10 @@ const handlers = {
   // `onSavePreset` is ONE callback for two buttons on purpose — the advanced
   // panel's "save as preset" and the preset list's Save are the same feature.
   onAdvancedChange: fn(),
+  // Plan 08 task 09 (D08-16): "Reset to fitted". `CameraAdvanced` renders the
+  // button ONLY when this is supplied, so the stories carry it too — reviewing
+  // the rail at 240px without it would review the wrong layout.
+  onAdvancedReset: fn(),
   onSavePreset: fn(),
   onApplyPreset: fn(),
   onDeletePreset: fn(),

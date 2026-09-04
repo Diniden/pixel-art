@@ -271,9 +271,11 @@ import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
 import { PoseEngine, loadThree } from "../ui/canvas/pose/poseEngine";
 import type { PoseEngineCamera } from "../ui/canvas/pose/poseEngine";
 import {
+  applyCameraOverrides,
   applyCameraParams,
   fitCameraToMesh,
   getCameraPreset,
+  hasCameraOverrides,
   offsetCameraParams,
   solveFitScale,
 } from "../ui/canvas/pose/poseCamera";
@@ -686,6 +688,16 @@ export const CanvasContainer = observer(function CanvasContainer({
   const poseCameraPreset = pose.cameraPreset;
   const poseScale = pose.scale;
   const poseFov = pose.fov;
+  /**
+   * The owner's EXACT projection values, if any (plan 08 task 09, D08-16).
+   *
+   * ⚠️ Read as a body value on purpose, unlike `pan`. It is `observableRef` and
+   * replaced only on a committed edit in the advanced panel — a keystroke rate
+   * at worst, never a pointer rate — so a re-render per change is correct here
+   * and is exactly what makes the typed value reach the camera. `pan` is the
+   * opposite case and stays out of the render body for the opposite reason.
+   */
+  const poseCameraOverrides = pose.cameraOverrides;
   const poseEdgeWidth = pose.edgeWidth;
   /**
    * The fit REQUEST counter (MASTER E14). Read here so the fit effect below
@@ -2918,7 +2930,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     // Every mesh — primitive, whole mannequin, or a single part — is normalised
     // into the unit box by `poseMeshes.ts` before it reaches the scene, so one
     // bounds value covers all of them.
-    const params = fitCameraToMesh({
+    const fitted = fitCameraToMesh({
       bounds: UNIT_BOUNDS,
       canvasWidth: cellWidth,
       canvasHeight: cellHeight,
@@ -2927,6 +2939,21 @@ export const CanvasContainer = observer(function CanvasContainer({
       pitch,
       yaw,
     });
+
+    // ⚠️ THE OWNER'S EXACT VALUES GO ON TOP OF THE FIT, NOT INSTEAD OF IT
+    // (plan 08 task 09, closes D08-16). The fit still derives `near`, `far`,
+    // the ortho box and the aspect on every run; whatever the advanced panel
+    // typed is then re-applied over that result. THAT ORDERING IS THE WHOLE
+    // DESIGN — because this effect re-runs for a fit request, a resize, a
+    // preset press and a projection change, re-applying afterwards is what
+    // makes a typed value SURVIVE all four. Silently reverting it would be
+    // worse than never having accepted it.
+    //
+    // `hasCameraOverrides` short-circuits so the untouched case allocates
+    // nothing and returns the fit's own object identity, exactly as before.
+    const params = hasCameraOverrides(poseCameraOverrides)
+      ? applyCameraOverrides(fitted, poseCameraOverrides)
+      : fitted;
 
     // Rebuild the camera only on a genuine projection change.
     const current = poseCameraRef.current;
@@ -2965,6 +2992,12 @@ export const CanvasContainer = observer(function CanvasContainer({
     poseProjection,
     poseCameraPreset,
     poseFov,
+    // ⚠️ A dependency ON PURPOSE, and it is safe in a way `pose.pan` is not:
+    // this is `observableRef`, replaced only when the owner commits a value in
+    // the advanced panel, so it puts a re-fit on a keystroke — never on a
+    // pointer sample. `pose.pan` is still deliberately ABSENT from this list
+    // (task 04, the D11 regression); do not add it.
+    poseCameraOverrides,
     cellWidth,
     cellHeight,
     poseApplyPannedCamera,

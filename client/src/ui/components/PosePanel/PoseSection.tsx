@@ -173,9 +173,11 @@ export interface PoseSectionProps {
   /* ── the advanced camera panel's values (task 06, mounted by task 08) ────
    *
    * ⚠️ These four are NOT store fields. `CanvasContainer` derives them inside
-   * its fit effect from `fitCameraToMesh`, and the container computes the same
-   * numbers for display here. See `PoseCameraGroup`'s header for exactly how
-   * far `onAdvancedChange` reaches today. */
+   * its fit effect from `fitCameraToMesh`, and the panel container computes
+   * the same numbers — through the same call, then the same override layer —
+   * for display here. Since task 09 (D08-16) all six advanced fields reach the
+   * camera; see `PoseCameraGroup`'s header for the ordering that makes a typed
+   * value survive a re-fit. */
 
   /** Near clip plane. Shared by both projections. */
   near: number;
@@ -240,6 +242,12 @@ export interface PoseSectionProps {
    * locally and emits nothing.
    */
   onAdvancedChange: (patch: CameraAdvancedPatch) => void;
+  /**
+   * Discard every typed projection value and return to the fitted frustum —
+   * the advanced panel's "Reset to fitted". Optional: `CameraAdvanced` renders
+   * the button only when it is supplied.
+   */
+  onAdvancedReset?: () => void;
   /**
    * Save the CURRENT scene under a name. Already trimmed and never empty.
    *
@@ -405,6 +413,7 @@ export function PoseSection({
   onSetFov,
   onRequestFit,
   onAdvancedChange,
+  onAdvancedReset,
   onSavePreset,
   onApplyPreset,
   onDeletePreset,
@@ -632,6 +641,7 @@ export function PoseSection({
         onSetFov={onSetFov}
         onRequestFit={onRequestFit}
         onAdvancedChange={onAdvancedChange}
+        onAdvancedReset={onAdvancedReset}
         onSaveAsPreset={onSavePreset}
       />
 

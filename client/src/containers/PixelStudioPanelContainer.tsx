@@ -60,8 +60,10 @@ import { PaletteManagerContainer } from "./PaletteManagerContainer";
 import { useStores } from "../stores/context";
 import { OTHER_HAND_SECTIONS } from "./otherHand/otherHandSections";
 import {
+  applyCameraOverrides,
   fitCameraToMesh,
   getCameraPreset,
+  hasCameraOverrides,
 } from "../ui/canvas/pose/poseCamera";
 import { UNIT_BOUNDS } from "../ui/canvas/pose/poseMeshes";
 
@@ -115,7 +117,7 @@ export const PixelStudioPanelContainer = observer(
     // orbit, and the store's own `projection` is the fallback for a preset id
     // that no longer exists.
     const poseFrustumPreset = getCameraPreset(pose.cameraPreset);
-    const poseFrustum = fitCameraToMesh({
+    const poseFittedFrustum = fitCameraToMesh({
       bounds: UNIT_BOUNDS,
       canvasWidth: gridDims.width,
       canvasHeight: gridDims.height,
@@ -124,6 +126,16 @@ export const PixelStudioPanelContainer = observer(
       pitch: poseFrustumPreset?.pitch ?? 0,
       yaw: poseFrustumPreset?.yaw ?? 0,
     });
+    // ⚠️ The owner's typed values are re-applied HERE TOO, in the same order
+    // `CanvasContainer`'s fit effect applies them (fit first, overrides on
+    // top). Both call sites must stay identical: the boxes are meant to read
+    // back the numbers the camera is ACTUALLY using, and a mirror that showed
+    // only the derived value would make a typed `near` look like it had been
+    // ignored the moment the box lost focus — which is the exact D08-16
+    // symptom this closes.
+    const poseFrustum = hasCameraOverrides(pose.cameraOverrides)
+      ? applyCameraOverrides(poseFittedFrustum, pose.cameraOverrides)
+      : poseFittedFrustum;
 
     return (
       <PixelStudioPanel
@@ -252,21 +264,39 @@ export const PixelStudioPanelContainer = observer(
           // the numbers on screen are the numbers the camera is actually
           // using rather than a second, drifting estimate.
           //
-          // ⚠️ **`onAdvancedChange` reaches only `fov` today, and that is a
-          // reported limitation, not an oversight.** There is no seam that
-          // can override a derived frustum value without editing
-          // `CanvasContainer.tsx` — the fit effect recomputes all four every
-          // time it runs — and that file is not in task 08's `Touches` list.
-          // `fov` IS a store field, so the one patch key the store can honour
-          // is honoured; the rest are accepted and dropped rather than
-          // written somewhere nothing reads. See `HANDOFF.md`.
+          // ⚠️ **ALL SIX KEYS NOW REACH THE CAMERA** (plan 08 task 09, closes
+          // D08-16). Task 08 shipped this callback honouring only `fov`,
+          // because the other five are DERIVED by the fit rather than stored
+          // and there was no seam to write them through. There is one now:
+          // `pose.cameraOverrides` holds what was typed, and both this mirror
+          // and `CanvasContainer`'s fit effect apply it ON TOP of the fit's
+          // output — so a typed value survives Fit to canvas, a resize, a
+          // preset press and a projection change instead of silently reverting.
           near: poseFrustum.near,
           far: poseFrustum.far,
           orthographic: poseFrustum.orthographic,
           perspective: poseFrustum.perspective,
+          // ⚠️ TWO DESTINATIONS, and the split is not arbitrary. `fov` is a
+          // real store field with its own clamp and its own slider, so it goes
+          // to `setFov` and reaches the fit as an INPUT; the other five have no
+          // stored form, so they go to `setCameraOverrides` and are applied to
+          // the fit's OUTPUT. Routing `fov` through the override layer as well
+          // would give one number two writers, which is how they drift.
+          //
+          // The patch is sparse and `setCameraOverrides` MERGES, so committing
+          // one box never disturbs the other five. A key explicitly set to
+          // `undefined` clears just that field back to the fitted value.
           onAdvancedChange: (patch) => {
-            if (patch.fov !== undefined) pose.setFov(patch.fov);
+            const { fov, ...frustum } = patch;
+            if (fov !== undefined) pose.setFov(fov);
+            if (Object.keys(frustum).length > 0) {
+              pose.setCameraOverrides(frustum);
+            }
           },
+          // "Reset to fitted" — task 06 shipped the button, task 08 left it
+          // unwired because there was nothing to reset. It drops every typed
+          // value and hands the frustum back to the fit.
+          onAdvancedReset: () => pose.clearCameraOverrides(),
           // ── saved scene presets (plan 08 task 08, F12) ────────────────────
           //
           // ⚠️ THE ONE PERSISTED FIELD ON THIS STORE. `posePresets` reaches

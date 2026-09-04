@@ -52,8 +52,10 @@ import {
   boundsCentre,
   boundsRadius,
   boxCorners,
+  applyCameraOverrides,
   DEFAULT_FIT_PADDING,
   fitCameraToMesh,
+  hasCameraOverrides,
   getCameraPreset,
   offsetCameraParams,
   orbitDirection,
@@ -1655,5 +1657,220 @@ describe("offsetCameraParams — pan is a camera-space translation (F3)", () => 
     });
     expect(twice.position.x).toBeCloseTo(direct.position.x, 12);
     expect(twice.position.y).toBeCloseTo(direct.position.y, 12);
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * The advanced camera OVERRIDES (plan 08 task 09, closes D08-16)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ⚠️ **The central claim these tests exist to pin is the ORDERING**, not the
+ * arithmetic: the fit derives the defaults and the overrides are applied on
+ * top, so a typed value survives everything that re-runs the fit. If a future
+ * edit ever makes the overrides an *input* to the fit instead, the "survives a
+ * re-fit" tests below are what fail.
+ */
+
+describe("hasCameraOverrides", () => {
+  it("is false for an empty record — the untouched case", () => {
+    expect(hasCameraOverrides({})).toBe(false);
+  });
+
+  it("is true for any single field", () => {
+    for (const key of [
+      "near",
+      "far",
+      "left",
+      "right",
+      "top",
+      "bottom",
+      "aspect",
+    ] as const) {
+      expect(hasCameraOverrides({ [key]: 1 })).toBe(true);
+    }
+  });
+
+  it("is false when a key is present but undefined", () => {
+    // ⚠️ The container short-circuits on this, so "present with value
+    // undefined" must read as untouched or an empty patch would cost an
+    // allocation and a new object identity on every fit.
+    expect(hasCameraOverrides({ near: undefined, far: undefined })).toBe(false);
+  });
+});
+
+describe("applyCameraOverrides — the owner's exact projection values (F16)", () => {
+  /* ── the identity pin ────────────────────────────────────────────────── */
+
+  it("⭐ an empty override is the IDENTITY on every field", () => {
+    // The regression pin, same role as `offsetCameraParams`'s zero-pan test:
+    // everything task 03 proved about the fit only still holds of the camera
+    // that renders if no overrides means no change.
+    for (const projection of ["orthographic", "perspective"] as const) {
+      const fitted = fit({ projection });
+      expect(applyCameraOverrides(fitted, {})).toEqual(fitted);
+    }
+  });
+
+  it("never mutates the params it is given", () => {
+    const fitted = fit({ projection: "orthographic" });
+    const snapshot = JSON.parse(JSON.stringify(fitted)) as PoseCameraParams;
+    applyCameraOverrides(fitted, { near: 0.5, left: -9 });
+    expect(fitted).toEqual(snapshot);
+  });
+
+  /* ── the fields themselves ───────────────────────────────────────────── */
+
+  it("writes an exact near and far", () => {
+    const out = applyCameraOverrides(fit(), { near: 0.25, far: 900 });
+    expect(out.near).toBe(0.25);
+    expect(out.far).toBe(900);
+  });
+
+  it("writes the exact orthographic box while orthographic", () => {
+    const out = applyCameraOverrides(fit({ projection: "orthographic" }), {
+      left: -3,
+      right: 4,
+      top: 5,
+      bottom: -6,
+    });
+    expect(out.orthographic).toEqual({
+      left: -3,
+      right: 4,
+      top: 5,
+      bottom: -6,
+    });
+  });
+
+  it("writes the exact aspect while perspective, and leaves fov alone", () => {
+    const fitted = fit({ projection: "perspective" });
+    const out = applyCameraOverrides(fitted, { aspect: 2.5 });
+    expect(out.perspective?.aspect).toBe(2.5);
+    // ⚠️ `fov` is a STORE field and reaches the fit as an input; it is
+    // deliberately not an override key. Two writers is how one number drifts.
+    expect(out.perspective?.fov).toBe(fitted.perspective?.fov);
+  });
+
+  it("⭐ touches ONLY the live projection's block", () => {
+    // Overriding the ortho box on a perspective camera must not invent an
+    // `orthographic` block: `applyCameraParams` would write nothing from it,
+    // but the params would lie to every other reader (the pan's
+    // world-per-texel among them).
+    const persp = applyCameraOverrides(fit({ projection: "perspective" }), {
+      left: -99,
+      right: 99,
+    });
+    expect(persp.orthographic).toBeUndefined();
+
+    const ortho = applyCameraOverrides(fit({ projection: "orthographic" }), {
+      aspect: 7,
+    });
+    expect(ortho.perspective).toBeUndefined();
+  });
+
+  /* ── the guards ──────────────────────────────────────────────────────── */
+
+  it("ignores a non-finite value field by field", () => {
+    const fitted = fit({ projection: "orthographic" });
+    const out = applyCameraOverrides(fitted, {
+      near: Number.NaN,
+      left: Number.POSITIVE_INFINITY,
+      right: 12,
+    });
+    // ⚠️ A NaN reaching a camera blanks the frame with no error and no console
+    // line, which is the worst failure mode available. The bad fields fall
+    // back to the fit; the good one still lands.
+    expect(out.near).toBe(fitted.near);
+    expect(out.orthographic?.left).toBe(fitted.orthographic?.left);
+    expect(out.orthographic?.right).toBe(12);
+  });
+
+  it("repairs a far plane at or behind near rather than discarding it", () => {
+    // `far <= near` renders NOTHING. The entry is nudged just past near so the
+    // typed number still moves the camera the way the owner asked.
+    const out = applyCameraOverrides(fit(), { near: 10, far: 10 });
+    expect(out.far).toBeGreaterThan(out.near);
+    const behind = applyCameraOverrides(fit(), { near: 10, far: 2 });
+    expect(behind.far).toBeGreaterThan(behind.near);
+  });
+
+  it("floors a zero or negative near plane", () => {
+    // Undefined for perspective, degenerate for orthographic.
+    for (const near of [0, -5]) {
+      const out = applyCameraOverrides(fit(), { near });
+      expect(out.near).toBeGreaterThan(0);
+      expect(out.far).toBeGreaterThan(out.near);
+    }
+  });
+
+  it("keeps an INVERTED ortho box — a mirrored view is a legal request", () => {
+    // Deliberately not repaired: second-guessing the sign would make the field
+    // lie about what it does.
+    const out = applyCameraOverrides(fit({ projection: "orthographic" }), {
+      left: 5,
+      right: -5,
+    });
+    expect(out.orthographic?.left).toBe(5);
+    expect(out.orthographic?.right).toBe(-5);
+  });
+
+  it("rejects an exactly-empty axis, which cannot render at all", () => {
+    const fitted = fit({ projection: "orthographic" });
+    const out = applyCameraOverrides(fitted, { left: 2, right: 2 });
+    expect(out.orthographic?.left).toBe(fitted.orthographic?.left);
+    expect(out.orthographic?.right).toBe(fitted.orthographic?.right);
+  });
+
+  /* ── the ordering claim: a typed value SURVIVES a re-fit ─────────────── */
+
+  it("⭐⭐ a typed value survives a RESIZE — the D08-16 promise", () => {
+    // The container re-runs the fit for a canvas resize and re-applies the
+    // overrides afterwards. This reproduces that sequence at both sizes.
+    const overrides = { near: 0.125, left: -2, right: 2 };
+    const small = applyCameraOverrides(
+      fit({ canvasWidth: 32, canvasHeight: 32, projection: "orthographic" }),
+      overrides,
+    );
+    const large = applyCameraOverrides(
+      fit({ canvasWidth: 256, canvasHeight: 224, projection: "orthographic" }),
+      overrides,
+    );
+    expect(small.near).toBe(0.125);
+    expect(large.near).toBe(0.125);
+    expect(large.orthographic?.left).toBe(-2);
+    expect(large.orthographic?.right).toBe(2);
+  });
+
+  it("⭐⭐ a typed value survives a PRESET press (a new pitch/yaw)", () => {
+    const overrides = { near: 0.5, far: 400 };
+    for (const [pitch, yaw] of [
+      [0, 0],
+      [TRUE_ISOMETRIC_PITCH_RADIANS, Math.PI / 4],
+      [Math.PI / 3, -Math.PI / 6],
+    ] as const) {
+      const out = applyCameraOverrides(fit({ pitch, yaw }), overrides);
+      expect(out.near).toBe(0.5);
+      expect(out.far).toBe(400);
+    }
+  });
+
+  it("⭐ composes with the pan: the pan translates the OVERRIDDEN frustum", () => {
+    // F3 says pan is a camera-space translation. Once the frustum can be typed
+    // by hand, that has to mean it translates the typed one.
+    const overridden = applyCameraOverrides(
+      fit({ projection: "orthographic", canvasWidth: 32, canvasHeight: 32 }),
+      { left: -2, right: 2, top: 2, bottom: -2 },
+    );
+    const panned = offsetCameraParams({
+      params: overridden,
+      panX: 3,
+      panY: -1,
+      canvasWidth: 32,
+      canvasHeight: 32,
+    });
+    // The frustum dimensions are the OVERRIDDEN ones, unchanged by the pan.
+    expect(panned.orthographic).toEqual(overridden.orthographic);
+    expect(panned.near).toBe(overridden.near);
+    // ...and the camera did move.
+    expect(panned.position).not.toEqual(overridden.position);
   });
 });

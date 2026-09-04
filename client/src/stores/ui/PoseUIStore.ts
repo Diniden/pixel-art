@@ -30,8 +30,8 @@
  * every field except {@link PoseUIStore.posePresets} it still does.
  *
  * - **The LIVE pose is session-only.** `meshId`, `rotation`, `scale`, `pan`,
- *   `edgeWidth`, `projection`, `cameraPreset`, `fov`, `lightDirection`,
- *   `lightColor` and `modelColor` are **not** read by
+ *   `edgeWidth`, `projection`, `cameraPreset`, `fov`, `cameraOverrides`,
+ *   `lightDirection`, `lightColor` and `modelColor` are **not** read by
  *   `UIStore.toPersistedUIState()` (`stores/ui/UIStore.ts`). That builder is
  *   an explicit field-by-field list and ABSENCE FROM IT IS THE MECHANISM.
  *   The pose was never asked to be saved (MASTER D6) — the model is not part
@@ -187,6 +187,59 @@ export interface PosePan {
   x: number;
   y: number;
 }
+
+/**
+ * The projection values the owner has typed **exactly** (owner item 8, **F16**;
+ * closes **D08-16**).
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ A SPARSE OVERRIDE LAYER. ABSENT MEANS "LET THE FIT DERIVE IT".
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * ⚠️ **Structurally identical to `ui/canvas/pose/poseCamera.ts`'s
+ * `PoseCameraOverrides`**, and declared here for the same boundary reason as
+ * {@link PoseCameraPresetApplication} above: `stores/**` may not import from
+ * `ui/`, type-only included. **If a field is added there, add it here in the
+ * same commit** — the container hands this value straight to
+ * `applyCameraOverrides` with no cast and no adapter, and only structural
+ * typing makes that seam free.
+ *
+ * **Why a store field at all (the D08-16 story).** `near`, `far`, the ortho box
+ * and the aspect ratio are **not** camera settings the way `fov` is — they are
+ * *derived* by `fitCameraToMesh` on every run. Task 08 could therefore mount
+ * the advanced panel but not honour it: four of its five keys were accepted and
+ * silently dropped. This field is the missing seam. The fit still derives the
+ * defaults; these are applied **on top of the fit's output**, which is exactly
+ * what makes a typed value **survive a re-fit** — Fit to canvas, a resize, a
+ * preset press and a projection change all recompute the derived numbers and
+ * then re-apply these, so the owner's typed value stands until they clear it.
+ * Reverting it silently would be worse than not accepting it at all.
+ *
+ * ⚠️ **`fov` is deliberately NOT here**: it is a real store field with its own
+ * `setFov` and its own clamp, and it reaches the fit as an *input*. Two paths
+ * to one number is how they drift. ⚠️ **`position` and `target` are not here
+ * either**: they belong to the fit (F4 — the camera holds still) and to the pan
+ * (F3 — a camera-space translation), and an override on either would be a third
+ * writer of the camera's placement, fighting both.
+ *
+ * **Session-only**, like every pose field but `posePresets`. The persistence
+ * path for an exact frustum is a **saved preset**, not this — see the panel's
+ * "Save as preset" button, whose whole purpose is to make a hand-typed camera
+ * outlive the session.
+ */
+export interface PoseCameraOverrideValues {
+  near?: number;
+  far?: number;
+  left?: number;
+  right?: number;
+  top?: number;
+  bottom?: number;
+  aspect?: number;
+}
+
+/** No overrides — every projection value comes from the fit. */
+export const DEFAULT_POSE_CAMERA_OVERRIDES: PoseCameraOverrideValues =
+  Object.freeze({});
 
 /* ── defaults ───────────────────────────────────────────────────────────────
  *
@@ -530,6 +583,27 @@ export class PoseUIStore {
   fov = 50;
 
   /**
+   * The projection values the owner typed **exactly** — the advanced camera
+   * panel's other four keys (plan 08 task 09, closes **D08-16**).
+   *
+   * `observableRef` and **REPLACED WHOLESALE** on every edit, like `pan` and
+   * `rotation`: it is a small plain record read as a unit by one effect, so
+   * per-key proxies would buy nothing and a MobX proxy reaching
+   * `applyCameraOverrides` would violate the same "pure numbers in" rule
+   * `poseCamera.ts` is built on.
+   *
+   * ⚠️ **Sparse and additive: an absent key means "let the fit derive it",
+   * never "reset it to zero".** {@link PoseUIStore.setCameraOverrides} merges
+   * rather than replaces so the panel can send one key at a time, and
+   * {@link PoseUIStore.clearCameraOverrides} is the only way back to the fitted
+   * frustum — which is what the panel's "Reset to fitted" button calls.
+   *
+   * See {@link PoseCameraOverrideValues} for why this exists, why it survives a
+   * re-fit, and why `fov`, `position` and `target` are deliberately absent.
+   */
+  cameraOverrides: PoseCameraOverrideValues = DEFAULT_POSE_CAMERA_OVERRIDES;
+
+  /**
    * Screen-space offset of the model, in grid cells. `observableRef`.
    *
    * **Never clamped** — the model may be dragged completely off canvas
@@ -588,6 +662,7 @@ export class PoseUIStore {
       cameraPreset: observable,
       scale: observable,
       fov: observable,
+      cameraOverrides: observableRef,
       pan: observableRef,
       fitGeneration: observable,
       posePresets: observableRef,
@@ -605,6 +680,8 @@ export class PoseUIStore {
       applyCameraPreset: action,
       setScale: action,
       setFov: action,
+      setCameraOverrides: action,
+      clearCameraOverrides: action,
       setPan: action,
       nudgePan: action,
       requestFit: action,
@@ -776,6 +853,57 @@ export class PoseUIStore {
   /** Clamped to `[POSE_FOV_MIN, POSE_FOV_MAX]` degrees. */
   setFov(fov: number): void {
     this.fov = clamp(fov, POSE_FOV_MIN, POSE_FOV_MAX);
+  }
+
+  /**
+   * MERGE a sparse patch of exact projection values (D08-16).
+   *
+   * ⚠️ **Merge, not replace, and the difference is the whole contract.** The
+   * advanced panel commits **one field at a time** (each `<input>` fires on its
+   * own blur/enter), so a replacing setter would wipe the other five every time
+   * a box was touched. A key present in `patch` wins; a key absent is left
+   * exactly as it was.
+   *
+   * ⚠️ **A key set to `undefined` CLEARS that one field** back to the fit's
+   * derived value — that is how a single box is emptied without disturbing its
+   * neighbours. `Object.keys` on the patch is what distinguishes "absent" from
+   * "explicitly undefined", so this cannot be simplified to a spread.
+   *
+   * **Non-finite values are rejected outright** rather than stored. A `NaN`
+   * reaching a camera blanks the frame with no error and no console line; the
+   * panel already refuses to emit one, and this is the belt to that braces.
+   * `applyCameraOverrides` guards a third time, on read.
+   *
+   * ⚠️ **No clamping and no ordering repair happens here.** An inverted ortho
+   * box is a legitimate request for a mirrored view, and `near`/`far` legality
+   * depends on both values at once — repairing one against a stale other would
+   * fight the owner's own typing. The invariants are restored where they are
+   * consumed (`applyCameraOverrides`), which is also where a preset written by
+   * a newer build (F15) arrives.
+   */
+  setCameraOverrides(patch: PoseCameraOverrideValues): void {
+    const next: PoseCameraOverrideValues = { ...this.cameraOverrides };
+    for (const key of Object.keys(patch) as (keyof PoseCameraOverrideValues)[]) {
+      const value = patch[key];
+      if (value === undefined) {
+        delete next[key];
+      } else if (Number.isFinite(value)) {
+        next[key] = value;
+      }
+    }
+    this.cameraOverrides = next;
+  }
+
+  /**
+   * Drop every typed value and return to the fitted frustum — the panel's
+   * "Reset to fitted" button (task 06's `onReset`).
+   *
+   * Restores the frozen default by identity as well as by value, so a `===`
+   * check against {@link DEFAULT_POSE_CAMERA_OVERRIDES} is a valid "untouched"
+   * test, exactly as `clear()` relies on for the other defaults.
+   */
+  clearCameraOverrides(): void {
+    this.cameraOverrides = DEFAULT_POSE_CAMERA_OVERRIDES;
   }
 
   /**
@@ -1029,6 +1157,7 @@ export class PoseUIStore {
     this.cameraPreset = "2.5d";
     this.scale = 1;
     this.fov = 50;
+    this.cameraOverrides = DEFAULT_POSE_CAMERA_OVERRIDES;
     this.pan = DEFAULT_POSE_PAN;
   }
 }

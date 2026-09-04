@@ -1052,6 +1052,72 @@ describe("PoseSection — the advanced camera panel is mounted", () => {
     expect(save.mock.calls.length).toBe(before + 1);
     expect(save.mock.lastCall).toEqual(["From advanced"]);
   });
+
+  /* ── D08-16: the other five fields now reach the camera too ──────────── */
+
+  /** Open the advanced panel and return it. */
+  function advanced(container: HTMLElement): HTMLElement {
+    const camera = group(container, "Camera");
+    fireEvent.click(
+      camera.querySelector<HTMLButtonElement>(".pose-panel__disclosure")!,
+    );
+    const panel = camera.querySelector<HTMLElement>(".pose-panel__advanced");
+    if (!panel) throw new Error("the advanced panel did not open");
+    return panel;
+  }
+
+  it("⭐⭐ a typed NEAR reaches onAdvancedChange (task 08 dropped it)", () => {
+    // ⚠️ THE D08-16 PIN AT THE RAIL'S EDGE. Between tasks 08 and 09 this
+    // callback fired but the container honoured only `fov`, so typing an exact
+    // near changed nothing on screen. The container half is pinned in
+    // `poseCamera.test.ts`; this is the half that proves the rail still emits.
+    const { container } = render(<composed.Primitive />);
+    const change = spy(composed.Primitive.args.onAdvancedChange);
+    const before = change.mock.calls.length;
+    fireEvent.change(byLabel(advanced(container), "Near"), {
+      target: { value: "0.25" },
+    });
+    expect(change.mock.calls.length).toBe(before + 1);
+    expect(change.mock.lastCall).toEqual([{ near: 0.25 }]);
+  });
+
+  it("⭐ each ORTHOGRAPHIC box emits its own sparse patch", () => {
+    // Sparse and one key at a time is why the store's setter MERGES: a
+    // replacing setter would wipe the other five on every commit.
+    const { container } = render(<composed.Orthographic />);
+    const change = spy(composed.Orthographic.args.onAdvancedChange);
+    const panel = advanced(container);
+    for (const [label, value, key] of [
+      ["Left", "-3", "left"],
+      ["Right", "4", "right"],
+      ["Top", "5", "top"],
+      ["Bottom", "-6", "bottom"],
+    ] as const) {
+      fireEvent.change(byLabel(panel, label), { target: { value } });
+      expect(change.mock.lastCall).toEqual([{ [key]: Number(value) }]);
+    }
+  });
+
+  it("⭐ the ASPECT box emits, on a perspective camera", () => {
+    const { container } = render(<composed.Primitive />);
+    const change = spy(composed.Primitive.args.onAdvancedChange);
+    fireEvent.change(byLabel(advanced(container), "Aspect"), {
+      target: { value: "2.5" },
+    });
+    expect(change.mock.lastCall).toEqual([{ aspect: 2.5 }]);
+  });
+
+  it('⭐ "Reset to fitted" is rendered and fires onAdvancedReset', () => {
+    // ⚠️ Task 06 shipped the button behind an optional prop and task 08 left
+    // it unsupplied, so it did not render at all — there was nothing to reset.
+    // The way back to the fitted frustum is the other half of accepting typed
+    // values: without it a typed near would be permanent.
+    const { container } = render(<composed.Primitive />);
+    const reset = spy(composed.Primitive.args.onAdvancedReset);
+    const before = reset.mock.calls.length;
+    fireEvent.click(byText(advanced(container), "Reset to fitted"));
+    expect(reset.mock.calls.length).toBe(before + 1);
+  });
 });
 
 /**

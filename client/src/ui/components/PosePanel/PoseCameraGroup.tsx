@@ -29,22 +29,27 @@
  * scale travel is precisely the kind of drift the plan's alignment guide warns
  * about.
  *
- * ## The advanced panel is MOUNTED here, and only half-wired — read this
+ * ## The advanced panel is MOUNTED here, and FULLY wired — read this
  *
  * `CameraAdvanced` (task 06) is rendered at the bottom of this group. Its
- * `onSaveAsPreset` is fully live: it saves a whole scene preset, which is what
- * the owner asked the advanced panel to be able to do (*"save that matrix into
- * a preset I can select"*).
+ * `onSaveAsPreset` is live: it saves a whole scene preset, which is what the
+ * owner asked the advanced panel to be able to do (*"save that matrix into a
+ * preset I can select"*).
  *
- * ⚠️ **Its `onChange` is NOT wired to the render, and that is a reported
- * limitation rather than an oversight.** `near`, `far`, the orthographic box
- * and the aspect ratio are not store fields: `CanvasContainer` derives all
- * four inside its fit effect from `fitCameraToMesh`, and there is no seam that
- * can override them without editing `CanvasContainer.tsx` — which task 08's
- * `Touches` list does not include. The `onChange` prop is therefore accepted
- * and forwarded so the wiring is a one-line change when that seam exists, and
- * the container currently routes only the field the store genuinely owns.
- * See task 08's report and `HANDOFF.md`.
+ * ⚠️ **`onChange` reached only `fov` between tasks 08 and 09 (D08-16), and it
+ * now reaches all six fields.** The history is worth keeping, because it
+ * explains the shape: `near`, `far`, the orthographic box and the aspect ratio
+ * are **not** store fields — `CanvasContainer` DERIVES all four inside its fit
+ * effect on every run — so there was nowhere to write them. Task 09 added the
+ * seam: `pose.cameraOverrides` holds what was typed, and it is applied **on
+ * top of the fit's output** in both the container's effect and the panel
+ * container's display mirror.
+ *
+ * **That ordering is the point.** Because the overrides go on last, a typed
+ * value survives everything that re-runs the fit — Fit to canvas, a canvas
+ * resize, a preset press, a projection change — instead of silently reverting
+ * the moment the box lost focus. `onReset` is the deliberate way back to the
+ * fitted frustum.
  */
 import { POSE_CAMERA_PRESETS } from "../../canvas/pose/poseCamera";
 import type { PoseCameraPresetSpec } from "../../canvas/pose/poseCamera";
@@ -95,6 +100,14 @@ export interface PoseCameraGroupProps {
   onRequestFit: () => void;
   /** One advanced field edited to a finite, legal value. */
   onAdvancedChange: (patch: CameraAdvancedPatch) => void;
+  /**
+   * Discard every typed projection value and return to the fitted frustum.
+   *
+   * ⚠️ Optional because `CameraAdvanced` only renders its "Reset to fitted"
+   * button when it is supplied — a button that cannot reset anything is worse
+   * than no button. The container always supplies it.
+   */
+  onAdvancedReset?: () => void;
   /** Save the whole scene under a name — see the header. */
   onSaveAsPreset: (name: string) => void;
 }
@@ -115,6 +128,7 @@ export function PoseCameraGroup({
   onSetFov,
   onRequestFit,
   onAdvancedChange,
+  onAdvancedReset,
   onSaveAsPreset,
 }: PoseCameraGroupProps) {
   /* An orthographic camera has no field of view. */
@@ -244,8 +258,9 @@ export function PoseCameraGroup({
       {/* ── Advanced camera mode (task 06, mounted here by task 08) ──────────
           F16: these fields ARE the projection matrix; there is no 16-float
           box, and the component says so on screen. Collapsed by default —
-          the rail is 240px. ⚠️ See this file's header for exactly how far
-          `onAdvancedChange` currently reaches. */}
+          the rail is 240px. ⚠️ All six fields reach the camera since task 09
+          (D08-16); see this file's header for how, and for why they survive a
+          re-fit. */}
       <CameraAdvanced
         projection={projection}
         near={near}
@@ -254,6 +269,7 @@ export function PoseCameraGroup({
         perspective={perspective}
         onChange={onAdvancedChange}
         onSaveAsPreset={onSaveAsPreset}
+        onReset={onAdvancedReset}
       />
     </div>
   );

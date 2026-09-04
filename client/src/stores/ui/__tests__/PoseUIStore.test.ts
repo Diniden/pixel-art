@@ -36,6 +36,7 @@
 import { describe, expect, it } from "vitest";
 import { isObservable, isObservableProp, reaction, runInAction } from "mobx";
 import {
+  DEFAULT_POSE_CAMERA_OVERRIDES,
   DEFAULT_POSE_LIGHT_COLOR,
   DEFAULT_POSE_LIGHT_DIRECTION,
   DEFAULT_POSE_MODEL_COLOR,
@@ -1405,5 +1406,150 @@ describe("ApplicationStore — pose presets and the load order", () => {
     } finally {
       app.dispose();
     }
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * `cameraOverrides` — the seam that closes D08-16
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The advanced camera panel commits ONE FIELD AT A TIME (each `<input>` fires
+ * on its own blur/enter), so the whole contract of this field is that the
+ * setter MERGES. A replacing setter would wipe the other five boxes every time
+ * one was touched, which is exactly the class of bug that looks like the
+ * feature "not working" and is chased in the wrong file.
+ */
+
+describe("PoseUIStore — cameraOverrides (D08-16)", () => {
+  it("starts empty, by identity as well as by value", () => {
+    const pose = new PoseUIStore();
+    expect(pose.cameraOverrides).toEqual({});
+    // Identity too, so `=== DEFAULT_POSE_CAMERA_OVERRIDES` is a valid
+    // "untouched" test — the same contract the other defaults keep.
+    expect(pose.cameraOverrides).toBe(DEFAULT_POSE_CAMERA_OVERRIDES);
+  });
+
+  it("is observable, and observableRef rather than deep", () => {
+    const pose = new PoseUIStore();
+    expect(isObservableProp(pose, "cameraOverrides")).toBe(true);
+    pose.setCameraOverrides({ near: 1 });
+    // ⚠️ The stored record must NOT become a MobX proxy: it is handed straight
+    // to `applyCameraOverrides`, which `poseCamera.ts` documents as pure
+    // numbers in, pure numbers out.
+    expect(isObservable(pose.cameraOverrides)).toBe(false);
+  });
+
+  it("⭐ MERGES rather than replaces — the whole contract", () => {
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ near: 0.5 });
+    pose.setCameraOverrides({ far: 200 });
+    pose.setCameraOverrides({ left: -4 });
+    // If this were a replacing setter, only `left` would survive — and the
+    // owner would see two of their three typed values silently vanish.
+    expect(pose.cameraOverrides).toEqual({ near: 0.5, far: 200, left: -4 });
+  });
+
+  it("a later write to the SAME key wins", () => {
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ near: 0.5 });
+    pose.setCameraOverrides({ near: 0.25 });
+    expect(pose.cameraOverrides.near).toBe(0.25);
+  });
+
+  it("⭐ an explicit `undefined` CLEARS just that field", () => {
+    // How a single box is emptied without disturbing its neighbours. This is
+    // why the setter walks `Object.keys` and cannot be a spread.
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ near: 0.5, far: 200 });
+    pose.setCameraOverrides({ near: undefined });
+    expect(pose.cameraOverrides).toEqual({ far: 200 });
+    expect("near" in pose.cameraOverrides).toBe(false);
+  });
+
+  it("rejects a non-finite value rather than storing it", () => {
+    // ⚠️ A NaN reaching a camera blanks the frame with no error at all.
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ near: Number.NaN, far: Number.POSITIVE_INFINITY });
+    expect(pose.cameraOverrides).toEqual({});
+    pose.setCameraOverrides({ near: 2, far: Number.NaN });
+    expect(pose.cameraOverrides).toEqual({ near: 2 });
+  });
+
+  it("does NOT clamp or repair — that belongs where the values are consumed", () => {
+    // An inverted ortho box is a legitimate mirrored view, and near/far
+    // legality depends on both at once; repairing one against a stale other
+    // would fight the owner's own typing. `applyCameraOverrides` guards.
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ near: -5, left: 3, right: -3 });
+    expect(pose.cameraOverrides).toEqual({ near: -5, left: 3, right: -3 });
+  });
+
+  it("replaces the object identity on every write (observableRef contract)", () => {
+    const pose = new PoseUIStore();
+    const before = pose.cameraOverrides;
+    pose.setCameraOverrides({ near: 1 });
+    expect(pose.cameraOverrides).not.toBe(before);
+  });
+
+  it("notifies a reaction — this is what re-runs the container's fit", () => {
+    const pose = new PoseUIStore();
+    const seen: (number | undefined)[] = [];
+    const stop = reaction(
+      () => pose.cameraOverrides,
+      (value) => seen.push(value.near),
+    );
+    runInAction(() => pose.setCameraOverrides({ near: 0.75 }));
+    stop();
+    expect(seen).toEqual([0.75]);
+  });
+
+  it("clearCameraOverrides restores the frozen default by identity", () => {
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ near: 0.5, far: 200, aspect: 2 });
+    pose.clearCameraOverrides();
+    expect(pose.cameraOverrides).toBe(DEFAULT_POSE_CAMERA_OVERRIDES);
+  });
+
+  it("clear() resets it", () => {
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ near: 0.5 });
+    pose.clear();
+    expect(pose.cameraOverrides).toBe(DEFAULT_POSE_CAMERA_OVERRIDES);
+  });
+
+  it("⭐ a camera PRESET does not touch it — a typed value survives (F16)", () => {
+    // ⚠️ Deliberate, and the counterpart to open question 1. A preset owns the
+    // ORIENTATION; the frustum values the owner typed by hand are theirs until
+    // they press "Reset to fitted". Silently reverting them on a preset press
+    // is the exact behaviour D08-16 exists to remove.
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ near: 0.5, far: 200 });
+    pose.applyCameraPreset({
+      id: "iso",
+      projection: "orthographic",
+      pitch: 0.6,
+      yaw: 0.78,
+      fov: 50,
+      rotation: { x: 0, y: 0, z: 0 },
+      clipPolicy: "fit",
+    });
+    expect(pose.cameraOverrides).toEqual({ near: 0.5, far: 200 });
+  });
+
+  it("⭐ requestFit does not touch it either — it survives Fit to canvas", () => {
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ left: -2, right: 2 });
+    pose.requestFit();
+    pose.requestFit();
+    expect(pose.cameraOverrides).toEqual({ left: -2, right: 2 });
+  });
+
+  it("⚠️ is NOT persisted — session-only, like every pose field but presets", () => {
+    // The persistence path for an exact frustum is a SAVED PRESET, not this.
+    // `toPersistedPosePresets` is the store's only wire-facing serializer.
+    const pose = new PoseUIStore();
+    pose.setCameraOverrides({ near: 0.5 });
+    expect("toPersistedCameraOverrides" in pose).toBe(false);
+    expect(JSON.stringify(pose.toPersistedPosePresets() ?? null)).toBe("null");
   });
 });
