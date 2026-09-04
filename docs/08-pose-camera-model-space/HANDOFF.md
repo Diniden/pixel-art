@@ -15,7 +15,7 @@
 | W4 | 05 | **DONE** | 2026-09-04 | `673f5fe` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2984 tests pass** · boundaries OK all 5 · snapshots **unmoved** · `UIStore.ts` diff EMPTY · no lockfile |
 | W5 | 06, 07 | **DONE** | 2026-09-04 | `64d6629` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3047 tests pass** · boundaries OK · **stylelint exactly 2 errors** (`:338`/`:359`, pre-existing) · **storybook build 0** · snapshots unmoved · `UIStore.ts` EMPTY |
 | W6 | 08 | **DONE** (⚠️ one gap, D08-16) | 2026-09-04 | `a2aa8cc` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3102 tests pass** · boundaries OK · stylelint exactly 2 · storybook 0 · ⚠️ **corpus digest `e448764a…` UNCHANGED, verified by coordinator against a pre-dispatch baseline** · `server/` untouched · no lockfile |
-| W7 | 09 | IN PROGRESS | 2026-09-04 | | |
+| W7 | 09 | IN PROGRESS (agent 1 hit a rate limit mid-task; resumed) | 2026-09-04 | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
