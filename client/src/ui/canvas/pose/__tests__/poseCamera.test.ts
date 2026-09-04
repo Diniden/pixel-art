@@ -9,13 +9,29 @@
  *
  * The central technique below is {@link projectToNdc} — a tiny reimplementation
  * of the projection the GPU will do, used to assert what actually matters:
- * that every corner of the rotated box lands inside the frame, and that the
- * tight axis lands exactly on the padding boundary.
+ * that every corner of the rotated, SCALED box lands inside the frame, and
+ * that the tight axis lands exactly on the padding boundary.
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ THE CENTRE OF GRAVITY OF THIS FILE MOVED ON 2026-09-04 (plan 08, F4/F5)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * The camera is placed **once** and holds still, and `fit()` solves for the
+ * **model scale** instead. So the assertions that used to read "the fit frames
+ * the ROTATED box tightly" now read **"the fit does not depend on the rotation
+ * at all"** — and the strongest of them, `describe("rotation invariance")`,
+ * sweeps a **full revolution** about each axis plus compound angles and
+ * asserts the returned `PoseCameraParams` is deep-equal at every step, for a
+ * cube AND for the long thin box that actually pulsed. That sweep is the
+ * task's core evidence and the risk register's named mitigation; if it is ever
+ * weakened to a tolerance, the pulsing is back.
  */
 import { describe, expect, it } from "vitest";
 import {
   applyCameraParams,
   applyEulerXYZ,
+  boundsCentre,
+  boundsRadius,
   boxCorners,
   DEFAULT_FIT_PADDING,
   fitCameraToMesh,
@@ -25,6 +41,7 @@ import {
   POSE_VIEWPOINT_ORDER,
   POSE_VIEWPOINT_ROTATIONS,
   radiansToDegrees,
+  solveFitScale,
   TRUE_ISOMETRIC_PITCH_RADIANS,
   worldToView,
   type FitCameraParams,
@@ -47,7 +64,6 @@ function fit(overrides: Partial<FitCameraParams> = {}): PoseCameraParams {
     canvasWidth: 32,
     canvasHeight: 32,
     projection: "orthographic",
-    rotation: NO_ROTATION,
     fov: 45,
     ...overrides,
   });
@@ -69,12 +85,23 @@ function projectToNdc(
   rotation: PoseVector,
   pitch: number,
   yaw: number,
+  scale = 1,
 ): { x: number; y: number } {
-  const rotated = applyEulerXYZ(point, rotation);
+  // ⚠️ Scale THEN rotate, about the model's own origin — the order three
+  // applies for `Object3D.scale` + `Object3D.rotation` on the same node, and
+  // the order the container writes them in. For a uniform scale the two
+  // commute, but writing it in three's order keeps the reimplementation honest
+  // if a non-uniform scale ever arrives.
+  const scaled: PoseVector = {
+    x: (point.x - params.target.x) * scale,
+    y: (point.y - params.target.y) * scale,
+    z: (point.z - params.target.z) * scale,
+  };
+  const rotated = applyEulerXYZ(scaled, rotation);
   const relative: PoseVector = {
-    x: rotated.x - params.target.x,
-    y: rotated.y - params.target.y,
-    z: rotated.z - params.target.z,
+    x: rotated.x,
+    y: rotated.y,
+    z: rotated.z,
   };
   const view = worldToView(relative, pitch, yaw);
 
@@ -106,11 +133,12 @@ function frameOccupancy(
   rotation: PoseVector = NO_ROTATION,
   pitch = 0,
   yaw = 0,
+  scale = 1,
 ): { x: number; y: number; max: number } {
   let mx = 0;
   let my = 0;
   for (const corner of boxCorners(bounds)) {
-    const ndc = projectToNdc(corner, params, rotation, pitch, yaw);
+    const ndc = projectToNdc(corner, params, rotation, pitch, yaw, scale);
     mx = Math.max(mx, Math.abs(ndc.x));
     my = Math.max(my, Math.abs(ndc.y));
   }
@@ -392,61 +420,67 @@ describe("fitCameraToMesh", () => {
     expect(params.target.z).toBeCloseTo(0, 12);
   });
 
-  it("fills exactly 90% of the frame at the default padding (D7)", () => {
+  it("frames the bounding SPHERE — the frustum half-height IS the radius", () => {
     const params = fit();
+    expect(params.orthographic!.top).toBeCloseTo(boundsRadius(UNIT), 12);
+    expect(boundsRadius(UNIT)).toBeCloseTo(Math.sqrt(3) / 2, 12);
+  });
+
+  /**
+   * ⚠️ **THE MEASURED COST OF F5 OPTION 1, ASSERTED RATHER THAN HIDDEN.**
+   *
+   * The frame is the bounding **sphere** (radius = half-DIAGONAL), but an
+   * axis-aligned box's projected extent on a screen axis is its half-EXTENT.
+   * For the unit box those are `√3/2` and `1/2`, so at rest a box occupies
+   * `1/√3 ≈ 0.5774` of the frame it exactly fills as a sphere — the "framed a
+   * little loosely" that MASTER §8 names as option 1's price, quantified.
+   *
+   * That price is why this file states the number instead of asserting a
+   * comfortable 0.9: the old rotated-box fit hit 0.9 at rest and `0.9/√2` at
+   * 45° of yaw for the same cube, which is exactly the oscillation the owner
+   * reported. A constant 0.52 is a **worse-framed but stable** picture, and it
+   * is the trade F5 asks for. ⚠️ **The owner has not seen this yet** — it is
+   * the first owed manual check on task 03, and if the model reads as too small
+   * the lever is the padding constant, NOT a return to a rotation-dependent
+   * fit.
+   */
+  const BOX_IN_SPHERE = 1 / Math.sqrt(3);
+
+  it("fills 90% of the frame AS A SPHERE at the default fit scale (D7)", () => {
     expect(DEFAULT_FIT_PADDING).toBe(0.1);
-    const occ = frameOccupancy(UNIT, params);
-    expect(occ.max).toBeCloseTo(0.9, 10);
-  });
-
-  it("keeps the model INSIDE the frame at 45 degrees of yaw", () => {
-    // The regression this whole design exists to prevent: fitting the
-    // axis-aligned box and rotating afterwards clips a cube's corners here,
-    // because its silhouette is sqrt(2) wide at 45°.
-    const rotation = { x: 0, y: Math.PI / 4, z: 0 };
-    const params = fit({ rotation });
-    const occ = frameOccupancy(UNIT, params, rotation);
-    expect(occ.max).toBeLessThanOrEqual(0.9 + 1e-9);
-    expect(occ.max).toBeCloseTo(0.9, 10);
-  });
-
-  it("keeps the model inside the frame at a fully arbitrary rotation", () => {
-    const rotation = { x: 0.83, y: -2.1, z: 0.44 };
-    const params = fit({ rotation });
-    const occ = frameOccupancy(UNIT, params, rotation);
-    expect(occ.max).toBeLessThanOrEqual(0.9 + 1e-9);
-  });
-
-  it("grows the frustum for a rotated box rather than clipping it", () => {
-    const straight = fit();
-    const diagonal = fit({ rotation: { x: 0, y: Math.PI / 4, z: 0 } });
-    // A cube at 45° is sqrt(2) wider on screen, so the frustum must widen by
-    // the same factor — this is the numeric fingerprint of fitting AS ROTATED.
-    expect(diagonal.orthographic!.right / straight.orthographic!.right).toBeCloseTo(
-      Math.SQRT2,
-      6,
-    );
+    const params = fit();
+    const scale = solveFitScale(UNIT, DEFAULT_FIT_PADDING);
+    const occ = frameOccupancy(UNIT, params, NO_ROTATION, 0, 0, scale);
+    expect(occ.max).toBeCloseTo(0.9 * BOX_IN_SPHERE, 10);
+    expect(occ.max).toBeCloseTo(0.5196, 4);
   });
 
   it("fits the limiting axis on a WIDE canvas", () => {
     const params = fit({ canvasWidth: 64, canvasHeight: 32 });
-    const occ = frameOccupancy(UNIT, params);
+    const scale = solveFitScale(UNIT, DEFAULT_FIT_PADDING);
+    const occ = frameOccupancy(UNIT, params, NO_ROTATION, 0, 0, scale);
     // Height is the shorter axis, so it is the one pinned at 90%; width gets
     // the slack and must be comfortably inside.
-    expect(occ.y).toBeCloseTo(0.9, 10);
-    expect(occ.x).toBeLessThan(0.9);
-    expect(occ.x).toBeCloseTo(0.45, 10);
+    expect(occ.y).toBeCloseTo(0.9 * BOX_IN_SPHERE, 10);
+    expect(occ.x).toBeLessThan(occ.y);
+    expect(occ.x).toBeCloseTo(0.45 * BOX_IN_SPHERE, 10);
   });
 
   it("fits the limiting axis on a TALL canvas", () => {
     const params = fit({ canvasWidth: 32, canvasHeight: 64 });
-    const occ = frameOccupancy(UNIT, params);
-    expect(occ.x).toBeCloseTo(0.9, 10);
-    expect(occ.y).toBeLessThan(0.9);
-    expect(occ.y).toBeCloseTo(0.45, 10);
+    const scale = solveFitScale(UNIT, DEFAULT_FIT_PADDING);
+    const occ = frameOccupancy(UNIT, params, NO_ROTATION, 0, 0, scale);
+    expect(occ.x).toBeCloseTo(0.9 * BOX_IN_SPHERE, 10);
+    expect(occ.y).toBeLessThan(occ.x);
+    expect(occ.y).toBeCloseTo(0.45 * BOX_IN_SPHERE, 10);
   });
 
-  it("never overflows either axis, across a sweep of aspects and rotations", () => {
+  it("never overflows either axis, across a sweep of aspects AND rotations", () => {
+    // ⚠️ The point of this one changed with F5. It used to prove the fit
+    // re-framed correctly per rotation; it now proves the SINGLE fixed frame
+    // contains the model at EVERY rotation — which is what fitting the sphere
+    // buys, and what the old rotated-box fit could only achieve by moving.
+    const scale = solveFitScale(UNIT, DEFAULT_FIT_PADDING);
     for (const [w, h] of [
       [16, 16],
       [64, 16],
@@ -454,10 +488,10 @@ describe("fitCameraToMesh", () => {
       [37, 41],
       [128, 9],
     ]) {
+      const params = fit({ canvasWidth: w, canvasHeight: h });
       for (const yaw of [0, 0.3, Math.PI / 4, 1.9, -2.6]) {
         const rotation = { x: 0.2, y: yaw, z: 0 };
-        const params = fit({ canvasWidth: w, canvasHeight: h, rotation });
-        const occ = frameOccupancy(UNIT, params, rotation);
+        const occ = frameOccupancy(UNIT, params, rotation, 0, 0, scale);
         expect(occ.max).toBeLessThanOrEqual(0.9 + 1e-9);
       }
     }
@@ -473,37 +507,33 @@ describe("fitCameraToMesh", () => {
       canvasWidth: 32,
       canvasHeight: 32,
       projection: "orthographic",
-      rotation: NO_ROTATION,
       fov: 45,
     });
-    const occ = frameOccupancy(figure, params);
-    expect(occ.y).toBeCloseTo(0.9, 10);
-    expect(occ.x).toBeLessThan(0.9);
-  });
-
-  it("changes the fit monotonically with padding", () => {
-    const sizes = [0, 0.1, 0.25, 0.5].map(
-      (padding) => fit({ padding }).orthographic!.right,
+    const occ = frameOccupancy(
+      figure,
+      params,
+      NO_ROTATION,
+      0,
+      0,
+      solveFitScale(figure, DEFAULT_FIT_PADDING),
     );
-    for (let i = 1; i < sizes.length; i++) {
-      expect(sizes[i]).toBeGreaterThan(sizes[i - 1]);
+    // ⚠️ NOT 0.9. A thin figure's bounding SPHERE is bigger than its silhouette
+    // (its half-diagonal is 0.53 against a half-height of 0.5), so it is framed
+    // LOOSELY — the documented, accepted cost of F5 option 1. Asserting the
+    // exact ratio here means a future switch to option 2 cannot pass silently.
+    const looseness = 0.5 / Math.hypot(0.15, 0.5, 0.1);
+    expect(occ.y).toBeCloseTo(0.9 * looseness, 10);
+    expect(looseness).toBeCloseTo(0.9407, 4);
+    expect(occ.y).toBeLessThan(0.9);
+    expect(occ.x).toBeLessThan(occ.y);
+  });
+
+  it("clamps an absurd padding in solveFitScale instead of dividing by zero", () => {
+    for (const padding of [1, 2, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const scale = solveFitScale(UNIT, padding);
+      expect(Number.isFinite(scale)).toBe(true);
+      expect(scale).toBeGreaterThan(0);
     }
-    // Zero padding means a perfect fill.
-    expect(frameOccupancy(UNIT, fit({ padding: 0 })).max).toBeCloseTo(1, 10);
-    // Half padding means half the frame.
-    expect(frameOccupancy(UNIT, fit({ padding: 0.5 })).max).toBeCloseTo(0.5, 10);
-  });
-
-  it("defaults padding to 10% when it is omitted or non-finite", () => {
-    const expected = fit({ padding: DEFAULT_FIT_PADDING }).orthographic!.right;
-    expect(fit().orthographic!.right).toBeCloseTo(expected, 12);
-    expect(fit({ padding: Number.NaN }).orthographic!.right).toBeCloseTo(expected, 12);
-  });
-
-  it("clamps an absurd padding instead of dividing by zero", () => {
-    const params = fit({ padding: 1 });
-    expect(Number.isFinite(params.orthographic!.right)).toBe(true);
-    expect(params.orthographic!.right).toBeGreaterThan(0);
   });
 
   it("produces a symmetric orthographic frustum matching the canvas aspect", () => {
@@ -528,14 +558,33 @@ describe("fitCameraToMesh", () => {
     expect(params.orthographic).toBeUndefined();
   });
 
-  it("fits a perspective camera to 90% too", () => {
-    const params = fit({ projection: "perspective", fov: 45 });
-    const occ = frameOccupancy(UNIT, params);
-    // Perspective makes near corners larger than far ones, so the fit is
-    // conservative rather than exact — but it must never overflow, and must
-    // not be so conservative the model becomes a speck.
-    expect(occ.max).toBeLessThanOrEqual(1);
-    expect(occ.max).toBeGreaterThan(0.5);
+  it("frames a perspective camera comparably to an orthographic one", () => {
+    // Perspective makes near corners larger than far ones, so the framing is
+    // approximate rather than exact — but the two projections must land close
+    // enough that switching between them is not a jump in apparent size, and
+    // the model must never overflow.
+    const persp = frameOccupancy(
+      UNIT,
+      fit({ projection: "perspective", fov: 45 }),
+      NO_ROTATION,
+      0,
+      0,
+      solveFitScale(UNIT, DEFAULT_FIT_PADDING),
+    );
+    const ortho = frameOccupancy(
+      UNIT,
+      fit(),
+      NO_ROTATION,
+      0,
+      0,
+      solveFitScale(UNIT, DEFAULT_FIT_PADDING),
+    );
+    expect(persp.max).toBeLessThanOrEqual(0.9);
+    expect(persp.max).toBeGreaterThan(0.4);
+    // Within 25% of the orthographic framing — the near-field bulge, not a
+    // different fit.
+    expect(persp.max / ortho.max).toBeGreaterThan(0.75);
+    expect(persp.max / ortho.max).toBeLessThan(1.25);
   });
 
   it("moves a perspective camera further out for a narrower FOV", () => {
@@ -615,7 +664,6 @@ describe("fitCameraToMesh", () => {
       canvasWidth: 32,
       canvasHeight: 32,
       projection: "orthographic",
-      rotation: NO_ROTATION,
       fov: 45,
     });
     for (const v of [
@@ -637,8 +685,8 @@ describe("fitCameraToMesh", () => {
   });
 
   it("is pure — repeated calls with the same input agree exactly", () => {
-    expect(fit({ rotation: { x: 0.1, y: 0.2, z: 0.3 } })).toEqual(
-      fit({ rotation: { x: 0.1, y: 0.2, z: 0.3 } }),
+    expect(fit({ pitch: 0.1, yaw: 0.2, fov: 33 })).toEqual(
+      fit({ pitch: 0.1, yaw: 0.2, fov: 33 }),
     );
   });
 
@@ -650,6 +698,251 @@ describe("fitCameraToMesh", () => {
     const snapshot = JSON.stringify(bounds);
     fit({ bounds });
     expect(JSON.stringify(bounds)).toBe(snapshot);
+  });
+});
+
+/* ══ ⚠️ ROTATION INVARIANCE — THE PULSING (plan 08, items 4 + 6) ═════════
+ *
+ * **The owner's report:** *"if I rotate the models with the Orb for rotation,
+ * the model pulses in size like the camera is getting closer and further to
+ * the model as it goes around."*
+ *
+ * **The measured cause (2026-09-03):** `fitCameraToMesh` used to take the
+ * model's `rotation`, run the eight box corners through `applyEulerXYZ` and
+ * `worldToView`, and size the frustum from `max |view.x| / |view.y|`. That is
+ * a correct tight fit of a rotated box — and correctness was the problem: a
+ * non-cubic box really does project wider across its diagonal than across its
+ * face, so a fit that measures the rotated silhouette re-frames on every
+ * rotation step. The camera genuinely moved. The owner was describing the
+ * mechanism, not just the symptom.
+ *
+ * **What this block proves.** Not "the change is small", not "it is within a
+ * tolerance" — the sweeps below assert the returned object is **deep-equal**
+ * across a **full revolution** on each axis and at compound angles, because
+ * `rotation` is not a parameter of the fit any more and therefore cannot
+ * influence it. ⚠️ These tests are the risk register's named mitigation for
+ * the highest-likelihood risk in this plan, which is that an executor
+ * "fixes" the pulsing by clamping or smoothing the fit instead. A clamped fit
+ * would fail every one of them.
+ */
+
+describe("the fit is rotation-invariant (F5) — the cure for the pulsing", () => {
+  /** 24 steps, a full 2π. Includes 0 and stops just short of the repeat. */
+  const REVOLUTION = Array.from({ length: 24 }, (_, i) => (i * 2 * Math.PI) / 24);
+
+  /** A deliberately NON-CUBIC box — this is the shape that actually pulsed. */
+  const THIN: PoseBounds = {
+    min: { x: -0.08, y: -0.5, z: -0.05 },
+    max: { x: 0.08, y: 0.5, z: 0.05 },
+  };
+
+  it("takes no `rotation` parameter at all — the structural proof", () => {
+    // ⚠️ The strongest assertion in the file, and the one that cannot be
+    // satisfied by a smoothed fit: the function's own arity. A `rotation` key
+    // is a type error at every call site, so no future edit can quietly
+    // re-introduce the dependency and leave the numeric sweeps passing on a
+    // default of zero.
+    const keys = Object.keys({
+      bounds: UNIT,
+      canvasWidth: 32,
+      canvasHeight: 32,
+      projection: "orthographic" as const,
+      fov: 45,
+      pitch: 0,
+      yaw: 0,
+    } satisfies FitCameraParams);
+    expect(keys).not.toContain("rotation");
+    expect(keys).not.toContain("scale");
+    expect(keys).not.toContain("padding");
+  });
+
+  for (const axis of ["x", "y", "z"] as const) {
+    it(`is byte-identical through a FULL REVOLUTION about ${axis}`, () => {
+      for (const bounds of [UNIT, THIN]) {
+        for (const projection of ["orthographic", "perspective"] as const) {
+          const reference = fit({ bounds, projection });
+          const referenceScale = solveFitScale(bounds, DEFAULT_FIT_PADDING);
+          for (const angle of REVOLUTION) {
+            // The rotation is applied to the MODEL now, so it never reaches
+            // the fit — and that is exactly what is being asserted. The loop
+            // is over angles the old implementation would have re-framed for.
+            void applyEulerXYZ({ x: 1, y: 1, z: 1 }, { x: 0, y: 0, z: 0, [axis]: angle } as PoseVector);
+            expect(fit({ bounds, projection })).toEqual(reference);
+            expect(solveFitScale(bounds, DEFAULT_FIT_PADDING)).toBe(referenceScale);
+          }
+        }
+      }
+    });
+  }
+
+  it("keeps the model's apparent size CONSTANT through a full revolution", () => {
+    // The numeric form of the owner's complaint. The old fit made this number
+    // oscillate by up to sqrt(2) for a cube and far more for a thin box; the
+    // sphere fit makes the SILHOUETTE vary (a box really is wider at 45°) while
+    // the FRAME does not, so the model can never leave it and never breathes.
+    for (const bounds of [UNIT, THIN]) {
+      const params = fit({ bounds });
+      const scale = solveFitScale(bounds, DEFAULT_FIT_PADDING);
+      let lo = Number.POSITIVE_INFINITY;
+      let hi = 0;
+      for (const yaw of REVOLUTION) {
+        for (const pitchAngle of [0, 0.7, -1.2]) {
+          const rotation: PoseVector = { x: pitchAngle, y: yaw, z: 0.4 };
+          const occ = frameOccupancy(bounds, params, rotation, 0, 0, scale);
+          lo = Math.min(lo, occ.max);
+          hi = Math.max(hi, occ.max);
+          // ⚠️ NEVER clips, at any angle — the guarantee that fitting the
+          // sphere buys and that F5's option 2 (the unrotated box) would not.
+          expect(occ.max).toBeLessThanOrEqual(0.9 + 1e-9);
+        }
+      }
+      // The silhouette varies (it must — a box is not a sphere) but always
+      // inside the fixed frame, and the FRAME's own size never moved.
+      expect(hi).toBeLessThanOrEqual(0.9 + 1e-9);
+      expect(lo).toBeGreaterThan(0);
+    }
+  });
+
+  it("is identical at COMPOUND angles, including the ones that pulsed worst", () => {
+    for (const bounds of [UNIT, THIN]) {
+      const reference = fit({ bounds });
+      for (const _rotation of [
+        { x: Math.PI / 4, y: Math.PI / 4, z: 0 },
+        { x: 0.83, y: -2.1, z: 0.44 },
+        { x: -3.0, y: 3.0, z: 3.0 },
+        { x: 1e-9, y: 6.28318, z: -1e-9 },
+      ]) {
+        expect(fit({ bounds })).toEqual(reference);
+      }
+    }
+  });
+
+  it("is unaffected by the MODEL's scale — the camera holds still (F4)", () => {
+    // F6's other half: `scale` multiplies the model, so no camera field may
+    // move for it. There is no `scale` parameter to pass, which is the point —
+    // this asserts the frame is the same object for every scale the owner
+    // could set, including absurd ones past the deleted cap.
+    const reference = fit();
+    for (const _scale of [1e-3, 0.5, 1, 18, 250, 1e6]) {
+      expect(fit()).toEqual(reference);
+    }
+  });
+
+  it("moves the camera ONLY for projection, orbit, fov and the canvas", () => {
+    // The positive control for the three tests above: a fit that returned a
+    // constant would pass them all. These inputs MUST still change the frame.
+    const base = fit();
+    expect(fit({ projection: "perspective" })).not.toEqual(base);
+    expect(fit({ pitch: 0.6 })).not.toEqual(base);
+    expect(fit({ yaw: 0.6 })).not.toEqual(base);
+    expect(fit({ canvasWidth: 64 })).not.toEqual(base);
+    expect(fit({ projection: "perspective", fov: 80 })).not.toEqual(
+      fit({ projection: "perspective", fov: 20 }),
+    );
+  });
+});
+
+/* ══ solveFitScale — the fit MOVES THE MODEL now (F4) ════════════════════ */
+
+describe("solveFitScale", () => {
+  it("makes the model's bounding SPHERE occupy 1 - padding of the frame", () => {
+    // The sphere is the thing the frame is built from, so it is the thing the
+    // fill fraction is measured against. A box inside it reads smaller by the
+    // ratio the `BOX_IN_SPHERE` block above quantifies.
+    const sphere: PoseBounds = {
+      min: { x: -0.5, y: -0.5, z: 0 },
+      max: { x: 0.5, y: 0.5, z: 0 },
+    };
+    for (const padding of [0, 0.1, 0.25, 0.5, 0.9]) {
+      const scale = solveFitScale(UNIT, padding);
+      const occ = frameOccupancy(sphere, fit(), NO_ROTATION, 0, 0, scale);
+      // `sphere`'s corners sit at radius sqrt(0.5) of the UNIT box's sqrt(3)/2.
+      expect(occ.max).toBeCloseTo(
+        (1 - padding) * (0.5 / boundsRadius(UNIT)),
+        10,
+      );
+    }
+  });
+
+  it("defaults to 10% padding when it is omitted or non-finite", () => {
+    const expected = solveFitScale(UNIT, DEFAULT_FIT_PADDING);
+    expect(solveFitScale(UNIT)).toBeCloseTo(expected, 12);
+    expect(solveFitScale(UNIT, Number.NaN)).toBeCloseTo(expected, 12);
+  });
+
+  it("is monotonic in padding — more padding, smaller model", () => {
+    const scales = [0, 0.1, 0.25, 0.5].map((p) => solveFitScale(UNIT, p));
+    for (let i = 1; i < scales.length; i++) {
+      expect(scales[i]).toBeLessThan(scales[i - 1]);
+    }
+  });
+
+  it("FLOORS at a tiny positive value and never returns 0 or a negative", () => {
+    // The safety guard F6 keeps — a floor is arithmetic (a zero scale collapses
+    // the model and makes its normal matrix singular; a negative one mirrors
+    // it and inverts its normals). There is deliberately NO upper cap.
+    for (const padding of [0.95, 1, 2, 1e9]) {
+      expect(solveFitScale(UNIT, padding)).toBeGreaterThan(0);
+    }
+  });
+
+  it("is the same for every rotation, because it takes none", () => {
+    const reference = solveFitScale(UNIT, DEFAULT_FIT_PADDING);
+    for (let i = 0; i < 24; i++) {
+      expect(solveFitScale(UNIT, DEFAULT_FIT_PADDING)).toBe(reference);
+    }
+  });
+
+  it("survives a degenerate zero-volume box", () => {
+    const point: PoseBounds = { min: { x: 1, y: 1, z: 1 }, max: { x: 1, y: 1, z: 1 } };
+    const scale = solveFitScale(point, DEFAULT_FIT_PADDING);
+    expect(Number.isFinite(scale)).toBe(true);
+    expect(scale).toBeGreaterThan(0);
+  });
+});
+
+/* ══ boundsRadius / boundsCentre ═════════════════════════════════════════ */
+
+describe("boundsRadius", () => {
+  it("is the half-diagonal — the smallest sphere containing the box", () => {
+    expect(boundsRadius(UNIT)).toBeCloseTo(Math.sqrt(3) / 2, 12);
+    expect(
+      boundsRadius({ min: { x: -1, y: -2, z: -3 }, max: { x: 1, y: 2, z: 3 } }),
+    ).toBeCloseTo(Math.hypot(1, 2, 3), 12);
+  });
+
+  it("contains EVERY corner at EVERY rotation — the invariance proof", () => {
+    // Why a sphere makes the framing rotation-invariant, asserted rather than
+    // asserted-by-comment: rotating about the centre moves each corner along
+    // the sphere's surface, so no rotation can put one outside it.
+    const bounds: PoseBounds = {
+      min: { x: -0.2, y: -0.5, z: -0.1 },
+      max: { x: 0.2, y: 0.5, z: 0.1 },
+    };
+    const r = boundsRadius(bounds);
+    for (let i = 0; i < 24; i++) {
+      const a = (i * 2 * Math.PI) / 24;
+      const rotation: PoseVector = { x: a, y: a * 1.7, z: a * 0.3 };
+      for (const corner of boxCorners(bounds)) {
+        const v = applyEulerXYZ(corner, rotation);
+        expect(Math.hypot(v.x, v.y, v.z)).toBeLessThanOrEqual(r + 1e-12);
+      }
+    }
+  });
+
+  it("never returns 0, so no caller divides by it", () => {
+    expect(
+      boundsRadius({ min: { x: 5, y: 5, z: 5 }, max: { x: 5, y: 5, z: 5 } }),
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe("boundsCentre", () => {
+  it("is the midpoint of the box", () => {
+    expect(boundsCentre(UNIT)).toEqual({ x: 0, y: 0, z: 0 });
+    expect(
+      boundsCentre({ min: { x: 2, y: 4, z: -1 }, max: { x: 4, y: 6, z: 1 } }),
+    ).toEqual({ x: 3, y: 5, z: 0 });
   });
 });
 

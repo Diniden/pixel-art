@@ -8,7 +8,7 @@
  * for everything that render is a function of: which mesh is loaded (a
  * primitive, the whole mannequin, or one of its parts), its rotation, the key
  * light's direction and colour, the outline's thickness, the camera's
- * projection / preset / zoom / FOV, and the screen-space pan.
+ * projection / preset / FOV, the model's **scale**, and the screen-space pan.
  *
  * ⚠️ **The model's and outline's COLOURS are not here.** They are the app's own
  * Fill and Edge slots on `ToolUIStore` (MASTER E8/E9), read by
@@ -40,12 +40,13 @@
  *   `modelColor` and `pan` are refs and are REPLACED WHOLESALE — never edited
  *   field by field. Readers may therefore compare identity to know whether the
  *   render needs to be re-issued, and no `PoseVector` or `Color` is ever a
- *   MobX proxy. The scalars (`zoom`, `fov`, `fitGeneration`) and the string
+ *   MobX proxy. The scalars (`scale`, `fov`, `fitGeneration`) and the string
  *   unions are plain `observable`, which is safe: they are primitives.
- * - **Zoom and pan are free** (MASTER E11/E13, refinements 2026-09-03). `zoom`
- *   has no upper bound and `pan` has no bound at all — the model may be blown
- *   up far past the canvas and dragged completely off it. `fitGeneration` is
- *   the seam that brings it back: the rail bumps it, the container re-frames.
+ * - **Scale and pan are free** (MASTER E11/E13, refinements 2026-09-03).
+ *   `scale` has no upper bound and `pan` has no bound at all — the model may
+ *   be blown up far past the canvas and dragged completely off it.
+ *   `fitGeneration` is the seam that brings it back: the rail bumps it, the
+ *   container re-frames.
  *
  * ── Lifetime (locked D6) ──────────────────────────────────────────────────
  * The pose outlives layer, frame, object and variant switches — switch to
@@ -169,25 +170,31 @@ export const DEFAULT_POSE_MODEL_COLOR: Color = Object.freeze({
 export const DEFAULT_POSE_PAN: PosePan = Object.freeze({ x: 0, y: 0 });
 
 /**
- * Zoom **safety floor** — deliberately NOT a range (MASTER E11).
+ * Model-scale **safety floor** — deliberately NOT a range (MASTER E11).
  *
- * There used to be a `POSE_ZOOM_MAX = 10` alongside this, and it was the thing
+ * ⚠️ **Renamed AND re-meant on 2026-09-04 (plan 08, F6).** This was
+ * `POSE_ZOOM_MIN_SAFE`, the floor on a *camera* multiplier that divided the
+ * frustum. `scale` is now a multiplier on the **model's own transform about
+ * its own origin** — `root.scale.setScalar(...)` in `CanvasContainer` — and
+ * the camera holds still (F4). The number is unchanged; what it guards is not.
+ *
+ * There used to be a `POSE_ZOOM_MAX = 10` alongside it, and it was the thing
  * the owner hit: it capped how large the model could be drawn. It is gone, and
- * `zoom` is now unbounded above — any positive finite number is stored verbatim.
+ * `scale` is unbounded above — any positive finite number is stored verbatim.
  *
  * A floor still exists, and the reason is categorically different from a cap. A
- * cap is a taste judgement about how big is useful; a floor is arithmetic. Zoom
- * multiplies a camera scale, so `0` collapses the projection to a point (a
- * degenerate frustum / zero-extent orthographic box, which renders nothing and
- * can divide by zero downstream) and a negative value MIRRORS it, flipping the
- * model and inverting its normals. Neither is a view the owner could have asked
- * for, so both are treated as bad input and floored rather than honoured.
+ * cap is a taste judgement about how big is useful; a floor is arithmetic. A
+ * scale of `0` collapses the model to a point and makes its normal matrix
+ * singular, and a negative value MIRRORS it, flipping the geometry and
+ * inverting its normals so the lighting reads inside-out. Neither is a view the
+ * owner could have asked for, so both are treated as bad input and floored
+ * rather than honoured.
  *
- * `1e-3` is chosen to be far below any useful view (at 0.001× a 32-px sprite is
+ * `1e-3` is chosen to be far below any useful view (at 0.001x a 32-px sprite is
  * a fraction of one pixel) so it never acts as a limit in practice — it only
- * catches values that would break the camera.
+ * catches values that would break the render.
  */
-export const POSE_ZOOM_MIN_SAFE = 1e-3;
+export const POSE_SCALE_MIN_SAFE = 1e-3;
 
 /** FOV clamp, in degrees. Outside this the perspective camera degenerates. */
 export const POSE_FOV_MIN = 10;
@@ -248,23 +255,23 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * `value` as a usable zoom multiplier: any positive finite number is returned
- * UNCHANGED — there is no upper bound (MASTER E11) — and anything the camera
- * cannot use falls back to `floor`.
+ * `value` as a usable model-scale multiplier: any positive finite number is
+ * returned UNCHANGED — there is no upper bound (MASTER E11) — and anything the
+ * render cannot use falls back to `floor`.
  *
- * This replaces `clamp()` for zoom, and the difference in how it treats
+ * This replaces `clamp()` for scale, and the difference in how it treats
  * infinity is the point. `clamp()` deliberately lets `±Infinity` settle on
  * whichever bound it runs into and reserves the `min` fallback for `NaN`, which
  * has no ordering and would otherwise propagate straight through into the
  * render (that reasoning still stands, and `setFov` still relies on it — FOV
- * has a real maximum for `+Infinity` to land on). Zoom no longer has an upper
+ * has a real maximum for `+Infinity` to land on). Scale no longer has an upper
  * bound for `+Infinity` to clamp to, so it cannot be handled by ordering at
- * all: `Infinity` must be rejected outright, because a non-finite camera scale
+ * all: `Infinity` must be rejected outright, because a non-finite transform
  * produces `NaN` matrices exactly as `NaN` itself would. Hence one predicate,
  * `Number.isFinite`, which rejects `NaN` and both infinities together, and a
  * separate `> 0` test for zero and negatives.
  */
-function sanitizeZoom(value: number, floor: number): number {
+function sanitizeScale(value: number, floor: number): number {
   if (!Number.isFinite(value) || value <= 0) return floor;
   return Math.max(floor, value);
 }
@@ -300,14 +307,21 @@ export class PoseUIStore {
   /** Perspective or orthographic. Set directly, or via a preset. */
   projection: PoseProjection = "perspective";
 
-  /** The named camera angle. A preset sets projection + angles, not zoom/pan. */
+  /** The named camera angle. A preset sets projection + angles, not scale/pan. */
   cameraPreset: PoseCameraPreset = "2.5d";
 
   /**
-   * Free scale multiplier applied on top of the auto-fit. Unbounded above;
-   * only floored at `POSE_ZOOM_MIN_SAFE` (MASTER E11).
+   * The model's **own** scale multiplier, about its own origin (plan 08, F6).
+   *
+   * ⚠️ This is a MODEL transform, not a camera setting. The container writes it
+   * as `root.scale.setScalar(...)`; the camera does not move for it (F4).
+   * Unbounded above; only floored at `POSE_SCALE_MIN_SAFE` (MASTER E11).
+   *
+   * The auto-fit COMPOSES with it rather than replacing it: the container
+   * multiplies this by the fit's solved scale, so a fit re-frames the model
+   * while leaving the owner's own scaling intact.
    */
-  zoom = 1;
+  scale = 1;
 
   /** Field of view in degrees; ignored while `projection` is orthographic. */
   fov = 50;
@@ -346,7 +360,7 @@ export class PoseUIStore {
       modelColor: observableRef,
       projection: observable,
       cameraPreset: observable,
-      zoom: observable,
+      scale: observable,
       fov: observable,
       pan: observableRef,
       fitGeneration: observable,
@@ -361,7 +375,7 @@ export class PoseUIStore {
       setModelColor: action,
       setProjection: action,
       setCameraPreset: action,
-      setZoom: action,
+      setScale: action,
       setFov: action,
       setPan: action,
       nudgePan: action,
@@ -433,27 +447,27 @@ export class PoseUIStore {
   /**
    * Pick a named angle. Only the id is stored — resolving it to a projection
    * and euler angles is `poseCamera.ts`'s job (task 06), which is pure and
-   * lives under `ui/`. Zoom and pan are untouched (MASTER D14).
+   * lives under `ui/`. Scale and pan are untouched (MASTER D14).
    */
   setCameraPreset(preset: PoseCameraPreset): void {
     this.cameraPreset = preset;
   }
 
   /**
-   * Store any positive finite zoom verbatim — **there is no upper bound**
+   * Store any positive finite scale verbatim — **there is no upper bound**
    * (MASTER E11). `NaN`, `±Infinity`, zero and negatives fall back to
-   * `POSE_ZOOM_MIN_SAFE`; see `sanitizeZoom` for why that is a safety floor and
-   * not the old range's `min`.
+   * `POSE_SCALE_MIN_SAFE`; see `sanitizeScale` for why that is a safety floor
+   * and not the old range's `min`.
    *
-   * ⚠️ Unclamping here is **necessary but not sufficient** for the owner's
-   * complaint. Pose-tool task 08 folded zoom into `fitCameraToMesh`'s padding
-   * instead of applying it as a separate camera scale, so the fit keeps
-   * re-normalising whatever multiplier this stores. Separating the two is
-   * MASTER E12, owned by task 06 in `poseCamera.ts` / `CanvasContainer.tsx` —
-   * NOT fixable from this file.
+   * ⚠️ **Plan 08 (F6) closed the loop this comment used to say was open.** The
+   * refinements plan noted that unclamping here was "necessary but not
+   * sufficient", because the container folded the multiplier into the fit's
+   * padding and the fit kept re-normalising it. That fold is gone: `scale` is
+   * now applied to the MODEL (`root.scale.setScalar`) and the camera holds
+   * still, so what is stored here is what the owner sees.
    */
-  setZoom(zoom: number): void {
-    this.zoom = sanitizeZoom(zoom, POSE_ZOOM_MIN_SAFE);
+  setScale(scale: number): void {
+    this.scale = sanitizeScale(scale, POSE_SCALE_MIN_SAFE);
   }
 
   /** Clamped to `[POSE_FOV_MIN, POSE_FOV_MAX]` degrees. */
@@ -487,7 +501,7 @@ export class PoseUIStore {
    * settings (MASTER E14/E15) — the rail's "Fit to canvas" button.
    *
    * ⚠️ This bumps the counter and does **nothing else**. It must never touch
-   * `zoom`, `pan`, `rotation`, `projection`, `cameraPreset` or `fov`: the whole
+   * `scale`, `pan`, `rotation`, `projection`, `cameraPreset` or `fov`: the whole
    * point is to re-frame at whatever the owner has already set up, so resetting
    * any of them here would defeat the feature. The container observes
    * `fitGeneration` and performs the framing.
@@ -507,7 +521,7 @@ export class PoseUIStore {
    * other, so clearing the pose would spuriously fire a fit — at the exact
    * moment the mesh has just been unloaded and there is nothing to fit. Leaving
    * it alone is what makes "a fit was requested" mean only that. Everything
-   * else, `zoom` included, returns to its default.
+   * else, `scale` included, returns to its default.
    */
   clear(): void {
     this.meshId = null;
@@ -518,7 +532,7 @@ export class PoseUIStore {
     this.modelColor = DEFAULT_POSE_MODEL_COLOR;
     this.projection = "perspective";
     this.cameraPreset = "2.5d";
-    this.zoom = 1;
+    this.scale = 1;
     this.fov = 50;
     this.pan = DEFAULT_POSE_PAN;
   }

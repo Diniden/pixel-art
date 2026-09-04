@@ -245,20 +245,12 @@ export interface FitCameraParams {
   /** Render-target height in texels — `cellHeight`. */
   canvasHeight: number;
   projection: PoseProjection;
-  /** The MODEL's euler rotation (XYZ radians) — the box is fitted as rotated. */
-  rotation: PoseVector;
   /** Vertical field of view in DEGREES. Ignored when orthographic. */
   fov: number;
   /** Camera orbit pitch in radians. Default 0. */
   pitch?: number;
   /** Camera orbit yaw in radians. Default 0. */
   yaw?: number;
-  /**
-   * Fraction of the frame left empty, total across both edges. `0.1` (the
-   * default) means the model occupies **90% of the shorter canvas axis**
-   * (MASTER D7). Clamped to `[0, 0.95)` — 100% padding would divide by zero.
-   */
-  padding?: number;
 }
 
 /** The default 10% total padding — a 90% fill (MASTER D7). */
@@ -268,48 +260,122 @@ export const DEFAULT_FIT_PADDING = 0.1;
 const MIN_HALF_EXTENT = 1e-4;
 
 /**
- * Frame `bounds` so its **rotated** projection occupies 90% of the shorter
- * canvas axis, centred (MASTER D7).
+ * The **scale floor** — the same guard `PoseUIStore.POSE_SCALE_MIN_SAFE`
+ * applies, restated here because this module may not import a store (MASTER
+ * D15) and {@link solveFitScale} must never hand a caller a zero or negative
+ * multiplier. A cap would be a taste judgement; a floor is arithmetic.
+ */
+const MIN_FIT_SCALE = 1e-3;
+
+/**
+ * How many bounding radii of depth the clip planes allow around the model.
  *
- * Three things this gets right that a naive implementation does not:
+ * ⚠️ Deliberately large. The model's `scale` is **unbounded above** (F6), so a
+ * model scaled to 30× has to stay between `near` and `far` or it disappears
+ * rather than merely overflowing the frame — and "it vanishes past a certain
+ * scale" is a bug report about the scale control, not about clipping, which is
+ * exactly the kind of misattribution that costs a debugging session. 64 radii
+ * covers every scale the sliders reach and costs only depth precision, which
+ * this renderer does not read (the height channel reads the depth BUFFER of a
+ * separately-configured pass, not this one's `far`).
+ */
+export const POSE_DEPTH_ALLOWANCE = 64;
+
+/**
+ * The radius of the bounding **sphere** of `bounds`, about its own centre.
  *
- * 1. **It fits the box AS ROTATED.** Fitting the axis-aligned box and then
- *    rotating the model makes a cube clip at its corners the moment you reach
- *    45°, because a unit cube's silhouette is `√2` wide there. The eight
- *    corners are transformed into VIEW space and the extents measured on the
- *    result, so every orientation frames correctly.
- * 2. **It handles non-square canvases.** The art grid is frequently not
- *    square. The fill target is the SHORTER axis, and the longer axis is given
- *    the slack — so the model never overflows either edge and the padding
- *    reads the same on the tight axis regardless of aspect.
- * 3. **It is pure.** Numbers in, numbers out, no three objects — which is what
- *    lets it be tested at all in a lane with no WebGL.
+ * ⚠️ **This is the whole cure for the pulsing (plan 08, F5).** See
+ * {@link fitCameraToMesh}'s header for why a sphere and not a box.
+ */
+export function boundsRadius(bounds: PoseBounds): number {
+  const hx = (bounds.max.x - bounds.min.x) / 2;
+  const hy = (bounds.max.y - bounds.min.y) / 2;
+  const hz = (bounds.max.z - bounds.min.z) / 2;
+  return Math.max(Math.hypot(hx, hy, hz), MIN_HALF_EXTENT);
+}
+
+/** The centre of `bounds` — what the camera aims at. */
+export function boundsCentre(bounds: PoseBounds): PoseVector {
+  return {
+    x: (bounds.min.x + bounds.max.x) / 2,
+    y: (bounds.min.y + bounds.max.y) / 2,
+    z: (bounds.min.z + bounds.max.z) / 2,
+  };
+}
+
+/**
+ * Place the camera **once**, so that a model at scale 1 exactly fills the
+ * shorter canvas axis (plan 08, **F4**).
  *
- * The camera is placed along the orbit direction at a distance chosen from the
- * view-space depth of the box, so the box always sits comfortably inside
- * `[near, far]` — for an orthographic camera the distance does not affect the
- * framing at all, but clipping planes still have to contain the geometry.
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ THE CAMERA HOLDS STILL. IT DOES NOT SEE THE MODEL'S ROTATION OR SCALE.
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Everything this function returns is a pure function of `bounds`, the canvas
+ * dimensions, `projection`, `pitch`, `yaw` and `fov`. **`rotation` is not a
+ * parameter any more, and neither is `scale`** — that is not an omission, it
+ * is the fix, and `poseCamera.test.ts` pins it by sweeping a full revolution
+ * and asserting the returned object is deep-equal at every step.
+ *
+ * ## Why the old fit made the model pulse (measured 2026-09-03)
+ *
+ * The previous implementation took the eight corners of `bounds`, ran each
+ * through `applyEulerXYZ(local, rotation)` and then `worldToView(...)`, and
+ * sized the frustum from `max |view.x| / |view.y|`. That is a **correct**
+ * tight fit of a rotated box — and it is exactly why the model breathed. A
+ * non-cubic box genuinely has a larger projected extent across its diagonal
+ * than across its face (a unit cube is `√2` wide at 45° of yaw), so a fit that
+ * measures the rotated silhouette re-frames on **every rotation step**. The
+ * owner saw that as "the camera gets closer and further as it goes around".
+ *
+ * ⚠️ Clamping or smoothing that number would have been the wrong cure (MASTER
+ * §8, mistake 1): it would only have made the breathing slower. The fit had to
+ * stop depending on rotation **at all**.
+ *
+ * ## The cure: fit the bounding SPHERE (F5, option 1)
+ *
+ * A sphere has the same silhouette from every direction, so its projected
+ * radius is rotation-invariant **by construction** — not by approximation, not
+ * within a tolerance. Rotating a model about its own centre moves every vertex
+ * along that sphere's surface and can never move one outside it, so a frame
+ * built from the radius is a frame the model can never overflow, at any angle.
+ * That is what makes the invariance provable rather than merely observed.
+ *
+ * The alternative (F5 option 2 — fit the **unrotated** box) was rejected:
+ * it is equally stable, but a rotated corner can push past the frame edge, so
+ * it trades a pulsing model for an intermittently clipped one. Its own cost is
+ * paid in framing tightness: a long thin model is framed loosely at every
+ * angle, by the ratio of its diagonal to its longest side. Since **plan 08
+ * task 01 centred every mesh's geometry on its own bounding-box centre**, and
+ * everything reaching the engine is normalised into `UNIT_BOUNDS`, the sphere
+ * here is a known quantity — `√3/2 ≈ 0.866` for the unit box — and the
+ * looseness is a constant, not a surprise.
+ *
+ * ## What "scale 1 fills the frame" buys
+ *
+ * The frustum is sized so the **bounding sphere touches the SHORTER canvas
+ * axis at model scale 1**, with **no padding folded in**. Padding is not the
+ * camera's business any more: it belongs to {@link solveFitScale}, which is
+ * what the owner's **Fit to canvas** now sets. Keeping the camera at a
+ * padding-free reference frame means the model scale reads directly as
+ * "fraction of the frame the sphere fills", which is what makes the Scale
+ * control legible and the fit arithmetic one line.
+ *
+ * ⚠️ **A box inside that sphere therefore reads SMALLER than the frame it is
+ * fitted to** — by the ratio of its half-extent to its half-diagonal, `1/√3 ≈
+ * 0.577` for a cube. That is not a bug and not a rounding error; it is F5
+ * option 1's price, and `poseCamera.test.ts` asserts the exact number so a
+ * future switch to option 2 cannot pass silently. ⚠️ **No owner has seen this
+ * rendered yet.** If the model reads as too small in the frame, the lever is
+ * the padding constant in `CanvasContainer`, **never** a return to a
+ * rotation-dependent fit — that would bring the pulsing straight back.
+ *
+ * ⚠️ **`scale` is a MODEL transform** (F6). It is applied by the container as
+ * `root.scale.setScalar(...)` and never reaches this function. The old
+ * `scaleCameraParams`, which divided the frustum instead, is **deleted**.
  */
 export function fitCameraToMesh(params: FitCameraParams): PoseCameraParams {
-  const {
-    bounds,
-    canvasWidth,
-    canvasHeight,
-    projection,
-    rotation,
-    fov,
-    pitch = 0,
-    yaw = 0,
-  } = params;
-
-  // Padding is clamped rather than validated: a caller that computes it from a
-  // slider should get a sane frame, not an exception mid-render.
-  const padding = clamp(
-    Number.isFinite(params.padding) ? (params.padding as number) : DEFAULT_FIT_PADDING,
-    0,
-    0.95,
-  );
-  const fill = 1 - padding;
+  const { bounds, canvasWidth, canvasHeight, projection, fov, pitch = 0, yaw = 0 } = params;
 
   // A zero-area canvas has no frame to fit into; fall back to square so the
   // caller still gets usable numbers instead of NaN.
@@ -317,52 +383,20 @@ export function fitCameraToMesh(params: FitCameraParams): PoseCameraParams {
   const height = Number.isFinite(canvasHeight) && canvasHeight > 0 ? canvasHeight : 1;
   const aspect = width / height;
 
-  const centre: PoseVector = {
-    x: (bounds.min.x + bounds.max.x) / 2,
-    y: (bounds.min.y + bounds.max.y) / 2,
-    z: (bounds.min.z + bounds.max.z) / 2,
-  };
+  const centre = boundsCentre(bounds);
 
-  // The eight corners, taken into view space: first the MODEL's rotation, then
-  // the inverse of the camera's orbit (equivalently: rotate the world by −yaw
-  // then −pitch, which is what looking from (pitch, yaw) does).
-  let halfW = MIN_HALF_EXTENT;
-  let halfH = MIN_HALF_EXTENT;
-  let halfD = MIN_HALF_EXTENT;
-
-  for (const corner of boxCorners(bounds)) {
-    // Model space, relative to the centre we will aim at.
-    const local: PoseVector = {
-      x: corner.x - centre.x,
-      y: corner.y - centre.y,
-      z: corner.z - centre.z,
-    };
-    const rotated = applyEulerXYZ(local, rotation);
-    const view = worldToView(rotated, pitch, yaw);
-    halfW = Math.max(halfW, Math.abs(view.x));
-    halfH = Math.max(halfH, Math.abs(view.y));
-    halfD = Math.max(halfD, Math.abs(view.z));
-  }
-
-  // ── The limiting axis ──────────────────────────────────────────────────
+  // ── The frame ──────────────────────────────────────────────────────────
   //
-  // The model must fit `fill` of the SHORTER canvas axis. Working in
-  // normalised device coordinates (−1..1 on both axes), the shorter axis has
-  // no extra room while the longer one is stretched by `aspect`. A box of
-  // view half-extents (halfW, halfH) fills the frame when
-  //
-  //     halfW / frustumHalfWidth  ≤ fill   and   halfH / frustumHalfHeight ≤ fill
-  //
-  // so the frustum half-height that satisfies BOTH is the larger of the two
-  // requirements. Expressing everything in half-heights (half-width is
-  // `aspect × half-height`) makes the comparison one line.
-  const halfHeightForVertical = halfH / fill;
-  const halfHeightForHorizontal = halfW / fill / aspect;
-  const frustumHalfHeight = Math.max(
-    halfHeightForVertical,
-    halfHeightForHorizontal,
-    MIN_HALF_EXTENT,
-  );
+  // The bounding sphere's projected radius, in world units, is just `radius` —
+  // for an orthographic camera exactly, and for a perspective one to within
+  // the near-field bulge, which at these distances is well under a texel.
+  // The SHORTER canvas axis is the one the model must fit, and in a symmetric
+  // frustum expressed in half-heights the shorter axis IS the half-height when
+  // `aspect >= 1` and `halfHeight * aspect` when it is not — so taking the
+  // half-height as `radius / min(aspect, 1)` makes the sphere touch whichever
+  // axis is tight, at model scale 1, on any canvas.
+  const radius = boundsRadius(bounds);
+  const frustumHalfHeight = Math.max(radius / Math.min(aspect, 1), MIN_HALF_EXTENT);
   const frustumHalfWidth = frustumHalfHeight * aspect;
 
   // ── Camera placement ───────────────────────────────────────────────────
@@ -371,25 +405,34 @@ export function fitCameraToMesh(params: FitCameraParams): PoseCameraParams {
   // this is +Z, i.e. the default "in front of the model" position.
   const dir = orbitDirection(pitch, yaw);
 
-  // Distance. For orthographic this only has to clear the geometry; for
-  // perspective it is what actually sets the framing, from the frustum
-  // half-height and the vertical FOV.
-  const fovRadians = clamp(
-    Number.isFinite(fov) ? fov : 45,
-    1,
-    179,
-  ) * (Math.PI / 180);
+  const fovRadians = clamp(Number.isFinite(fov) ? fov : 45, 1, 179) * (Math.PI / 180);
 
+  // For perspective the distance is what sets the framing; for orthographic it
+  // only has to clear the geometry. Both are measured against the SPHERE, so
+  // both are rotation-invariant like everything else here.
   const perspectiveDistance = frustumHalfHeight / Math.tan(fovRadians / 2);
-  // Two model-depths of headroom keeps the whole box in front of the camera
-  // even when it is long and thin along the view axis.
-  const orthographicDistance = halfD * 2 + Math.max(frustumHalfHeight, halfD) * 2;
+  const orthographicDistance = radius * 2 + Math.max(frustumHalfHeight, radius) * 2;
+
+  // ⚠️ A generous depth allowance, applied to the CLIP PLANES ONLY and never
+  // to the distance. The model may be SCALED far past the frame (F6 removed
+  // the cap), so `near`/`far` bracket a multiple of the radius rather than
+  // hugging it — growing the model must not push it through a clip plane and
+  // make it vanish, a failure that would read as "the scale control breaks past
+  // N" rather than as a clipping bug.
+  //
+  // ⚠️ Folding this into the DISTANCE instead would be a subtle disaster for a
+  // perspective camera: the distance is what sets its framing, so a 64-radius
+  // dolly-back would shrink the model to a speck. (Measured while writing this
+  // — the first draft did exactly that, and `frameOccupancy` fell to 0.02.)
+  const depthAllowance = radius * POSE_DEPTH_ALLOWANCE;
 
   // A floor on the distance keeps a degenerate (point-sized) box from putting
   // the camera on top of its own target, where `near` would overrun `far`.
   const MIN_DISTANCE = 1e-2;
   const distance = Math.max(
-    projection === "perspective" ? perspectiveDistance + halfD : orthographicDistance,
+    projection === "perspective"
+      ? perspectiveDistance + radius
+      : orthographicDistance,
     MIN_DISTANCE,
   );
 
@@ -399,7 +442,7 @@ export function fitCameraToMesh(params: FitCameraParams): PoseCameraParams {
     z: centre.z + dir.z * distance,
   };
 
-  // Clip planes bracket the box with room to spare.
+  // Clip planes bracket the sphere with room to spare.
   //
   // `near` is kept strictly positive — a zero or negative near plane is
   // undefined for perspective and produces a degenerate projection matrix for
@@ -407,10 +450,10 @@ export function fitCameraToMesh(params: FitCameraParams): PoseCameraParams {
   // independently, so `far > near` holds by construction: computing the two
   // separately let a point-sized box produce `near > far`, which silently
   // renders nothing at all.
-  const near = Math.max(distance - halfD * 2, distance * 0.01, 1e-3);
+  const near = Math.max(distance - depthAllowance, distance * 0.01, 1e-3);
   const far = Math.max(
-    distance + halfD * 2 + frustumHalfHeight * 2,
-    near + Math.max(halfD * 4, frustumHalfHeight * 4, 1e-2),
+    distance + depthAllowance + frustumHalfHeight * 2,
+    near + Math.max(depthAllowance * 2, frustumHalfHeight * 4, 1e-2),
   );
 
   if (projection === "perspective") {
@@ -437,6 +480,47 @@ export function fitCameraToMesh(params: FitCameraParams): PoseCameraParams {
       bottom: -frustumHalfHeight,
     },
   };
+}
+
+/**
+ * The **model scale** that makes `bounds` fill `1 - padding` of the frame that
+ * {@link fitCameraToMesh} placed for the same `bounds` (plan 08, **F4**).
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ A FIT MOVES THE MODEL NOW, NOT THE CAMERA.
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * This is the other half of F4: "fit to canvas" used to re-place the camera,
+ * and now it solves for the multiplier the container writes onto the model
+ * root as `root.scale.setScalar(...)`. Because {@link fitCameraToMesh} frames
+ * the bounding sphere at **exactly** one radius of half-height (see its
+ * header), a model at scale `s` occupies `s` of the half-frame — so the scale
+ * that fills `1 - padding` is `1 - padding` itself.
+ *
+ * ⚠️ **It is written as the ratio anyway, not as `1 - padding`.** The identity
+ * holds only while the camera frames the sphere exactly, and a future change
+ * to the framing (a fixed camera preset with its own frustum, say) must break
+ * this function loudly rather than silently keep returning a stale constant.
+ * Deriving it from the same `boundsRadius` the camera used costs one divide
+ * and keeps the two definitions tied together.
+ *
+ * `padding` is the same `[0, 0.95)` clamp {@link fitCameraToMesh} used to
+ * apply, and the result is floored at {@link MIN_FIT_SCALE} — never capped
+ * (F6: a floor is arithmetic, a cap is a taste judgement).
+ */
+export function solveFitScale(bounds: PoseBounds, padding?: number): number {
+  const clamped = clamp(
+    Number.isFinite(padding) ? (padding as number) : DEFAULT_FIT_PADDING,
+    0,
+    0.95,
+  );
+  const fill = 1 - clamped;
+  const radius = boundsRadius(bounds);
+  // The frame's half-extent in model units, on the tight axis: one radius, by
+  // construction of `fitCameraToMesh`. The model must occupy `fill` of it.
+  const frameHalfExtent = radius;
+  const scale = (fill * frameHalfExtent) / radius;
+  return Number.isFinite(scale) && scale > MIN_FIT_SCALE ? scale : MIN_FIT_SCALE;
 }
 
 /* ── the one seam that touches a camera object ────────────────────────────── */

@@ -10,9 +10,17 @@
  *
  * Also pins MASTER D7 (`setMesh` resets pan), the FOV clamp, the outline
  * thickness (`edgeWidth`, E4 — integer 0–4, default OFF), and
- * — from the refinements plan, 2026-09-03 — that zoom has **no upper bound**
- * (E11), that pan is **never** clamped (E13), and that `fitGeneration` /
- * `requestFit()` form an event counter that mutates no camera state (E14/E15).
+ * — from the refinements plan, 2026-09-03 — that the model's `scale` has **no
+ * upper bound** (E11), that pan is **never** clamped (E13), and that
+ * `fitGeneration` / `requestFit()` form an event counter that mutates no
+ * camera state (E14/E15).
+ *
+ * ⚠️ `zoom`/`setZoom`/`POSE_ZOOM_MIN_SAFE` were renamed to
+ * `scale`/`setScale`/`POSE_SCALE_MIN_SAFE` on 2026-09-04 (plan 08, F6) AND
+ * re-meant: the value is now a multiplier on the MODEL's own transform about
+ * its own origin, not a divisor on the camera frustum. The store's arithmetic
+ * is unchanged, which is why these tests survive the rename verbatim; what
+ * changed is what the container does with the number.
  *
  * The last block wires a real `ApplicationStore` the way
  * `ReflectionUIStore.test.ts` does (no Zustand, no auto-save) to pin that
@@ -33,7 +41,7 @@ import {
   DEFAULT_POSE_EDGE_WIDTH,
   POSE_EDGE_WIDTH_MAX,
   POSE_EDGE_WIDTH_MIN,
-  POSE_ZOOM_MIN_SAFE,
+  POSE_SCALE_MIN_SAFE,
   PoseUIStore,
 } from "../PoseUIStore";
 import { ApplicationStore } from "@/stores/ApplicationStore";
@@ -59,7 +67,7 @@ describe("PoseUIStore — defaults", () => {
     expect(s.modelColor).toEqual(DEFAULT_POSE_MODEL_COLOR);
     expect(s.projection).toBe("perspective");
     expect(s.cameraPreset).toBe("2.5d");
-    expect(s.zoom).toBe(1);
+    expect(s.scale).toBe(1);
     expect(s.fov).toBe(50);
     expect(s.pan).toEqual({ x: 0, y: 0 });
     expect(s.fitGeneration).toBe(0);
@@ -84,7 +92,7 @@ describe("PoseUIStore — defaults", () => {
       "modelColor",
       "projection",
       "cameraPreset",
-      "zoom",
+      "scale",
       "fov",
       "pan",
       "fitGeneration",
@@ -120,7 +128,7 @@ describe("PoseUIStore — setters", () => {
       s.setEdgeWidth(3);
       s.setPan({ x: 7, y: -3 });
       s.setRotation({ x: 0.5, y: 0.5, z: 0 });
-      s.setZoom(2);
+      s.setScale(2);
       s.setProjection("orthographic");
     });
 
@@ -133,7 +141,7 @@ describe("PoseUIStore — setters", () => {
     // parts at the same thickness impossible.
     expect(s.edgeWidth).toBe(3);
     expect(s.rotation).toEqual({ x: 0.5, y: 0.5, z: 0 });
-    expect(s.zoom).toBe(2);
+    expect(s.scale).toBe(2);
     expect(s.projection).toBe("orthographic");
   });
 
@@ -168,12 +176,12 @@ describe("PoseUIStore — setters", () => {
     runInAction(() => {
       s.setMesh("cube");
       s.setPan({ x: 4000, y: -4000 });
-      s.setZoom(2500);
+      s.setScale(2500);
     });
     runInAction(() => s.setMesh("sphere"));
     expect(s.pan).toEqual({ x: 0, y: 0 });
-    // Zoom is the owner's working setup and survives, uncapped.
-    expect(s.zoom).toBe(2500);
+    // The owner's own scale is their working setup and survives, uncapped.
+    expect(s.scale).toBe(2500);
   });
 
 
@@ -216,14 +224,14 @@ describe("PoseUIStore — setters", () => {
     expect(s.cameraPreset).toBe("iso");
   });
 
-  it("setCameraPreset leaves zoom and pan alone (D14)", () => {
+  it("setCameraPreset leaves scale and pan alone (D14)", () => {
     const s = new PoseUIStore();
     runInAction(() => {
-      s.setZoom(3);
+      s.setScale(3);
       s.setPan({ x: 2, y: 2 });
       s.setCameraPreset("top-down");
     });
-    expect(s.zoom).toBe(3);
+    expect(s.scale).toBe(3);
     expect(s.pan).toEqual({ x: 2, y: 2 });
   });
 
@@ -236,46 +244,48 @@ describe("PoseUIStore — setters", () => {
   });
 });
 
-/* ── zoom: sanitised, not clamped ─────────────────────────────────────────────
+/* ── scale: sanitised, not clamped ────────────────────────────────────────────
  *
  * MASTER E11 (refinements 2026-09-03). The old `POSE_ZOOM_MAX = 10` was the cap
  * the owner hit; it is deleted and these tests pin its absence. Only a safety
- * floor survives, because a zero or negative camera scale collapses or mirrors
- * the projection — arithmetic, not taste.
+ * floor survives, because a zero or negative model scale collapses or mirrors
+ * the geometry — arithmetic, not taste.
  *
- * ⚠️ These tests prove the STORE stores what it is given. They cannot prove the
- * owner sees a bigger model: zoom is still folded into `fitCameraToMesh`'s
- * padding, which task 06 separates (E12).
+ * ⚠️ These tests prove the STORE stores what it is given. Plan 08 (F6) closed
+ * the gap the refinements plan left open: the value is no longer folded into
+ * `fitCameraToMesh`'s padding — it is written onto the MODEL as
+ * `root.scale.setScalar(...)`, so what is stored here is what is rendered.
+ * That composition is the CONTAINER's, and is not testable from this file.
  */
-describe("PoseUIStore — zoom sanitising (no upper bound)", () => {
-  it("accepts a huge zoom verbatim — there is no cap", () => {
+describe("PoseUIStore — model-scale sanitising (no upper bound)", () => {
+  it("accepts a huge scale verbatim — there is no cap", () => {
     const s = new PoseUIStore();
-    runInAction(() => s.setZoom(5000));
-    expect(s.zoom).toBe(5000);
+    runInAction(() => s.setScale(5000));
+    expect(s.scale).toBe(5000);
   });
 
-  it("accepts ordinary and very large zooms unchanged", () => {
+  it("accepts ordinary and very large scales unchanged", () => {
     const s = new PoseUIStore();
-    for (const z of [POSE_ZOOM_MIN_SAFE, 0.25, 1, 2.5, 10, 11, 250, 1e6]) {
-      runInAction(() => s.setZoom(z));
-      expect(s.zoom).toBe(z);
+    for (const z of [POSE_SCALE_MIN_SAFE, 0.25, 1, 2.5, 10, 11, 250, 1e6]) {
+      runInAction(() => s.setScale(z));
+      expect(s.scale).toBe(z);
     }
   });
 
   it("floors zero and negatives — a non-positive scale collapses or mirrors", () => {
     const s = new PoseUIStore();
-    runInAction(() => s.setZoom(0));
-    expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
-    runInAction(() => s.setZoom(-5));
-    expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
-    runInAction(() => s.setZoom(-0));
-    expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
+    runInAction(() => s.setScale(0));
+    expect(s.scale).toBe(POSE_SCALE_MIN_SAFE);
+    runInAction(() => s.setScale(-5));
+    expect(s.scale).toBe(POSE_SCALE_MIN_SAFE);
+    runInAction(() => s.setScale(-0));
+    expect(s.scale).toBe(POSE_SCALE_MIN_SAFE);
   });
 
   it("floors a positive value below the safety floor", () => {
     const s = new PoseUIStore();
-    runInAction(() => s.setZoom(1e-9));
-    expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
+    runInAction(() => s.setScale(1e-9));
+    expect(s.scale).toBe(POSE_SCALE_MIN_SAFE);
   });
 
   it("rejects NaN and BOTH infinities — the camera needs a finite scale", () => {
@@ -288,16 +298,16 @@ describe("PoseUIStore — zoom sanitising (no upper bound)", () => {
       Number.POSITIVE_INFINITY,
       Number.NEGATIVE_INFINITY,
     ]) {
-      runInAction(() => s.setZoom(2));
-      runInAction(() => s.setZoom(bad));
-      expect(s.zoom).toBe(POSE_ZOOM_MIN_SAFE);
-      expect(Number.isFinite(s.zoom)).toBe(true);
+      runInAction(() => s.setScale(2));
+      runInAction(() => s.setScale(bad));
+      expect(s.scale).toBe(POSE_SCALE_MIN_SAFE);
+      expect(Number.isFinite(s.scale)).toBe(true);
     }
   });
 
   it("the safety floor is a floor, not a range — it is far below any useful view", () => {
-    expect(POSE_ZOOM_MIN_SAFE).toBeGreaterThan(0);
-    expect(POSE_ZOOM_MIN_SAFE).toBeLessThan(0.01);
+    expect(POSE_SCALE_MIN_SAFE).toBeGreaterThan(0);
+    expect(POSE_SCALE_MIN_SAFE).toBeLessThan(0.01);
   });
 });
 
@@ -466,7 +476,7 @@ describe("PoseUIStore — fitGeneration / requestFit (E14/E15)", () => {
       s.setModelColor(BLUE);
       s.setProjection("orthographic");
       s.setCameraPreset("iso");
-      s.setZoom(42);
+      s.setScale(42);
       s.setFov(88);
       s.setPan({ x: -17, y: 23 });
     });
@@ -479,10 +489,16 @@ describe("PoseUIStore — fitGeneration / requestFit (E14/E15)", () => {
 
     // Every field except the counter is byte-for-byte what it was, and the ref
     // fields keep their identity too — a re-fit must not look like a new pose.
+    //
+    // ⚠️ This stays true after plan 08 (F4), where a fit sets the model's
+    // SCALE. The STORE still only bumps the counter; the CONTAINER observes it
+    // and calls `setScale(1)`, because only the container knows what fitting
+    // means (it holds the bounds, the canvas size and the model root). Keeping
+    // the reset out of `requestFit()` is what lets this assertion stay exact.
     expect({ ...s }).toEqual({ ...before, fitGeneration: before.fitGeneration + 1 });
     expect(s.rotation).toBe(rotationRef);
     expect(s.pan).toBe(panRef);
-    expect(s.zoom).toBe(42);
+    expect(s.scale).toBe(42);
   });
 
   it("clear() deliberately does NOT reset the counter", () => {
@@ -497,7 +513,7 @@ describe("PoseUIStore — fitGeneration / requestFit (E14/E15)", () => {
     // unloaded. Everything else resets; this only ever counts up.
     expect(s.fitGeneration).toBe(2);
     expect(s.meshId).toBeNull();
-    expect(s.zoom).toBe(1);
+    expect(s.scale).toBe(1);
   });
 });
 
@@ -544,7 +560,7 @@ describe("PoseUIStore — clear()", () => {
       s.setModelColor(BLUE);
       s.setProjection("orthographic");
       s.setCameraPreset("iso");
-      s.setZoom(4);
+      s.setScale(4);
       s.setFov(90);
       s.setPan({ x: 9, y: 9 });
     });
@@ -560,7 +576,7 @@ describe("PoseUIStore — clear()", () => {
     expect(s.modelColor).toEqual(DEFAULT_POSE_MODEL_COLOR);
     expect(s.projection).toBe("perspective");
     expect(s.cameraPreset).toBe("2.5d");
-    expect(s.zoom).toBe(1);
+    expect(s.scale).toBe(1);
     expect(s.fov).toBe(50);
     expect(s.pan).toEqual(DEFAULT_POSE_PAN);
   });
@@ -570,7 +586,7 @@ describe("PoseUIStore — clear()", () => {
     const used = new PoseUIStore();
     runInAction(() => {
       used.setMesh("cube");
-      used.setZoom(7);
+      used.setScale(7);
       used.clear();
     });
     expect({ ...used }).toEqual({ ...fresh });
@@ -636,7 +652,7 @@ describe("ApplicationStore — app.pose", () => {
         app.pose.setMesh("mannequin");
         app.pose.setEdgeWidth(4);
         app.pose.setPan({ x: 3, y: 3 });
-        app.pose.setZoom(5);
+        app.pose.setScale(5);
       });
       expect(app.pose.hasMesh).toBe(true);
 
@@ -647,7 +663,7 @@ describe("ApplicationStore — app.pose", () => {
       expect(app.pose.meshId).toBeNull();
       expect(app.pose.edgeWidth).toBe(DEFAULT_POSE_EDGE_WIDTH);
       expect(app.pose.pan).toEqual({ x: 0, y: 0 });
-      expect(app.pose.zoom).toBe(1);
+      expect(app.pose.scale).toBe(1);
     } finally {
       app.dispose();
     }
