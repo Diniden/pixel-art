@@ -1,8 +1,8 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W5 IN PROGRESS (tasks 06, 07)
+**Current position:** W5 DONE — W6 next (⚠️ the persistence wave)
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
-**Last commit:** `cee0910` (W4 complete; W5 dispatched)
+**Last commit:** `64d6629` (W5 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
 
 ## Wave ledger
@@ -13,7 +13,7 @@
 | W2 | 03 | **DONE** | 2026-09-04 | `4727a53` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2945 tests pass** · boundaries OK · snapshots unmoved · **`UIStore.ts` diff EMPTY** · no lockfile |
 | W3 | 04 | **DONE** | 2026-09-04 | `62f3052` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2965 tests pass** · boundaries OK · snapshots unmoved · `UIStore.ts` diff EMPTY · no lockfile |
 | W4 | 05 | **DONE** | 2026-09-04 | `673f5fe` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2984 tests pass** · boundaries OK all 5 · snapshots **unmoved** · `UIStore.ts` diff EMPTY · no lockfile |
-| W5 | 06, 07 | IN PROGRESS | 2026-09-04 | | |
+| W5 | 06, 07 | **DONE** | 2026-09-04 | `64d6629` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3047 tests pass** · boundaries OK · **stylelint exactly 2 errors** (`:338`/`:359`, pre-existing) · **storybook build 0** · snapshots unmoved · `UIStore.ts` EMPTY |
 | W6 | 08 | TODO | | | ⚠️ the persistence wave — data-safety gate |
 | W7 | 09 | TODO | | | |
 
@@ -28,8 +28,8 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 03 | Camera holds still: fit → scale | W2 | **DONE** | `76ce43f`, `4727a53` | F5 cure = **bounding sphere**. `rotation` REMOVED from `FitCameraParams`. ⚠️ See F5-COST below |
 | 04 | Camera-space pan | W3 | **DONE** | `62f3052` | **No deviations.** Blit back to fixed origin; `viewToWorld` verified against three itself to 1.7e-16 |
 | 05 | Presets + viewpoint semantics | W4 | **DONE** | `673f5fe` | F7 via one `applyCameraPreset` action; F9 inverts left/right **as a semantic change, maths byte-identical**. ⚠️ Records F8 (below). Open question 1 CLOSED. See deviation D08-8 |
-| 06 | Advanced camera mode | W5 | TODO | | Ships a component; 08 mounts it |
-| 07 | Exact Euler entry | W5 | TODO | | ⚠️ F11 decision required for the light |
+| 06 | Advanced camera mode | W5 | **DONE** | `bd81268` | Standalone `CameraAdvanced.tsx`; F16 caveat rendered on screen. **Task 08 must mirror `CameraAdvancedProps` exactly** |
+| 07 | Exact Euler entry | W5 | **DONE** | `64d6629` | F11 CLOSED: **two fields (azimuth/elevation), no roll box.** ⚠️ Found a quiet composition bug — verified |
 | 08 | Saved scene presets, persisted | W6 | TODO | | ⚠️ **The only wire-format change** |
 | 09 | Full gate, QA, handoff | W7 | TODO | | Likely ends `PARTIAL` |
 
@@ -142,9 +142,23 @@ added this way before. The remaining real risks are the three traps in task 08's
    Pinned by `PoseUIStore.test.ts` → *"leaves SCALE and PAN alone — open question 1, decided
    2026-09-04"*. The full reasoning also lives beside `PoseCameraPresetSpec` in
    `ui/canvas/pose/poseCamera.ts`, so it is found from the code as well as from here.
-2. **How are the light's angles represented?** (F11) The light is a **unit vector** with no Euler
-   form today, and vector → Euler is **not unique** (roll is unconstrained). Task 07 decides;
-   recommended is a two-field azimuth/elevation control, honestly labelled.
+2. ~~**How are the light's angles represented?**~~ **CLOSED by task 07 (2026-09-04): TWO fields —
+   `Azimuth` and `Elevation` — derived from the vector every time, with NO stored second copy.**
+   ⚠️ **The deciding argument was not the store constraint.** Storing typed angles alongside would
+   mean shipping **a roll box that does nothing**: typing in it would change the stored angles,
+   leave the vector identical, and light the model exactly as before. A control that accepts input
+   and produces no effect is worse than one not offered, and no labelling rescues it. The stored-
+   angles design also **drifts the instant the light orb is dragged** (the orb writes a vector; the
+   copy would not know).
+   **The exact round-trip the owner will experience:** type a number, the light moves; drag the
+   orb, the numbers follow live; type, look away, come back — **the same two numbers**, with one
+   bounded exception. Elevation is reported in −90…90 and azimuth in −180…180, so `elevation 100`
+   redisplays in its canonical spelling (physically identical: 10° past the pole = `elevation 80`
+   with azimuth flipped 180°) and `azimuth 370` comes back as `10`. **Nothing is lost — the light
+   is exactly where the typed numbers put it** — the numbers are a *reading* of the vector, not a
+   remembered copy. ⚠️ **The model's rotation is deliberately asymmetric here:** `370` stays `370`,
+   because those three numbers **are** the stored state. That asymmetry is the honest price of
+   storing no second copy. **Owed manual check W5-4 is where the owner accepts or rejects it.**
 3. ~~**Is the full mannequin's geometry centred too, or only the parts?**~~ **CLOSED by task 01
    (2026-09-04): YES, the full scene is centred too.** Baking node transforms proved unnecessary —
    a scene has one centre, so the single world offset is converted into each node's local frame via
@@ -196,6 +210,68 @@ are float maths, and the unit lane is **node**, not jsdom (`vitest.config.ts`,
 and asserting it on exported constants would not have asserted it at all. The stale header rule was
 rewritten rather than left in place. Coordinator's assessment: correct, and the 2931-test green run
 confirms it executes.
+
+**⚠️ COORDINATOR-VERIFIED FINDING (task 07) — a QUIET wrong answer that was caught before it
+shipped.** Composing the light's azimuth/elevation with **one** combined `applyEulerXYZ({0,0,1},
+{x:-elev, y:azim, z:0})` call is **NOT** "turn, then lift": three's XYZ order composes `Rz·Ry·Rx`,
+so the two operations interfere. **I re-derived this independently and my numbers match task 07's
+to six decimals** — at azimuth 45 / elevation 20:
+
+| | vector |
+| --- | --- |
+| **Correct** (two sequential calls) | `(0.664463, 0.342020, 0.664463)` |
+| **The trap** (one combined call) | `(0.707107, 0.241845, 0.664463)` |
+| delta | x **0.042644**, y **0.100175** |
+
+⚠️ **Both results are exactly unit length**, which is precisely why this is dangerous: it would
+never throw and never look broken — it would surface as *"the boxes and the orb disagree
+slightly"* and be chased for hours in the wrong place. The code composes **two** `applyEulerXYZ`
+calls, a test pins the difference, and the correct composition reproduces `DirectionOrb`'s own
+`vectorToSpherical` **to 1e-12**, so boxes and orb cannot disagree.
+
+**D08-13 — task 07 made two small compressions inside `PoseSection.tsx` beyond its wiring.** The
+file sat at **394 of the 400 code-line `ui/` error ceiling** and the wiring pushed it to 403. Both
+changes are genuine simplifications, not comment-padding: an 11-line inline `satisfies readonly
+(readonly [...])[]` became a hoisted `ColorSlotRow` type alias, and `viewpointTitle`'s 16-line
+`switch` became a `VIEWPOINT_TITLES` lookup plus a 5-line function. No behaviour changed and the
+covering tests still pass; coordinator confirmed `max-lines` no longer fires.
+⚠️⚠️ **STRUCTURAL WARNING FOR TASK 08: `PoseSection.tsx` is at ~397 code lines and has
+essentially NO budget left — and task 08 must mount BOTH `CameraAdvanced` and the preset UI into
+it. It very likely needs splitting BEFORE more is added.** Splitting a `ui/` component is in
+keeping with the boundary rules, but it is real work that task 08's estimate may not include.
+
+**Task 08 must mirror `CameraAdvancedProps` exactly** (task 06 ships it unmounted):
+`{projection, near, far, orthographic?, perspective?, defaultOpen?, onChange, onSaveAsPreset,
+onReset?}`, where `CameraAdvancedPatch` is **sparse** and deliberately omits `position`/`target` —
+those belong to the fit and the pan, not the frustum.
+
+**D08-12 — task 06's `parseNumber` / `describeInvalid` are module-private, not exported.** Its
+first draft exported them for direct unit testing, but `react-refresh/only-export-components` is an
+**error** under `PosePanel/` (downgraded to `warn` only for a named list of legacy directories,
+which this is not), so exporting a non-component from a component module cost 2 eslint errors.
+Constants like `MATRIX_NOTE` are exempt; **functions are not.** Both rules are now pinned *through
+the rendered component*, which is the stronger pin — it proves the box wired to the guard rejects
+the empty string, not merely that a helper does.
+⚠️ **A note task 06 passed to task 07 mid-wave:** `EulerInput.tsx` hits the same rule for the same
+reason. Coordinator observed 1 eslint error at `PoseSection.tsx:678` (`max-lines`) while task 07
+was **mid-edit** — that is task 07's file in flight, not task 06's, and it is resolved at the W5
+gate below, not here.
+
+**Minor scope note on task 06 (not a deviation):** it also added
+`PosePanel/CameraAdvanced.stories.tsx`, which the Touches list did not enumerate. It is the
+conventional companion to a new `ui/` component, purely additive, and required for the
+`storybook build` leg of the W5 gate. Coordinator's assessment: **within the spirit of the
+matrix** — no other task owns that path, so no collision was possible.
+
+**Coordinator verified task 06's F16 handling.** The owner asked for *"exact values for the
+camera's projection matrix"*; a raw 4×4 input would be **silently overwritten** by
+`updateProjectionMatrix()`. Rather than shipping a control that provably does nothing, task 06
+renders the reason on screen (`MATRIX_NOTE`): *"These fields ARE the projection matrix. The camera
+rebuilds its matrix from them every frame (updateProjectionMatrix), so a hand-typed 4×4 would be
+overwritten — entering the frustum values is the only way to set it exactly."* Three DOM tests pin
+it, one asserting the text names the **mechanism** so a future reader does not "add the missing
+4×4 input". Import check: the component imports only React, one `type`, and its CSS — the `ui/`
+boundary holds.
 
 **⚠️ COORDINATOR'S INDEPENDENT VERIFICATION OF F9 (mistake 6 — the one that has already bitten
 this table twice).** Task 05 claimed it changed *semantics only*, not maths. **I verified that
@@ -426,6 +502,37 @@ evidence for the *maths*. It is not evidence about the *render*.
 ⚠️ Task 04's note: **F5-COST (the ~0.52 frame fill) will be visible in the same session** as
 anyone who checks pan check 1 — a loosely-framed model makes panning to the border *easier*, not
 harder. Judge the two together.
+
+### W5 — 11 owed, **0 performed**
+
+**Task 06 — advanced camera mode (5):**
+1. The advanced panel opens and shows the right fields for the current projection.
+2. Typing an exact `fov` / ortho box changes the view to *exactly* that. ⚠️ **Blocked on task 08's
+   wiring** — nothing is mounted yet.
+3. An invalid `near`/`far` combination is visibly rejected and does not corrupt the view. The red
+   border and reason line are asserted in the DOM; whether they *read* as rejection is perceptual.
+4. ⚠️ **Most likely to send task 06 back: layout at 240 px** — six numeric boxes in a narrow rail.
+   A two-column grid is the mitigation and the `Orthographic`/`Perspective` stories mount at
+   exactly 240 px for review, but **no one has looked at them.**
+5. Touch: the numeric fields are usable on iPad and the rail does not scroll while typing.
+
+**Task 07 — Euler entry (6):**
+6. Typing `45` into the model's Y rotation turns it exactly as dragging the orb to 45° does.
+7. Dragging either orb updates its numeric fields **live**, and typing moves the orb.
+8. ⚠️ **The measured trap, live:** typing a negative or partial value (`-`, `.`) does **not** snap
+   the model to 0 mid-keystroke. Pinned by tests at both levels via synthetic `change` events, but
+   **real browser keystroke sequences are not the same thing.**
+9. ⚠️ **Highest value of the six — the visual proof of the F11 decision.** The light's fields move
+   the light as expected and the values shown match its actual direction after dragging its orb,
+   **including the canonicalisation behaviour the owner needs to see and accept** (see open
+   question 2).
+10. Layout at **240 px** with five extra number boxes in the rotation group. The `Orthographic`
+    story now carries deliberately wide values (rotation ≈ −45/135/30, light ≈ azimuth −120 /
+    elevation 35) so it is reviewed at its **worst case** — but Storybook was only *built*, never
+    *opened*.
+11. Touch: the fields are usable on iPad and the rail does not scroll while typing. ⚠️ These boxes
+    reuse `pose-panel__slider-row`, so they **inherit the carried `touch-action` defect task 08
+    owns.**
 
 ### W4 — 9 owed, **0 performed**
 
