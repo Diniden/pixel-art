@@ -15,7 +15,7 @@
  * |               | E1/E2, not a framing), a THICK outline (`edgeWidth` 4)    |
  * |               | and the EDGE slot being edited                            |
  * | Orthographic  | the FOV slider disabled, an orthographic preset active,   |
- * |               | zoom well past the old `max={10}` cap                     |
+ * |               | model SCALE well past the old `max={10}` cap              |
  *
  * Between them the four cover the states the plan asks for: no mesh · a
  * primitive with the outline off (NoMesh) and with a thin one (Primitive) · a
@@ -43,7 +43,7 @@ const handlers = {
   onSetEdgeWidth: fn(),
   onSetProjection: fn(),
   onSelectCameraPreset: fn(),
-  onSetZoom: fn(),
+  onSetScale: fn(),
   onSetFov: fn(),
   onRequestFit: fn(),
   onClear: fn(),
@@ -69,7 +69,7 @@ const defaults = {
   edgeWidth: 0,
   projection: "perspective" as const,
   cameraPreset: "2.5d" as const,
-  zoom: 1,
+  scale: 1,
   fov: 50,
 };
 
@@ -104,7 +104,8 @@ const meta = {
           "**Edge** colour slots as swatches (there is no native colour " +
           "input — clicking a swatch points the app's own picker at that " +
           "slot, MASTER E8/E9/E10), the outline width (0–4 px, 0 = off), and " +
-          "the camera group (projection, five presets, an **uncapped** zoom, " +
+          "the camera group (projection, five presets, an **uncapped** model " +
+          "**Scale**, " +
           "FOV and **Fit to canvas**). FOV is disabled in orthographic — " +
           "disabled rather than hidden, so the layout never jumps. The " +
           "mannequin row is never disabled: every part is loadable from any " +
@@ -155,9 +156,10 @@ export const Orthographic: Story = {
     meshId: "sphere",
     projection: "orthographic",
     cameraPreset: "iso",
-    /* Past the old `max={10}`, which task 03 deleted: the story is the
-       regression pin for the owner's "the zoom caps out" complaint. */
-    zoom: 18,
+    /* Past the old `max={10}`, deleted by the refinements plan: the story is
+       the regression pin for the owner's "the zoom caps out" complaint. ⚠️ It
+       is `scale` now, and it scales the MODEL, not the frustum (plan 08 F6). */
+    scale: 18,
     edgeWidth: 2,
   },
 };

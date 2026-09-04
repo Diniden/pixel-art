@@ -274,8 +274,8 @@ import {
   applyCameraParams,
   fitCameraToMesh,
   getCameraPreset,
+  solveFitScale,
 } from "../ui/canvas/pose/poseCamera";
-import type { PoseCameraParams } from "../ui/canvas/pose/poseCamera";
 import {
   UNIT_BOUNDS,
   applyMaterial,
@@ -350,87 +350,32 @@ const POSE_ALPHA_THRESHOLD = 128;
  * shorter canvas axis (D7).
  *
  * ══════════════════════════════════════════════════════════════════════════
- *  ⚠️ ZOOM IS NO LONGER FOLDED INTO THIS. THAT FOLD WAS THE BUG (MASTER E12)
+ *  ⚠️ THE PADDING NOW SIZES THE MODEL, NOT THE CAMERA (plan 08, F4)
  * ══════════════════════════════════════════════════════════════════════════
  *
- * Pose-tool task 08 passed `padding: 1 - (1 - 0.1) * zoom` so that the fit
- * stayed the single owner of the framing. It reads plausibly and it is the
- * owner's headline complaint, because that expression is only a zoom over a
- * *narrow* interval and turns into nonsense outside it:
+ * `solveFitScale(UNIT_BOUNDS, DEFAULT_POSE_FIT_PADDING)` returns the MODEL
+ * scale that fills 90% of the frame; `fitCameraToMesh` places a camera that is
+ * a pure function of the projection, the orbit and the canvas and never sees
+ * the padding at all.
  *
- *   - `fitCameraToMesh` clamps padding to `[0, 0.95)`, so every zoom at or
- *     above `1 / 0.9 ≈ 1.111` produced padding `<= 0` — clamped to exactly 0.
- *     **Every zoom from 1.12 upward framed identically.** Deleting
- *     `POSE_ZOOM_MAX` could not help: the ceiling was arithmetic, not a clamp,
- *     and it sat an order of magnitude below the old cap of 10.
- *   - Below 1 it is not linear either: `padding = 1 - 0.9z` makes the model
- *     `(1 - padding) = 0.9z` of the frame, so it happened to behave, but only
- *     by coincidence of the same constant appearing twice.
- *   - And a *fit* re-derived the padding from the zoom every time, so pressing
- *     **Fit to canvas** while zoomed could never do anything but re-apply the
- *     zoom it was supposed to be independent of.
+ * ⚠️ **`scaleCameraParams` IS DELETED (F6).** It divided the fitted frustum by
+ * the old `zoom`, and that was the whole "zoom" concept: the camera moved and
+ * the model did not. The owner asked for the opposite — *"I want the camera to
+ * hold still and have the model scaled up and down from its origin"* — so the
+ * multiplier is now written onto the model root as `root.scale.setScalar(...)`
+ * and the frustum is left alone. Nothing calls it and nothing should: a
+ * re-introduced frustum divisor would silently re-couple the camera to a
+ * control that is supposed to move only the model.
  *
- * Zoom is now a free multiplier applied to the fitted frustum AFTER the fit
- * (see `scaleCameraParams`), and this constant is a constant again.
+ * The historical note this constant used to carry is still worth keeping,
+ * because it is the reason the old design failed and not merely a diff: the
+ * refinements plan's `padding: 1 - (1 - 0.1) * zoom` fold ran into
+ * `fitCameraToMesh`'s `[0, 0.95)` padding clamp, so **every zoom from about
+ * 1.12 upward framed identically** — an arithmetic ceiling an order of
+ * magnitude below the nominal cap of 10, which is why deleting `POSE_ZOOM_MAX`
+ * did not fix the owner's complaint on its own.
  */
 const DEFAULT_POSE_FIT_PADDING = 0.1;
-
-/**
- * Apply a free zoom multiplier to an already-fitted camera (MASTER E12).
- *
- * The fit decides the frame; zoom scales it. `zoom > 1` means "draw the model
- * bigger", which means a **smaller** frustum, hence the division — and there
- * is no ceiling: at zoom 1000 the orthographic box is a thousandth of the
- * fitted one and the model overflows the canvas enormously, which is exactly
- * what the owner asked for.
- *
- * ⚠️ It scales the FRUSTUM, never the model or the camera distance:
- *
- *  - Orthographic framing is `left/right/top/bottom` and nothing else, so a
- *    dolly would change only the clipping, not the size. Scaling the box is
- *    the only thing that works, and it leaves `near`/`far` — which the fit
- *    sized to bracket the geometry — untouched.
- *  - For perspective, scaling `fov` the same way keeps the two projections
- *    behaving identically under the same slider. `tan` is used rather than the
- *    angle directly because screen size is proportional to `tan(fov/2)`, not
- *    to the angle; halving the angle does NOT double the model. The result is
- *    clamped to a legal FOV, which is a degeneracy guard and not a zoom cap:
- *    at the 179° end the model is vanishingly small and at the 1e-4° end it is
- *    ~10^6× the fitted size, both far outside anything usable.
- *
- * Returns a NEW object; `params` is not mutated.
- */
-function scaleCameraParams(
-  params: PoseCameraParams,
-  zoom: number,
-): PoseCameraParams {
-  // A non-finite or non-positive zoom is the store's job to reject
-  // (`sanitizeZoom`), but the render path must not produce NaN matrices if one
-  // ever reaches it by another route.
-  if (!Number.isFinite(zoom) || zoom <= 0 || zoom === 1) return params;
-
-  if (params.projection === "orthographic" && params.orthographic) {
-    const o = params.orthographic;
-    return {
-      ...params,
-      orthographic: {
-        left: o.left / zoom,
-        right: o.right / zoom,
-        top: o.top / zoom,
-        bottom: o.bottom / zoom,
-      },
-    };
-  }
-
-  if (params.perspective) {
-    const halfRadians = (params.perspective.fov * Math.PI) / 360;
-    const scaledHalf = Math.atan(Math.tan(halfRadians) / zoom);
-    const fov = Math.min(179, Math.max(1e-4, (scaledHalf * 360) / Math.PI));
-    return { ...params, perspective: { ...params.perspective, fov } };
-  }
-
-  return params;
-}
 
 function isGestureTool(tool: string): boolean {
   return (
@@ -737,7 +682,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   const poseLightColor = pose.lightColor;
   const poseProjection = pose.projection;
   const poseCameraPreset = pose.cameraPreset;
-  const poseZoom = pose.zoom;
+  const poseScale = pose.scale;
   const poseFov = pose.fov;
   const poseEdgeWidth = pose.edgeWidth;
   /**
@@ -2415,6 +2360,33 @@ export const CanvasContainer = observer(function CanvasContainer({
   const poseRootRef = useRef<Object3D | null>(null);
 
   /**
+   * The scale `poseMeshes.normalizeToUnitBox` left on the CURRENT root, before
+   * the owner's own scale is applied (plan 08, F6).
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THIS IS THE `normalizeToUnitBox` TRAP, AND IT IS NOT HYPOTHETICAL
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * `normalizeToUnitBox` (`poseMeshes.ts`) writes `object.scale.multiplyScalar
+   * (1 / largestDimension)` **onto the very object the container stores here**.
+   * A bare `root.scale.setScalar(userScale)` would therefore not compose with
+   * that normalisation — it would **overwrite** it, and a mannequin authored at
+   * 170 units would jump to 170× the size of a cube the instant the owner
+   * touched the Scale control. And a `multiplyScalar` would be worse: it would
+   * **compound**, so every re-render would grow the model again.
+   *
+   * Capturing the normalised value once per mesh and always writing
+   * `base × fit × user` is what makes the write **idempotent**: it is an
+   * assignment derived from a constant, not an accumulation, so running the
+   * effect a hundred times is the same as running it once. A mesh swap
+   * re-captures, so nothing carries over from the previous mesh either.
+   *
+   * `1` for "no mesh": a fresh root that was never normalised (a primitive
+   * built straight from a unit-box constructor) genuinely has scale 1.
+   */
+  const poseBaseScaleRef = useRef(1);
+
+  /**
    * The camera instance, rebuilt when the PROJECTION changes.
    *
    * Kept across fits rather than reallocated: `applyCameraParams` writes every
@@ -2672,6 +2644,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     return () => {
       poseTokenRef.current += 1;
       poseRootRef.current = null;
+      poseBaseScaleRef.current = 1;
       poseCameraRef.current = null;
       poseThreeRef.current = null;
       poseEngineRef.current?.dispose();
@@ -2701,6 +2674,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     if (poseMeshId === null) {
       engine.clearObject3D();
       poseRootRef.current = null;
+      poseBaseScaleRef.current = 1;
       invalidatePoseRef.current?.();
       return;
     }
@@ -2730,6 +2704,11 @@ export const CanvasContainer = observer(function CanvasContainer({
         }
         live.setObject3D(object);
         poseRootRef.current = object;
+        // ⚠️ CAPTURE BEFORE ANY USER SCALE IS WRITTEN. `normalizeToUnitBox`
+        // has already multiplied this scale in; the scale effect below reads
+        // it as the base of `base × fit × user` and never accumulates onto it.
+        // See `poseBaseScaleRef`.
+        poseBaseScaleRef.current = object.scale.x || 1;
         invalidatePoseRef.current?.();
       } catch (error) {
         // The mannequin is not vendored until task 09, so
@@ -2774,42 +2753,50 @@ export const CanvasContainer = observer(function CanvasContainer({
   /* ── auto-fit (D7) ─────────────────────────────────────────────────────── */
 
   /**
-   * Re-frame the model. Runs on mesh, projection, preset, rotation, zoom, FOV,
-   * **`cellWidth`/`cellHeight`** and **`fitGeneration`** change.
+   * Place the camera. Runs on projection, preset, FOV, **`cellWidth`/
+   * `cellHeight`** and **`fitGeneration`** change.
    *
    * ══════════════════════════════════════════════════════════════════════
-   *  ⚠️ ZOOM IS APPLIED AFTER THE FIT, NOT FOLDED INTO IT (MASTER E12)
+   *  ⚠️ THE CAMERA HOLDS STILL (plan 08, F4). ROTATION AND SCALE ARE GONE
+   *  FROM THIS EFFECT'S DEPENDENCIES, AND THAT IS THE FIX FOR THE PULSING.
    * ══════════════════════════════════════════════════════════════════════
    *
-   * This is the owner's headline complaint and the fix is the two-step shape
-   * below: `fitCameraToMesh` frames the model at a FIXED
-   * {@link DEFAULT_POSE_FIT_PADDING}, and then {@link scaleCameraParams}
-   * multiplies the resulting frustum by the free zoom. See that constant's
-   * header for exactly how the old fold capped out at zoom ≈ 1.12.
+   * **The owner's report:** *"if I rotate the models with the Orb for rotation,
+   * the model pulses in size like the camera is getting closer and further to
+   * the model as it goes around."*
    *
-   * ⚠️ **A FIT NEVER RESETS ZOOM OR PAN** (E15). Neither is written here — the
-   * zoom is read and re-applied, and the pan is not touched at all — so
-   * pressing **Fit to canvas** re-frames at the current rotation, projection,
-   * preset and zoom, and pressing it twice is idempotent. Only
-   * `PoseUIStore.setMesh` resets the pan.
+   * **The measured cause:** this effect used to depend on `poseRotation` and
+   * pass it into `fitCameraToMesh`, which measured the **rotated** projected
+   * extent of the box. For a non-cubic model that extent genuinely changes with
+   * the angle (a unit cube is `√2` wide across its diagonal and `1` across its
+   * face), so the camera really was moving on every rotation step — the owner's
+   * description of the symptom was an exact description of the mechanism.
    *
-   * ⚠️ **`fitGeneration` IS A DEPENDENCY ON PURPOSE.** `requestFit()` mutates
-   * nothing else, so without it the button would be a no-op: every other
-   * dependency is unchanged by definition when the owner asks to re-frame at
-   * the *current* settings. The counter is monotonic and `clear()` never
-   * rewinds it, so it can only ever move forward — one fit per press.
+   * **The cure (F5, option 1):** `fitCameraToMesh` now frames the bounding
+   * **sphere**, whose projected radius is rotation-invariant by construction,
+   * and no longer takes a `rotation` parameter at all. ⚠️ It was NOT fixed by
+   * clamping or smoothing the fit (MASTER §8, mistake 1) — that would only have
+   * slowed the breathing down. The dependency is removed, so the effect cannot
+   * re-run for a rotation even in principle.
+   *
+   * ⚠️ **`scaleCameraParams` IS DELETED (F6).** The old "zoom" divided the
+   * frustum; scale now multiplies the MODEL, in the effect below. Nothing here
+   * reads `poseScale`, and a test in `poseCamera.test.ts` pins that the
+   * returned params are byte-identical across a full revolution.
    *
    * ⚠️ THE RESIZE PATH IS THE `cellWidth`/`cellHeight` DEPENDENCY, and that is
    * the whole answer to "respond to the object being resized". A grid resize
    * notifies through `domainVersion`, NOT `pixelVersion`, so there is no
    * pixel-side signal to observe — but `cellWidth`/`cellHeight` already flow
    * through this container as plain values and change when the object is
-   * resized. Keying off them directly is both simpler and correct.
+   * resized.
    *
-   * ⚠️ THE PAN IS PRESERVED. It is neither read nor written here, so a resize
-   * re-fits the model while leaving it wherever the user dragged it (manual
-   * check 19). Only `PoseUIStore.setMesh` resets it — which is why a mesh
-   * change recentres and a resize does not.
+   * ⚠️ **`fitGeneration` IS A DEPENDENCY ON PURPOSE.** `requestFit()` mutates
+   * nothing else, so without it the button would be a no-op. The counter is
+   * monotonic and `clear()` never rewinds it, so it can only move forward.
+   *
+   * ⚠️ THE PAN IS PRESERVED, and so is the owner's own `scale`. Neither is read
+   * nor written here (E15), so a fit re-frames without undoing either.
    *
    * ⚠️ The camera is rebuilt only when the PROJECTION changes. Four of the
    * five presets are orthographic (D14) and `OrthographicCamera` is a
@@ -2827,26 +2814,18 @@ export const CanvasContainer = observer(function CanvasContainer({
     const preset = getCameraPreset(poseCameraPreset);
     const projection = preset?.projection ?? poseProjection;
 
-    // ── step 1: FIT, at a fixed padding and the CURRENT rotation ────────
-    //
-    // Every mesh — primitive, whole mannequin, or a single part — is
-    // normalised into the unit box by `poseMeshes.ts` before it reaches the
-    // scene, so one bounds value covers all of them. (Framing's sub-boxes are
-    // gone: a part is its own geometry now, not a crop of the whole figure.)
-    const fitted = fitCameraToMesh({
+    // Every mesh — primitive, whole mannequin, or a single part — is normalised
+    // into the unit box by `poseMeshes.ts` before it reaches the scene, so one
+    // bounds value covers all of them.
+    const params = fitCameraToMesh({
       bounds: UNIT_BOUNDS,
       canvasWidth: cellWidth,
       canvasHeight: cellHeight,
       projection,
-      rotation: poseRotation,
       fov: poseFov,
       pitch: preset?.pitch ?? 0,
       yaw: preset?.yaw ?? 0,
-      padding: DEFAULT_POSE_FIT_PADDING,
     });
-
-    // ── step 2: ZOOM, as a free multiplier over the fitted frame ────────
-    const params = scaleCameraParams(fitted, poseZoom);
 
     // Rebuild the camera only on a genuine projection change.
     const current = poseCameraRef.current;
@@ -2876,12 +2855,85 @@ export const CanvasContainer = observer(function CanvasContainer({
     poseFitGeneration,
     poseProjection,
     poseCameraPreset,
-    poseRotation,
-    poseZoom,
     poseFov,
     cellWidth,
     cellHeight,
   ]);
+
+  /**
+   * The model's SIZE — `base × fit × user` on the model root (plan 08, F4/F6).
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ THE FIT MOVES THE MODEL NOW. THE CAMERA DOES NOT MOVE FOR IT.
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * **The owner's words:** *"Zoom -> this should be scale. I want the camera to
+   * hold still and have the model scaled up and down from it's origin."*
+   *
+   * Three factors, and each is here for a different reason:
+   *
+   *  - **`base`** — whatever `normalizeToUnitBox` left on the root. Not a
+   *    design choice, a fact about the object being written to; see
+   *    `poseBaseScaleRef` for why overwriting or compounding it are both bugs.
+   *  - **`fit`** — {@link solveFitScale}, the multiplier that makes the model
+   *    fill `1 - DEFAULT_POSE_FIT_PADDING` of the frame the camera above
+   *    placed. This is what "Fit to canvas" now sets, and it is a pure function
+   *    of the bounds and the padding, so pressing Fit twice is idempotent —
+   *    exactly as it was when the fit moved the camera instead.
+   *  - **`user`** — the owner's own `scale`, floored but never capped (F6).
+   *
+   * ⚠️ **A fit does NOT reset `user`** (E15). The two multiply, so pressing Fit
+   * re-frames the model at whatever size the owner had scaled it to relative to
+   * the frame, rather than throwing that away. Pan is not touched either.
+   *
+   * `setScalar`, never `multiplyScalar`: this effect re-runs on several
+   * dependencies and an accumulating write would grow the model a little on
+   * every render — the classic version of this bug, and invisible until it is
+   * enormous.
+   *
+   * ⚠️ `poseMeshId` is a dependency so a MESH SWAP re-applies the scale onto
+   * the newly captured base. Without it the new mesh would keep the transform
+   * `buildMesh` gave it until the owner next touched a control.
+   */
+  useEffect(() => {
+    const root = poseRootRef.current;
+    if (!root) return;
+    const fit = solveFitScale(UNIT_BOUNDS, DEFAULT_POSE_FIT_PADDING);
+    root.scale.setScalar(poseBaseScaleRef.current * fit * poseScale);
+    invalidatePoseRef.current?.();
+  }, [poseScale, poseFitGeneration, poseEngineTick, poseMeshId]);
+
+  /**
+   * **Fit to canvas** returns the model to the fitted size (plan 08, F4).
+   *
+   * The effect above already writes `base × fit × user`, so the FRAME is
+   * correct at every scale; what a fit adds is putting `user` back to 1, which
+   * is the whole point of the button — *"put the model back to a sensible
+   * size"*. Without this a fit would be invisible at any scale but 1, because
+   * every other term in that product is a constant.
+   *
+   * ⚠️ **THE `> 0` GUARD IS LOAD-BEARING, NOT DEFENSIVE.** `fitGeneration`
+   * starts at 0 and this effect runs once on mount, so without the guard the
+   * initial render would reset a scale the owner had already set — silently,
+   * and only on a reload. `requestFit()` bumps the counter before anything can
+   * observe it, so a real press is always `>= 1`. ⚠️ `clear()` deliberately
+   * never rewinds the counter, which is what keeps it monotonic here.
+   *
+   * ⚠️ **A fit does NOT touch pan** (E15, and task 04 owns pan). `setScale` is
+   * the only write, and the store floors it without capping (F6).
+   *
+   * ⚠️ The store's `requestFit()` still mutates NOTHING but the counter — the
+   * reset lives here, in the container that knows what fitting means, exactly
+   * as the framing itself does.
+   */
+  useEffect(() => {
+    if (poseFitGeneration <= 0) return;
+    pose.setScale(1);
+    // ⚠️ ONLY `poseFitGeneration`. Adding `pose` (a stable store instance) or
+    // `poseScale` would make this effect fight the owner's own slider, resetting
+    // the scale on the very change that set it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poseFitGeneration]);
 
   /**
    * Keep the render target in step with the grid, and repaint.

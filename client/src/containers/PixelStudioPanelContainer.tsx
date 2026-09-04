@@ -23,8 +23,8 @@
  * already existed and simply grew a prop, which is what the task asked for.
  * The section's values are read straight off the store and its callbacks call
  * the store's actions; no derivation is needed, because the store already
- * clamps FOV and normalises the light direction on write. (Zoom is no longer
- * clamped above — MASTER E11.)
+ * clamps FOV and normalises the light direction on write. (The model's SCALE
+ * is floored but never capped — MASTER E11 / plan 08 F6.)
  *
  * ⚠️ **The pose model's colour is the app's own FILL slot, and its outline's
  * colour is the EDGE slot** (pose-refinements MASTER E8/E9/E10). The rail used
@@ -171,7 +171,7 @@ export const PixelStudioPanelContainer = observer(
           edgeWidth: pose.edgeWidth,
           projection: pose.projection,
           cameraPreset: pose.cameraPreset,
-          zoom: pose.zoom,
+          scale: pose.scale,
           fov: pose.fov,
           // ⚠️ The mannequin PART buttons come through here too (MASTER
           // E1/E2). A part is real sub-geometry now, so "load the head" is a
@@ -200,10 +200,11 @@ export const PixelStudioPanelContainer = observer(
           // is `poseCamera.ts`'s job in the render, not the rail's — which is
           // why nothing here reaches for `getCameraPreset()`.
           onSelectCameraPreset: (preset) => pose.setCameraPreset(preset),
-          // ⚠️ Zoom is re-sanitised by the store but NO LONGER CAPPED (MASTER
-          // E11): task 01 deleted `POSE_ZOOM_MAX` and only a `1e-3` safety
-          // floor remains. FOV is still clamped to 10–120.
-          onSetZoom: (zoom) => pose.setZoom(zoom),
+          // ⚠️ `scale` is the MODEL's own multiplier about its own origin
+          // (plan 08, F6) — renamed from `zoom` AND re-meant: the camera no
+          // longer moves for it. Re-sanitised by the store but NEVER CAPPED
+          // (MASTER E11): only a `1e-3` safety floor. FOV is still 10–120.
+          onSetScale: (scale) => pose.setScale(scale),
           onSetFov: (fov) => pose.setFov(fov),
           // ⚠️ A REQUEST, not a fit (MASTER E14). `requestFit()` only bumps the
           // store's `fitGeneration` counter and mutates no camera field; the

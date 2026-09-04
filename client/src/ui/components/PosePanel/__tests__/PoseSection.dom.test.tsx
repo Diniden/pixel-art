@@ -28,8 +28,10 @@
  *    picker at that slot (E10). They SET nothing themselves.
  *  - the outline width slider is integer-only over 0–4, and reads 0 as "Off".
  *  - `Fit to canvas` fires `onRequestFit`, and is disabled with no mesh.
- *  - ⚠️ the zoom slider's old `max={10}` is GONE — the regression pin for the
- *    owner's "the zoom is capping out" complaint.
+ *  - ⚠️ the SCALE slider's old `max={10}` is GONE — the regression pin for the
+ *    owner's "the zoom is capping out" complaint. ⚠️ Renamed from Zoom AND
+ *    re-meant on 2026-09-04 (plan 08, F6): it scales the MODEL about its own
+ *    origin, and the camera holds still.
  */
 import { describe, expect, it } from "vitest";
 import { fireEvent, render } from "@testing-library/react";
@@ -38,7 +40,7 @@ import * as stories from "../PoseSection.stories";
 import {
   POSE_EDGE_WIDTH_MAX,
   POSE_EDGE_WIDTH_MIN,
-  POSE_ZOOM_SLIDER_MAX,
+  POSE_SCALE_SLIDER_MAX,
 } from "../PoseSection";
 import {
   POSE_CAMERA_PRESETS,
@@ -555,62 +557,64 @@ describe("PoseSection — the camera group", () => {
     ]);
   });
 
-  it("the zoom slider no longer caps at 10 — the owner's complaint", () => {
+  it("the scale slider no longer caps at 10 — the owner's complaint", () => {
     // ⚠️ REGRESSION PIN. `max={10}` mirrored the deleted `POSE_ZOOM_MAX`; with
     // it in place the owner could not make the model bigger from the only
     // control they touch. The slider still needs finite ends to place a thumb,
     // so what is asserted is that its travel is far past the old cap AND that
     // an unbounded numeric path exists beside it (MASTER E11).
     const { container } = render(<composed.Orthographic />);
-    const zoom = byLabel(container, "Zoom");
-    expect(Number(zoom.max)).toBe(POSE_ZOOM_SLIDER_MAX);
-    expect(Number(zoom.max)).toBeGreaterThan(10);
+    const scale = byLabel(container, "Scale");
+    expect(Number(scale.max)).toBe(POSE_SCALE_SLIDER_MAX);
+    expect(Number(scale.max)).toBeGreaterThan(10);
 
-    const box = byLabel(container, "Zoom value");
+    const box = byLabel(container, "Scale value");
     expect(box.type).toBe("number");
     expect(box.getAttribute("max")).toBeNull();
   });
 
-  it("the zoom controls are live and report a value past the old cap", () => {
+  it("the scale controls are live and report a value past the old cap", () => {
     const { container } = render(<composed.Orthographic />);
-    const onSetZoom = composed.Orthographic.args.onSetZoom;
+    const onSetScale = composed.Orthographic.args.onSetScale;
 
-    const zoom = byLabel(container, "Zoom");
-    expect(zoom.disabled).toBe(false);
-    expect(zoom.value).toBe("18");
-    expect(byLabel(container, "Zoom value").value).toBe("18");
+    const scale = byLabel(container, "Scale");
+    expect(scale.disabled).toBe(false);
+    expect(scale.value).toBe("18");
+    expect(byLabel(container, "Scale value").value).toBe("18");
 
-    fireEvent.change(zoom, { target: { value: "4" } });
-    expect(onSetZoom).toHaveBeenLastCalledWith(4);
+    fireEvent.change(scale, { target: { value: "4" } });
+    expect(onSetScale).toHaveBeenLastCalledWith(4);
   });
 
   it("the number box accepts a value the slider cannot reach, and ignores NaN", () => {
     const { container } = render(<composed.Orthographic />);
-    const onSetZoom = composed.Orthographic.args.onSetZoom;
-    const box = byLabel(container, "Zoom value");
+    const onSetScale = composed.Orthographic.args.onSetScale;
+    const box = byLabel(container, "Scale value");
 
     fireEvent.change(box, { target: { value: "250" } });
-    expect(onSetZoom).toHaveBeenLastCalledWith(250);
+    expect(onSetScale).toHaveBeenLastCalledWith(250);
 
     // ⚠️ An emptied or half-typed box must send NOTHING. A number input
     // sanitises anything unparseable to `""`, and `Number("")` is `0` — not
     // `NaN` — so a naive finite-check would collapse the camera to the store's
     // safety floor on the way to typing a new value.
-    const before = spy(onSetZoom).mock.calls.length;
+    const before = spy(onSetScale).mock.calls.length;
     fireEvent.change(box, { target: { value: "" } });
     fireEvent.change(box, { target: { value: "not a number" } });
-    expect(spy(onSetZoom).mock.calls.length).toBe(before);
+    expect(spy(onSetScale).mock.calls.length).toBe(before);
   });
 
-  it("clamps only the SLIDER's thumb when zoom exceeds its travel", () => {
+  it("clamps only the SLIDER's thumb when scale exceeds its travel", () => {
     // The store's value is untouched — the number box still shows it — but the
     // range input cannot represent it, so its thumb parks at the far end.
     const { container } = render(
-      <composed.Orthographic zoom={POSE_ZOOM_SLIDER_MAX + 60} />,
+      <composed.Orthographic scale={POSE_SCALE_SLIDER_MAX + 60} />,
     );
-    expect(byLabel(container, "Zoom").value).toBe(String(POSE_ZOOM_SLIDER_MAX));
-    expect(byLabel(container, "Zoom value").value).toBe(
-      String(POSE_ZOOM_SLIDER_MAX + 60),
+    expect(byLabel(container, "Scale").value).toBe(
+      String(POSE_SCALE_SLIDER_MAX),
+    );
+    expect(byLabel(container, "Scale value").value).toBe(
+      String(POSE_SCALE_SLIDER_MAX + 60),
     );
   });
 

@@ -18,7 +18,7 @@
  * | Light        | orb + light tint presets                         | `lightDirection/Color`|
  * | Colours      | Fill swatch · Edge swatch (the APP's picker)     | `ui.tool` (E8/E9/E10) |
  * | Outline      | thickness 0–4 px                                 | `edgeWidth` (E4)      |
- * | Camera       | projection · 5 presets · zoom · FOV · Fit        | `projection` …        |
+ * | Camera       | projection · 5 presets · scale · FOV · Fit       | `projection` …        |
  *
  * ## ⚠️ There is NO native colour input here any more (task 03)
  *
@@ -91,18 +91,21 @@ export const POSE_EDGE_WIDTH_MIN = 0;
 export const POSE_EDGE_WIDTH_MAX = 4;
 
 /**
- * The zoom SLIDER's travel — an affordance, **not a limit** (MASTER E11).
+ * The scale SLIDER's travel — an affordance, **not a limit** (MASTER E11).
  *
  * ⚠️ These are deliberately NOT a mirror of a store constant. `POSE_ZOOM_MAX`
- * was deleted by task 01 precisely because the owner reported the model
- * capping out, and re-introducing any ceiling on the store's value here would
- * undo that. An `<input type="range">` must have finite ends to place a thumb,
- * so the slider covers the comfortable range and the number box beside it
- * accepts anything the store does — which above `POSE_ZOOM_MIN_SAFE` is
+ * was deleted by the refinements plan precisely because the owner reported the
+ * model capping out, and re-introducing any ceiling on the store's value here
+ * would undo that. An `<input type="range">` must have finite ends to place a
+ * thumb, so the slider covers the comfortable range and the number box beside
+ * it accepts anything the store does — which above `POSE_SCALE_MIN_SAFE` is
  * everything.
+ *
+ * ⚠️ Renamed from `POSE_ZOOM_SLIDER_*` on 2026-09-04 (plan 08, F6): the control
+ * now scales the **model** about its own origin, not the camera's frustum.
  */
-export const POSE_ZOOM_SLIDER_MIN = 0.1;
-export const POSE_ZOOM_SLIDER_MAX = 40;
+export const POSE_SCALE_SLIDER_MIN = 0.1;
+export const POSE_SCALE_SLIDER_MAX = 40;
 
 export interface PoseSectionProps {
   /** The loaded reference solid, or `null` for "no model". */
@@ -134,11 +137,11 @@ export interface PoseSectionProps {
   projection: PoseProjection;
   cameraPreset: PoseCameraPreset;
   /**
-   * Scale multiplier over the auto-fit. **Unbounded above** (MASTER E11): the
-   * store only floors it at `POSE_ZOOM_MIN_SAFE`, and this rail must not
-   * reintroduce the cap that task 01 deleted.
+   * The MODEL's scale multiplier, about its own origin (plan 08, F6).
+   * **Unbounded above** (MASTER E11): the store only floors it at
+   * `POSE_SCALE_MIN_SAFE`, and this rail must not reintroduce the deleted cap.
    */
-  zoom: number;
+  scale: number;
   /** Field of view in degrees. The store clamps it to 10–120. */
   fov: number;
 
@@ -159,9 +162,13 @@ export interface PoseSectionProps {
   onSetEdgeWidth: (width: number) => void;
   onSetProjection: (projection: PoseProjection) => void;
   onSelectCameraPreset: (preset: PoseCameraPreset) => void;
-  onSetZoom: (zoom: number) => void;
+  onSetScale: (scale: number) => void;
   onSetFov: (fov: number) => void;
-  /** Re-frame the model at its CURRENT rotation and camera (MASTER E14/E15). */
+  /**
+   * Re-frame the model (MASTER E14/E15). ⚠️ Since plan 08 (F4) a fit sets the
+   * model's SCALE back to the fitted size instead of moving the camera; the
+   * pan is still untouched.
+   */
   onRequestFit: () => void;
   /** Unloads the mesh and returns every setting to its default. */
   onClear: () => void;
@@ -255,7 +262,7 @@ export function PoseSection({
   edgeWidth,
   projection,
   cameraPreset,
-  zoom,
+  scale,
   fov,
   onSelectMesh,
   onSetRotation,
@@ -266,7 +273,7 @@ export function PoseSection({
   onSetEdgeWidth,
   onSetProjection,
   onSelectCameraPreset,
-  onSetZoom,
+  onSetScale,
   onSetFov,
   onRequestFit,
   onClear,
@@ -493,36 +500,36 @@ export function PoseSection({
         </div>
 
         <div className="pose-panel__slider-row">
-          <span className="pose-panel__slider-label">Zoom</span>
+          <span className="pose-panel__slider-label">Scale</span>
           <input
             type="range"
             className="pose-panel__slider"
-            aria-label="Zoom"
+            aria-label="Scale"
             /* ⚠️ THE OLD `max={10}` IS GONE. It mirrored `POSE_ZOOM_MAX`,
-               which task 01 deleted because the owner reported the model
-               capping out; leaving it here would have kept exactly that cap in
-               the one place they touch it. A range input cannot be literally
+               deleted because the owner reported the model capping out;
+               leaving it here would have kept exactly that cap in the one
+               place they touch it. A range input cannot be literally
                unbounded — it needs finite ends to have a thumb position — so
-               the TRAVEL is widened to `POSE_ZOOM_SLIDER_MAX` for the common
+               the TRAVEL is widened to `POSE_SCALE_SLIDER_MAX` for the common
                case, and the number box beside it takes any value the store
                accepts, which per MASTER E11 is anything above
-               `POSE_ZOOM_MIN_SAFE` with NO ceiling. The slider is an
+               `POSE_SCALE_MIN_SAFE` with NO ceiling. The slider is an
                affordance; it is not the limit. */
-            min={POSE_ZOOM_SLIDER_MIN}
-            max={POSE_ZOOM_SLIDER_MAX}
+            min={POSE_SCALE_SLIDER_MIN}
+            max={POSE_SCALE_SLIDER_MAX}
             step={0.1}
-            value={Math.min(zoom, POSE_ZOOM_SLIDER_MAX)}
-            onChange={(e) => onSetZoom(Number(e.target.value))}
+            value={Math.min(scale, POSE_SCALE_SLIDER_MAX)}
+            onChange={(e) => onSetScale(Number(e.target.value))}
           />
           <input
             type="number"
             className="pose-panel__number"
-            aria-label="Zoom value"
+            aria-label="Scale value"
             /* No `max`: this is the unbounded path (E11). `min` is the store's
                safety floor, not a cap. */
-            min={POSE_ZOOM_SLIDER_MIN}
+            min={POSE_SCALE_SLIDER_MIN}
             step={0.1}
-            value={zoom}
+            value={scale}
             onChange={(e) => {
               /* ⚠️ An EMPTY box must send nothing at all. A number input
                  sanitises anything unparseable to `""`, and `Number("")` is
@@ -532,9 +539,9 @@ export function PoseSection({
               const raw = e.target.value.trim();
               if (raw === "") return;
               const next = Number(raw);
-              if (Number.isFinite(next)) onSetZoom(next);
+              if (Number.isFinite(next)) onSetScale(next);
             }}
-            title="Zoom multiplier — type any value; there is no upper limit"
+            title="Model scale multiplier — type any value; there is no upper limit"
           />
         </div>
 
@@ -561,8 +568,9 @@ export function PoseSection({
 
         {/* MASTER E14/E15 — a REQUEST, not a computation. The container reacts
             to the store's `fitGeneration` counter and does the framing; this
-            button only asks. It sits with the camera controls because that is
-            what it re-frames, and it does NOT reset zoom or pan. */}
+            button only asks. ⚠️ Since plan 08 (F4) the fit sets the MODEL's
+            scale rather than moving the camera, so a press returns Scale to
+            the fitted size — but it still does NOT touch the pan. */}
         <button
           type="button"
           className="pose-panel__btn"
@@ -570,7 +578,7 @@ export function PoseSection({
           disabled={!hasMesh}
           title={
             hasMesh
-              ? "Re-frame the model to the canvas at its current rotation"
+              ? "Return the model to the fitted size; the pan is left alone"
               : "Load a reference solid first"
           }
         >
