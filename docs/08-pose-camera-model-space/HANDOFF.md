@@ -423,6 +423,50 @@ cannot. The convention header was **rewritten, and the old "`left` shows the mod
 claim DELETED** rather than amended — a stale sentence contradicting the table is exactly how this
 got inverted twice.
 
+**D08-17 — task 09 CHANGED APPLICATION CODE, and its own task file forbids that.**
+The 09 spec says *"bundle/QA notes only — no application code"* and *"do not change application
+behaviour; if you find a real bug, record it rather than fixing it."* The coordinator's dispatch
+overrode this deliberately, assigning task 09 the closure of **D08-16** (owner item 8's other
+half) and adding `CanvasContainer.tsx`, `PixelStudioPanelContainer.tsx`, `PoseUIStore.ts` and the
+`PosePanel/` wiring files to its Touches. Recorded so a reader comparing the task file against the
+diff does not think the constraint was ignored. **Nothing else was patched at the gate** — the four
+findings in §12 are reported, not fixed, exactly as the constraint intends.
+
+**D08-18 — task 09 SPLIT `poseCamera.ts`, which its Touches did not enumerate.**
+The inherited override layer pushed the file to **430** code lines, over the `ui/` 400-line
+`max-lines` **error** ceiling (measured: `poseCamera.ts 1204:1 error File has too many lines
+(430)`). Tasks 01, 07 and 08 all hit this same ceiling; task 08's precedent was to **split along a
+real seam and keep an existing test as the pin that the split changed nothing**, and this follows
+it. The seam: everything moved to **`poseCameraPresets.ts`** is a **named table** (the five camera
+presets, the seven viewpoint rotations, the degree helpers); everything left is **geometry** (the
+fit, the frustum, the pan offset, the Euler maths). ⚠️ **No consumer moved** — all eight symbols
+are re-exported from `poseCamera.ts`, so `CanvasContainer.tsx`, `PixelStudioPanelContainer.tsx`,
+`PoseSection.tsx`, `PoseCameraGroup.tsx`, `EulerInput.tsx`, `PoseSection.stories.tsx` and both DOM
+test files are **untouched**, and `poseCamera.test.ts` still imports all eight from `poseCamera.ts`
+and its **103 tests pass unchanged**. That is the proof it was a move rather than an edit. One
+exception is documented in the code: `fitCameraToMesh` reports its FOV in degrees, so
+`radiansToDegrees` is **imported back** as well as re-exported.
+
+**D08-19 — the advanced camera overrides are SESSION-ONLY, decided rather than defaulted.**
+The dispatch left this open (*"session-only unless you deliberately decide otherwise — and if you
+persist it, F13's conditional-emission rule and the corpus digest apply"*). **Decision:
+session-only.** The persistence path for an exact frustum already exists and is the one the owner
+asked for — *"save that matrix into a preset I can select"* — so a second wire key would take on
+F13's conditional-emission rule and the corpus-digest risk **for no behaviour a saved preset does
+not already give**. The `cameraOverrides` field therefore joins the live pose as session state and
+`clear()` resets it. ⚠️ **A camera preset and `requestFit()` deliberately do NOT clear it**: the
+dispatch's hard constraint is that a typed value must survive a re-fit, and a preset press is a
+re-fit. Two tests pin exactly that.
+
+**D08-20 — `UIStore.ts`'s W6 diff is ~19 lines, not the "exactly one `assign()` line" the 09 spec
+predicted.** The **emission** is exactly one conditional `assign()` (`UIStore.ts:581`) and is never
+`posePresets: undefined` — that is the F13 mechanism and it held. But task 08 also had to make the
+pose store reachable from `UIStore` (a `poseUI` dependency, an `ownPosePresets` fallback for the
+harness suites, a private `toPersistedPosePresets()` and a `hydrate` branch). Coordinator-reviewed
+and gate-clean; recorded because the 09 spec inverted this check specifically and told the reader
+to **read the diff rather than pattern-match** — this is what reading it found. **Task 09 did not
+touch `UIStore.ts`.**
+
 **D08-4 — `poseMeshes.ts` is now near the `ui/` 400-line ceiling.** Task 01's first draft hit 408
 code lines (1 eslint error) and was resolved by factoring a genuine duplication into `usableCentre`,
 not by padding comments. ⚠️ **Note for a later task adding to this file: it may need to be split.**
@@ -589,6 +633,367 @@ on their screen turns the way they meant.** Only their eyes close this.
 **This agent could not confirm `bun run dev`** (three long-lived mprocs processes). No entry point,
 config or build input was touched, and the client typecheck, lint, boundary scan and full suite all
 pass — that is inference, not observation.
+
+### W6 — 8 owed, **0 performed**
+
+⚠️ **The per-task list task 08 owed was never transcribed into this file.** It is recorded
+here for completeness and then superseded by §9 below.
+
+1. ⚠️ **Highest value: save a preset, reload the app, select it — the view is restored.**
+2. A project saved **before** this change still opens, with no presets and no error.
+3. Saving a preset then opening a **different** project does not carry presets across.
+4. Deleting a preset removes it and it stays gone after a reload.
+5. The advanced camera panel and the Euler fields are mounted and actually drive the view.
+   ⚠️ **The advanced half of this was the D08-16 gap and is closed by task 09** — it is now a
+   real check rather than a known-failing one.
+6. ⚠️ **iPad: dragging a slider no longer scrolls the rail** (the `touch-action` fix —
+   confirmed defect, now fixed but **unverified**).
+7. Layout at 240 px with the preset list added.
+8. ⚠️ The saved preset restores `scale` but **not** `pan` (open question 4). Save at a pan,
+   move the model, restore — the model returns to the saved size at the *current* pan.
+
+### W7 — 4 owed, **0 performed** (task 09's own work, closing D08-16)
+
+1. ⚠️⚠️ **Type an exact `near` / `far` / ortho box / `aspect` in the advanced panel and the
+   view CHANGES to exactly that.** This is the whole of owner item 8's second half and it did
+   nothing at all before this task.
+2. ⚠️ **A typed value SURVIVES a re-fit**: type a `near`, then press **Fit to canvas**, resize
+   the canvas, press a camera preset, and flip the projection — it must still be your number,
+   not the derived one. The unit tests pin the arithmetic; only the app proves the wiring.
+3. **"Reset to fitted" returns every field to the derived value.** It did not render at all
+   before this task.
+4. The advanced panel's boxes **read back** the number the camera is using after a re-fit —
+   a typed value must not look like it was ignored the moment the box lost focus.
+
+## 9. ⚠️ THE ONE CONSOLIDATED CHECKLIST FOR THE OWNER (task 09)
+
+> ⚠️ **ALL THE PER-WAVE LISTS ABOVE ARE SUPERSEDED BY THIS SECTION.** They are kept for
+> provenance only. **This is the list to take to the keyboard.**
+
+### ⚠️ READ THIS FIRST — a green gate proves the arithmetic, NOT the picture
+
+**`bun run verify` exits 0. That is not the same as "it works."**
+
+**This plan is unusually visual. SIX of the eleven owner items can only be confirmed by
+looking** — the pulsing (4), the pan clipping (3), part centring (2/7), scale-about-origin
+(6), viewpoint semantics (11) and preset restore (10). A unit test can prove the fit is
+rotation-invariant to seventeen significant digits; it cannot prove the model stops breathing
+on screen. **No agent in plans 06, 07 or 08 has had a browser, a GPU or a device.**
+
+**Score: 0 of 60 observed.** Roughly a dozen had their *structural* claim independently
+re-derived from source or from the built bundle. **That is evidence about the code, not about
+the picture, and the distinction must not be blurred.**
+
+**How this list was built.** Plan 07 §7.7's **41** carried checks were merged with plan 08's
+**53** owed (W1 12 · W2 7 · W3 6 · W4 9 · W5 11 · W6 8) and task 09's own **4** — **98 raw**,
+de-duplicated to **60**. **38 were dropped as genuine duplicates or as subsumed**, and the
+overlaps are named where they merge so nothing looks quietly deleted:
+
+- **Smooth shading** appeared in plan 07 #9/#15 and plan 08 W1-4 — one check (**T1-3**).
+- **The WebGL context leak** appeared in both plans — one check (**T1-11**).
+- **GPU depth-derived heights** appeared in plan 07 #8 and plan 08 W1-12 — one check (**T1-10**).
+- **iPad slider drag** was plan 07 #6 (the confirmed defect) and plan 08 W5-5, W5-11, W6-6
+  (the fix and its new consumers) — one check (**T1-12**).
+- **Part loading / centring** was plan 07 #12, #13, #14 and plan 08 W1-1, W1-2, W2-7 — folded
+  into **T1-4** and **T2-5**.
+- **The 240 px rail layout** was plan 07 #22 and plan 08 W5-4, W5-10, W6-7 — one check (**T2-13**),
+  because they are one rail reviewed once.
+- **Fit to canvas** was plan 07 #3/#4 and plan 08 W2-4, W2-6 — folded into **T1-7**.
+- **Pan off-canvas** was plan 07 #2 and plan 08 W3-1 — one check (**T1-2**); plan 08's is the
+  stronger statement (it must not *clip*, not merely travel).
+- **Scale past the old cap** was plan 07 #1 and plan 08 W2-3 — one check (**T1-6**).
+- **Stamp = one undo entry** was plan 07 #19 and plan 08 W1-7 — one check (**T2-3**), with the
+  outline half **inverted** by F1 (plan 07 said the outline is *absent*; it is now present).
+- **Variant-edit stamping** was plan 07 #11 and plan 08 W1-10, W3-5 — one check (**T1-9**).
+
+### 🔴 Tier 1 — start here. Eleven items, most-likely-broken first.
+
+| # | Check | Why it leads |
+| --- | --- | --- |
+| **T1-1** | ⚠️⚠️ **Rotate the orb through a FULL circle. The model does NOT pulse** — its apparent size is constant at every angle. | ⭐ **OWNER ITEM 4, THE HEADLINE, AND THE FIX IS ARITHMETIC THAT HAS NEVER BEEN RENDERED.** The fit no longer takes `rotation` at all, and a 24-step × 3-axis × 2-bounds × 2-projection sweep proves the *camera params* are byte-identical through a revolution. That proves the camera is still; it does not prove the model looks still. If one thing in this plan is broken, it is most likely here. |
+| **T1-2** | ⚠️⚠️ **Pan the model toward a border and past it. It must NOT clip** — it slides smoothly out of frame and may leave entirely, then drags back. | **OWNER ITEM 3.** The old code blitted the whole render target at a canvas offset, which is *why* it clipped; pan is now a camera+target translation and `putImageData` is back at a fixed origin. `viewToWorld` was verified against three 0.185.1 itself to **1.7e-16** — unusually strong evidence about the *maths* and none at all about the *render*. |
+| **T1-3** | ⚠️ **Smooth shading survives.** Sphere, cylinder **and** the mannequin parts show a smooth gradient — **not** a ring of flat facets — with no banding as the light orb sweeps. Silhouettes read round at 32×32. | **THE D08-2 TRIPWIRE, VISUALLY.** Task 01 refused `BufferGeometry.translate()` because it re-normalises **every** normal in the buffer (measured drift on the real torso: `0.4748470187187195` → `0.4748469889163971`). A byte-identity test pins it. **Only a GPU render proves the result**, and this is the second time flat shading has nearly returned. *(Merged: 07 #9, 07 #15, 08 W1-4.)* |
+| **T1-4** | ⚠️ **Select Head. It is centred in the frame, and rotating it spins it ABOUT ITSELF**, not about a point off-screen. Then the same for a primitive. | **OWNER ITEMS 2 and 7.** The old `normalizeToUnitBox` moved the *object transform*, leaving the geometry origin at the mannequin's pelvis. Task 01 translates **vertices**. If a part still swings around an invisible pivot, F2 did not take. *(Merged: 08 W1-1, W1-2, W2-7; 07 #12, #14.)* |
+| **T1-5** | ⚠️⚠️ **Press Left. The model TURNS TO FACE LEFT**, so you see its **RIGHT** flank. Press **Right**: the mirror. Then **Top/Bottom/Front/Back** as the control group. | ⚠️ **F9, AND NO TEST CAN EVER CLOSE THIS.** Left/right is *uniquely* resistant to unit testing: the maths is self-consistent under **both** conventions, so a test can only assert the convention it was written against. This table has been inverted **twice**. If it feels backwards, **F9 itself needs re-deciding — do NOT flip the signs and do NOT touch `applyEulerXYZ`.** Read D08-11 first. If left/right look right but top/bottom now look *wrong*, the maths *did* change and D08-11's evidence needs re-reading. |
+| **T1-6** | ⚠️ **F5-COST: is the new framing acceptable?** The model now fills **~0.52** of the shorter axis where the old fit hit **0.9 at rest**. Also scale far past the old cap (250, 1e4): nothing clamps it and the model does not vanish through a clip plane. | ⚠️ **THE CHECK MOST LIKELY TO SEND WORK BACK.** F5's cure is the bounding **sphere**, whose projected radius is rotation-invariant *by construction* — but a box inside its own sphere reads at `1/√3 ≈ 0.577`. The old 0.9 oscillated to 0.64 at 45° yaw; **that oscillation was the bug.** The picture is worse-framed but stable. If it reads too small the lever is **the padding constant in `CanvasContainer`** — ⚠️ **NEVER a return to a rotation-dependent fit.** `POSE_DEPTH_ALLOWANCE = 64` radii is reasoned, never observed. *(Merged: 07 #1, 08 W2-3, W2-5.)* |
+| **T1-7** | **Fit to canvas** re-frames at the current rotation, **does not reset pan**, and pressing it twice is two distinct events. Initial load still auto-fits. Resizing the object re-fits. | ⚠️ **D08-6 IS THE SUBTLE PART: a fit DOES reset the owner's `scale` to 1** (deliberate — without it a fit would be invisible at any other scale), while pan survives. The `> 0` guard on the effect is load-bearing: without it a reload would silently reset a scale the owner had set. *(Merged: 07 #3, 07 #4, 08 W2-4, W2-6.)* |
+| **T1-8** | ⚠️ **Stamp with an outline over EXISTING artwork, then open the lighting studio: the underlying normals and heights are UNTOUCHED.** An outline pixel on empty canvas has colour but no lighting response. | ⚠️ **THE F1 ASSERTION, AND IT INVERTS PLAN 07's E7** — which said the outline is *not* stamped. `PixelCellWrite`'s `0` sentinels mean *empty*, not *unchanged*, so task 02 had to route the existing normal/height back through a new `readExistingCell` callback (D08-1). An outline over art that flattens its lighting is the failure mode. |
+| **T1-9** | ⚠️ **In VARIANT-EDIT mode: pan, then stamp. Do the pixels land exactly under the model?** With an outline, and at a non-zero pan. | ⚠️ **THE ONE UNIT-UNTESTED SEAM IN THE PLAN.** D08-1: the container's `readExistingCell` **duplicates `editableGrid`'s variant resolution inline**, because the real one is declared later in the render body. That duplication has no test. The overlay also spans the expanded view while the stamp targets the smaller variant grid, so the model stamps **cropped** — correct, but surprising. *(Merged: 07 #11, 08 W1-10, W1-11, W3-5.)* |
+| **T1-10** | ⚠️ **Stamp, then open the lighting studio. Are the heights sensible — not uniform, not inverted?** | **THE DEPTH-DERIVED HEIGHTS HAVE NEVER RUN ON A GPU, ACROSS THREE PLANS.** They were reasoned from three's `depth.glsl.js` source. Task 02 added a second buffer copy alongside that readback path without restructuring it. If heights come back uniform or inverted, the depth pass is the first place to look. *(Merged: 07 #8, 08 W1-12.)* |
+| **T1-11** | ⚠️ **WebGL context leak.** Select Pose, then switch tools ~20× and change meshes ~20×. Watch for `Too many active WebGL contexts`. | **STILL NEVER TESTED, ACROSS THREE PLANS.** Browsers cap contexts at ~16; exhausting them crashes the tab. Argued safe (one context per mount, disposed on unmount) but never observed. Plan 07 added mesh *parts*, so there are now more switches to make. Do this in **StrictMode dev** and confirm exactly one renderer and one overlay. |
+| **T1-12** | ⚠️ **iPad: drag the sliders with a finger — the rail must NOT scroll.** Scale, edge thickness, **and** the five new numeric fields. Finger-drag on the canvas pans the model; double-tap stamps; a pinch still zooms the view rather than dragging the model. | ⚠️ **A CONFIRMED DEFECT, FIXED BUT DELIBERATELY UNTESTED.** `.pose-panel__slider` had no `touch-action: none` while `.direction-orb__sphere` did, under a comment calling it "THE TOUCH FIX, not a nicety". Task 08 added the line. **No test in this repo can observe a browser choosing to scroll — jsdom has no compositor**, and a test asserting the class name would assert only that a string was typed, which reads like coverage and is worse than nothing. The owner's primary device. *(Merged: 07 #6, 07 #7, 07 #32, 08 W3-6, W5-5, W5-11, W6-6.)* |
+
+### 🟠 Tier 2 — the new features. Do they actually work?
+
+| # | Check |
+| --- | --- |
+| **T2-1** | ⚠️ **Save a scene preset, RELOAD THE APP, select it — the view is restored.** The only persistence path in the plan, and the only check that exercises the wire format end to end. Then: a project saved **before** this change still opens with no presets and no error; presets do **not** carry across into a different project; a deleted preset stays gone after a reload. |
+| **T2-2** | ⚠️⚠️ **Type an exact `near`, `far`, ortho box or `aspect` in the advanced panel — the view changes to EXACTLY that.** Then confirm it **survives a re-fit**: press Fit to canvas, resize the canvas, press a camera preset, flip the projection — your number must still be there. Then **"Reset to fitted"** returns every field to the derived value. ⚠️ **Nothing but `fov` worked here before task 09 (D08-16), and "Reset to fitted" did not render at all.** |
+| **T2-3** | **Stamp is still ONE undo entry** — one Ctrl-Z removes model **and** outline together. ⚠️ **The outline is now PRESENT in the stamp** (F1), inverting plan 07's E7. Edge width 0 produces exactly what it did before; widths 1–4 write a crisp outline in the **Edge** colour, landing where the overlay drew it. |
+| **T2-4** | ⚠️ **Press Isometric: projection, camera angle AND model rotation all change in one go.** Pressing the same preset twice does nothing the second time. **Oblique then 3/4** changes the camera but leaves the model's orientation. `three-quarter` still shows the **same shoulder** as before plan 08 (deliberately left alone — see D08-11). |
+| **T2-5** | **Each part button — Head / Torso / Arm / Leg / Hand / Full — loads that piece ALONE**, centred and auto-fitted, and none is empty. ⚠️ **The mesh is a T-POSE, so "arm" is a horizontal bar reaching BOTH ways** (E1). The full mannequin still loads and frames as it did — ⚠️ **raised in importance**: open question 3 changed that path, so it is no longer a mere no-regression check. |
+| **T2-6** | ⚠️ **Pressing a preset OVERWRITES a rotation you set with the orb**, and does **NOT** reset Scale or Pan. Scale up, pan off-centre, press Isometric: the angle changes, the size and position do not. **Both halves are deliberate (F7 + open question 1) and both will feel wrong the first time.** Confirm the owner still wants them. The counter-argument is recorded above; the change is two lines if not. |
+| **T2-7** | **Typing `45` into the model's Y rotation does exactly what dragging the orb to 45° does.** Dragging either orb updates its numeric fields **live**, and typing moves the orb. ⚠️ **Typing a negative or partial value (`-`, `.`) does NOT snap the model to 0 mid-keystroke** — pinned by synthetic `change` events at two levels, but real browser keystroke sequences are not the same thing. |
+| **T2-8** | ⚠️ **The light's Azimuth/Elevation fields move the light as expected, and read back its actual direction after dragging its orb** — *including the canonicalisation*: `elevation 100` redisplays as `80` with azimuth flipped 180° (physically identical), and `azimuth 370` comes back as `10`. ⚠️ **The model's rotation is deliberately asymmetric — `370` stays `370` there.** This is where the owner accepts or rejects the F11 decision (open question 2). |
+| **T2-9** | ⚠️ **Scale grows the model about its own centre while the camera visibly does NOT move.** A part and a primitive both scale about their own centres. **Owner item 6**, and the visible proof that `scaleCameraParams` was deleted rather than renamed. |
+| **T2-10** | **The image stays pixel-aligned while panning** — no shimmer, no half-texel crawl — dragging feels **1:1** and is not inverted, and **panning does not change the model's apparent size.** Pinned hard in NDC (distance preserved to 1e-10, no frustum dimension changes), but perspective near-field parallax is real and only an eye judges whether it *reads* wrong. |
+| **T2-11** | **An invalid `near`/`far` combination is visibly rejected and does not corrupt the view.** The red border and reason line are asserted in the DOM; whether they *read* as rejection is perceptual. |
+| **T2-12** | ⚠️ **Every preset now writes FOV too, including the four orthographic ones** (which ignore it while selected). Press **2D**, then switch to **Perspective**: FOV should read **50**, not whatever it was. The least obvious consequence of "a preset sets everything". |
+| **T2-13** | ⚠️ **Rail layout at 240 px** with everything at once: the Colours group, the tint row, the Scale box, the thickness slider, **five** Euler boxes, **six** advanced numeric boxes and the preset list. *(Reviewable in Storybook — the decorator mounts at exactly 240 px, and the `Orthographic` story carries deliberately wide worst-case values. **Storybook has only ever been BUILT, never opened.**)* *(Merged: 07 #22, 08 W5-4, W5-10, W6-7.)* |
+| **T2-14** | **The outline is HARD-EDGED at 1–4 px** — crisp, no soft fringing, no partial alpha — and hugs the silhouette exactly. **0 removes it entirely.** |
+| **T2-15** | **Model colour follows Fill, outline colour follows Edge**, live, with no native OS swatch anywhere. Clicking each swatch switches the main picker to the matching tab. The **light-tint preset row** (Neutral/Warm/Cool/Amber/Moon) visibly changes the key light. |
+| **T2-16** | **Resize the object** — the render target follows and the model re-fits. **Pan survives a resize and resets on a mesh change.** |
+| **T2-17** | **Time a full-canvas stamp on the largest object you have.** ⚠️ **Never measured**, across three plans, and the parts raised the triangle counts. |
+
+### 🟡 Tier 3 — the rest of the rail, and the older pose behaviours
+
+| # | Check |
+| --- | --- |
+| **T3-1** | The model renders with **hard, blocky, aliased edges** — no smooth silhouette, no downscale banding. **This is the feature; if it looks smooth, it failed.** |
+| **T3-2** | Crisp and grid-aligned at **every canvas zoom level**. On 32×32 genuinely chunky; on 256×224 still **1:1** without stretching. |
+| **T3-3** | Non-square grids fit the limiting axis without clipping; a **45°-rotated** model does not clip at the frame edges. |
+| **T3-4** | Mouse: drag pans, does **not** rotate, does **not** draw. Double-click stamps. With a selection active the stamp is **masked** to it. |
+| **T3-5** | **Drag both orbs with a mouse**, including moving the cursor off the orb mid-drag (the `setPointerCapture` contract). |
+| **T3-6** | Each viewpoint button snaps the model **and** visibly moves the rotation orb's handle. |
+| **T3-7** | Perspective ↔ Orthographic toggles visibly; FOV affects perspective only and is disabled in orthographic. **Iso reads as true isometric.** ⚠️ **See F8 below: a preset overrides the toggle, by the owner's own decision.** |
+| **T3-8** | Selecting Pose swaps the rail to the Pose section; Pencil/Eraser swap it back. **Clear pose** unloads the mesh (the only way to). Switching projects clears the pose. |
+| **T3-9** | Cube / Sphere / Cylinder each load and appear pixelated. *("Mannequin" is now the Mannequin row's **Full** button.)* |
+
+### 🟢 Tier 4 — regressions: nothing else may have changed
+
+| # | Check |
+| --- | --- |
+| **T4-1** | **No visual change anywhere in the pixel studio while Pose is NOT selected.** The overlay is always mounted; any difference means the canvas stack was disturbed. |
+| **T4-2** | **Drawing performance on a large sprite is unchanged while pose is not selected.** |
+| **T4-3** | Pencil, eraser, both fills, line, rectangle, ellipse, move, selection, eyedropper and origin all behave as before. **Reflection still mirrors and its guides still draw.** Marching ants, origin cross and reflection guides still render **above** the artwork. |
+| **T4-4** | Lighting studio opens and its normal/height tools work; onion skin / frame trace / reference overlays still layer correctly; undo/redo across a mixed session is normal and autosave fires. |
+| **T4-5** | Split canvas still works and correctly does **NOT** get the pose overlay; export output is still correct. |
+
+### The eleven owner items → the checks that verify them
+
+⚠️ **Six of these eleven can only be confirmed by looking.** Marked 👁.
+
+| # | The owner's words (abbreviated) | Verifying checks |
+| --- | --- | --- |
+| **1** | Stamping should include the outline | **T1-8** (the F1 assertion: normals/heights untouched), **T2-3** (one undo entry, outline present), **T2-14** (hard-edged 1–4 px) |
+| **2** | 👁 Part pieces should have their geometry centred on the canvas | **T1-4** (centred, rotates about itself), **T2-5** (each part loads alone) |
+| **3** | 👁 Panning should be a parallel translation to the camera; no clipping | **T1-2** (does not clip — the deciding check), **T2-10** (pixel-aligned, 1:1, no size change), **T1-9** (stamp lands under the model at a pan) |
+| **4** | 👁 The model pulses in size when rotated with the orb | **T1-1** (no pulsing through a full orbit — **the headline**) |
+| **5** | Camera presets should change ALL the other camera settings | **T2-4** (projection + angle + rotation in one press), **T2-12** (FOV too), **T2-6** (…but not scale/pan — confirm), **T3-7** (the D14/F8 override) |
+| **6** | 👁 Zoom → scale; camera holds still, model scales from its origin | **T2-9** (grows about its centre, camera still), **T1-6** (past the old cap, nothing clamps) |
+| **7** | 👁 ALL models have their origin at the bounding-volume centre | **T1-4** (parts **and** primitives), **T2-5** (the full mannequin too — open question 3), **T1-3** (that centring did not damage the normals) |
+| **8** | Advanced mode: EXACT projection values, saved into a preset | **T2-2** (all six fields reach the camera and survive a re-fit — **closed by task 09**), **T2-11** (invalid near/far rejected), **T2-1** (saving it as a preset) |
+| **9** | Exact euler angles for rotation and the light | **T2-7** (rotation: typing = dragging), **T2-8** (the light's two fields and their canonicalisation — the F11 decision) |
+| **10** | 👁 Save ALL orientations to a preset I can reload | **T2-1** (save → **reload the app** → restore; the only persistence path) |
+| **11** | 👁 Rotation presets indicative: left means face left | **T1-5** (**the deciding check — no test can close it**) |
+
+### ⚠️ The four most likely to send work back
+
+1. **T1-6 / F5-COST** — the fit now fills **~0.52** of the frame where the old one hit **0.9 at
+   rest**. It is stable instead of pulsing, which is the trade F5 asked for, but **no owner has
+   seen it rendered.** The lever is the padding constant; **never a rotation-dependent fit.**
+2. **T1-5 / F9** — left/right. **No test can ever close this**: the maths is self-consistent
+   under both conventions, so a test asserts only the convention it was written against. This
+   table has been inverted twice. If it feels wrong, **re-decide F9 — do not flip signs.**
+3. **T2-8 / F11** — the light's angle canonicalisation. `elevation 100` comes back as `80` with
+   the azimuth flipped, and the model's rotation is deliberately **asymmetric** (`370` stays
+   `370` there). Nothing is lost, but it will read as the field "changing my number."
+4. **T1-12 / the iPad `touch-action` fix** — a confirmed defect, fixed, and **deliberately
+   untested**: jsdom has no compositor, so nothing here can observe a browser deciding to
+   scroll. The owner's primary device.
+
+## 10. Task 09's gate results (2026-09-04)
+
+**`bun run verify` (root) — EXIT 0.** Real output:
+
+```
+$ bun run typecheck && bun run lint && bun run format:check && bun run test && bun run build
+$ bun run --cwd client typecheck && bun run --cwd server typecheck
+$ tsc --noEmit
+$ tsc --noEmit
+$ bun run --cwd client lint && bun run --cwd server lint
+$ eslint .
+✖ 65 problems (0 errors, 65 warnings)
+$ eslint .
+$ bunx prettier --check "*.{json,md,yaml,yml}" "client/*.{ts,js,json}" "server/*.{ts,js,json}" "client/src/types/**/*.{ts,tsx}"
+All matched files use Prettier code style!
+$ bun run --cwd client test
+$ vitest run
+ Test Files  148 passed (148)
+      Tests  3137 passed (3137)
+$ cd client && bun run build
+$ tsc --noEmit && vite build
+dist/index.html                         0.76 kB │ gzip:   0.42 kB
+dist/assets/index-CQ-0uNNp.css        220.84 kB │ gzip:  27.91 kB
+dist/assets/GLTFLoader--NCVAYW2.js     45.56 kB │ gzip:  13.70 kB
+dist/assets/three.module-PDSP0dbZ.js  734.33 kB │ gzip: 189.46 kB
+dist/assets/index-Bry3rJMT.js         810.17 kB │ gzip: 236.22 kB
+✓ built in 2.12s
+```
+
+**No formatting fix was needed.** The root prettier glob covers only `*.{json,md,yaml,yml}`,
+`client/*`, `server/*` and `client/src/types/**` — every file task 09 touched is **outside** it,
+and the glob was **not widened**.
+
+| Command (from `client/`) | Result |
+| --- | --- |
+| `bunx eslint .` | **0 errors**, 65 warnings — exactly the baseline |
+| `bunx vitest run` | **148 files / 3137 tests pass** (W6 was 3102; task 09 adds **+35**) |
+| `bun run lint:boundaries` | **OK — all 5 boundary rules hold** |
+| `bunx stylelint "src/**/*.css"` | 70 problems, **exactly 2 errors** — `OtherHand.css:338`, `:359`, both pre-existing |
+| `bunx storybook build` | **exit 0** |
+| lockfile sweep | **empty** after every `bunx` |
+
+### ⚠️ DATA SAFETY — the headline result
+
+```
+$ git status --short -- '*__snapshots__*'
+                                     ← EMPTY
+$ shasum -a 256 client/src/types/__tests__/__snapshots__/migrations.test.ts.snap
+e448764af560ed1411164e3d5ee782b0c333d4737cd32848fb5fe120d170a307
+$ git diff --stat -- client/src/types/__tests__/__snapshots__/
+                                     ← EMPTY
+$ git diff --stat -- server/
+                                     ← EMPTY
+```
+
+**NO CORPUS SNAPSHOT MOVED.** The digest is byte-for-byte the coordinator's pre-dispatch
+baseline. Task 08 changed the persisted wire format and all 151 corpus digests rebuilt
+identical; task 09 added a store field and did not touch the wire format at all. `vitest -u`
+was never run.
+
+**The conditional key is proven.** `persistedUIState.test.ts` → *"posePresets — absent stays
+absent (plan 08, F13)"* (`:739`): a store with **no** presets builds a state where
+`"posePresets" in ui.toPersistedUIState()` is **false** (`:754`, `:768`, `:774`, `:777`, `:780`),
+and one **with** a preset emits it (`:792-795`) and round-trips it (`:806-808`).
+
+⚠️ **`UIStore.ts`'s diff is NOT one line, and this corrects the task spec's expectation.**
+The **emission** is exactly one conditional `assign()` — `UIStore.ts:581`,
+`assign(persisted, "posePresets", this.toPersistedPosePresets())` — and it is **never**
+`posePresets: undefined`, which is the F13 mechanism and the thing that matters. But task 08
+also had to make the pose store **reachable** from `UIStore` (a `poseUI` dependency, an
+`ownPosePresets` fallback for the harness suites, a private `toPersistedPosePresets()` and a
+`hydrate` branch) — ~18 further lines. **Coordinator-reviewed and gate-clean**; recorded here
+because the spec predicted one line and a reader comparing them should not think a check failed.
+**Task 09 did not touch `UIStore.ts` at all.**
+
+### Bundle
+
+| Chunk | Plan start | Now | Δ |
+| --- | --- | --- | --- |
+| main | 793.89 kB / 231.22 gz | **810.17 kB / 236.22 gz** | **+16.28 kB / +5.00 gz** |
+| `three.module` (lazy) | 734.33 / 189.46 gz | **734.33 / 189.46 gz** | **0 — byte-identical** |
+| `GLTFLoader` (lazy) | 45.56 / 13.70 gz | **45.56 / 13.70 gz** | **0** |
+| CSS | — | 220.84 / 27.91 gz | — |
+
+**+16.28 kB (+2.1%) for eight tasks of new UI and store logic** — the advanced camera panel,
+the Euler inputs, `PoseCameraGroup`, `PosePresetList`, the preset store surface and the wire
+types. Expected and proportionate.
+
+⚠️ **`three` is still NOT in the main bundle, and here is the POSITIVE CONTROL** — the grep
+found the symbols where they *should* be, so a zero in main means absence and not a broken grep:
+
+| Symbol | main | `three.module` |
+| --- | --- | --- |
+| `BufferGeometry` | **1** (a `new n.BufferGeometry` namespace access) | **26** |
+| `WebGLRenderer` | **1** (same) | **39** |
+| `PerspectiveCamera` | **4** (`poseEngine`'s structural type + the container's `new three.PerspectiveCamera()`) | **7** |
+
+**1 and 26 is exactly plan 07's measured baseline.** `three.module` is byte-identical to the
+plan-start measurement, which is the strongest possible statement that nothing leaked either way.
+
+### Dead code
+
+- **`scaleCameraParams` is GONE.** `grep -rn "scaleCameraParams" client/src` returns **3 hits,
+  all prose** saying it was deleted (`poseCamera.ts:246`, `CanvasContainer.tsx:365`, `:2893`).
+  No declaration, no call site. **F6 held.**
+- **No stale pose `zoom`.** Every `setZoom`/`POSE_ZOOM` hit is either the **viewport** store's
+  own unrelated `zoom` (correct) or deliberate historical prose explaining the F6 rename.
+- ⚠️ **Two stale comments remain**, plan 07's finding A: `poseEngine.ts:266` *"Placeholder only —
+  task 06 replaces the framing entirely"* and `:413` *"task 06 owns the real ones"*. **Task 06
+  landed; only the tense is wrong.** **NOT fixed** — `poseEngine.ts` is in no task's Touches and
+  a gate task does not patch application files. A future editor should rewrite them.
+
+### `bun run dev`
+
+⚠️ **PARTLY OBSERVED, and the distinction is stated rather than blurred.**
+
+**All three ports were already held by the owner's own live session** (vite 5173 pid 23322 up
+since Sep 3, express 3001 pid 23321, uvicorn 8100 pid 23345). **Nothing of the owner's was
+killed or touched**, so a clean `bun run dev` from a cold start was **not** performed.
+
+What **was** observed, and it is stronger than a port check:
+
+- All three answer live HTTP: vite `200`, express `/api/projects` `200`, uvicorn `/health`
+  `{"status":"ok","mode":"proxy",...}`.
+- ⚠️ **The owner's running vite server transforms and serves THIS branch's code.** Requesting
+  `src/stores/ui/PoseUIStore.ts` returns a module containing **6 occurrences of
+  `cameraOverrides`** — a symbol that did not exist before this task. Every module task 09
+  touched — `CanvasContainer.tsx`, `PixelStudioPanelContainer.tsx`, `poseCamera.ts`,
+  `PoseCameraGroup.tsx`, and the **newly created** `poseCameraPresets.ts`, which that server had
+  never seen — returns `200` with no transform error.
+
+**Conclusion, honestly labelled:** the dev *client* compiling and serving this branch is
+**observed**. The **mprocs wrapper** starting all three from cold is **inferred** — no entry
+point, config, `mprocs.yaml` or build input was touched, and typecheck, lint, the boundary scan,
+the full suite and the production build all pass.
+
+## 11. Open questions and decisions the owner should read
+
+1. ⚠️ **F8 — F7 SUPERSEDES plan 06's D14, and D14 was subsumed rather than dropped.** D14
+   (*"a camera preset overrides the projection"*) was **deliberately kept** by owner decision on
+   2026-09-03, *before* F7 existed. F7 then widened it: a preset now owns projection, pitch, yaw,
+   fov, the clip policy, the fit **and** the model's rotation. **D14's guarantee still holds
+   and is still observable** (Isometric still forces orthographic regardless of the toggle); it
+   has simply stopped being the whole rule. **If they ever appear to conflict, F7 wins.**
+   Surfaces at **T3-7**.
+2. **Open question 1 (task 05): a camera preset does NOT reset scale or pan.** A preset restores
+   which way the scene is *pointing*; scale and pan are where the owner *put* it. ⚠️ **The
+   counter-argument is real and recorded**: two presses of Isometric from different framings give
+   two different pictures, in tension with F7's "fully known state". Mitigation: **Fit to canvas**
+   is one press away. Two lines to change. Surfaces at **T2-6**.
+3. **Open question 2 (task 07, F11): the light has TWO fields — Azimuth and Elevation — derived
+   from the vector every time, with no stored second copy.** The deciding argument was **not**
+   the store constraint: storing typed angles would ship **a roll box that does nothing**. The
+   price is canonicalisation (`elevation 100` → `80` with azimuth flipped; `azimuth 370` → `10`),
+   and the model's rotation is deliberately **asymmetric** (`370` stays `370`, because those
+   numbers *are* the stored state). Surfaces at **T2-8**.
+4. **Open question 3 (task 01): the full mannequin scene IS centred too, not just the parts.**
+   Baking node transforms proved unnecessary — one world offset converted into each node's local
+   frame. A test pins that the two nodes' relative offset is preserved, guarding the obvious
+   wrong implementation (`centerGeometryOnOrigin` inside a `traverse`), which would explode the
+   figure. Surfaces at **T2-5**.
+5. **Open question 4 (task 08): a saved scene preset carries `meshId`, `rotation`, `projection`,
+   `cameraPreset`, `fov`, `scale`, `lightDirection`, `lightColor`, `edgeWidth` — and EXCLUDES
+   `pan`.** ⚠️ `scale` is **in** even though a *camera* preset leaves it alone: a camera preset is
+   a **verb**, a scene preset is a **noun**. `pan` is out for a harder reason — it is measured in
+   **grid cells of whatever canvas was open**, so a pan saved on a 64×64 sprite lands elsewhere on
+   a 32×32 one, and pan is unbounded (E13), so a restored preset could put the model off screen
+   **with no visible cause.** One-field change if the owner disagrees. Surfaces at **W6-8**.
+6. ⚠️ **D08-16 is CLOSED by task 09, and the design is worth one line of the owner's attention:**
+   the fit still derives `near`/`far`/the ortho box/`aspect`, and the owner's typed values are
+   applied **on top of the fit's output**. That ordering is what makes a typed value **survive**
+   Fit to canvas, a resize, a preset press and a projection change. **"Reset to fitted" is the
+   only way back.** ⚠️ The overrides are **session-only** — the persistence path for an exact
+   frustum is a **saved scene preset**, which is what the owner asked for. Surfaces at **T2-2**.
+7. **In variant-edit mode the overlay spans the expanded view while the stamp targets the smaller
+   variant grid**, so the model stamps **cropped**. Correct per the plan, likely surprising in
+   use. Surfaces at **T1-9**.
+8. **The root `format:check` glob does not cover any file these three plans touched**
+   (`client/src/ui/**`, `stores/**`, `containers/**` are all outside it). It passes, on a
+   narrower set than "everything written". **Pre-existing configuration — flagged, not widened.**
+
+## 12. Bugs and follow-ups — RECORDED, NOT FIXED
+
+**No behavioural bug was found at the gate.** Task 09 changed application code only to close
+D08-16, which was an assigned scope item and not a gate-time patch.
+
+| # | Item | Severity | Notes |
+| --- | --- | --- | --- |
+| A | **Two stale comments in `poseEngine.ts` (`:266`, `:413`)** say task 06 "replaces" / "owns" as though pending. Task 06 landed. | Cosmetic | The **code is correct**; only the tense is wrong. Carried from plan 07. Outside any Touches list. |
+| B | **Bundle inversion (plan 07 deviation 19).** `MANNEQUIN_PART_ORDER` lives in `poseMeshes.ts`, so importing it from the rail drags ~900 lines into main (the whole +5.33 kB of plan 07). Moving it to `poseTypes.ts` would invert it. | Low | **NOT DONE** — application code, needs owner sign-off. |
+| C | **Dead state (plan 07 deviation 22).** `pose.modelColor`, its action and its `clear()` line are unread; the container uses `tool.fillColorOrSelected`. | Low | **NOT DONE.** Deleting an `observableRef` field is a store-shape change with its own risk. The store header already warns against wiring a new reader. |
+| D | ⚠️ **`readExistingCell` duplicates `editableGrid`'s variant resolution inline** (D08-1), because the real one is declared later in the container's render body. **Unit-untested.** | Med | The most likely place for a variant-mode stamping bug. **T1-9** is the check. |
 
 ## Notes for the next session
 
