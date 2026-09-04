@@ -15,6 +15,11 @@
  * `fitGeneration` / `requestFit()` form an event counter that mutates no
  * camera state (E14/E15).
  *
+ * ⚠️ Plan 08 F7 (2026-09-04) added `applyCameraPreset` — a preset now sets
+ * EVERY camera field and the MODEL'S ROTATION in one action, and deliberately
+ * leaves `scale` and `pan` alone. That decision is pinned below; the reasoning
+ * lives beside `PoseCameraPresetSpec` in `ui/canvas/pose/poseCamera.ts`.
+ *
  * ⚠️ `zoom`/`setZoom`/`POSE_ZOOM_MIN_SAFE` were renamed to
  * `scale`/`setScale`/`POSE_SCALE_MIN_SAFE` on 2026-09-04 (plan 08, F6) AND
  * re-meant: the value is now a multiplier on the MODEL's own transform about
@@ -29,7 +34,7 @@
  * reaches the persisted wire format.
  */
 import { describe, expect, it } from "vitest";
-import { isObservableProp, runInAction } from "mobx";
+import { isObservableProp, reaction, runInAction } from "mobx";
 import {
   DEFAULT_POSE_LIGHT_COLOR,
   DEFAULT_POSE_LIGHT_DIRECTION,
@@ -224,15 +229,25 @@ describe("PoseUIStore — setters", () => {
     expect(s.cameraPreset).toBe("iso");
   });
 
-  it("setCameraPreset leaves scale and pan alone (D14)", () => {
+  it("setCameraPreset records the id and touches nothing else", () => {
+    // ⚠️ The low-level setter, deliberately kept alongside `applyCameraPreset`
+    // for callers that have already written the other fields themselves. A
+    // preset BUTTON must not call this one — see the F7 block below.
     const s = new PoseUIStore();
     runInAction(() => {
       s.setScale(3);
       s.setPan({ x: 2, y: 2 });
+      s.setRotation({ x: 0.1, y: 0.2, z: 0.3 });
+      s.setProjection("perspective");
+      s.setFov(77);
       s.setCameraPreset("top-down");
     });
+    expect(s.cameraPreset).toBe("top-down");
     expect(s.scale).toBe(3);
     expect(s.pan).toEqual({ x: 2, y: 2 });
+    expect(s.rotation).toEqual({ x: 0.1, y: 0.2, z: 0.3 });
+    expect(s.projection).toBe("perspective");
+    expect(s.fov).toBe(77);
   });
 
   it("setPan is absolute and nudgePan is relative", () => {
@@ -257,6 +272,144 @@ describe("PoseUIStore — setters", () => {
  * `root.scale.setScalar(...)`, so what is stored here is what is rendered.
  * That composition is the CONTAINER's, and is not testable from this file.
  */
+/* ── F7: a preset sets EVERYTHING ─────────────────────────────────────────────
+ *
+ * **The owner's words:** *"The camera preset buttons: these should CHANGE all
+ * of the other settings that can be used for the camera."*
+ *
+ * ⚠️ F7 SUPERSEDES plan 06's D14 ("a preset overrides the projection"), which
+ * was kept by owner decision on 2026-09-03 — before F7 existed. It is not being
+ * dropped by accident: a preset now owns projection AND every other camera
+ * field AND the model's rotation, so D14 is subsumed rather than reversed. The
+ * projection assertion below is D14's own guarantee, still holding.
+ *
+ * The specs here are written out by hand rather than imported from
+ * `poseCamera.ts`, because `stores/**` may not import `ui/` — the same boundary
+ * that forces `PoseCameraPresetApplication` to be a structural duplicate.
+ * `poseCamera.test.ts` pins the real table's contents; this file pins what the
+ * store DOES with one.
+ */
+const ISO_LIKE = {
+  id: "iso" as const,
+  projection: "orthographic" as const,
+  pitch: 0.6154797086703873,
+  yaw: Math.PI / 4,
+  fov: 50,
+  rotation: { x: 0, y: 0, z: 0 },
+  clipPolicy: "fit" as const,
+};
+
+describe("PoseUIStore — applyCameraPreset sets the whole scene (F7)", () => {
+  it("writes the id, the projection, the FOV and the model's ROTATION", () => {
+    const s = new PoseUIStore();
+    runInAction(() => {
+      // A deliberately messy starting state: nothing here may survive except
+      // the two fields F7 exempts.
+      s.setCameraPreset("2d");
+      s.setProjection("perspective");
+      s.setFov(113);
+      s.setRotation({ x: 1.1, y: 2.2, z: 3.3 });
+      s.applyCameraPreset(ISO_LIKE);
+    });
+    expect(s.cameraPreset).toBe("iso");
+    expect(s.projection).toBe("orthographic");
+    expect(s.fov).toBe(50);
+    expect(s.rotation).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it("OVERWRITES a rotation the orb or a viewpoint button had set", () => {
+    // ⚠️ This is the behaviour change, stated as a test so nobody "fixes" it
+    // back. Owner-decided: a preset is a fully known scene state, and a scene
+    // state that inherits an arbitrary orientation is not known.
+    const s = new PoseUIStore();
+    runInAction(() => s.setRotation({ x: 0, y: Math.PI / 2, z: 0 }));
+    runInAction(() =>
+      s.applyCameraPreset({ ...ISO_LIKE, rotation: { x: 0.25, y: 0.5, z: 0 } }),
+    );
+    expect(s.rotation).toEqual({ x: 0.25, y: 0.5, z: 0 });
+  });
+
+  it("leaves SCALE and PAN alone — open question 1, decided 2026-09-04", () => {
+    // ⚠️ The decision, not an oversight. After tasks 03/04 neither is a camera
+    // setting: `scale` is a MODEL transform (F6) and `pan` is framing rather
+    // than orientation. A preset restores which way the scene points; losing
+    // your zoom on every angle change is hostile.
+    const s = new PoseUIStore();
+    runInAction(() => {
+      s.setScale(7.5);
+      s.setPan({ x: -12, y: 34 });
+      s.applyCameraPreset(ISO_LIKE);
+    });
+    expect(s.scale).toBe(7.5);
+    expect(s.pan).toEqual({ x: -12, y: 34 });
+  });
+
+  it("leaves the mesh, the light and the outline alone", () => {
+    // A preset is about the CAMERA and the model's orientation. It is not a
+    // reset button, and it must not behave like one.
+    const s = new PoseUIStore();
+    runInAction(() => {
+      s.setMesh("head");
+      s.setEdgeWidth(3);
+      s.setLightDirection({ x: 1, y: 0, z: 0 });
+      s.setLightColor(RED);
+      s.applyCameraPreset(ISO_LIKE);
+    });
+    expect(s.meshId).toBe("head");
+    expect(s.edgeWidth).toBe(3);
+    expect(s.lightDirection).toEqual({ x: 1, y: 0, z: 0 });
+    expect(s.lightColor).toEqual(RED);
+  });
+
+  it("is IDEMPOTENT — applying the same preset twice changes nothing", () => {
+    const s = new PoseUIStore();
+    runInAction(() => s.applyCameraPreset(ISO_LIKE));
+    const after = { ...s };
+    runInAction(() => s.applyCameraPreset(ISO_LIKE));
+    expect({ ...s }).toEqual(after);
+  });
+
+  it("clamps a preset's FOV exactly as setFov would", () => {
+    // A preset must not be the one path that can get an out-of-range FOV into
+    // the store — the readout and the stored value would disagree.
+    const s = new PoseUIStore();
+    runInAction(() => s.applyCameraPreset({ ...ISO_LIKE, fov: 500 }));
+    expect(s.fov).toBe(POSE_FOV_MAX);
+    runInAction(() => s.applyCameraPreset({ ...ISO_LIKE, fov: 1 }));
+    expect(s.fov).toBe(POSE_FOV_MIN);
+    runInAction(() => s.applyCameraPreset({ ...ISO_LIKE, fov: Number.NaN }));
+    expect(s.fov).toBe(POSE_FOV_MIN);
+  });
+
+  it("COPIES the rotation rather than holding the preset table's object", () => {
+    // ⚠️ `rotation` is an `observableRef` whose contract is wholesale
+    // replacement with a plain object. Storing a shared module constant by
+    // reference would let a future in-place write corrupt the preset table.
+    const spec = { ...ISO_LIKE, rotation: { x: 0.1, y: 0.2, z: 0.3 } };
+    const s = new PoseUIStore();
+    runInAction(() => s.applyCameraPreset(spec));
+    expect(s.rotation).toEqual(spec.rotation);
+    expect(s.rotation).not.toBe(spec.rotation);
+  });
+
+  it("is ONE action — no reaction can observe a torn half-applied camera", () => {
+    // Five separate setter calls would be five observable writes, and a
+    // reaction reading two of them would run against an intermediate state
+    // (new projection, old rotation) that is a real frame, not a theory.
+    const s = new PoseUIStore();
+    const seen: string[] = [];
+    const stop = reaction(
+      () => `${s.cameraPreset}|${s.projection}|${s.fov}|${s.rotation.y}`,
+      (v) => seen.push(v),
+    );
+    runInAction(() =>
+      s.applyCameraPreset({ ...ISO_LIKE, rotation: { x: 0, y: 1.25, z: 0 } }),
+    );
+    stop();
+    expect(seen).toEqual(["iso|orthographic|50|1.25"]);
+  });
+});
+
 describe("PoseUIStore — model-scale sanitising (no upper bound)", () => {
   it("accepts a huge scale verbatim — there is no cap", () => {
     const s = new PoseUIStore();

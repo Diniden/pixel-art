@@ -25,6 +25,25 @@
  * cube AND for the long thin box that actually pulsed. That sweep is the
  * task's core evidence and the risk register's named mitigation; if it is ever
  * weakened to a tolerance, the pulsing is back.
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ THE VIEWPOINT TESTS WERE REWRITTEN ON 2026-09-04 (plan 08, F9)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * `left` and `right` were **inverted on purpose**, by owner decision. The
+ * maths — {@link applyEulerXYZ}, `worldToView`, `orbitDirection`, the
+ * projection — is **UNCHANGED**, and its own `describe` blocks below are
+ * untouched: they are the standing proof that F9 was a change of meaning and
+ * not a sign fix. (The first draft of this module had left/right/top/bottom
+ * all genuinely inverted; that was fixed in 2026-09-02, and this is the
+ * SECOND, deliberate inversion of left/right only. There must not be a third.)
+ *
+ * The viewpoint assertions are therefore written on **transformed basis
+ * vectors and named in English** — "Left turns the model to FACE left, showing
+ * the viewer its RIGHT flank" — rather than on raw angle values. A test that
+ * asserts `left.y === -90 degrees` can be "fixed" by editing the number on
+ * both sides; a test that asserts which way the model's face is pointing
+ * cannot.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -173,6 +192,53 @@ describe("POSE_CAMERA_PRESETS", () => {
     });
   });
 
+  it("gives EVERY preset every field F7 requires — none is partial", () => {
+    // ⚠️ The whole point of F7: pressing a preset must put the scene into a
+    // fully known state. A preset missing a field is a preset that leaves that
+    // property at whatever it happened to be, which is the "half-applied"
+    // behaviour the owner reported.
+    for (const preset of POSE_CAMERA_PRESETS) {
+      expect(typeof preset.id).toBe("string");
+      expect(typeof preset.label).toBe("string");
+      expect(["orthographic", "perspective"]).toContain(preset.projection);
+      expect(Number.isFinite(preset.pitch)).toBe(true);
+      expect(Number.isFinite(preset.yaw)).toBe(true);
+      expect(Number.isFinite(preset.fov)).toBe(true);
+      expect(preset.clipPolicy).toBe("fit");
+      expect(Number.isFinite(preset.rotation.x)).toBe(true);
+      expect(Number.isFinite(preset.rotation.y)).toBe(true);
+      expect(Number.isFinite(preset.rotation.z)).toBe(true);
+    }
+  });
+
+  it("keeps every preset's FOV inside the store's 10-120 clamp", () => {
+    // A preset that stored an out-of-range FOV would be silently rewritten on
+    // write, so the preset table and the readout would disagree.
+    for (const preset of POSE_CAMERA_PRESETS) {
+      expect(preset.fov).toBeGreaterThanOrEqual(10);
+      expect(preset.fov).toBeLessThanOrEqual(120);
+    }
+  });
+
+  it("leaves the model square-on for the four canonical views", () => {
+    // ⚠️ The camera's pitch/yaw already carry each named view. Rotating the
+    // model as well would double the angle and land somewhere neither name
+    // describes — an isometric camera looking at a 45-degree-turned model
+    // sees a flat side, which reads as "Isometric is broken".
+    for (const id of ["2d", "2.5d", "iso", "top-down"] as const) {
+      expect(getCameraPreset(id)!.rotation).toEqual({ x: 0, y: 0, z: 0 });
+    }
+  });
+
+  it("gives oblique the SAME rotation as the three-quarter viewpoint", () => {
+    // The one preset that is a reference pose rather than a canonical view:
+    // it turns the subject as well as the observer, and it must agree with the
+    // 3/4 button by construction rather than by two hand-copied numbers.
+    expect(getCameraPreset("oblique")!.rotation).toEqual(
+      POSE_VIEWPOINT_ROTATIONS["three-quarter"],
+    );
+  });
+
   it("puts 2D front-on: pitch 0, yaw 0", () => {
     const preset = getCameraPreset("2d")!;
     expect(preset.pitch).toBe(0);
@@ -271,15 +337,49 @@ describe("POSE_VIEWPOINT_ROTATIONS", () => {
     );
   });
 
-  it("brings the model's +Y face toward the camera for 'top'", () => {
-    // Rotating the model by `top` must swing its up-axis toward +Z (the
-    // camera). This is the assertion that catches a sign flip.
+  it("Left turns the model to FACE left, showing the viewer its RIGHT flank", () => {
+    // ⚠️ THE F9 ASSERTION. Read it as English, not as an angle:
+    //   1. the model's FRONT (+Z) ends up pointing screen-LEFT (-X) — the
+    //      model has turned to face left, which is what the button says;
+    //   2. so the surface now facing the CAMERA (+Z) is its own RIGHT (+X).
+    // Asserting the transformed basis vectors rather than `y === -90 degrees`
+    // is what makes this un-re-invertible by accident: a sign flip breaks a
+    // sentence about which way the model is looking, not a number.
+    const r = POSE_VIEWPOINT_ROTATIONS.left;
+    const front = applyEulerXYZ({ x: 0, y: 0, z: 1 }, r);
+    expect(front.x).toBeCloseTo(-1, 10);
+    const modelsRight = applyEulerXYZ({ x: 1, y: 0, z: 0 }, r);
+    expect(modelsRight.z).toBeCloseTo(1, 10);
+  });
+
+  it("Right turns the model to FACE right, showing the viewer its LEFT flank", () => {
+    const r = POSE_VIEWPOINT_ROTATIONS.right;
+    const front = applyEulerXYZ({ x: 0, y: 0, z: 1 }, r);
+    expect(front.x).toBeCloseTo(1, 10);
+    const modelsLeft = applyEulerXYZ({ x: -1, y: 0, z: 0 }, r);
+    expect(modelsLeft.z).toBeCloseTo(1, 10);
+  });
+
+  it("Left and Right are exact mirrors of one another", () => {
+    // Whichever way round they are, they must be opposite. This is the check
+    // that survives the convention itself changing again.
+    const l = applyEulerXYZ({ x: 0, y: 0, z: 1 }, POSE_VIEWPOINT_ROTATIONS.left);
+    const r = applyEulerXYZ({ x: 0, y: 0, z: 1 }, POSE_VIEWPOINT_ROTATIONS.right);
+    expect(l.x).toBeCloseTo(-r.x, 10);
+    expect(l.z).toBeCloseTo(r.z, 10);
+  });
+
+  it("Top puts the model's CROWN (+Y) toward the camera — viewer-centric, unchanged by F9", () => {
+    // ⚠️ The owner phrased this one from the VIEWER's side ("top means I look
+    // at the top of the model"), which is why F9 inverted left/right and left
+    // this alone. If a future reader "fixes" top for consistency with left,
+    // this is the test that stops them.
     const rotated = applyEulerXYZ({ x: 0, y: 1, z: 0 }, POSE_VIEWPOINT_ROTATIONS.top);
     expect(rotated.z).toBeCloseTo(1, 10);
     expect(rotated.y).toBeCloseTo(0, 10);
   });
 
-  it("brings the model's -Y face toward the camera for 'bottom'", () => {
+  it("Bottom puts the model's UNDERSIDE (-Y) toward the camera — also unchanged", () => {
     const rotated = applyEulerXYZ(
       { x: 0, y: -1, z: 0 },
       POSE_VIEWPOINT_ROTATIONS.bottom,
@@ -287,9 +387,32 @@ describe("POSE_VIEWPOINT_ROTATIONS", () => {
     expect(rotated.z).toBeCloseTo(1, 10);
   });
 
-  it("shows the model's -X side for 'left'", () => {
-    const rotated = applyEulerXYZ({ x: -1, y: 0, z: 0 }, POSE_VIEWPOINT_ROTATIONS.left);
-    expect(rotated.z).toBeCloseTo(1, 10);
+  it("Front is the identity — the model faces the viewer", () => {
+    const front = applyEulerXYZ({ x: 0, y: 0, z: 1 }, POSE_VIEWPOINT_ROTATIONS.front);
+    expect(front.z).toBeCloseTo(1, 10);
+  });
+
+  it("Back turns the model away — its -Z back faces the camera", () => {
+    const r = POSE_VIEWPOINT_ROTATIONS.back;
+    const front = applyEulerXYZ({ x: 0, y: 0, z: 1 }, r);
+    expect(front.z).toBeCloseTo(-1, 10);
+    const back = applyEulerXYZ({ x: 0, y: 0, z: -1 }, r);
+    expect(back.z).toBeCloseTo(1, 10);
+  });
+
+  it("three-quarter is UNCHANGED by F9 and still shows the model's LEFT shoulder", () => {
+    // ⚠️ Re-examined under F9 and deliberately not flipped. "Three-quarter"
+    // names a PICTURE, not a facing, so the model-centric/viewer-centric
+    // distinction that inverts left/right has nothing to bite on here. Under
+    // the model-centric reading its 45-degree yaw turns the subject to ITS
+    // right, presenting the viewer with its front and its LEFT shoulder — the
+    // standard reference 3/4, and the same shoulder as before plan 08.
+    const r = POSE_VIEWPOINT_ROTATIONS["three-quarter"];
+    const modelsLeft = applyEulerXYZ({ x: -1, y: 0, z: 0 }, r);
+    expect(modelsLeft.z).toBeGreaterThan(0);
+    const front = applyEulerXYZ({ x: 0, y: 0, z: 1 }, r);
+    // Still mostly facing the viewer — it is a 3/4, not a profile.
+    expect(front.z).toBeGreaterThan(0.5);
   });
 
   it("makes three-quarter show two faces plus a hint of the top", () => {
@@ -298,7 +421,8 @@ describe("POSE_VIEWPOINT_ROTATIONS", () => {
     // The tip must bring the top surface INTO view, i.e. the model's up-axis
     // must acquire a positive Z (toward the camera). Asserting the visible
     // effect rather than the sign of `r.x` is what makes this test survive a
-    // convention change instead of merely restating the data.
+    // convention change instead of merely restating the data — and it did
+    // exactly that through F9, which left this viewpoint alone.
     const up = applyEulerXYZ({ x: 0, y: 1, z: 0 }, r);
     expect(up.z).toBeGreaterThan(0);
     // And two side faces stay visible — the yaw has not degenerated to a

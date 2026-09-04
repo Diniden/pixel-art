@@ -62,12 +62,29 @@
  * the isometric angle is a guaranteed drift, and the buttons here and the
  * camera maths must agree by construction, not by coincidence.
  * `poseCamera.ts` is itself under `ui/`, so importing it crosses no boundary.
+ *
+ * ## ⚠️ Two things changed meaning on 2026-09-04 (plan 08)
+ *
+ * - **A camera preset button applies a WHOLE SCENE STATE** (F7). It emits the
+ *   resolved `PoseCameraPresetSpec` through `onApplyCameraPreset`, and the
+ *   container writes projection, pitch, yaw, FOV, the clip policy **and the
+ *   model's rotation** in one store action. `scale` and `pan` are deliberately
+ *   left alone — see `PoseCameraPresetSpec`'s header for that decision.
+ * - **`Left` and `Right` INVERTED** (F9). The owner's convention is
+ *   model-centric: *"left means the model rotates to face the left"*, so
+ *   pressing **Left** turns the model to its left and shows the viewer its
+ *   RIGHT flank. `Top`/`Bottom` are viewer-centric ("I look at the top") and
+ *   are unchanged. ⚠️ This rail renders `POSE_VIEWPOINT_ROTATIONS` verbatim
+ *   and holds no angles of its own, so the inversion lives entirely in
+ *   `poseCamera.ts` — do not "correct" a label here.
  */
 import {
   POSE_CAMERA_PRESETS,
   POSE_VIEWPOINT_ORDER,
   POSE_VIEWPOINT_ROTATIONS,
 } from "../../canvas/pose/poseCamera";
+import type { PoseCameraPresetSpec } from "../../canvas/pose/poseCamera";
+
 import { MANNEQUIN_PART_ORDER } from "../../canvas/pose/poseMeshes";
 import type {
   PoseColor,
@@ -161,7 +178,23 @@ export interface PoseSectionProps {
   onEditEdgeColor: () => void;
   onSetEdgeWidth: (width: number) => void;
   onSetProjection: (projection: PoseProjection) => void;
-  onSelectCameraPreset: (preset: PoseCameraPreset) => void;
+  /**
+   * Apply a whole camera preset (plan 08, **F7**).
+   *
+   * ⚠️ **It receives the resolved SPEC, not just the id**, and that is the
+   * shape of F7: a preset sets `projection`, `pitch`, `yaw`, `fov`, the
+   * near/far policy **and the model's `rotation`**, so the id alone is not
+   * enough for the container to write the state in one action. The rail
+   * already maps `POSE_CAMERA_PRESETS` to render the buttons, so it hands over
+   * the entry it rendered rather than making the container look up by id and
+   * risk resolving a different table.
+   *
+   * ⚠️ Renamed from `onSelectCameraPreset` on 2026-09-04. The old name said
+   * "record which one is chosen"; this one applies a state. The rename is
+   * deliberate so a caller still wired to the old, partial behaviour fails to
+   * compile rather than silently half-applying.
+   */
+  onApplyCameraPreset: (preset: PoseCameraPresetSpec) => void;
   onSetScale: (scale: number) => void;
   onSetFov: (fov: number) => void;
   /**
@@ -238,6 +271,38 @@ function viewpointLabel(id: string): string {
 }
 
 /**
+ * The tooltip for one viewpoint button, spelling out **what the model does**
+ * (plan 08, **F9**).
+ *
+ * ⚠️ These sentences are the user-facing half of the F9 semantic change, and
+ * they exist because "Left" alone is exactly the ambiguity that got this table
+ * inverted twice. `left`/`right` are **model-centric** — the model turns — so
+ * their tooltips say which flank that turn presents. `top`/`bottom` are
+ * **viewer-centric** — the owner said *"top means I look at the top of the
+ * model"* — so theirs say what comes into view. The asymmetry in the wording
+ * mirrors the asymmetry in the convention on purpose; flattening it would hide
+ * the very distinction the next reader needs.
+ */
+function viewpointTitle(id: string): string {
+  switch (id) {
+    case "left":
+      return "Turn the model to face left — you see its right side";
+    case "right":
+      return "Turn the model to face right — you see its left side";
+    case "top":
+      return "Look at the top of the model";
+    case "bottom":
+      return "Look at the underside of the model";
+    case "front":
+      return "Face the model toward you";
+    case "back":
+      return "Turn the model away — you see its back";
+    default:
+      return "Turn the model to the classic three-quarter reference pose";
+  }
+}
+
+/**
  * A `PoseColor` as a CSS colour. Transcribed from `ColorPicker`'s target-tab
  * swatch, which renders its two slot colours exactly this way — the rail is
  * showing the same two colours, so it shows them the same way.
@@ -272,7 +337,7 @@ export function PoseSection({
   onEditEdgeColor,
   onSetEdgeWidth,
   onSetProjection,
-  onSelectCameraPreset,
+  onApplyCameraPreset,
   onSetScale,
   onSetFov,
   onRequestFit,
@@ -367,7 +432,7 @@ export function PoseSection({
               /* Feeding the orb a new `value` is what moves its handle — it
                  holds no direction of its own, precisely so this works. */
               onClick={() => onSetRotation(POSE_VIEWPOINT_ROTATIONS[id])}
-              title={`Snap the model to the ${viewpointLabel(id)} view`}
+              title={viewpointTitle(id)}
             >
               {viewpointLabel(id)}
             </button>
@@ -491,8 +556,11 @@ export function PoseSection({
               key={preset.id}
               type="button"
               className={btn(cameraPreset === preset.id)}
-              onClick={() => onSelectCameraPreset(preset.id)}
-              title={`${preset.label} — ${preset.projection}`}
+              /* ⚠️ Hands over the WHOLE preset (F7), not its id: pressing
+                 this sets projection, pitch, yaw, FOV, the clip policy AND
+                 the model's rotation, in one action. */
+              onClick={() => onApplyCameraPreset(preset)}
+              title={`${preset.label} — ${preset.projection}; sets the camera and the model's rotation`}
             >
               {preset.label}
             </button>

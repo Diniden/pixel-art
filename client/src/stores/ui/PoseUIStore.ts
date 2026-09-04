@@ -119,6 +119,33 @@ export interface PoseVector {
   z: number;
 }
 
+/**
+ * The resolved contents of a camera preset — **a whole scene state** (plan 08,
+ * **F7**).
+ *
+ * ⚠️ **Structurally identical to `ui/canvas/pose/poseCamera.ts`'s
+ * `PoseCameraPresetSpec`**, and declared here for the same boundary reason as
+ * the unions above: `stores/**` may not import from `ui/`, type-only included.
+ * `poseCamera.ts` owns the *values*; this declares only the *shape* the store
+ * needs to apply them. The container reads the spec through `getCameraPreset()`
+ * and hands it straight to {@link PoseUIStore.applyCameraPreset} with no cast
+ * and no adapter — the two are assignable because TypeScript is structural.
+ *
+ * **If a field is added there, add it here in the same commit.** The spec
+ * carries `label` too; it is deliberately absent from this shape because a
+ * label is a rail concern and the store has no use for one — the wider type is
+ * assignable to the narrower, so nothing breaks at the seam.
+ */
+export interface PoseCameraPresetApplication {
+  id: PoseCameraPreset;
+  projection: PoseProjection;
+  pitch: number;
+  yaw: number;
+  fov: number;
+  rotation: PoseVector;
+  clipPolicy: "fit";
+}
+
 /** Screen-space pan of the model within the frame, in grid cells. */
 export interface PosePan {
   x: number;
@@ -307,7 +334,13 @@ export class PoseUIStore {
   /** Perspective or orthographic. Set directly, or via a preset. */
   projection: PoseProjection = "perspective";
 
-  /** The named camera angle. A preset sets projection + angles, not scale/pan. */
+  /**
+   * The named camera angle.
+   *
+   * ⚠️ Since plan 08 (**F7**) applying a preset sets **every camera field and
+   * the model's `rotation`** — see {@link applyCameraPreset}. `scale` and `pan`
+   * are the two deliberate exceptions.
+   */
   cameraPreset: PoseCameraPreset = "2.5d";
 
   /**
@@ -375,6 +408,7 @@ export class PoseUIStore {
       setModelColor: action,
       setProjection: action,
       setCameraPreset: action,
+      applyCameraPreset: action,
       setScale: action,
       setFov: action,
       setPan: action,
@@ -445,12 +479,83 @@ export class PoseUIStore {
   }
 
   /**
-   * Pick a named angle. Only the id is stored — resolving it to a projection
-   * and euler angles is `poseCamera.ts`'s job (task 06), which is pure and
-   * lives under `ui/`. Scale and pan are untouched (MASTER D14).
+   * Record the preset id and **nothing else**.
+   *
+   * ⚠️ **This is the low-level setter, and it is NOT what a preset button
+   * calls** — see {@link applyCameraPreset}, which is the F7 action. This one
+   * survives for the cases that genuinely only want the id: restoring a
+   * session, and any future caller that has already written the other fields
+   * itself. Calling this from a button would reproduce exactly the "the preset
+   * only half-applies" behaviour F7 exists to remove.
    */
   setCameraPreset(preset: PoseCameraPreset): void {
     this.cameraPreset = preset;
+  }
+
+  /**
+   * Apply a whole camera preset — **every camera field AND the model's
+   * rotation — as ONE action** (plan 08, **F7**).
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  ⚠️ A PRESET OVERWRITES THE MODEL'S ROTATION. THAT IS THE FEATURE.
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * **The owner's words:** *"The camera preset buttons: these should CHANGE
+   * all of the other settings that can be used for the camera."* Pressing one
+   * puts the scene into a fully known, reproducible state rather than into
+   * "the preset's angle, on top of whatever the orb was left at".
+   *
+   * ⚠️ **F7 supersedes plan 06's D14** ("a preset overrides the projection").
+   * D14 was kept by owner decision on 2026-09-03, *before* F7 existed; F7
+   * subsumes it because a preset now owns projection **and** every other
+   * camera field **and** the rotation. Recorded in plan 08's `HANDOFF.md` —
+   * D14 was not dropped by accident.
+   *
+   * ## Why ONE action and not five setter calls
+   *
+   * Every write here is inside a single MobX action, so all six fields change
+   * in **one** transaction: reactions and `observer` components see the
+   * finished state exactly once. Five separate calls from the container would
+   * be five observable writes, and any reaction reading two of them would run
+   * against a torn intermediate — a camera briefly holding the new projection
+   * with the old rotation is a real frame, not a theoretical one, and the
+   * container's fit effect reads several of these together.
+   *
+   * ## ⚠️ `scale` and `pan` are deliberately NOT touched
+   *
+   * Decided 2026-09-04, plan 08 open question 1. Neither is a camera setting
+   * after tasks 03/04 — `scale` is a **model** transform (F6) and `pan` is
+   * *framing* rather than orientation — and a preset restores **which way the
+   * scene points**, not where the owner has parked it or how close in they are
+   * working. Losing your zoom on every angle change is hostile; losing your
+   * angle is what you asked for. Full reasoning lives next to
+   * `PoseCameraPresetSpec` in `ui/canvas/pose/poseCamera.ts`, with the
+   * counter-argument stated in case this is ever revisited.
+   *
+   * `fov` is clamped and `rotation` is copied wholesale, exactly as the
+   * individual setters do — a preset must not be able to store a value the
+   * setters would have rejected, or a preset press would be the one way to get
+   * an out-of-range FOV into the store.
+   */
+  applyCameraPreset(preset: PoseCameraPresetApplication): void {
+    this.cameraPreset = preset.id;
+    this.projection = preset.projection;
+    this.fov = clamp(preset.fov, POSE_FOV_MIN, POSE_FOV_MAX);
+    // ⚠️ Copied, never held by reference: `rotation` is an `observableRef`
+    // whose contract is wholesale replacement with a plain object, and the
+    // preset table's vectors are shared module constants. Storing one directly
+    // would let any future in-place edit of the store's rotation corrupt the
+    // preset table itself.
+    this.rotation = {
+      x: preset.rotation.x,
+      y: preset.rotation.y,
+      z: preset.rotation.z,
+    };
+    // `pitch`, `yaw` and `clipPolicy` are consumed by the CONTAINER's fit —
+    // they are properties of the preset, not store fields, and re-declaring
+    // them here would create a second source of truth for the camera's angles.
+    // The container re-resolves them from `cameraPreset` (the id it just got),
+    // which is why the id is written first.
   }
 
   /**

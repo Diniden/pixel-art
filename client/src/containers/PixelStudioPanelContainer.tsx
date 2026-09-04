@@ -196,10 +196,19 @@ export const PixelStudioPanelContainer = observer(
           // whatever its slider produced.
           onSetEdgeWidth: (width) => pose.setEdgeWidth(width),
           onSetProjection: (projection) => pose.setProjection(projection),
-          // ⚠️ A preset stores only its ID (MASTER D14). Resolving it to angles
-          // is `poseCamera.ts`'s job in the render, not the rail's — which is
-          // why nothing here reaches for `getCameraPreset()`.
-          onSelectCameraPreset: (preset) => pose.setCameraPreset(preset),
+          // ⚠️ **A preset now applies a WHOLE SCENE STATE** (plan 08, F7),
+          // which supersedes MASTER D14's narrower "a preset overrides the
+          // projection". `applyCameraPreset` writes the id, the projection,
+          // the FOV and the MODEL'S ROTATION in ONE MobX action, so no
+          // reaction can observe a torn half-applied camera. The rail hands
+          // over the resolved spec it already rendered, so there is still no
+          // second lookup and no second angle table here. `pitch`, `yaw` and
+          // the clip policy stay properties of the preset — `CanvasContainer`
+          // re-resolves them from the id it just stored.
+          //
+          // ⚠️ `scale` and `pan` are deliberately NOT reset; see
+          // `PoseCameraPresetSpec`'s header for that decision.
+          onApplyCameraPreset: (preset) => pose.applyCameraPreset(preset),
           // ⚠️ `scale` is the MODEL's own multiplier about its own origin
           // (plan 08, F6) — renamed from `zoom` AND re-meant: the camera no
           // longer moves for it. Re-sanitised by the store but NEVER CAPPED

@@ -11,7 +11,9 @@
  *    `poseMeshes.ts`'s `MANNEQUIN_PART_ORDER`, so a re-declared copy in the
  *    rail would fail here rather than drift from the geometry.
  *  - the FOV slider is disabled in orthographic and live in perspective.
- *  - each camera preset button calls `onSelectCameraPreset` with its id.
+ *  - each camera preset button calls `onApplyCameraPreset` with the WHOLE
+ *    resolved spec (plan 08, F7) — not just its id — so the container can set
+ *    every camera field and the model's rotation in one action.
  *  - each viewpoint button calls `onSetRotation` with the angles FROM
  *    `poseCamera.ts`. This is the anti-drift check: the test reads the same
  *    table the component does, so a re-declared copy in the component would
@@ -306,6 +308,26 @@ describe("PoseSection — the orbs and the viewpoint snaps", () => {
     });
   });
 
+  it("Left's tooltip says the model turns left and shows its right side (F9)", () => {
+    // ⚠️ The user-facing half of F9. "Left" alone is the ambiguity that got
+    // this table inverted twice; the tooltip is where the convention is stated
+    // to the person pressing the button, so it is pinned like the angles are.
+    const { container } = render(<composed.Primitive />);
+    const snaps = row(container, "Rotation & light", 0);
+    const titleOf = (label: string) =>
+      snaps.find((b) => b.textContent === label)?.getAttribute("title") ?? "";
+
+    expect(titleOf("Left")).toBe(
+      "Turn the model to face left — you see its right side",
+    );
+    expect(titleOf("Right")).toBe(
+      "Turn the model to face right — you see its left side",
+    );
+    // Viewer-centric, and deliberately worded differently — see F9.
+    expect(titleOf("Top")).toBe("Look at the top of the model");
+    expect(titleOf("Bottom")).toBe("Look at the underside of the model");
+  });
+
   it("the rotation orb's handle reflects the incoming rotation prop", () => {
     // Mannequin's rotation is the 3/4 viewpoint: yaw 45°, so the handle sits
     // right of centre rather than at it. This is the controlled contract the
@@ -528,9 +550,12 @@ describe("PoseSection — the camera group", () => {
     expect(onSetProjection).toHaveBeenLastCalledWith("perspective");
   });
 
-  it("each preset button fires onSelectCameraPreset with poseCamera's id", () => {
+  it("each preset button hands over the WHOLE preset, not just its id (F7)", () => {
+    // ⚠️ The id alone is not enough any more. F7 makes a preset set every
+    // camera field AND the model's rotation, so the rail emits the entry it
+    // rendered — the same object from the same table the camera maths reads.
     const { container } = render(<composed.Primitive />);
-    const onSelectCameraPreset = composed.Primitive.args.onSelectCameraPreset;
+    const onApplyCameraPreset = composed.Primitive.args.onApplyCameraPreset;
     const presets = row(container, "Camera", 1);
 
     expect(presets.map((b) => b.textContent)).toEqual(
@@ -539,10 +564,36 @@ describe("PoseSection — the camera group", () => {
 
     POSE_CAMERA_PRESETS.forEach((preset, index) => {
       fireEvent.click(presets[index]);
-      expect(onSelectCameraPreset).toHaveBeenLastCalledWith(preset.id);
+      expect(onApplyCameraPreset).toHaveBeenLastCalledWith(preset);
     });
-    expect(onSelectCameraPreset).toHaveBeenCalledTimes(
+    expect(onApplyCameraPreset).toHaveBeenCalledTimes(
       POSE_CAMERA_PRESETS.length,
+    );
+  });
+
+  it("every emitted preset carries a rotation and an FOV, not only angles", () => {
+    // The regression guard for "the preset table was extended but the rail
+    // still emits the old three fields": read what actually reached the
+    // callback rather than what the table declares.
+    const { container } = render(<composed.Primitive />);
+    const onApplyCameraPreset = composed.Primitive.args.onApplyCameraPreset;
+    const presets = row(container, "Camera", 1);
+
+    fireEvent.click(presets[0]);
+    expect(onApplyCameraPreset).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: expect.any(String),
+        projection: expect.any(String),
+        pitch: expect.any(Number),
+        yaw: expect.any(Number),
+        fov: expect.any(Number),
+        clipPolicy: "fit",
+        rotation: expect.objectContaining({
+          x: expect.any(Number),
+          y: expect.any(Number),
+          z: expect.any(Number),
+        }),
+      }),
     );
   });
 

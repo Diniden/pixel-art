@@ -42,7 +42,10 @@ const handlers = {
   onEditEdgeColor: fn(),
   onSetEdgeWidth: fn(),
   onSetProjection: fn(),
-  onSelectCameraPreset: fn(),
+  // ⚠️ Renamed from `onSelectCameraPreset` on 2026-09-04 (plan 08, F7): a
+  // preset now applies a whole scene state — every camera field AND the
+  // model's rotation — and receives the resolved spec rather than an id.
+  onApplyCameraPreset: fn(),
   onSetScale: fn(),
   onSetFov: fn(),
   onRequestFit: fn(),
