@@ -1,8 +1,8 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W6 IN PROGRESS (task 08 — ⚠️ the persistence wave)
+**Current position:** W6 DONE (⚠️ **PARTIAL** — see D08-16) — W7 next
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
-**Last commit:** `64d6629` (W5 complete)
+**Last commit:** `a2aa8cc` (W6 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
 
 ## Wave ledger
@@ -14,7 +14,7 @@
 | W3 | 04 | **DONE** | 2026-09-04 | `62f3052` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2965 tests pass** · boundaries OK · snapshots unmoved · `UIStore.ts` diff EMPTY · no lockfile |
 | W4 | 05 | **DONE** | 2026-09-04 | `673f5fe` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2984 tests pass** · boundaries OK all 5 · snapshots **unmoved** · `UIStore.ts` diff EMPTY · no lockfile |
 | W5 | 06, 07 | **DONE** | 2026-09-04 | `64d6629` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3047 tests pass** · boundaries OK · **stylelint exactly 2 errors** (`:338`/`:359`, pre-existing) · **storybook build 0** · snapshots unmoved · `UIStore.ts` EMPTY |
-| W6 | 08 | IN PROGRESS | 2026-09-04 | | ⚠️ the persistence wave — data-safety gate |
+| W6 | 08 | **DONE** (⚠️ one gap, D08-16) | 2026-09-04 | `a2aa8cc` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3102 tests pass** · boundaries OK · stylelint exactly 2 · storybook 0 · ⚠️ **corpus digest `e448764a…` UNCHANGED, verified by coordinator against a pre-dispatch baseline** · `server/` untouched · no lockfile |
 | W7 | 09 | TODO | | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
@@ -30,7 +30,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 | 05 | Presets + viewpoint semantics | W4 | **DONE** | `673f5fe` | F7 via one `applyCameraPreset` action; F9 inverts left/right **as a semantic change, maths byte-identical**. ⚠️ Records F8 (below). Open question 1 CLOSED. See deviation D08-8 |
 | 06 | Advanced camera mode | W5 | **DONE** | `bd81268` | Standalone `CameraAdvanced.tsx`; F16 caveat rendered on screen. **Task 08 must mirror `CameraAdvancedProps` exactly** |
 | 07 | Exact Euler entry | W5 | **DONE** | `64d6629` | F11 CLOSED: **two fields (azimuth/elevation), no roll box.** ⚠️ Found a quiet composition bug — verified |
-| 08 | Saved scene presets, persisted | W6 | TODO | | ⚠️ **The only wire-format change** |
+| 08 | Saved scene presets, persisted | W6 | **DONE** (⚠️ D08-16) | `a2aa8cc` | F13/F14 held; digest unmoved. Split `PoseSection.tsx`. ⚠️ `onChange` reaches only `fov` |
 | 09 | Full gate, QA, handoff | W7 | TODO | | Likely ends `PARTIAL` |
 
 ## Known state at planning time (2026-09-03)
@@ -169,8 +169,22 @@ added this way before. The remaining real risks are the three traps in task 08's
    the two nodes' relative offset is preserved — the guard against the obvious wrong implementation
    (`centerGeometryOnOrigin` inside a `traverse`), which would centre each mesh on its own centre
    and explode the figure.
-4. **What does a saved preset contain?** Task 08 decides `pan` / `lightDirection` / `lightColor` /
-   `edgeWidth` / `meshId` inclusion. Recommended: include light and mesh, exclude pan.
+4. ~~**What does a saved preset contain?**~~ **CLOSED by task 08 (2026-09-04): `meshId`,
+   `rotation`, `projection`, `cameraPreset`, `fov`, `scale`, `lightDirection`, `lightColor`,
+   `edgeWidth`. It EXCLUDES `pan`.** Light and mesh are in, as recommended — a scene without its
+   subject is not a scene.
+   ⚠️ **The interesting half is the deliberate asymmetry with open question 1.** `scale` **is**
+   included even though a *camera* preset leaves it alone, because the two are different objects:
+   a **camera preset is a verb** ("put me at isometric") firing while the owner works at a scale
+   they chose — taking it away punishes them for changing angle. A **scene preset is a noun** ("the
+   setup I saved"), asked for so it can be *reloaded*; restoring everything except how big the
+   model was gives back a view that was never saved.
+   ⚠️ **`pan` is excluded for a harder reason than framing-vs-orientation:** pan is measured in
+   **grid cells of whatever canvas was open**, so a pan saved on a 64×64 sprite lands somewhere
+   else on a 32×32 one — and pan is unbounded (E13), so a restored preset could put the model off
+   screen **with no visible cause**. Scale is canvas-independent; pan is not. The full reasoning,
+   the counter-argument, and a note that this is a **one-field change** if the owner disagrees live
+   beside `PersistedPosePreset` in `types/domain.ts`.
 
 ## Deviations
 
