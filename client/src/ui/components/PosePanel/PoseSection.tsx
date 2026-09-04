@@ -94,6 +94,7 @@ import type {
   PoseVector,
 } from "../../canvas/pose/poseTypes";
 import { DirectionOrb } from "./DirectionOrb";
+import { LightAnglesInput, RotationEulerInput } from "./EulerInput";
 import "./PosePanel.css";
 
 /**
@@ -256,13 +257,27 @@ const PROJECTIONS: readonly { id: PoseProjection; label: string }[] = [
  * cool skylight, a sodium/amber lamp and a moonlit blue. All fully opaque, as
  * the pose light has always been.
  */
-const LIGHT_TINTS: readonly { id: string; label: string; color: PoseColor }[] = [
-  { id: "neutral", label: "Neutral", color: { r: 255, g: 255, b: 255, a: 255 } },
-  { id: "warm", label: "Warm", color: { r: 255, g: 226, b: 189, a: 255 } },
-  { id: "cool", label: "Cool", color: { r: 201, g: 226, b: 255, a: 255 } },
-  { id: "amber", label: "Amber", color: { r: 255, g: 183, b: 92, a: 255 } },
-  { id: "moon", label: "Moon", color: { r: 150, g: 176, b: 255, a: 255 } },
-];
+const LIGHT_TINTS: readonly { id: string; label: string; color: PoseColor }[] =
+  [
+    {
+      id: "neutral",
+      label: "Neutral",
+      color: { r: 255, g: 255, b: 255, a: 255 },
+    },
+    { id: "warm", label: "Warm", color: { r: 255, g: 226, b: 189, a: 255 } },
+    { id: "cool", label: "Cool", color: { r: 201, g: 226, b: 255, a: 255 } },
+    { id: "amber", label: "Amber", color: { r: 255, g: 183, b: 92, a: 255 } },
+    { id: "moon", label: "Moon", color: { r: 150, g: 176, b: 255, a: 255 } },
+  ];
+
+/**
+ * One row of the Colours group: which of the app's two slots it is, its
+ * caption, the colour it shows, and what clicking it asks for (E8/E9/E10).
+ *
+ * Hoisted out of the JSX because the inline `satisfies` annotation it replaces
+ * spanned eleven lines inside the render, which is a lot of type for two rows.
+ */
+type ColorSlotRow = readonly ["edge" | "fill", string, PoseColor, () => void];
 
 /** `"three-quarter"` → `"3/4"`; everything else is its id, title-cased. */
 function viewpointLabel(id: string): string {
@@ -283,23 +298,20 @@ function viewpointLabel(id: string): string {
  * mirrors the asymmetry in the convention on purpose; flattening it would hide
  * the very distinction the next reader needs.
  */
+const VIEWPOINT_TITLES: Readonly<Record<string, string>> = {
+  left: "Turn the model to face left — you see its right side",
+  right: "Turn the model to face right — you see its left side",
+  top: "Look at the top of the model",
+  bottom: "Look at the underside of the model",
+  front: "Face the model toward you",
+  back: "Turn the model away — you see its back",
+};
+
 function viewpointTitle(id: string): string {
-  switch (id) {
-    case "left":
-      return "Turn the model to face left — you see its right side";
-    case "right":
-      return "Turn the model to face right — you see its left side";
-    case "top":
-      return "Look at the top of the model";
-    case "bottom":
-      return "Look at the underside of the model";
-    case "front":
-      return "Face the model toward you";
-    case "back":
-      return "Turn the model away — you see its back";
-    default:
-      return "Turn the model to the classic three-quarter reference pose";
-  }
+  return (
+    VIEWPOINT_TITLES[id] ??
+    "Turn the model to the classic three-quarter reference pose"
+  );
 }
 
 /**
@@ -423,6 +435,20 @@ export function PoseSection({
             mode="direction"
           />
         </div>
+        {/* ── EXACT ANGLE ENTRY (plan 08 task 07, F10/F11) ──────────────────
+            Two views of ONE value each, never two values: these read the same
+            props the orbs above them do, so dragging an orb moves the numbers
+            and typing a number moves the orb. Degrees here, radians in the
+            store — the conversion is inside `EulerInput`, at this edge.
+            ⚠️ The light gets TWO boxes, not three: it is a unit VECTOR the
+            engine uses as a position, not a rotation, so a third box would be
+            one the owner could type into to no effect. `EulerInput`'s header
+            carries the F11 decision and the exact round-trip. */}
+        <RotationEulerInput rotation={rotation} onChange={onSetRotation} />
+        <LightAnglesInput
+          lightDirection={lightDirection}
+          onChange={onSetLightDirection}
+        />
         <div className="pose-panel__buttons">
           {POSE_VIEWPOINT_ORDER.map((id) => (
             <button
@@ -470,14 +496,9 @@ export function PoseSection({
         <div className="pose-panel__slots" role="group">
           {(
             [
-              ["fill", "Model", modelColor, onEditModelColor] as const,
-              ["edge", "Outline", edgeColor, onEditEdgeColor] as const,
-            ] satisfies readonly (readonly [
-              "edge" | "fill",
-              string,
-              PoseColor,
-              () => void,
-            ])[]
+              ["fill", "Model", modelColor, onEditModelColor],
+              ["edge", "Outline", edgeColor, onEditEdgeColor],
+            ] satisfies readonly ColorSlotRow[]
           ).map(([slot, label, color, onEdit]) => (
             <button
               key={slot}

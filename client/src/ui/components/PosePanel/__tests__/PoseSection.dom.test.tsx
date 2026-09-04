@@ -21,6 +21,15 @@
  *  - the two orbs are two instances of ONE component (MASTER D13), labelled
  *    Rotation and Light.
  *
+ * Added by plan 08 task 07:
+ *  - the rotation group now carries **five** numeric boxes: three degree
+ *    fields for the model's rotation (`X`/`Y`/`Z`, F10 — degrees in, radians
+ *    out) and **two** for the light (`Azimuth`/`Elevation`, F11 — a direction
+ *    has two degrees of freedom, so there is deliberately no third).
+ *  - the boxes and the orbs are two views of ONE value: both read the same
+ *    prop, so neither can drift from the other.
+ *  - the empty/partial-input guard, again at the wired-up level.
+ *
  * Added by task 03:
  *  - **NO `<input type="color">` survives anywhere in the rail.** This is the
  *    owner's actual complaint ("some form of native color picker") and the
@@ -65,7 +74,9 @@ const composed = composeStories(stories);
  * a `fn()` spy. `expect(...)` accepts it as-is; reading `.mock` does not. This
  * is the one narrowing for those reads.
  */
-function spy(callback: unknown): { mock: { calls: unknown[][]; lastCall?: unknown[] } } {
+function spy(callback: unknown): {
+  mock: { calls: unknown[][]; lastCall?: unknown[] };
+} {
   return callback as { mock: { calls: unknown[][]; lastCall?: unknown[] } };
 }
 
@@ -80,7 +91,10 @@ function group(container: HTMLElement, groupLabel: string): HTMLElement {
   return found;
 }
 
-function buttons(container: HTMLElement, groupLabel: string): HTMLButtonElement[] {
+function buttons(
+  container: HTMLElement,
+  groupLabel: string,
+): HTMLButtonElement[] {
   return Array.from(
     group(container, groupLabel).querySelectorAll<HTMLButtonElement>(
       ".pose-panel__btn",
@@ -108,7 +122,9 @@ function row(
 }
 
 function byLabel(container: HTMLElement, label: string): HTMLInputElement {
-  const el = container.querySelector<HTMLInputElement>(`[aria-label="${label}"]`);
+  const el = container.querySelector<HTMLInputElement>(
+    `[aria-label="${label}"]`,
+  );
   if (!el) throw new Error(`no control labelled ${label}`);
   return el;
 }
@@ -209,7 +225,9 @@ describe("PoseSection — the mannequin part buttons", () => {
     // re-declared copy in the rail would disagree with the geometry loudly.
     expect(partRow.map((b) => b.textContent)).toEqual([
       "Full",
-      ...MANNEQUIN_PART_ORDER.map((id) => id.charAt(0).toUpperCase() + id.slice(1)),
+      ...MANNEQUIN_PART_ORDER.map(
+        (id) => id.charAt(0).toUpperCase() + id.slice(1),
+      ),
     ]);
     expect(partRow.map((b) => b.textContent)).toEqual([
       "Full",
@@ -225,7 +243,11 @@ describe("PoseSection — the mannequin part buttons", () => {
     // The old Framing row was disabled for a primitive and with no mesh at
     // all, because there was nothing to frame. This is the regression pin for
     // that behaviour being gone.
-    for (const Story of [composed.NoMesh, composed.Primitive, composed.Orthographic]) {
+    for (const Story of [
+      composed.NoMesh,
+      composed.Primitive,
+      composed.Orthographic,
+    ]) {
       const { container } = render(<Story />);
       for (const button of buttons(container, "Mannequin")) {
         expect(button.disabled).toBe(false);
@@ -266,7 +288,9 @@ describe("PoseSection — the mannequin part buttons", () => {
   it("the rail no longer offers a framing callback at all", () => {
     // E2 — deleted, not deprecated. A prop left behind would let a caller
     // wire the old behaviour back in without a compile error.
-    expect(Object.keys(composed.Primitive.args)).not.toContain("onSelectFraming");
+    expect(Object.keys(composed.Primitive.args)).not.toContain(
+      "onSelectFraming",
+    );
     expect(Object.keys(composed.Primitive.args)).not.toContain("framing");
   });
 });
@@ -275,8 +299,8 @@ describe("PoseSection — the orbs and the viewpoint snaps", () => {
   it("renders TWO instances of the one orb component", () => {
     const { container } = render(<composed.Primitive />);
     expect(
-      Array.from(container.querySelectorAll(".direction-orb__sphere")).map((o) =>
-        o.getAttribute("aria-label"),
+      Array.from(container.querySelectorAll(".direction-orb__sphere")).map(
+        (o) => o.getAttribute("aria-label"),
       ),
     ).toEqual(["Rotation", "Light"]);
   });
@@ -491,8 +515,9 @@ describe("PoseSection — the outline width slider", () => {
 
     const thin = render(<composed.Primitive />); // edgeWidth 1
     expect(
-      group(thin.container, "Outline").querySelector(".pose-panel__slider-value")
-        ?.textContent,
+      group(thin.container, "Outline").querySelector(
+        ".pose-panel__slider-value",
+      )?.textContent,
     ).toBe("1 px");
 
     const thick = render(<composed.Mannequin />); // edgeWidth 4
@@ -683,6 +708,84 @@ describe("PoseSection — the camera group", () => {
   });
 });
 
+/* ── exact angle entry (plan 08 task 07, F10/F11) ─────────────────────────── */
+
+describe("PoseSection — exact angle entry", () => {
+  it("puts THREE rotation boxes and TWO light boxes in the rotation group", () => {
+    const { container } = render(<composed.Primitive />);
+    const rotationGroup = group(container, "Rotation & light");
+    const fields = Array.from(
+      rotationGroup.querySelectorAll<HTMLInputElement>("input[type=number]"),
+    );
+
+    // ⚠️ Five, not six. The light is a unit VECTOR with two degrees of
+    // freedom, so it gets Azimuth and Elevation rather than a third box the
+    // owner could type into to no effect (plan 08, F11, decided 2026-09-04).
+    expect(fields.map((f) => f.getAttribute("aria-label"))).toEqual([
+      "Rotation X",
+      "Rotation Y",
+      "Rotation Z",
+      "Light Azimuth",
+      "Light Elevation",
+    ]);
+  });
+
+  it("types DEGREES into a rotation box and emits RADIANS (F10)", () => {
+    const { container } = render(<composed.Primitive />);
+    fireEvent.change(byLabel(container, "Rotation Y"), {
+      target: { value: "45" },
+    });
+    // The store is the single source of truth IN RADIANS; the conversion
+    // happens at this component's edge and nowhere else.
+    expect(composed.Primitive.args.onSetRotation).toHaveBeenLastCalledWith({
+      x: 0,
+      y: Math.PI / 4,
+      z: 0,
+    });
+  });
+
+  it("shows the SAME value the orb is drawn from — two views, one value", () => {
+    // The Mannequin story sits at the three-quarter viewpoint, so the boxes
+    // must read those exact angles converted to degrees. Both the orb and the
+    // boxes take the `rotation` prop; neither holds a value of its own, which
+    // is what makes dragging one move the other.
+    const { container } = render(<composed.Mannequin />);
+    const expected = POSE_VIEWPOINT_ROTATIONS["three-quarter"];
+    const shown = (label: string) => Number(byLabel(container, label).value);
+
+    expect(shown("Rotation X")).toBeCloseTo((expected.x * 180) / Math.PI, 1);
+    expect(shown("Rotation Y")).toBeCloseTo((expected.y * 180) / Math.PI, 1);
+    expect(shown("Rotation Z")).toBeCloseTo((expected.z * 180) / Math.PI, 1);
+  });
+
+  it("emits a unit direction from the light's two angles", () => {
+    const { container } = render(<composed.Primitive />);
+    fireEvent.change(byLabel(container, "Light Azimuth"), {
+      target: { value: "90" },
+    });
+    const emitted = spy(composed.Primitive.args.onSetLightDirection).mock
+      .lastCall?.[0] as { x: number; y: number; z: number };
+    expect(Math.hypot(emitted.x, emitted.y, emitted.z)).toBeCloseTo(1, 10);
+  });
+
+  it("⚠️ sends NOTHING for an emptied box — no mid-keystroke snap to 0", () => {
+    // The measured trap: `<input type="number">` sanitises garbage to `""` and
+    // `Number("")` is `0`, so a naive guard would flatten the model to zero
+    // degrees on the way to typing `-45`.
+    const { container } = render(<composed.Primitive />);
+    const before = spy(composed.Primitive.args.onSetRotation).mock.calls.length;
+    fireEvent.change(byLabel(container, "Rotation X"), {
+      target: { value: "" },
+    });
+    fireEvent.change(byLabel(container, "Rotation X"), {
+      target: { value: "-" },
+    });
+    expect(spy(composed.Primitive.args.onSetRotation).mock.calls.length).toBe(
+      before,
+    );
+  });
+});
+
 /* ── Fit to canvas (MASTER E14/E15) ───────────────────────────────────────── */
 
 describe("PoseSection — Fit to canvas", () => {
@@ -707,16 +810,18 @@ describe("PoseSection — Fit to canvas", () => {
     // top of the file: the spy is shared with the other three stories.
     const before = spy(composed.NoMesh.args.onRequestFit).mock.calls.length;
     fireEvent.click(fit);
-    expect(spy(composed.NoMesh.args.onRequestFit).mock.calls.length).toBe(before);
+    expect(spy(composed.NoMesh.args.onRequestFit).mock.calls.length).toBe(
+      before,
+    );
   });
 
   it("sits inside the camera group, which is what it re-frames", () => {
     const { container } = render(<composed.Primitive />);
     // `:last-of-type` is scoped per PARENT, so it would match the last button
     // of each row. The Fit button is the camera group's last DIRECT child.
-    const direct = Array.from(
-      group(container, "Camera").children,
-    ).filter((el): el is HTMLButtonElement => el.tagName === "BUTTON");
+    const direct = Array.from(group(container, "Camera").children).filter(
+      (el): el is HTMLButtonElement => el.tagName === "BUTTON",
+    );
     expect(direct.map((b) => b.textContent)).toEqual(["Fit to canvas"]);
   });
 });

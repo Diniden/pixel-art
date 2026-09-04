@@ -102,7 +102,11 @@ const meta = {
           "a Mannequin row whose Full/Head/Torso/Arm/Leg/Hand buttons each " +
           "load that piece as its OWN mesh (MASTER E1/E2 — the old camera " +
           "framing is gone), TWO instances of the same reusable " +
-          "`DirectionOrb` (model rotation and light direction), the seven " +
+          "`DirectionOrb` (model rotation and light direction), the EXACT " +
+          "ANGLE boxes beneath them (three degree fields for the rotation, " +
+          "and **two** — Azimuth and Elevation — for the light, because a " +
+          "direction has only two degrees of freedom; plan 08 F10/F11), " +
+          "the seven " +
           "viewpoint snaps, key-light tint presets, the app's **Fill** and " +
           "**Edge** colour slots as swatches (there is no native colour " +
           "input — clicking a swatch points the app's own picker at that " +
@@ -157,6 +161,12 @@ export const Orthographic: Story = {
     ...defaults,
     ...handlers,
     meshId: "sphere",
+    /* A rotation and a light that both read as WIDE numbers in the degree
+       boxes (plan 08 task 07), so the 240 px layout is reviewed with the
+       fields at their worst case rather than showing four zeroes. The light
+       here is roughly azimuth -120 / elevation 35. */
+    rotation: { x: -0.7854, y: 2.3562, z: 0.5236 },
+    lightDirection: { x: -0.709, y: 0.574, z: -0.409 },
     projection: "orthographic",
     cameraPreset: "iso",
     /* Past the old `max={10}`, deleted by the refinements plan: the story is
