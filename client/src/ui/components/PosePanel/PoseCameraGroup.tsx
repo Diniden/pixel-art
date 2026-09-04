@@ -63,24 +63,7 @@ import type {
   CameraAdvancedPatch,
   CameraAdvancedPerspective,
 } from "./CameraAdvanced";
-import {
-  POSE_AXIS_SCALE_MAX,
-  POSE_AXIS_SCALE_MIN,
-  POSE_SCALE_SLIDER_MAX,
-  POSE_SCALE_SLIDER_MIN,
-} from "./PoseSection";
-
-/**
- * The three proportion rows, as a table so the markup is written once.
- *
- * Labelled `X`/`Y`/`Z` to match the rotation orb's own axis labels — the
- * owner reads them as the same three axes, and they are.
- */
-const AXIS_SCALE_ROWS = [
-  { axis: "x", label: "X" },
-  { axis: "y", label: "Y" },
-  { axis: "z", label: "Z" },
-] as const;
+import { POSE_SCALE_SLIDER_MAX, POSE_SCALE_SLIDER_MIN } from "./PoseSection";
 import "./PosePanel.css";
 
 const PROJECTIONS: readonly { id: PoseProjection; label: string }[] = [
@@ -113,9 +96,6 @@ export interface PoseCameraGroupProps {
   /** ⚠️ Receives the resolved SPEC, not an id — plan 08 F7. */
   onApplyCameraPreset: (preset: PoseCameraPresetSpec) => void;
   onSetScale: (scale: number) => void;
-  /** Per-axis proportions, each `0.001`..`1`. Replaced wholesale. */
-  axisScale: { x: number; y: number; z: number };
-  onSetAxisScale: (axisScale: { x: number; y: number; z: number }) => void;
   onSetFov: (fov: number) => void;
   onRequestFit: () => void;
   /** One advanced field edited to a finite, legal value. */
@@ -136,7 +116,6 @@ export function PoseCameraGroup({
   projection,
   cameraPreset,
   scale,
-  axisScale,
   fov,
   hasMesh,
   near,
@@ -146,7 +125,6 @@ export function PoseCameraGroup({
   onSetProjection,
   onApplyCameraPreset,
   onSetScale,
-  onSetAxisScale,
   onSetFov,
   onRequestFit,
   onAdvancedChange,
@@ -236,60 +214,6 @@ export function PoseCameraGroup({
           title="Model scale multiplier — type any value; there is no upper limit"
         />
       </div>
-
-      {/*
-        Per-axis PROPORTIONS (owner-requested 2026-09-04).
-
-        ⚠️ These are a genuine `0.001`..`1` range, unlike Scale above, and the
-        asymmetry is the point: Scale answers *how big* and is uncapped (E11),
-        these answer *what shape* and can only squash. Keeping the ceiling at
-        exactly 1 means the model's largest dimension stays governed by Scale
-        alone, so the two controls can never fight over size.
-
-        `step` is 0.001 — the range's own minimum — so the arrow keys can
-        reach every value the store will store rather than quantising to a
-        coarser grid than the field displays.
-      */}
-      {AXIS_SCALE_ROWS.map(({ axis, label }) => (
-        <div className="pose-panel__slider-row" key={axis}>
-          <span className="pose-panel__slider-label">{label}</span>
-          <input
-            type="range"
-            className="pose-panel__slider"
-            aria-label={`Scale ${label}`}
-            min={POSE_AXIS_SCALE_MIN}
-            max={POSE_AXIS_SCALE_MAX}
-            step={0.001}
-            value={axisScale[axis]}
-            disabled={!hasMesh}
-            onChange={(e) =>
-              onSetAxisScale({ ...axisScale, [axis]: Number(e.target.value) })
-            }
-          />
-          <input
-            type="number"
-            className="pose-panel__number pose-panel__number--angle"
-            aria-label={`Scale ${label} value`}
-            min={POSE_AXIS_SCALE_MIN}
-            max={POSE_AXIS_SCALE_MAX}
-            step={0.001}
-            value={axisScale[axis]}
-            disabled={!hasMesh}
-            onChange={(e) => {
-              /* Empty sends nothing — `Number("")` is `0`, which the store
-                 would clamp to the floor and flatten the model mid-keystroke.
-                 Same guard as the Scale box above. */
-              const raw = e.target.value.trim();
-              if (raw === "") return;
-              const next = Number(raw);
-              if (Number.isFinite(next)) {
-                onSetAxisScale({ ...axisScale, [axis]: next });
-              }
-            }}
-            title={`Scale along ${label} — ${POSE_AXIS_SCALE_MIN} to ${POSE_AXIS_SCALE_MAX}, squash only`}
-          />
-        </div>
-      ))}
 
       <div className="pose-panel__slider-row">
         <span className="pose-panel__slider-label">FOV</span>

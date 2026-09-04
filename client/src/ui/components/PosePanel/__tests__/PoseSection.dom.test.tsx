@@ -163,7 +163,7 @@ describe("PoseSection — mounts every story with no provider", () => {
     ).toEqual([
       "Model",
       "Mannequin",
-      "Rotation & light",
+      "Model transform & light",
       "Colours",
       "Outline",
       "Camera",
@@ -327,7 +327,7 @@ describe("PoseSection — the orbs and the viewpoint snaps", () => {
     // hand-written expectation and quietly disagree with the camera maths.
     const { container } = render(<composed.Primitive />);
     const onSetRotation = composed.Primitive.args.onSetRotation;
-    const snaps = row(container, "Rotation & light", 0);
+    const snaps = row(container, "Model transform & light", 0);
 
     expect(snaps).toHaveLength(POSE_VIEWPOINT_ORDER.length);
     expect(snaps.map((b) => b.textContent)).toEqual([
@@ -353,7 +353,7 @@ describe("PoseSection — the orbs and the viewpoint snaps", () => {
     // this table inverted twice; the tooltip is where the convention is stated
     // to the person pressing the button, so it is pinned like the angles are.
     const { container } = render(<composed.Primitive />);
-    const snaps = row(container, "Rotation & light", 0);
+    const snaps = row(container, "Model transform & light", 0);
     const titleOf = (label: string) =>
       snaps.find((b) => b.textContent === label)?.getAttribute("title") ?? "";
 
@@ -395,7 +395,7 @@ describe("PoseSection — the light tint presets", () => {
   it("offers five tints and emits a fully opaque colour for each", () => {
     const { container } = render(<composed.Primitive />);
     const onSetLightColor = composed.Primitive.args.onSetLightColor;
-    const tints = row(container, "Rotation & light", 1);
+    const tints = row(container, "Model transform & light", 1);
 
     expect(tints.map((b) => b.textContent)).toEqual([
       "Neutral",
@@ -423,7 +423,7 @@ describe("PoseSection — the light tint presets", () => {
   it("marks the tint matching the current light colour, and only it", () => {
     // The stories' default light colour is pure white — "Neutral".
     const { container } = render(<composed.Primitive />);
-    const active = row(container, "Rotation & light", 1).filter((b) =>
+    const active = row(container, "Model transform & light", 1).filter((b) =>
       b.className.includes("pose-panel__btn--active"),
     );
     expect(active.map((b) => b.textContent)).toEqual(["Neutral"]);
@@ -727,23 +727,66 @@ describe("PoseSection — the camera group", () => {
 /* ── exact angle entry (plan 08 task 07, F10/F11) ─────────────────────────── */
 
 describe("PoseSection — exact angle entry", () => {
-  it("puts THREE rotation boxes and TWO light boxes in the rotation group", () => {
+  it("puts THREE rotation, THREE scale and TWO light boxes in the model group", () => {
     const { container } = render(<composed.Primitive />);
-    const rotationGroup = group(container, "Rotation & light");
+    const rotationGroup = group(container, "Model transform & light");
     const fields = Array.from(
       rotationGroup.querySelectorAll<HTMLInputElement>("input[type=number]"),
     );
 
-    // ⚠️ Five, not six. The light is a unit VECTOR with two degrees of
-    // freedom, so it gets Azimuth and Elevation rather than a third box the
+    // ⚠️ The light gets TWO boxes, not three. It is a unit VECTOR with two
+    // degrees of freedom, so Azimuth and Elevation rather than a third box the
     // owner could type into to no effect (plan 08, F11, decided 2026-09-04).
+    //
+    // ⚠️ Scale gets THREE and sits HERE, next to rotation, because both are
+    // properties of the MODEL — the S and the R of one ISROT transform. It was
+    // briefly in the Camera group; the owner's correction was that scaling the
+    // model is "totally unrelated to the camera" and must not be locked out by
+    // a camera mode. This assertion is what pins it in the right group.
     expect(fields.map((f) => f.getAttribute("aria-label"))).toEqual([
       "Rotation X",
       "Rotation Y",
       "Rotation Z",
+      "Scale X value",
+      "Scale Y value",
+      "Scale Z value",
       "Light Azimuth",
       "Light Elevation",
     ]);
+  });
+
+  /**
+   * ⚠️ The owner's two corrections, pinned so neither can regress quietly.
+   *
+   * Scale was first built as a 0.001..1 PROPORTION control living in the
+   * CAMERA group. Both halves were wrong: it is the S of the model's ISROT
+   * transform, so it belongs with the model and must not be capped or gated
+   * on a camera mode.
+   */
+  it("keeps model scale live in EVERY projection — it is not a camera control", () => {
+    // `Primitive` is perspective, `Orthographic` is not. Scale must be usable
+    // in both: it is gated on there being a MESH, never on the camera.
+    for (const story of [composed.Primitive, composed.Orthographic] as const) {
+      const { container, unmount } = render(story());
+      for (const axis of ["X", "Y", "Z"]) {
+        expect(byLabel(container, `Scale ${axis} value`).disabled).toBe(false);
+      }
+      unmount();
+    }
+  });
+
+  it("accepts a model scale ABOVE 1 — the S is not a squash-only proportion", () => {
+    const { container } = render(<composed.Primitive />);
+    fireEvent.change(byLabel(container, "Scale Y value"), {
+      target: { value: "12.5" },
+    });
+    // Verbatim and uncapped, and only Y moves — the other two axes are
+    // carried through from the current value, not reset.
+    expect(composed.Primitive.args.onSetAxisScale).toHaveBeenCalledWith({
+      x: 1,
+      y: 12.5,
+      z: 1,
+    });
   });
 
   it("types DEGREES into a rotation box and emits RADIANS (F10)", () => {

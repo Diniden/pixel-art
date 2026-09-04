@@ -3043,10 +3043,19 @@ export const CanvasContainer = observer(function CanvasContainer({
     const root = poseRootRef.current;
     if (!root) return;
     const fit = solveFitScale(UNIT_BOUNDS, DEFAULT_POSE_FIT_PADDING);
-    // `set`, not `setScalar`: the per-axis proportions multiply in on top of
-    // the uniform chain (owner-requested 2026-09-04). At the default
-    // `{1,1,1}` this is arithmetically identical to the `setScalar` it
-    // replaced, so an unsquashed model renders exactly as before.
+    // `set`, not `setScalar`: the model carries a per-axis scale — the S of
+    // its ISROT transform (owner-requested 2026-09-04).
+    //
+    // ⚠️ The three factors are NOT three competing size controls:
+    //  - `base` is `normalizeToUnitBox`'s doing, so an arbitrary glTF and a
+    //    unit primitive arrive at the same size. Not a control at all.
+    //  - `fit` frames that unit box in the camera. Not a control either.
+    //  - `poseScale` is the rail's uniform Scale, and `poseAxisScale` is the
+    //    model's own per-axis S. Both are the owner's, both unbounded above.
+    //
+    // At `{1,1,1}` this is arithmetically identical to the `setScalar` it
+    // replaced, so a model nobody has scaled per-axis renders exactly as
+    // before.
     const uniform = poseBaseScaleRef.current * fit * poseScale;
     root.scale.set(
       uniform * poseAxisScale.x,

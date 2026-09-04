@@ -430,9 +430,9 @@ export interface PersistedPosePreset {
   /** The model's own scale multiplier about its own origin. */
   scale?: number;
   /**
-   * Per-axis proportions, `0.001`..`1` each. Absent reads as `{1,1,1}` — a
-   * preset saved before this field existed restores an unsquashed model,
-   * which is what it was.
+   * The model's per-axis scale — the **S of its ISROT transform**. Floored at
+   * `0.001` per component, **not capped**. Absent reads as `{1,1,1}`, which is
+   * what a preset saved before this field existed actually had.
    */
   axisScale?: { x: number; y: number; z: number };
   /** Key-light direction. Re-normalised on apply, so drift is harmless. */

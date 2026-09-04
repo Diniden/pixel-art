@@ -288,6 +288,101 @@ export function EulerInput({
   );
 }
 
+/**
+ * The model's per-axis SCALE — the **S** of its ISROT transform, a sibling of
+ * {@link RotationEulerInput}'s R (owner-requested 2026-09-04).
+ *
+ * ⚠️ **This is a MODEL property and belongs beside the model's rotation, not
+ * in the camera group.** The owner's correction, verbatim: *"Scaling the model
+ * shouldn't get locked out when I pick certain camera modes. It's totally
+ * unrelated to the camera."* It is therefore never disabled by a projection or
+ * a camera preset — only by there being no model to scale.
+ *
+ * ⚠️ **Not `EulerInput`**, despite the visual similarity: that primitive
+ * converts radians to degrees at its edge, and a scale is a bare multiplier
+ * with no angular meaning. Reusing it would have meant a "degrees" component
+ * rendering dimensionless numbers.
+ *
+ * ⚠️ **The slider's travel is an affordance, NOT the limit** — the same rule
+ * `scale` follows (MASTER E11). A range input needs finite ends to place a
+ * thumb, so it covers the useful span while the number box beside it accepts
+ * anything the store does, which above the safety floor is everything.
+ */
+export interface ScaleAxisInputProps {
+  /** The model's per-axis scale. Replaced wholesale. */
+  scale: PoseVector;
+  onChange: (scale: PoseVector) => void;
+  disabled?: boolean;
+}
+
+/** Slider travel only — see {@link ScaleAxisInputProps}. */
+export const SCALE_AXIS_SLIDER_MIN = 0.001;
+export const SCALE_AXIS_SLIDER_MAX = 4;
+
+export function ScaleAxisInput({
+  scale,
+  onChange,
+  disabled = false,
+}: ScaleAxisInputProps): ReactElement {
+  const axes = [
+    { label: "X", value: scale.x },
+    { label: "Y", value: scale.y },
+    { label: "Z", value: scale.z },
+  ] as const;
+
+  const emit = (label: "X" | "Y" | "Z", next: number): void => {
+    onChange({
+      x: label === "X" ? next : scale.x,
+      y: label === "Y" ? next : scale.y,
+      z: label === "Z" ? next : scale.z,
+    });
+  };
+
+  return (
+    <div className="pose-panel__slider-row">
+      {axes.map(({ label, value }) => (
+        <span key={label} className="pose-panel__slider-row">
+          <span className="pose-panel__slider-label">{label}</span>
+          <input
+            type="range"
+            className="pose-panel__slider"
+            aria-label={`Scale ${label}`}
+            min={SCALE_AXIS_SLIDER_MIN}
+            max={SCALE_AXIS_SLIDER_MAX}
+            step={0.001}
+            /* Clamped for the THUMB only: a value past the slider's travel is
+               legal in the store, and the box beside this one still shows it
+               verbatim. Letting the thumb run off the end would hide it. */
+            value={Math.min(value, SCALE_AXIS_SLIDER_MAX)}
+            disabled={disabled}
+            onChange={(e) => emit(label, Number(e.target.value))}
+          />
+          <input
+            type="number"
+            className="pose-panel__number pose-panel__number--angle"
+            aria-label={`Scale ${label} value`}
+            /* `min` is the safety floor, NOT a cap, and there is no `max` —
+               the store stores any positive finite number (E11). */
+            min={SCALE_AXIS_SLIDER_MIN}
+            step={0.001}
+            value={value}
+            disabled={disabled}
+            onChange={(e) => {
+              /* An empty box must send nothing: `Number("")` is `0`, which the
+                 store floors, flattening the axis mid-keystroke. */
+              const raw = e.target.value.trim();
+              if (raw === "") return;
+              const next = Number(raw);
+              if (Number.isFinite(next)) emit(label, next);
+            }}
+            title={`Model scale along ${label} — type any value; there is no upper limit`}
+          />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export interface RotationEulerInputProps {
   /** The model's rotation, Euler XYZ **radians** — the store's own value. */
   rotation: PoseVector;

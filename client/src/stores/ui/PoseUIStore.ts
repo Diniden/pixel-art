@@ -313,20 +313,20 @@ export const DEFAULT_POSE_PAN: PosePan = Object.freeze({ x: 0, y: 0 });
 export const POSE_SCALE_MIN_SAFE = 1e-3;
 
 /**
- * Per-axis scale range — a REAL range, unlike {@link POSE_SCALE_MIN_SAFE}.
+ * Per-axis scale floor — a **safety floor, not a range**, exactly like
+ * {@link POSE_SCALE_MIN_SAFE}.
  *
- * ⚠️ The asymmetry with `scale` is deliberate. `scale` is floored but never
- * capped (MASTER E11) because it answers *how big*; `axisScale` answers *what
- * shape* and the owner asked for `0.001 - 1`. A maximum of exactly 1 means an
- * axis can only ever squash, never stretch — so the model's largest dimension
- * stays governed by `scale` alone and the two controls cannot fight over size.
+ * ⚠️ **Unbounded above, deliberately.** This is the **S of the model's ISROT
+ * transform**, a sibling of {@link PoseUIStore.rotation} — not a modifier on
+ * anything. Capping it would reintroduce the ceiling MASTER E11 removed after
+ * the owner reported the model capping out, just on three axes instead of one.
+ * The slider's travel is an affordance; the store's value has no maximum.
  *
- * The minimum matches `POSE_SCALE_MIN_SAFE` for the same reason it exists: an
- * axis at 0 collapses the model into a plane and makes its normal matrix
- * singular, which renders black rather than erroring.
+ * The minimum exists for the same reason `POSE_SCALE_MIN_SAFE` does: an axis
+ * at 0 collapses the model into a plane and makes its normal matrix singular,
+ * which renders black rather than erroring.
  */
-export const POSE_AXIS_SCALE_MIN = 1e-3;
-export const POSE_AXIS_SCALE_MAX = 1;
+export const POSE_AXIS_SCALE_MIN_SAFE = 1e-3;
 
 /** FOV clamp, in degrees. Outside this the perspective camera degenerates. */
 export const POSE_FOV_MIN = 10;
@@ -596,20 +596,22 @@ export class PoseUIStore {
   scale = 1;
 
   /**
-   * Per-axis scale, **composed on top of {@link scale}** — owner-requested
-   * 2026-09-04.
+   * The model's **per-axis scale — the S of its ISROT transform**
+   * (owner-requested 2026-09-04).
    *
-   * ⚠️ **This is a PROPORTION control, not a size control**, and that is why
-   * its range is `POSE_AXIS_SCALE_MIN`..`1` while {@link scale} stays
-   * unbounded above. The two answer different questions: `scale` is *how big
-   * overall*, this is *what shape*. Folding them into one three-component
-   * value would have put a ceiling of 1 back on the model's size — the exact
-   * cap MASTER E11 removed after the owner reported the model capping out.
+   * ⚠️ **A MODEL property, a sibling of {@link rotation}, and nothing to do
+   * with the camera.** It is not a proportion modifier and it is not composed
+   * onto a camera control: it is the model's own scale vector, and it stays
+   * live whatever projection or camera preset is selected. The owner's
+   * correction, verbatim: *"Scaling the model shouldn't get locked out when I
+   * pick certain camera modes. It's totally unrelated to the camera."*
    *
-   * The container writes the product per axis:
-   * `root.scale.set(base * fit * scale * axis.x, ...y, ...z)`. At the default
-   * `{1,1,1}` that is identical to the uniform `setScalar` it replaced, so a
-   * model nobody has squashed renders exactly as before.
+   * ⚠️ **Unbounded above** — see {@link POSE_AXIS_SCALE_MIN_SAFE}. Each
+   * component is floored, never capped.
+   *
+   * The container writes it per axis:
+   * `root.scale.set(base * fit * x, ...y, ...z)`. At `{1,1,1}` that is
+   * identical to the uniform `setScalar` it replaced.
    *
    * `observableRef` and replaced **wholesale**, like `rotation` — a
    * per-component observable would make a slider drag notify three times.
@@ -890,24 +892,23 @@ export class PoseUIStore {
   }
 
   /**
-   * Replace the per-axis scale **wholesale**, each component clamped into
-   * `POSE_AXIS_SCALE_MIN`..`POSE_AXIS_SCALE_MAX`.
+   * Replace the model's per-axis scale **wholesale**, each component floored
+   * at `POSE_AXIS_SCALE_MIN_SAFE` and **never capped**.
    *
-   * `clamp`, not `sanitizeScale`: this one genuinely IS a range (see
-   * {@link POSE_AXIS_SCALE_MIN}), so a value above 1 is the owner asking for
-   * something the control does not offer and is pinned to the end of its
-   * travel — where `scale` would have stored it verbatim. `clamp` maps `NaN`
-   * to the minimum, which for a proportion means "flattest", so a `NaN`
-   * reaching here is visible rather than silently rendering black.
+   * `sanitizeScale` per component, not `clamp`: this is the same contract
+   * {@link setScale} has, applied three times. Any positive finite number is
+   * stored verbatim — a stretch of 40 on Y is as legal as a squash of 0.01 —
+   * and `NaN`, `±Infinity`, zero and negatives fall back to the safety floor
+   * rather than collapsing the axis.
    *
    * Wholesale replacement because the field is `observableRef` — a partial
    * write would leave the other two axes reading from a stale object.
    */
   setAxisScale(axisScale: PoseVector): void {
     this.axisScale = {
-      x: clamp(axisScale.x, POSE_AXIS_SCALE_MIN, POSE_AXIS_SCALE_MAX),
-      y: clamp(axisScale.y, POSE_AXIS_SCALE_MIN, POSE_AXIS_SCALE_MAX),
-      z: clamp(axisScale.z, POSE_AXIS_SCALE_MIN, POSE_AXIS_SCALE_MAX),
+      x: sanitizeScale(axisScale.x, POSE_AXIS_SCALE_MIN_SAFE),
+      y: sanitizeScale(axisScale.y, POSE_AXIS_SCALE_MIN_SAFE),
+      z: sanitizeScale(axisScale.z, POSE_AXIS_SCALE_MIN_SAFE),
     };
   }
 

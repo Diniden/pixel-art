@@ -98,7 +98,11 @@ import type {
   CameraAdvancedPerspective,
 } from "./CameraAdvanced";
 import { DirectionOrb } from "./DirectionOrb";
-import { LightAnglesInput, RotationEulerInput } from "./EulerInput";
+import {
+  LightAnglesInput,
+  RotationEulerInput,
+  ScaleAxisInput,
+} from "./EulerInput";
 import { PoseCameraGroup } from "./PoseCameraGroup";
 import { PosePresetList } from "./PosePresetList";
 import type { PosePresetEntry } from "./PosePresetList";
@@ -131,20 +135,6 @@ export const POSE_EDGE_WIDTH_MAX = 4;
  */
 export const POSE_SCALE_SLIDER_MIN = 0.1;
 export const POSE_SCALE_SLIDER_MAX = 40;
-
-/**
- * The per-axis proportion range (owner-requested 2026-09-04).
- *
- * ⚠️ Unlike the two above these are NOT merely an affordance — they mirror
- * `PoseUIStore`'s `POSE_AXIS_SCALE_MIN`/`MAX` exactly, because that control
- * genuinely is a range and the store clamps to it. Declared here rather than
- * imported for the same reason every other constant in this file is: `ui/`
- * may not import a store, type-only included. **If the store's range changes,
- * change these with it** — the same "duplicate unions change together"
- * discipline `poseTypes.ts` follows.
- */
-export const POSE_AXIS_SCALE_MIN = 0.001;
-export const POSE_AXIS_SCALE_MAX = 1;
 
 export interface PoseSectionProps {
   /** The loaded reference solid, or `null` for "no model". */
@@ -499,7 +489,7 @@ export function PoseSection({
       </div>
 
       <div className="pose-panel__group">
-        <span className="pose-panel__group-label">Rotation &amp; light</span>
+        <span className="pose-panel__group-label">Model transform &amp; light</span>
         <div className="pose-panel__orbs">
           {/* ONE component, used twice (MASTER D13). The two differ only in
               what their vector means, which `mode` says. */}
@@ -526,6 +516,19 @@ export function PoseSection({
             one the owner could type into to no effect. `EulerInput`'s header
             carries the F11 decision and the exact round-trip. */}
         <RotationEulerInput rotation={rotation} onChange={onSetRotation} />
+        {/* ⚠️ The model's SCALE sits here, with its ROTATION, because both are
+            properties of the MODEL — this is the S and the R of one ISROT
+            transform. It was briefly in the Camera group and that was wrong:
+            the owner's correction was *"Scaling the model shouldn't get locked
+            out when I pick certain camera modes. It's totally unrelated to the
+            camera."* It is gated on `meshId` alone, never on projection or a
+            camera preset. */}
+        <span className="pose-panel__slider-label">Scale</span>
+        <ScaleAxisInput
+          scale={axisScale}
+          onChange={onSetAxisScale}
+          disabled={meshId === null}
+        />
         <LightAnglesInput
           lightDirection={lightDirection}
           onChange={onSetLightDirection}
@@ -648,7 +651,6 @@ export function PoseSection({
         projection={projection}
         cameraPreset={cameraPreset}
         scale={scale}
-        axisScale={axisScale}
         fov={fov}
         hasMesh={hasMesh}
         near={near}
@@ -658,7 +660,6 @@ export function PoseSection({
         onSetProjection={onSetProjection}
         onApplyCameraPreset={onApplyCameraPreset}
         onSetScale={onSetScale}
-        onSetAxisScale={onSetAxisScale}
         onSetFov={onSetFov}
         onRequestFit={onRequestFit}
         onAdvancedChange={onAdvancedChange}
