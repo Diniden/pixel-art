@@ -132,6 +132,20 @@ export const POSE_EDGE_WIDTH_MAX = 4;
 export const POSE_SCALE_SLIDER_MIN = 0.1;
 export const POSE_SCALE_SLIDER_MAX = 40;
 
+/**
+ * The per-axis proportion range (owner-requested 2026-09-04).
+ *
+ * ⚠️ Unlike the two above these are NOT merely an affordance — they mirror
+ * `PoseUIStore`'s `POSE_AXIS_SCALE_MIN`/`MAX` exactly, because that control
+ * genuinely is a range and the store clamps to it. Declared here rather than
+ * imported for the same reason every other constant in this file is: `ui/`
+ * may not import a store, type-only included. **If the store's range changes,
+ * change these with it** — the same "duplicate unions change together"
+ * discipline `poseTypes.ts` follows.
+ */
+export const POSE_AXIS_SCALE_MIN = 0.001;
+export const POSE_AXIS_SCALE_MAX = 1;
+
 export interface PoseSectionProps {
   /** The loaded reference solid, or `null` for "no model". */
   meshId: PoseMeshId | null;
@@ -167,6 +181,8 @@ export interface PoseSectionProps {
    * `POSE_SCALE_MIN_SAFE`, and this rail must not reintroduce the deleted cap.
    */
   scale: number;
+  /** Per-axis proportions, each `0.001`..`1`. */
+  axisScale: PoseVector;
   /** Field of view in degrees. The store clamps it to 10–120. */
   fov: number;
 
@@ -229,6 +245,7 @@ export interface PoseSectionProps {
    */
   onApplyCameraPreset: (preset: PoseCameraPresetSpec) => void;
   onSetScale: (scale: number) => void;
+  onSetAxisScale: (axisScale: PoseVector) => void;
   onSetFov: (fov: number) => void;
   /**
    * Re-frame the model (MASTER E14/E15). ⚠️ Since plan 08 (F4) a fit sets the
@@ -394,6 +411,7 @@ export function PoseSection({
   projection,
   cameraPreset,
   scale,
+  axisScale,
   fov,
   near,
   far,
@@ -410,6 +428,7 @@ export function PoseSection({
   onSetProjection,
   onApplyCameraPreset,
   onSetScale,
+  onSetAxisScale,
   onSetFov,
   onRequestFit,
   onAdvancedChange,
@@ -629,6 +648,7 @@ export function PoseSection({
         projection={projection}
         cameraPreset={cameraPreset}
         scale={scale}
+        axisScale={axisScale}
         fov={fov}
         hasMesh={hasMesh}
         near={near}
@@ -638,6 +658,7 @@ export function PoseSection({
         onSetProjection={onSetProjection}
         onApplyCameraPreset={onApplyCameraPreset}
         onSetScale={onSetScale}
+        onSetAxisScale={onSetAxisScale}
         onSetFov={onSetFov}
         onRequestFit={onRequestFit}
         onAdvancedChange={onAdvancedChange}

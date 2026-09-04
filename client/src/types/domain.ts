@@ -429,6 +429,12 @@ export interface PersistedPosePreset {
   fov?: number;
   /** The model's own scale multiplier about its own origin. */
   scale?: number;
+  /**
+   * Per-axis proportions, `0.001`..`1` each. Absent reads as `{1,1,1}` — a
+   * preset saved before this field existed restores an unsquashed model,
+   * which is what it was.
+   */
+  axisScale?: { x: number; y: number; z: number };
   /** Key-light direction. Re-normalised on apply, so drift is harmless. */
   lightDirection?: { x: number; y: number; z: number };
   /** Key-light tint, as plain 0–255 components. */

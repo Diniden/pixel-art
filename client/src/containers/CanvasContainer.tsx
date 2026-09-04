@@ -687,6 +687,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   const poseProjection = pose.projection;
   const poseCameraPreset = pose.cameraPreset;
   const poseScale = pose.scale;
+  const poseAxisScale = pose.axisScale;
   const poseFov = pose.fov;
   /**
    * The owner's EXACT projection values, if any (plan 08 task 09, D08-16).
@@ -3042,9 +3043,24 @@ export const CanvasContainer = observer(function CanvasContainer({
     const root = poseRootRef.current;
     if (!root) return;
     const fit = solveFitScale(UNIT_BOUNDS, DEFAULT_POSE_FIT_PADDING);
-    root.scale.setScalar(poseBaseScaleRef.current * fit * poseScale);
+    // `set`, not `setScalar`: the per-axis proportions multiply in on top of
+    // the uniform chain (owner-requested 2026-09-04). At the default
+    // `{1,1,1}` this is arithmetically identical to the `setScalar` it
+    // replaced, so an unsquashed model renders exactly as before.
+    const uniform = poseBaseScaleRef.current * fit * poseScale;
+    root.scale.set(
+      uniform * poseAxisScale.x,
+      uniform * poseAxisScale.y,
+      uniform * poseAxisScale.z,
+    );
     invalidatePoseRef.current?.();
-  }, [poseScale, poseFitGeneration, poseEngineTick, poseMeshId]);
+  }, [
+    poseScale,
+    poseAxisScale,
+    poseFitGeneration,
+    poseEngineTick,
+    poseMeshId,
+  ]);
 
   /**
    * **Fit to canvas** returns the model to the fitted size (plan 08, F4).

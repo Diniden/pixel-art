@@ -47,6 +47,7 @@ const handlers = {
   // model's rotation — and receives the resolved spec rather than an id.
   onApplyCameraPreset: fn(),
   onSetScale: fn(),
+  onSetAxisScale: fn(),
   onSetFov: fn(),
   onRequestFit: fn(),
   // Plan 08 task 08: the advanced camera panel and the saved scene presets.
@@ -84,6 +85,7 @@ const defaults = {
   projection: "perspective" as const,
   cameraPreset: "2.5d" as const,
   scale: 1,
+  axisScale: { x: 1, y: 1, z: 1 },
   fov: 50,
   /* The advanced panel's values. ⚠️ NOT store fields — `CanvasContainer`
      derives them from `fitCameraToMesh`, and these are the shape it produces

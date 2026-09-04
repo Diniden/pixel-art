@@ -312,6 +312,22 @@ export const DEFAULT_POSE_PAN: PosePan = Object.freeze({ x: 0, y: 0 });
  */
 export const POSE_SCALE_MIN_SAFE = 1e-3;
 
+/**
+ * Per-axis scale range — a REAL range, unlike {@link POSE_SCALE_MIN_SAFE}.
+ *
+ * ⚠️ The asymmetry with `scale` is deliberate. `scale` is floored but never
+ * capped (MASTER E11) because it answers *how big*; `axisScale` answers *what
+ * shape* and the owner asked for `0.001 - 1`. A maximum of exactly 1 means an
+ * axis can only ever squash, never stretch — so the model's largest dimension
+ * stays governed by `scale` alone and the two controls cannot fight over size.
+ *
+ * The minimum matches `POSE_SCALE_MIN_SAFE` for the same reason it exists: an
+ * axis at 0 collapses the model into a plane and makes its normal matrix
+ * singular, which renders black rather than erroring.
+ */
+export const POSE_AXIS_SCALE_MIN = 1e-3;
+export const POSE_AXIS_SCALE_MAX = 1;
+
 /** FOV clamp, in degrees. Outside this the perspective camera degenerates. */
 export const POSE_FOV_MIN = 10;
 export const POSE_FOV_MAX = 120;
@@ -579,6 +595,27 @@ export class PoseUIStore {
    */
   scale = 1;
 
+  /**
+   * Per-axis scale, **composed on top of {@link scale}** — owner-requested
+   * 2026-09-04.
+   *
+   * ⚠️ **This is a PROPORTION control, not a size control**, and that is why
+   * its range is `POSE_AXIS_SCALE_MIN`..`1` while {@link scale} stays
+   * unbounded above. The two answer different questions: `scale` is *how big
+   * overall*, this is *what shape*. Folding them into one three-component
+   * value would have put a ceiling of 1 back on the model's size — the exact
+   * cap MASTER E11 removed after the owner reported the model capping out.
+   *
+   * The container writes the product per axis:
+   * `root.scale.set(base * fit * scale * axis.x, ...y, ...z)`. At the default
+   * `{1,1,1}` that is identical to the uniform `setScalar` it replaced, so a
+   * model nobody has squashed renders exactly as before.
+   *
+   * `observableRef` and replaced **wholesale**, like `rotation` — a
+   * per-component observable would make a slider drag notify three times.
+   */
+  axisScale: PoseVector = { x: 1, y: 1, z: 1 };
+
   /** Field of view in degrees; ignored while `projection` is orthographic. */
   fov = 50;
 
@@ -655,6 +692,7 @@ export class PoseUIStore {
       meshId: observable,
       edgeWidth: observable,
       rotation: observableRef,
+      axisScale: observableRef,
       lightDirection: observableRef,
       lightColor: observableRef,
       modelColor: observableRef,
@@ -679,6 +717,7 @@ export class PoseUIStore {
       setCameraPreset: action,
       applyCameraPreset: action,
       setScale: action,
+      setAxisScale: action,
       setFov: action,
       setCameraOverrides: action,
       clearCameraOverrides: action,
@@ -850,6 +889,28 @@ export class PoseUIStore {
     this.scale = sanitizeScale(scale, POSE_SCALE_MIN_SAFE);
   }
 
+  /**
+   * Replace the per-axis scale **wholesale**, each component clamped into
+   * `POSE_AXIS_SCALE_MIN`..`POSE_AXIS_SCALE_MAX`.
+   *
+   * `clamp`, not `sanitizeScale`: this one genuinely IS a range (see
+   * {@link POSE_AXIS_SCALE_MIN}), so a value above 1 is the owner asking for
+   * something the control does not offer and is pinned to the end of its
+   * travel — where `scale` would have stored it verbatim. `clamp` maps `NaN`
+   * to the minimum, which for a proportion means "flattest", so a `NaN`
+   * reaching here is visible rather than silently rendering black.
+   *
+   * Wholesale replacement because the field is `observableRef` — a partial
+   * write would leave the other two axes reading from a stale object.
+   */
+  setAxisScale(axisScale: PoseVector): void {
+    this.axisScale = {
+      x: clamp(axisScale.x, POSE_AXIS_SCALE_MIN, POSE_AXIS_SCALE_MAX),
+      y: clamp(axisScale.y, POSE_AXIS_SCALE_MIN, POSE_AXIS_SCALE_MAX),
+      z: clamp(axisScale.z, POSE_AXIS_SCALE_MIN, POSE_AXIS_SCALE_MAX),
+    };
+  }
+
   /** Clamped to `[POSE_FOV_MIN, POSE_FOV_MAX]` degrees. */
   setFov(fov: number): void {
     this.fov = clamp(fov, POSE_FOV_MIN, POSE_FOV_MAX);
@@ -987,6 +1048,14 @@ export class PoseUIStore {
       cameraPreset: this.cameraPreset,
       fov: this.fov,
       scale: this.scale,
+      // Proportions are part of "the setup I saved" (open question 4's
+      // reasoning): restoring the size but not the shape would hand back a
+      // model the owner never saved.
+      axisScale: {
+        x: this.axisScale.x,
+        y: this.axisScale.y,
+        z: this.axisScale.z,
+      },
       lightDirection: {
         x: this.lightDirection.x,
         y: this.lightDirection.y,
@@ -1066,6 +1135,11 @@ export class PoseUIStore {
     }
     if (typeof preset.fov === "number") {
       this.fov = clamp(preset.fov, POSE_FOV_MIN, POSE_FOV_MAX);
+    }
+    if (isVector(preset.axisScale)) {
+      // Through the action's clamp, not written raw: a preset from a newer
+      // build may carry a component outside this build's range (F15).
+      this.setAxisScale(preset.axisScale);
     }
     if (typeof preset.scale === "number") {
       this.scale = sanitizeScale(preset.scale, POSE_SCALE_MIN_SAFE);
@@ -1156,6 +1230,7 @@ export class PoseUIStore {
     this.projection = "perspective";
     this.cameraPreset = "2.5d";
     this.scale = 1;
+    this.axisScale = { x: 1, y: 1, z: 1 };
     this.fov = 50;
     this.cameraOverrides = DEFAULT_POSE_CAMERA_OVERRIDES;
     this.pan = DEFAULT_POSE_PAN;

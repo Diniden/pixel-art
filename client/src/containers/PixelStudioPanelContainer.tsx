@@ -206,6 +206,7 @@ export const PixelStudioPanelContainer = observer(
           projection: pose.projection,
           cameraPreset: pose.cameraPreset,
           scale: pose.scale,
+          axisScale: pose.axisScale,
           fov: pose.fov,
           // ⚠️ The mannequin PART buttons come through here too (MASTER
           // E1/E2). A part is real sub-geometry now, so "load the head" is a
@@ -248,6 +249,10 @@ export const PixelStudioPanelContainer = observer(
           // longer moves for it. Re-sanitised by the store but NEVER CAPPED
           // (MASTER E11): only a `1e-3` safety floor. FOV is still 10–120.
           onSetScale: (scale) => pose.setScale(scale),
+          // Per-axis PROPORTIONS, composed on top of `scale` by the container's
+          // scale effect (owner-requested 2026-09-04). The store clamps each
+          // component to 0.001..1 — a real range here, unlike `scale`'s floor.
+          onSetAxisScale: (axisScale) => pose.setAxisScale(axisScale),
           onSetFov: (fov) => pose.setFov(fov),
           // ⚠️ A REQUEST, not a fit (MASTER E14). `requestFit()` only bumps the
           // store's `fitGeneration` counter and mutates no camera field; the
