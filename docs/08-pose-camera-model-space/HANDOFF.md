@@ -1,6 +1,6 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W5 DONE — W6 next (⚠️ the persistence wave)
+**Current position:** W6 IN PROGRESS (task 08 — ⚠️ the persistence wave)
 **Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
 **Last commit:** `64d6629` (W5 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
@@ -14,7 +14,7 @@
 | W3 | 04 | **DONE** | 2026-09-04 | `62f3052` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2965 tests pass** · boundaries OK · snapshots unmoved · `UIStore.ts` diff EMPTY · no lockfile |
 | W4 | 05 | **DONE** | 2026-09-04 | `673f5fe` | tsc 0 · eslint **0 errors**/65 warn · vitest **146 files / 2984 tests pass** · boundaries OK all 5 · snapshots **unmoved** · `UIStore.ts` diff EMPTY · no lockfile |
 | W5 | 06, 07 | **DONE** | 2026-09-04 | `64d6629` | tsc 0 · eslint **0 errors**/65 warn · vitest **148 files / 3047 tests pass** · boundaries OK · **stylelint exactly 2 errors** (`:338`/`:359`, pre-existing) · **storybook build 0** · snapshots unmoved · `UIStore.ts` EMPTY |
-| W6 | 08 | TODO | | | ⚠️ the persistence wave — data-safety gate |
+| W6 | 08 | IN PROGRESS | 2026-09-04 | | ⚠️ the persistence wave — data-safety gate |
 | W7 | 09 | TODO | | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
