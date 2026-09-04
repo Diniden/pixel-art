@@ -1,15 +1,15 @@
 # HANDOFF — Pose camera, model space, and presets
 
-**Current position:** W1 not started
-**Branch:** (set by /plan-go — expected `feat/08-pose-camera-model-space`)
-**Last commit:** (set by /plan-go)
+**Current position:** W1 DONE — W2 next
+**Branch:** `feat/08-pose-camera-model-space` (created 2026-09-03 off `00616a1`)
+**Last commit:** `19c8538` (W1 complete)
 **Plan written:** 2026-09-03 · Planning baseline HEAD: `494b5b4` (branch `feat/07-pose-refinements`)
 
 ## Wave ledger
 
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
-| W1 | 01, 02 | TODO | | | |
+| W1 | 01, 02 | **DONE** | 2026-09-04 | `19c8538` | tsc 0 · eslint **0 errors**/65 warn (baseline) · vitest **146 files / 2931 tests pass** · boundaries OK all 5 · snapshots **unmoved** · no lockfile |
 | W2 | 03 | TODO | | | |
 | W3 | 04 | TODO | | | |
 | W4 | 05 | TODO | | | |
@@ -23,8 +23,8 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
 | Task | Title | Wave | Status | Commit | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 01 | Model-space origins | W1 | TODO | | Foundation — 03 depends on it |
-| 02 | Outline in the stamp | W1 | TODO | | Reverses plan 07's E7, per owner |
+| 01 | Model-space origins | W1 | **DONE** | `19c8538` | Vertices translated, not transforms (F2). ⚠️ Found `BufferGeometry.translate()` rewrites normals — avoided, pinned |
+| 02 | Outline in the stamp | W1 | **DONE** | `9d89fd9` | Colour-only via `readExistingCell` (F1). See deviation D08-1 |
 | 03 | Camera holds still: fit → scale | W2 | TODO | | The heart of the plan (items 4 + 6) |
 | 04 | Camera-space pan | W3 | TODO | | |
 | 05 | Presets + viewpoint semantics | W4 | TODO | | ⚠️ Records F8: F7 supersedes D14 |
@@ -106,15 +106,61 @@ added this way before. The remaining real risks are the three traps in task 08's
 2. **How are the light's angles represented?** (F11) The light is a **unit vector** with no Euler
    form today, and vector → Euler is **not unique** (roll is unconstrained). Task 07 decides;
    recommended is a two-field azimuth/elevation control, honestly labelled.
-3. **Is the full mannequin's geometry centred too, or only the parts?** (Task 01, step 5.) A glTF
-   scene is a node tree, so centring it may mean baking node transforms — task 01 may reasonably
-   judge that disproportionate and record it as a deviation.
+3. ~~**Is the full mannequin's geometry centred too, or only the parts?**~~ **CLOSED by task 01
+   (2026-09-04): YES, the full scene is centred too.** Baking node transforms proved unnecessary —
+   a scene has one centre, so the single world offset is converted into each node's local frame via
+   the inverse world matrix (differencing two mapped *points*, which strips the translation column).
+   The node tree keeps its shape; nothing is flattened. Rationale: the owner's instruction was
+   unqualified, and the full figure is the mesh the orb rotates most often, so leaving it orbiting
+   its own pelvis would have reproduced the reported bug on the most visible mesh. A test pins that
+   the two nodes' relative offset is preserved — the guard against the obvious wrong implementation
+   (`centerGeometryOnOrigin` inside a `traverse`), which would centre each mesh on its own centre
+   and explode the figure.
 4. **What does a saved preset contain?** Task 08 decides `pan` / `lightDirection` / `lightColor` /
    `edgeWidth` / `meshId` inclusion. Recommended: include light and mesh, exclude pan.
 
 ## Deviations
 
-(none yet)
+**D08-1 — task 02 resolved its stop-and-report condition inside Touches instead of stopping.**
+Task 02 step 4 said: *"if the cell type cannot express 'colour only', that is a real finding:
+stop and report it."* **It cannot.** `PixelStore.setPixelCells` is authoritative on all three
+channels (`PixelStore.ts:112-118`) and `PixelCellWrite`'s `0` sentinels mean *empty* / *no data*,
+**not** *unchanged*. The agent implemented F1 anyway, without leaving its Touches list, by having
+the container read the existing cell and pass its normal/height back through a new
+`readExistingCell` callback. Coordinator's assessment: **the right call** — stopping would have
+required editing `PixelStore.ts`, which is in no task's Touches, and the callback keeps
+`poseStamp.ts` pure (the new `PoseExistingCell` is structural, so `ui/` still imports no
+`types/domain.ts`). The finding is recorded in both files' headers. ⚠️ The container's
+`readExistingCell` duplicates `editableGrid`'s variant resolution inline (the real one is declared
+later in the render body, so the earlier callback cannot call it) — **that duplication is
+unit-untested and is owed manual check 6.**
+
+**D08-2 — task 01 did NOT use `BufferGeometry.translate()`**, the spec's first-listed option (it
+allowed either that or writing the attribute directly). ⚠️ **This one is load-bearing, not a style
+preference.** `translate()` delegates to `applyMatrix4()`, which does not stop at `position`: it
+derives the normal matrix and calls `normal.applyNormalMatrix()`, ending in `.normalize()` on
+**every normal in the buffer**. For a pure translation no normal changes *direction*, but the
+asset's authored normals are **not exactly unit length**, so re-normalising rewrites them
+(measured: real torso `0.4748470187187195` → `0.4748469889163971`). That is the same regression
+class as `computeVertexNormals()` — a silent partial return of flat shading — arriving through a
+function whose name promises it only moves vertices, and it would have silently mutated the exact
+data plan 07 task 05 went out of its way to **copy** rather than recompute. Task 01 writes
+positions directly instead and pins it two ways: a deliberately **non-unit** normal as a tripwire
+(`poseMeshes.test.ts:1078`) and a **byte-identity** assertion on the real asset (`:1528`).
+Coordinator verified both tests exist and the file contains no `.translate()` call.
+
+**D08-3 — task 01's test file now constructs real `three` objects**, contradicting its own header
+rule and MASTER's note that geometry construction "cannot run where there is no WebGL". Measured
+by the agent: WebGL is needed only by `WebGLRenderer`; `BufferGeometry`/`Box3`/`Vector3`/`Matrix4`
+are float maths, and the unit lane is **node**, not jsdom (`vitest.config.ts`,
+`projects[0].environment: "node"`). This matters because **F2 is a claim about vertex positions**,
+and asserting it on exported constants would not have asserted it at all. The stale header rule was
+rewritten rather than left in place. Coordinator's assessment: correct, and the 2931-test green run
+confirms it executes.
+
+**D08-4 — `poseMeshes.ts` is now near the `ui/` 400-line ceiling.** Task 01's first draft hit 408
+code lines (1 eslint error) and was resolved by factoring a genuine duplication into `usableCentre`,
+not by padding comments. ⚠️ **Note for a later task adding to this file: it may need to be split.**
 
 ## Blocked items
 
@@ -124,6 +170,39 @@ added this way before. The remaining real risks are the three traps in task 08's
 
 (recorded per task as waves complete — **every task in this plan carries owed visual checks**;
 none of the eleven owner items can be fully confirmed without a browser)
+
+### W1 — 12 owed, **0 performed**
+
+Neither W1 agent had a browser, a GPU or a device. The gate proves the arithmetic, not the picture.
+
+**Task 01 (4):**
+1. Selecting **Head** shows a head centred in the frame.
+2. Rotating a part with the orb spins it **about itself**, not about a point off-screen.
+3. The full mannequin still loads and frames as it did. ⚠️ **Raised in importance by the
+   open-question-3 decision** — task 01 changed this path, so it is no longer a mere no-regression
+   check.
+4. ⚠️ **Highest value of the four:** parts still shade **smoothly** (no flat facets) — the visual
+   proof of the D08-2 `translate()` finding. The byte-identity test is strong evidence; only a GPU
+   render proves the result.
+
+**Task 02 (8):**
+5. Stamping with edge width 0 produces exactly what it did before.
+6. Stamping with width 1–4 writes a crisp outline in the **Edge** colour, landing where the overlay
+   drew it.
+7. The stamp is still **one** undo entry (one Ctrl-Z removes model + outline together).
+8. ⚠️ **Highest value overall — the F1 assertion.** Stamping an outline over existing artwork
+   leaves that artwork's normals and heights intact; open the lighting studio and confirm the
+   underlying surface still shades as it did.
+9. An outline pixel on empty canvas has colour but no lighting response — **expected, not a bug**.
+10. The outline stamps correctly **while editing a variant** (the `readExistingCell` grid
+    resolution's variant branch is unit-untested — see D08-1).
+11. The outline stamps correctly **at a non-zero pan**.
+12. ⚠️ **The depth-derived height path has still never run on a GPU** (plan 07; 0 of 41 observed).
+    Task 02 adds a second buffer copy alongside it without restructuring it, but it stays unproven.
+
+**Neither agent could confirm `bun run dev`** (three long-lived mprocs processes). Client build,
+typecheck, lint and the full suite pass and no config or entry point was touched — that is
+inference, not observation.
 
 ## Notes for the next session
 
