@@ -562,10 +562,18 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     expect(built.layoutPresets?.desktop[0].name).toBe("Desk");
   });
 
-  it("emits railLayouts once a rail actually moves, keyed by device class", () => {
+  it("emits railLayouts once a rail actually moves, keyed by device AND orientation", () => {
+    // ⚠️ The key gained a second dimension on 2026-09-06 (plan 09, task 10):
+    // a tablet or phone stores under `` `${deviceClass}:${orientation}` `` so
+    // portrait and landscape hold separate arrangements, while DESKTOP keeps
+    // its bare `"desktop"` key. This is NOT a new wire key — `railLayouts`
+    // has always been `{ [key: string]: … }` — and the corpus-protecting
+    // property is untouched: the case below still pins that an untouched
+    // project emits no `railLayouts` at all. `orientationLayout.test.ts`
+    // pins the keying itself, including the legacy-map migration.
     const session = new SessionStore();
     const selection = new SelectionMirror();
-    const layout = new LayoutUIStore("tablet");
+    const layout = new LayoutUIStore("tablet", "landscape");
     const ui = new UIStore({ session, selection, layout });
 
     runInAction(() => layout.stepRail("left", 1));
@@ -574,9 +582,12 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     expect("railLayouts" in built).toBe(true);
     // One step crosses the canvas — `leftInner` is skipped because sitting
     // there would look identical. See `nextVisibleSlot` in `railLayout.ts`.
-    expect(built.railLayouts?.tablet.left.slot).toBe("rightInner");
-    // Only THIS device's entry is written — no other class is invented.
-    expect(Object.keys(built.railLayouts!)).toEqual(["tablet"]);
+    expect(built.railLayouts?.["tablet:landscape"].left.slot).toBe(
+      "rightInner",
+    );
+    // Only THIS device-and-orientation's entry is written — no other class,
+    // and not the other orientation either.
+    expect(Object.keys(built.railLayouts!)).toEqual(["tablet:landscape"]);
   });
 
   it("preserves ANOTHER device's layout when this device saves", () => {

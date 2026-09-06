@@ -149,25 +149,28 @@ describe("LayoutUIStore — narrowing untrusted persisted values", () => {
   });
 
   it("round-trips a spread through persistence", () => {
-    const store = new LayoutUIStore("tablet");
+    // ⚠️ Orientation pinned, and the key is composite (plan 09, task 10) —
+    // a tablet stores under `tablet:<orientation>`. See
+    // `orientationLayout.test.ts` for the keying itself.
+    const store = new LayoutUIStore("tablet", "landscape");
     runInAction(() => store.stepToolbarSpread(1));
 
     const persisted = store.toPersistedRailLayouts()!;
-    expect(persisted.tablet.toolbar?.spread).toBe(2);
+    expect(persisted["tablet:landscape"].toolbar?.spread).toBe(2);
 
-    const reloaded = new LayoutUIStore("tablet");
+    const reloaded = new LayoutUIStore("tablet", "landscape");
     runInAction(() => reloaded.hydrate({ railLayouts: persisted }));
     expect(reloaded.layout.toolbar.spread).toBe(2);
   });
 
   it("round-trips a toolbar edge through persistence", () => {
-    const store = new LayoutUIStore("tablet");
+    const store = new LayoutUIStore("tablet", "landscape");
     runInAction(() => store.setToolbarEdge("right"));
 
     const persisted = store.toPersistedRailLayouts()!;
-    expect(persisted.tablet.toolbar?.edge).toBe("right");
+    expect(persisted["tablet:landscape"].toolbar?.edge).toBe("right");
 
-    const reloaded = new LayoutUIStore("tablet");
+    const reloaded = new LayoutUIStore("tablet", "landscape");
     runInAction(() => reloaded.hydrate({ railLayouts: persisted }));
     expect(reloaded.layout.toolbar.edge).toBe("right");
   });
