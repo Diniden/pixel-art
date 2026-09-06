@@ -17,6 +17,34 @@ import { useState, useEffect, useRef, useCallback } from "react";
  *     active, `onSetColor(color)` otherwise.
  *
  * That "write on release, not on every mousemove" behaviour is manual check 3.
+ *
+ * ── Pointer events, not mouse events (plan 09 task 03, 2026-09-06) ─────────
+ *
+ * The SV square and the hue bar were the LAST interactive colour surfaces in
+ * the app still bound to `onMouseDown/Move/Up/Leave`. On an iPad the Apple
+ * Pencil never produced a `mousedown` until the browser had decided the touch
+ * was not a scroll, so the picker needed a second tap and then dropped the
+ * drag the moment it left the swatch. They now use the house pattern —
+ * `onPointerDown/Move/Up/Cancel` + `setPointerCapture` — copied from
+ * `OtherHand/ThumbSlider.tsx:60-82`.
+ *
+ * ⚠️ THE FIX IS TWO-PART AND BOTH HALVES ARE REQUIRED. The handlers here are
+ * one half; `touch-action: none` on the canvases, the range inputs and the
+ * picker root in `ColorPicker.css` is the other. With only the handlers,
+ * iPadOS hands the first movement to the rail's scroll and the drag is never
+ * delivered; with only the CSS, a mouse-event picker still cannot see a
+ * Pencil press. Neither alone works on iOS.
+ *
+ * ⚠️ `setPointerCapture` is why there is NO `onMouseLeave`/`onPointerLeave`
+ * drag-end handler any more. Capture routes every subsequent move to the
+ * captured element even when the pointer is outside its bounds — that is the
+ * point, and it is what makes "drag off the edge of the square and back"
+ * keep tracking. A leave handler would kill exactly the drag capture exists
+ * to preserve.
+ *
+ * The presses also `preventDefault()` and `stopPropagation()`, and the root
+ * container absorbs `pointerdown` as well: a Pencil contact anywhere in the
+ * picker must never fall through to the canvas beneath and draw.
  */
 import { Color } from "../../../types";
 // Task 36: the HSL ⇄ RGB maths was module-private here; it now lives in
@@ -95,8 +123,11 @@ export function ColorPicker({
      through it. Other Hand Mode has always used this hook, which is exactly
      why the owner reported those sliders "work great". */
   const [hsl, setHsl] = useHslMirror(selectedColor ?? localColor);
-  const [isDraggingSV, setIsDraggingSV] = useState(false);
-  const [isDraggingHue, setIsDraggingHue] = useState(false);
+  /* Refs, not state: the drag flags are never rendered, so a `useState` here
+     bought a re-render of the whole picker on every pointer move and nothing
+     else. `ThumbSlider` uses a ref for the same reason. */
+  const isDraggingSVRef = useRef(false);
+  const isDraggingHueRef = useRef(false);
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const historySaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasSavedInitialStateRef = useRef<boolean>(false);
@@ -213,9 +244,14 @@ export function ColorPicker({
     };
   }, []);
 
-  // Handle global mouse up to save final state if dragging
+  /* Handle a global release to save the final state if dragging.
+     `pointerup` is listened for alongside `mouseup` (plan 09 task 03): a
+     Pencil release on an `<input type="range">` fires `pointerup`, and the
+     synthetic `mouseup` iPadOS may or may not follow it with is not something
+     the 300 ms undo-grouping contract can depend on. Both are harmless
+     together — the handler is idempotent once `isDraggingSlider` is false. */
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
+    const handleGlobalPointerUp = () => {
       if (
         isDraggingSlider &&
         colorAdjustment &&
@@ -227,14 +263,23 @@ export function ColorPicker({
     };
 
     if (isDraggingSlider) {
-      window.addEventListener("mouseup", handleGlobalMouseUp);
+      window.addEventListener("mouseup", handleGlobalPointerUp);
+      window.addEventListener("pointerup", handleGlobalPointerUp);
+      window.addEventListener("pointercancel", handleGlobalPointerUp);
       return () => {
-        window.removeEventListener("mouseup", handleGlobalMouseUp);
+        window.removeEventListener("mouseup", handleGlobalPointerUp);
+        window.removeEventListener("pointerup", handleGlobalPointerUp);
+        window.removeEventListener("pointercancel", handleGlobalPointerUp);
       };
     }
   }, [isDraggingSlider, colorAdjustment, localColor, saveFinalStateToHistory]);
 
-  // Handle slider mouse down - start tracking drag
+  /* Handle a slider press — start tracking the drag.
+     Bound to BOTH `onMouseDown` and `onPointerDown` on every range input
+     (plan 09 task 03). The range input keeps its own native drag; all these
+     do is open and close the one-entry-per-drag undo group, and a Pencil
+     only ever produces the pointer half. Firing twice on a desktop mouse is
+     harmless: the body is idempotent. */
   const handleSliderMouseDown = useCallback(() => {
     setIsDraggingSlider(true);
     hasSavedInitialStateRef.current = false;
@@ -254,6 +299,30 @@ export function ColorPicker({
       saveFinalStateToHistory();
     }
   }, [colorAdjustment, localColor, saveFinalStateToHistory]);
+
+  /* ── The undo-grouping contract, shared by both colour surfaces ──────────
+     One drag = ONE history entry. `beginSurfaceDrag` saves the pre-image
+     exactly once (the `hasSavedInitialStateRef` latch) and cancels any
+     pending debounced save from a previous drag; `endSurfaceDrag` schedules
+     the 300 ms debounced post-image. Identical to what the SV and hue
+     `onMouseDown`/`onMouseUp` handlers each did inline before — factored out
+     so the pointer rewrite could not drift the two copies apart. */
+  const beginSurfaceDrag = useCallback(() => {
+    setIsDraggingSlider(true);
+    hasSavedInitialStateRef.current = false;
+    if (historySaveTimeoutRef.current) {
+      clearTimeout(historySaveTimeoutRef.current);
+      historySaveTimeoutRef.current = null;
+    }
+    saveInitialStateToHistory();
+  }, [saveInitialStateToHistory]);
+
+  const endSurfaceDrag = useCallback(() => {
+    setIsDraggingSlider(false);
+    if (colorAdjustment && hasSavedInitialStateRef.current) {
+      saveFinalStateToHistory();
+    }
+  }, [colorAdjustment, saveFinalStateToHistory]);
 
   /* The HSL the user asked for is used VERBATIM.
 
@@ -288,7 +357,7 @@ export function ColorPicker({
   };
 
   const handleSVCanvasInteraction = (
-    e: React.MouseEvent<HTMLCanvasElement>,
+    e: React.PointerEvent<HTMLCanvasElement>,
   ) => {
     const canvas = svCanvasRef.current;
     if (!canvas) return;
@@ -338,7 +407,7 @@ export function ColorPicker({
   };
 
   const handleHueCanvasInteraction = (
-    e: React.MouseEvent<HTMLCanvasElement>,
+    e: React.PointerEvent<HTMLCanvasElement>,
   ) => {
     const canvas = hueCanvasRef.current;
     if (!canvas) return;
@@ -354,6 +423,71 @@ export function ColorPicker({
     setLocalColor(newColor);
     // Don't track history while dragging
     applyColor(newColor, false);
+  };
+
+  /* ── The pointer handlers for the two colour surfaces ────────────────────
+     Shape copied verbatim from `OtherHand/ThumbSlider.tsx:60-82`:
+       down   → primary-button guard, absorb, capture, flag, act IMMEDIATELY
+       move   → act while the flag is set (capture delivers moves outside the
+                element, which is why there is no leave handler)
+       end    → clear the flag, release the capture, close the undo group
+
+     `preventDefault()` on the press stops the browser synthesising the
+     mouse/scroll/selection gestures that were eating the Pencil's first
+     contact; `stopPropagation()` stops that contact reaching the drawing
+     canvas underneath. Acting on the press itself is what makes the colour
+     change on contact rather than on a second tap. */
+  const handleSVPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // The primary button only: a two-finger tap must not start a drag.
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDraggingSVRef.current = true;
+    beginSurfaceDrag();
+    handleSVCanvasInteraction(e);
+  };
+
+  const handleSVPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDraggingSVRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    handleSVCanvasInteraction(e);
+  };
+
+  const handleSVPointerEnd = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDraggingSVRef.current) return;
+    isDraggingSVRef.current = false;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    endSurfaceDrag();
+  };
+
+  const handleHuePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDraggingHueRef.current = true;
+    beginSurfaceDrag();
+    handleHueCanvasInteraction(e);
+  };
+
+  const handleHuePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDraggingHueRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    handleHueCanvasInteraction(e);
+  };
+
+  const handleHuePointerEnd = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDraggingHueRef.current) return;
+    isDraggingHueRef.current = false;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    endSurfaceDrag();
   };
 
   const handleHexChange = (hex: string) => {
@@ -404,8 +538,17 @@ export function ColorPicker({
     setHsl(rgbToHsl(color.r, color.g, color.b, hsl));
   };
 
+  /* The root absorbs the press so a Pencil contact ANYWHERE in the picker —
+     the gaps between sliders, the section labels, the preview swatch — cannot
+     bubble out to the drawing canvas beneath and paint a pixel. It only stops
+     propagation; it does NOT `preventDefault`, because the buttons, the range
+     inputs and the hex field all need their own default behaviour. */
+  const handleRootPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+  };
+
   return (
-    <div className="panel color-picker">
+    <div className="panel color-picker" onPointerDown={handleRootPointerDown}>
       <div className="panel__header">
         <span className="panel__title">Color</span>
         {onOtherHand ? (
@@ -471,32 +614,10 @@ export function ColorPicker({
               width={180}
               height={120}
               className="color-picker__sv-canvas"
-              onMouseDown={(e) => {
-                setIsDraggingSV(true);
-                setIsDraggingSlider(true);
-                hasSavedInitialStateRef.current = false;
-                if (historySaveTimeoutRef.current) {
-                  clearTimeout(historySaveTimeoutRef.current);
-                  historySaveTimeoutRef.current = null;
-                }
-                saveInitialStateToHistory();
-                handleSVCanvasInteraction(e);
-              }}
-              onMouseMove={(e) => isDraggingSV && handleSVCanvasInteraction(e)}
-              onMouseUp={() => {
-                setIsDraggingSV(false);
-                setIsDraggingSlider(false);
-                if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory();
-                }
-              }}
-              onMouseLeave={() => {
-                setIsDraggingSV(false);
-                setIsDraggingSlider(false);
-                if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory();
-                }
-              }}
+              onPointerDown={handleSVPointerDown}
+              onPointerMove={handleSVPointerMove}
+              onPointerUp={handleSVPointerEnd}
+              onPointerCancel={handleSVPointerEnd}
             />
             <div
               className="color-picker__sv-handle"
@@ -510,34 +631,10 @@ export function ColorPicker({
               width={180}
               height={12}
               className="color-picker__hue-canvas"
-              onMouseDown={(e) => {
-                setIsDraggingHue(true);
-                setIsDraggingSlider(true);
-                hasSavedInitialStateRef.current = false;
-                if (historySaveTimeoutRef.current) {
-                  clearTimeout(historySaveTimeoutRef.current);
-                  historySaveTimeoutRef.current = null;
-                }
-                saveInitialStateToHistory();
-                handleHueCanvasInteraction(e);
-              }}
-              onMouseMove={(e) =>
-                isDraggingHue && handleHueCanvasInteraction(e)
-              }
-              onMouseUp={() => {
-                setIsDraggingHue(false);
-                setIsDraggingSlider(false);
-                if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory();
-                }
-              }}
-              onMouseLeave={() => {
-                setIsDraggingHue(false);
-                setIsDraggingSlider(false);
-                if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory();
-                }
-              }}
+              onPointerDown={handleHuePointerDown}
+              onPointerMove={handleHuePointerMove}
+              onPointerUp={handleHuePointerEnd}
+              onPointerCancel={handleHuePointerEnd}
             />
             <div
               className="color-picker__hue-handle"
@@ -576,6 +673,9 @@ export function ColorPicker({
               value={hsl.h}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
+              onPointerDown={handleSliderMouseDown}
+              onPointerUp={handleSliderMouseUp}
+              onPointerCancel={handleSliderMouseUp}
               onChange={(e) =>
                 updateColorFromHSL({ ...hsl, h: parseInt(e.target.value) })
               }
@@ -601,6 +701,9 @@ export function ColorPicker({
               value={hsl.s}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
+              onPointerDown={handleSliderMouseDown}
+              onPointerUp={handleSliderMouseUp}
+              onPointerCancel={handleSliderMouseUp}
               onChange={(e) =>
                 updateColorFromHSL({ ...hsl, s: parseInt(e.target.value) })
               }
@@ -631,6 +734,9 @@ export function ColorPicker({
               value={hsl.l}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
+              onPointerDown={handleSliderMouseDown}
+              onPointerUp={handleSliderMouseUp}
+              onPointerCancel={handleSliderMouseUp}
               onChange={(e) =>
                 updateColorFromHSL({ ...hsl, l: parseInt(e.target.value) })
               }
@@ -672,6 +778,9 @@ export function ColorPicker({
                 value={localColor[channel]}
                 onMouseDown={handleSliderMouseDown}
                 onMouseUp={handleSliderMouseUp}
+                onPointerDown={handleSliderMouseDown}
+                onPointerUp={handleSliderMouseUp}
+                onPointerCancel={handleSliderMouseUp}
                 onChange={(e) =>
                   updateColorFromRGB(channel, parseInt(e.target.value))
                 }
@@ -702,6 +811,9 @@ export function ColorPicker({
               value={localColor.a}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
+              onPointerDown={handleSliderMouseDown}
+              onPointerUp={handleSliderMouseUp}
+              onPointerCancel={handleSliderMouseUp}
               onChange={(e) =>
                 updateColorFromRGB("a", parseInt(e.target.value))
               }
