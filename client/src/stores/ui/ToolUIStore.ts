@@ -178,6 +178,7 @@ export class ToolUIStore {
       setColor: action,
       setFillColor: action,
       setColorTarget: action,
+      swapColors: action,
       setBrushSize: action,
       setBitDepth: action,
       setShapeMode: action,
@@ -310,6 +311,38 @@ export class ToolUIStore {
 
   setColorTarget(target: "edge" | "fill"): void {
     this.colorTarget = target;
+  }
+
+  /**
+   * Exchange the EDGE and FILL colour slots.
+   *
+   * ⚠️ THE SUBTLE PART IS THE `undefined` FILL, and it is the reason this is
+   * an action on the store rather than two `set*` calls at a call site.
+   * {@link fillColor} is TRI-STATE — `undefined` means "absent from the
+   * project file" — while {@link selectedColor} is a NON-OPTIONAL `Color`. A
+   * naive `[edge, fill] = [fill, edge]` would therefore write `undefined`
+   * into `selectedColor` on every project that predates the edge/fill split,
+   * which is every project the owner has.
+   *
+   * So the swap reads the EFFECTIVE fill — {@link fillColorOrSelected}, which
+   * falls back to the edge colour — and writes both slots unconditionally.
+   * When `fillColor` was `undefined` the exchange is a no-op VALUE-wise (both
+   * slots already resolved to the same colour), but it deliberately still
+   * MATERIALISES `fillColor`, so that afterwards the two slots are
+   * independently editable instead of the fill silently tracking the edge.
+   * That materialisation is the point of the operation in that case, and it
+   * is the first write of the key for such a project — the same
+   * user-initiated, owner-approved extension `setEyedropperMode` performs.
+   *
+   * ⚠️ NOT UNDOABLE BY ITSELF. History is bracketed by the caller —
+   * {@link ApplicationStore.swapEdgeAndFillColors} snapshots once so the swap
+   * lands as exactly ONE undo step.
+   */
+  swapColors(): void {
+    const nextEdge = this.fillColorOrSelected;
+    const nextFill = this.selectedColor;
+    this.selectedColor = nextEdge;
+    this.fillColor = nextFill;
   }
 
   /**

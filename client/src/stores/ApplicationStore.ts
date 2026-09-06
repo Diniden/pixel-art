@@ -837,6 +837,10 @@ export class ApplicationStore {
       // comparison for a grid.
       editableGrid: computed,
       selectionDims: computed,
+      // Plan 09 task 05: derives from `ToolUIStore`'s own observables
+      // (`colorTarget`, `selectedColor`, `fillColor`), so it re-evaluates
+      // when either slot or the target changes and is memoised in between.
+      activeColor: computed,
     });
 
     // The save reaction — constructed LAST so it observes fully-built stores.
@@ -1763,6 +1767,80 @@ export class ApplicationStore {
       this.session.addToColorHistory(color);
       this.ui.tool.setColor(color);
     });
+  }
+
+  /**
+   * THE single colour-set entry point — it honours `colorTarget` (plan 09,
+   * task 05).
+   *
+   * Every colour surface in the app (the picker, the palette grid, the pinned
+   * current palette, the eyedropper, the other-hand thumb rail) sets "the
+   * current colour". Before this method, FIVE call sites each decided for
+   * themselves which slot that meant, and four of them hardcoded the edge —
+   * which is the defect the user reported as "selecting from the palettes
+   * only sets the edge colour". One branch point replaces five.
+   *
+   * The behaviour generalised here is `ColorPickerContainer.tsx:116-120`, the
+   * one call site that already branched correctly.
+   *
+   * ⚠️ THE HISTORY ASYMMETRY IS DELIBERATE AND IS PRESERVED VERBATIM: the
+   * EDGE path adds to `colorHistory`, the FILL path does NOT. `colorHistory`
+   * is the recent-colours strip, and the owner expects it to track the colour
+   * that is DRAWING — the edge slot. Routing the fill slot through
+   * {@link setColorAndAddToHistory} as well would fill that strip with fill
+   * colours the user never drew a stroke with.
+   *
+   * ⚠️ THE TWO SLOTS ALSO HAVE DIFFERENT WRITE PATHS, and that is why this
+   * is not a one-line ternary over a single setter. `selectedColor` has a
+   * ride-along copy in the hosted project's `uiState` and goes through
+   * {@link setColorAndAddToHistory}, which patches it; `fillColor` is
+   * MobX-only and is written directly. See `ColorPickerContainer`'s own note.
+   */
+  setActiveColor(color: Color): void {
+    if (this.ui.tool.colorTarget === "fill") {
+      runInAction(() => this.ui.tool.setFillColor(color));
+      return;
+    }
+    this.setColorAndAddToHistory(color);
+  }
+
+  /**
+   * Read the colour the user is currently editing — the mirror of
+   * {@link setActiveColor}.
+   *
+   * Exists so read sites branch in ONE place too. The fill side goes through
+   * {@link ToolUIStore.fillColorOrSelected}, so a project that predates the
+   * edge/fill split reports its single colour for both targets rather than
+   * `undefined`.
+   */
+  get activeColor(): Color {
+    const tool = this.ui.tool;
+    return tool.colorTarget === "fill"
+      ? tool.fillColorOrSelected
+      : tool.selectedColor;
+  }
+
+  /**
+   * Swap the edge and fill colours as exactly ONE undo step.
+   *
+   * The snapshot is taken BEFORE the mutation, matching how
+   * `ColorPickerContainer.tsx:131` brackets the picker's own edits, so undo
+   * restores the pre-swap pair in a single press rather than unwinding two
+   * separate colour writes.
+   *
+   * ⚠️ The `undefined`-fill semantics live in {@link ToolUIStore.swapColors}
+   * — read its header before changing anything here.
+   *
+   * The `colorSink` call keeps the hosted project's `uiState.selectedColor`
+   * ride-along in step with the store, exactly as
+   * {@link setColorAndAddToHistory} does for the ordinary edge write. The
+   * swap deliberately does NOT touch `colorHistory`: it reorders two colours
+   * the user already has, it does not pick a new one.
+   */
+  swapEdgeAndFillColors(): void {
+    this.saveStateToHistory("Swap colors");
+    runInAction(() => this.ui.tool.swapColors());
+    this.colorSink(this.ui.tool.selectedColor);
   }
 
   /**

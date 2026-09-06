@@ -8,7 +8,7 @@
 
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
-| W1 | 01, 02, 03, 04 | PARTIAL | 2026-09-06 | 26b2ef6 | typecheck 0 · lint 65w/0e (baseline) · test 151 files / 3172 passed (was 148/3139; corpus unchanged) · build 0 · stylelint 71/2 (baseline) · boundaries OK |
+| W1 | 01, 02, 03, 04 | PARTIAL (code complete; device checks owed) | 2026-09-06 | cb27aa0 | typecheck 0 · lint 65w/0e (baseline) · test 151 files / 3176 passed (was 148/3139; corpus unchanged, no snapshot changed) · build 0 · stylelint 71/2 (baseline) · boundaries OK |
 | W2 | 05 → 09 (**sequential**) | TODO | | | |
 | W3 | 06, 07 | TODO | | | |
 | W4 | 08, 10 | TODO | | | |
@@ -24,10 +24,10 @@ whose device checks were skipped is **PARTIAL**, not `DONE`.
 
 | Task | Device needed | Checks recorded |
 | --- | --- | --- |
-| 01 | iPad | |
-| 02 | iPad + desktop | |
-| 03 | iPad + Pencil | |
-| 04 | owner's real project | |
+| 01 | iPad | ❌ **0 of 6 performed** — no device. Page must not zoom on double-tap / pinch / palm rest; canvas pinch-zoom must still work; rails, panels, timeline and modal bodies must still scroll. |
+| 02 | iPad + desktop | ❌ **0 of 6 performed** — no device/browser session. Clear a field → stays empty; over-max → clamps on blur; Escape reverts; Enter commits; iPad keyboard commits once on dismiss; undo/redo refreshes displayed values. ⚠️ Also eyeball the Pose **Elevation** clamp (deviation 1). |
+| 03 | iPad + Pencil | ❌ **0 of 7 performed** — no device. Pencil must select on contact in the SV grid and hue bar, track past the control's edge, and must NOT draw through onto the canvas. |
+| 04 | owner's real project | ❌ **0 of 6 performed** — no device/project. ⚠️ Zoom-out on the **pixel studio** canvas is still capped at 0.25 until task 11 applies the deferred line; only the lighting canvas has the new floor today. Re-check after W5. |
 | 06 | desktop or iPad | |
 | 07 | iPad (other-hand rail is tablet-only) | |
 | 08 | iPad + Pencil | |
@@ -77,6 +77,48 @@ Per-task verification against each Definition of done:
   take `floor` as a parameter defaulting to `0.25` and read no DOM.
   **`CanvasContainer.tsx` is NOT in the diff** (only `LightingCanvasContainer.tsx`, which
   is in Touches). ✅ code-complete.
+
+### Task 02 — completed by follow-up agent (commit `cb27aa0`)
+
+Step 4 finished (`PoseCameraGroup` Scale box; `EulerInput`'s shared angle primitive and
+`ScaleAxisInput`). **Step 5 required no code change** — all five `type="text"` sites
+already had draft/blur/Enter/Escape semantics. Coordinator-verified sweep: the only raw
+`type="number"` left in `ui/` + `containers/` is `ColorPicker.tsx` (task 03's file, task
+11's hex/number work) and `CameraAdvanced.tsx:259`, the reference implementation itself.
+
+**Spec correction:** `EulerInput.tsx` has **2** real inputs, not 3 — the third grep hit was
+inside a doc comment. The spec's "lines 261, 362" was right.
+
+**🔴 A real bug was found in W1's already-committed primitive and fixed here.**
+`NumberInput.commit` did `Number(raw)`, and **`Number("") === 0`, not `NaN`** — so clearing
+a box and blurring committed `clamp(0, min, max)`, i.e. the minimum. That is precisely the
+"clearing a field writes a value" defect this task exists to end, and it was **invisible in
+any field whose minimum is 0**. It affected **all nine call sites migrated earlier in W1**,
+not just the Pose ones. Empty/whitespace drafts are now rejected before the parse, with 2
+regression tests. Found because the Pose scale box's floor is `1e-3`, so clearing it
+collapsed the model rather than no-opping.
+
+**Two clamp traps avoided.** `NumberInput` *enforces* `min`/`max` on commit where the raw
+attribute was only advisory, so moving bounds across mechanically would have capped values
+the store accepts. `PoseCameraGroup`'s box declared the **slider's** floor (0.1) while the
+store's real floor is `1e-3`; it now passes the store floor as a local constant (`ui/` may
+not import a store). `ScaleAxisInput`'s slider min already equalled the store's, so it was
+safe unchanged.
+
+**Deviations:**
+1. **One user-visible behaviour change — worth eyeballing on the device.** Pose light
+   **Elevation** now genuinely clamps to the ±90 it always declared. Previously `100`
+   passed through, putting the light past the pole, and the box redisplayed it as `80`
+   with the azimuth swung 180°. Coordinator-reviewed: `Math.asin` cannot return outside
+   ±90 regardless, so this makes a declared bound true rather than changing reachable
+   state. Azimuth stays unbounded (it wraps). Documented in the file header.
+2. **Two test files edited outside `Touches`** — `EulerInput.dom.test.tsx`,
+   `PoseSection.dom.test.tsx`. 12 tests asserted the live-commit semantics the task
+   removes; per step 2's own guidance the assertions were rewritten to commit via blur
+   rather than worked around. Accepted by the coordinator: rewriting a test that pins the
+   behaviour you are deliberately changing is the intended move, not scope creep.
+   **No snapshot was updated anywhere in W1** (`git diff` over `__snapshots__` is empty) —
+   independent confirmation `vitest -u` was never run.
 
 ## Deferred follow-ups
 
