@@ -188,6 +188,18 @@ export interface UIState {
   // Pixel pencil brush settings
   pencilBrushShape: "circle" | "square";
   pencilBrushMax: 8 | 16 | 32 | 64 | 128;
+  /**
+   * The ERASER's own size and max (plan 09).
+   *
+   * ⚠️ OPTIONAL, and must stay optional — the same rule as `fillColor` above.
+   * Every project saved before the pencil/eraser split has neither key, and
+   * `brushSize` above keeps its meaning as THE PENCIL'S size. Readers fall
+   * back through `ToolUIStore.effectiveEraserSize` / `effectiveEraserMax`, so
+   * those projects keep their single-size behaviour and their corpus digests.
+   * That fallback IS the migration; there is no migration code.
+   */
+  eraserBrushSize?: number;
+  eraserBrushMax?: 8 | 16 | 32 | 64 | 128;
   // Trace mode nudge: how far Shift+WASD moves reference/frame trace offsets
   traceNudgeAmount: 10 | 20 | 25 | 50 | 100;
   // Variant editing state

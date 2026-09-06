@@ -93,6 +93,37 @@ export class ToolUIStore {
   eraserShape: "circle" | "square" = "circle";
   pencilBrushShape: "circle" | "square" = "square";
   pencilBrushMax: 8 | 16 | 32 | 64 | 128 = 16;
+
+  /* ── the ERASER's own size and max (plan 09, task 09) ──────────────────
+   *
+   * The user's report: "the pencil and eraser have too many settings
+   * interlaced … they need to be distinct values from each other." Shape
+   * already was — `eraserShape` and `pencilBrushShape` are separate fields.
+   * Size and max were not: `brushSize` above is a single global that the
+   * pencil, the eraser, `fill-square`, the reference-trace brush, the
+   * lighting normal pencil, the hover footprint and the other-hand sliders
+   * all read, and `pencilBrushMax` — named for the pencil — bounded the
+   * eraser's slider too. These two fields end that for the eraser.
+   *
+   * ⚠️ TRI-STATE, exactly like `eyedropperMode`, `borderRadius`,
+   * `gaussianFill` and `fillColor`: `undefined` means "absent from the
+   * project file", and readers apply `?? brushSize` / `?? pencilBrushMax`.
+   * Seeding a number here would ADD A KEY TO ALL 151 CORPUS SNAPSHOTS the
+   * next time each was saved — the exact wire-format drift R3 exists to
+   * prevent. Both are emitted through `assign()` in
+   * `UIStore.toPersistedUIState()`, which writes nothing for `undefined`, and
+   * `eraserBrush.test.ts` asserts an untouched store emits NEITHER key.
+   *
+   * ⚠️ AND THE FALLBACK IS THE MIGRATION — there is no migration code and
+   * none is needed. `brushSize` keeps its slot, its unconditional emission
+   * and its meaning (now specifically THE PENCIL'S size), so an existing
+   * project's single saved `brushSize` becomes the pencil's and the eraser
+   * inherits the same number through `effectiveEraserSize` until the user
+   * actually moves the eraser's slider. Nothing an existing project does
+   * looks any different until then, which is the whole point.
+   */
+  eraserBrushSize: number | undefined = undefined;
+  eraserBrushMax: 8 | 16 | 32 | 64 | 128 | undefined = undefined;
   /** Gates `moveLayerPixels` — passed as an ARGUMENT, never read across. */
   moveAllLayers: boolean = DEFAULT_UI_STATE.moveAllLayers;
   selectionMode: SelectionMode = "rect";
@@ -160,6 +191,8 @@ export class ToolUIStore {
       eraserShape: observable,
       pencilBrushShape: observable,
       pencilBrushMax: observable,
+      eraserBrushSize: observable,
+      eraserBrushMax: observable,
       moveAllLayers: observable,
       selectionMode: observable,
       selectionBehavior: observable,
@@ -186,6 +219,8 @@ export class ToolUIStore {
       setEraserShape: action,
       setPencilBrushShape: action,
       setPencilBrushMax: action,
+      setEraserBrushSize: action,
+      setEraserBrushMax: action,
       setMoveAllLayers: action,
       setSelectionMode: action,
       setSelectionBehavior: action,
@@ -395,6 +430,80 @@ export class ToolUIStore {
     this.brushSize = Math.min(this.brushSize, max);
   }
 
+  /**
+   * Write the ERASER's own size — the first write of the key on a project
+   * that never had one.
+   *
+   * ⚠️ That is the intended, owner-approved extension, and it happens ONLY
+   * when the user actually moves the eraser's slider. Nothing writes this
+   * field incidentally — in particular {@link setBrushSize} does not, which
+   * is what keeps an untouched project byte-identical while still letting the
+   * eraser inherit the pencil's size through {@link effectiveEraserSize}.
+   */
+  setEraserBrushSize(size: number): void {
+    this.eraserBrushSize = size;
+  }
+
+  /**
+   * The eraser's equivalent of {@link setPencilBrushMax}, including its
+   * re-clamp.
+   *
+   * ⚠️ IT RE-CLAMPS THE ERASER'S SIZE, NEVER `brushSize`. `setPencilBrushMax`
+   * clamps `brushSize` because `brushSize` IS the pencil's size; the mirror
+   * of that here is `eraserBrushSize`. Clamping `brushSize` from this setter
+   * would re-introduce exactly the interlacing this task removes — lowering
+   * the eraser's max would shrink the pencil.
+   *
+   * The clamp reads {@link effectiveEraserSize}, not the raw field, so
+   * lowering the max on a project that has never set an eraser size still
+   * produces a correct in-range value (materialising the key, which is
+   * user-initiated and therefore fine) rather than leaving the eraser
+   * inheriting an out-of-range `brushSize`.
+   */
+  setEraserBrushMax(max: 8 | 16 | 32 | 64 | 128): void {
+    this.eraserBrushMax = max;
+    this.eraserBrushSize = Math.min(this.effectiveEraserSize, max);
+  }
+
+  /**
+   * The `?? brushSize` fallback every reader applies to the tri-state eraser
+   * size. See the field's header — this getter IS the migration.
+   */
+  get effectiveEraserSize(): number {
+    return this.eraserBrushSize ?? this.brushSize;
+  }
+
+  /**
+   * The eraser's max, falling back to the pencil's and then to 16 — which is
+   * precisely the bound the eraser's slider used before this task, so a
+   * project that has set neither behaves exactly as it did.
+   */
+  get effectiveEraserMax(): 8 | 16 | 32 | 64 | 128 {
+    return this.eraserBrushMax ?? this.pencilBrushMax ?? 16;
+  }
+
+  /**
+   * The brush size THE ACTIVE TOOL should draw and preview with.
+   *
+   * ⚠️ ADDED BUT NOT YET CONSUMED — a one-line follow-up in
+   * `CanvasContainer.tsx` is required to finish the job, and it is recorded
+   * in `HANDOFF.md` for W5. Task 09 is forbidden from editing that file
+   * (tasks 07 and 08 own it), so the getter lands here and the container
+   * adopts it later. Until then the eraser's PANEL and RAIL sliders are
+   * independent while its DRAW path and hover footprint still follow
+   * `brushSize`.
+   *
+   * ⚠️ ONLY `"eraser"` branches, deliberately. `fill-square` and the
+   * reference-trace brush keep reading `brushSize` (the pencil's) — the user
+   * asked to separate the pencil and the eraser, not to give every tool its
+   * own size, and inventing more fields would add more wire keys.
+   */
+  get activeToolBrushSize(): number {
+    return this.selectedTool === "eraser"
+      ? this.effectiveEraserSize
+      : this.brushSize;
+  }
+
   setMoveAllLayers(moveAll: boolean): void {
     this.moveAllLayers = moveAll;
   }
@@ -495,6 +604,8 @@ export class ToolUIStore {
     eraserShape?: "circle" | "square";
     pencilBrushShape?: "circle" | "square";
     pencilBrushMax?: 8 | 16 | 32 | 64 | 128;
+    eraserBrushSize?: number;
+    eraserBrushMax?: 8 | 16 | 32 | 64 | 128;
     moveAllLayers?: boolean;
     selectionMode?: SelectionMode;
     selectionBehavior?: SelectionBehavior;
@@ -528,6 +639,12 @@ export class ToolUIStore {
     if (ui.pencilBrushMax !== undefined) {
       this.pencilBrushMax = ui.pencilBrushMax;
     }
+    // Assigned unconditionally: absent must stay absent (see the field note).
+    // Anything else would let a project WITHOUT the key inherit the previous
+    // project's eraser size on a project switch, and then write that borrowed
+    // number into a file that never had one.
+    this.eraserBrushSize = ui.eraserBrushSize;
+    this.eraserBrushMax = ui.eraserBrushMax;
     if (ui.moveAllLayers !== undefined) this.moveAllLayers = ui.moveAllLayers;
     if (ui.selectionMode !== undefined) this.selectionMode = ui.selectionMode;
     if (ui.selectionBehavior !== undefined) {

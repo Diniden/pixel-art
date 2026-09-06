@@ -117,6 +117,18 @@ export interface CompactUIState {
   eraserShape?: "circle" | "square"; // Optional for backward compatibility
   pencilBrushShape?: "circle" | "square"; // Optional for backward compatibility
   pencilBrushMax?: 8 | 16 | 32 | 64 | 128; // Optional for backward compatibility
+  /**
+   * The ERASER's own size and max (plan 09).
+   *
+   * ⚠️ Conditional, like `fillColor` above: absent until the user actually
+   * moves the eraser's slider or picks its max, so an untouched project's key
+   * set — and therefore its corpus digest — is unchanged. `brushSize` above
+   * stays unconditional and now means specifically the PENCIL's size; the
+   * eraser falls back to it (`ToolUIStore.effectiveEraserSize`), which is the
+   * whole migration.
+   */
+  eraserBrushSize?: number;
+  eraserBrushMax?: 8 | 16 | 32 | 64 | 128;
   traceNudgeAmount?: 10 | 20 | 25 | 50 | 100; // Optional for backward compatibility
   normalBrushShape?: "circle" | "square"; // Optional for backward compatibility
   variantFrameIndices?: { [variantGroupId: string]: number };

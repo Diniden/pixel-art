@@ -146,6 +146,13 @@ function fullyPopulatedProject(): Project {
     eraserShape: "square",
     pencilBrushShape: "circle",
     pencilBrushMax: 64,
+    // ⚠️ Present for the same reason as `posePresets` below: these two are
+    // conditional, so a fixture that left them out would make the
+    // every-field-reachable assertion read a real builder line as missing.
+    // Deliberately DIFFERENT from `brushSize`/`pencilBrushMax` above — the
+    // whole point of the pair is that the eraser's numbers are its own.
+    eraserBrushSize: 3,
+    eraserBrushMax: 8,
     traceNudgeAmount: 50,
     focusMode: true,
     lightGridMode: true,
@@ -294,7 +301,19 @@ describe("R3 — toPersistedUIState() is wire-format identical", () => {
     // (mesh, rotation, scale, pan, light, outline) stays session-only, which
     // `PoseUIStore.test.ts`'s "is NOT part of the persisted wire format" case
     // still pins unmodified.
-    expect(declared).toHaveLength(53);
+    // +2 (2026-09-06): `eraserBrushSize` and `eraserBrushMax`, the ERASER's
+    // own size and max — the user's "the pencil and eraser have too many
+    // settings interlaced … they need to be distinct values" (plan 09, task
+    // 09). Conditional on exactly the same terms as the seven above, and for
+    // exactly the same reason: both store fields are `undefined` until the
+    // user actually moves the eraser's slider or picks its max — nothing,
+    // including `setBrushSize`, writes them incidentally — so `assign` writes
+    // nothing and no existing snapshot gains a key. ⚠️ `brushSize` (slot 9)
+    // is NOT replaced and stays unconditional; it now means specifically the
+    // PENCIL's size, and the eraser falls back to it through
+    // `ToolUIStore.effectiveEraserSize`. That fallback IS the migration —
+    // there is no migration code and none is needed.
+    expect(declared).toHaveLength(55);
 
     // A FULLY-POPULATED project, because 11 of the 44 keys are
     // conditionally present by design: the legacy `...project.uiState`

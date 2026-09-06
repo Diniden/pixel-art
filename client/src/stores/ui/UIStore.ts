@@ -587,6 +587,30 @@ export class UIStore {
     // field stays `undefined` until `setEyedropperMode` runs, so `assign`
     // writes nothing and the corpus digests are untouched.
     /* 48 */ assign(persisted, "eyedropperMode", tool.eyedropperMode);
+    // ── The eraser's own size and max (plan 09, task 09) ─────────────────
+    //
+    // ⚠️ CONDITIONAL, AND FOR THE SAME REASON AS SLOTS 45-46 AND 48, WHICH
+    // MUST NOT BE WEAKENED: neither key is emitted until the user changes
+    // something. Both store fields are `undefined` until `setEraserBrushSize`
+    // or `setEraserBrushMax` runs — nothing writes them incidentally, and in
+    // particular `setBrushSize` does not — so `assign` writes nothing for a
+    // project whose owner has never touched the eraser's controls, and the
+    // 151 corpus digests are unchanged. `eraserBrush.test.ts` asserts exactly
+    // that: an untouched store emits NEITHER key.
+    //
+    // ⚠️ NEVER move these into the unconditional 1-31 block, and never write
+    // them as `eraserBrushSize: <expr>`. The `key: undefined` form still adds
+    // the key — to `Object.keys()` and to the corpus digest — as was measured
+    // while adding `fillColor`, where it changed all 11 digests.
+    //
+    // `brushSize` (slot 9) stays UNCONDITIONAL and is NOT replaced by these:
+    // it is part of the frozen key set, and it now carries specifically the
+    // PENCIL's size. An existing project's saved `brushSize` is therefore the
+    // pencil's, and the eraser inherits it through
+    // `ToolUIStore.effectiveEraserSize` — the `?? brushSize` fallback IS the
+    // migration, so no migration accompanies these keys and none is needed.
+    /* 50 */ assign(persisted, "eraserBrushSize", tool.eraserBrushSize);
+    /* 51 */ assign(persisted, "eraserBrushMax", tool.eraserBrushMax);
     // ⚠️ CONDITIONAL, AND THE CONDITION IS NOT "anything is hidden".
     //
     // MEASURED 2026-08-30, against the real corpus: `backup-02-08-2026.json
