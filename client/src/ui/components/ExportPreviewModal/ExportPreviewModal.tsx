@@ -19,6 +19,7 @@ import type {
   ExportedVariant,
 } from "../../../../lib/parse-pixel-project";
 import { Icon } from "../../primitives/Icon/Icon";
+import { NumberInput } from "../../primitives/NumberInput/NumberInput";
 import { AlertTriangle, X } from "lucide-react";
 import "./ExportPreviewModal.css";
 
@@ -533,14 +534,13 @@ export function ExportPreviewModal({
                 onChange={(e) => setFps(Number(e.target.value))}
                 className="export-preview-modal__fps-slider"
               />
-              <input
-                type="number"
-                min="1"
-                max="60"
+              <NumberInput
+                unstyled
+                label="FPS"
+                min={1}
+                max={60}
                 value={fps}
-                onChange={(e) =>
-                  setFps(Math.max(1, Math.min(60, Number(e.target.value) || 1)))
-                }
+                onChange={setFps}
                 className="export-preview-modal__fps-value"
               />
             </div>

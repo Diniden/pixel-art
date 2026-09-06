@@ -66,6 +66,53 @@ body {
     -webkit-touch-callout: none;
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     TOUCH DEVICES: NO PAGE ZOOM (2026-09-06)
+     ══════════════════════════════════════════════════════════════════════
+
+     HALF ONE OF A TWO-PART FIX. The other half is
+     `ui/hooks/useSuppressBrowserZoom`, mounted in `main.tsx`. Neither alone
+     is sufficient on iOS, and that is not a belt-and-braces claim — it is
+     the rule `ui/hooks/useCanvasViewport.ts:519-618` already states for the
+     canvas's own pinch listener:
+
+       "`touch-action: none` in the CSS stops the browser claiming the
+        gesture before the listener runs; this listener stops it claiming it
+        afterwards. Both are needed — neither alone is sufficient on iOS."
+
+     This declaration is the "before the listener runs" half, applied to the
+     whole document instead of one container. The editor has its own zoom
+     controls for everything; iOS's page zoom only ever fires here by
+     accident — a Pencil stroke with a stray palm contact, a two-finger rest
+     on a rail, a double-tap on the header.
+
+     ⚠️ THIS DOES NOT BREAK THE SCROLLING RAILS, and the reason is specific.
+     `touch-action` does not inherit; instead the browser intersects the
+     values from the touched element up the ancestor chain ONLY AS FAR AS
+     "the one that implements the gesture — the first containing scrolling
+     element" (CSS `touch-action`, Pointer Events L3 §8). A one-finger pan
+     inside `.app__panel-scroll`, `.toolbar`, `.frame-timeline` or any modal
+     body terminates the walk AT that scroll container, so the `none` here is
+     never intersected and the pan still happens. A pinch or double-tap on
+     non-scrollable chrome has no such container to stop at, walks all the
+     way up, and lands on this rule. That asymmetry is the whole mechanism.
+
+     This is also why `Toolbar.css:44`/`:87` (`pan-y`/`pan-x`) keep working
+     unchanged: a descendant may still RESTRICT what its own subtree allows.
+
+     ⚠️ Scoped to `pointer: coarse` so desktop trackpad pinch-zoom — a real
+     accessibility affordance on a machine with no other zoom gesture — is
+     untouched.
+
+     ⚠️ `.canvas__viewport` already declares its own `touch-action: none`
+     (`CanvasSurface.css:43`) and is deliberately left alone; the canvas's
+     pinch-to-zoom is the editor's, not the browser's, and keeps working. */
+  html,
+  body,
+  #root {
+    touch-action: none;
+  }
+
   /* The exemption. `auto`, not `text`: a `contenteditable` region resolves
      its own selection behaviour, which `text` would override. */
   input,
