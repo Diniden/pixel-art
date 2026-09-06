@@ -54,6 +54,7 @@ import { hslToRgb, rgbToHsl } from "../../utils/colorMath";
 // ⚠️ The fix for the 2026-08-31 HSL drift/stuck report — see the comment
 // on `hsl` below, and the hook's own header for the measurements.
 import { useHslMirror } from "../../hooks/useHslMirror";
+import { ArrowLeftRight } from "lucide-react";
 import { OtherHandButton } from "../OtherHand/OtherHandButton";
 import "./ColorPicker.css";
 
@@ -81,6 +82,19 @@ interface ColorPickerProps {
   onAdjustColor: (color: Color, trackHistory: boolean) => void;
   /** Label omitted on drag start, `"Adjust color"` on the debounced save. */
   onSaveStateToHistory: (label?: string) => void;
+  /**
+   * Exchange the edge and fill colours — ONE undo step (the store's
+   * `swapEdgeAndFillColors` snapshots before it mutates, so do not bracket
+   * this callback with a second history save).
+   *
+   * ⚠️ OPTIONAL, AND DELIBERATELY UNWIRED AS OF PLAN 09 TASK 07. The control
+   * renders only when a caller supplies this, so the component stays pure and
+   * the button cannot half-exist. `ColorPickerContainer` belongs to task 06
+   * and the `X` shortcut to task 11 — task 11 is what passes this prop. Until
+   * then the desktop picker shows no swap button at all, which is the correct
+   * intermediate state: a visible dead control would be worse.
+   */
+  onSwapColors?: () => void;
   /** Hands the rail to the colour sliders in Other Hand Mode (tablets only). */
   onOtherHand?: () => void;
 }
@@ -96,6 +110,7 @@ export function ColorPicker({
   onSetColor,
   onAdjustColor,
   onSaveStateToHistory,
+  onSwapColors,
   onOtherHand,
 }: ColorPickerProps) {
   const [localColor, setLocalColor] = useState<Color>({
@@ -562,31 +577,51 @@ export function ColorPicker({
             use the fill colour, and a rectangle/ellipse in "both" mode uses
             each for the part it names. The swatch on each tab is that slot's
             current colour, so the pair is readable without switching. */}
-        <div className="color-picker__targets" role="tablist">
-          {(
+        <div className="color-picker__target-row">
+          <div className="color-picker__targets" role="tablist">
+            {(
             [
-              ["edge", "Edge", edgeColor],
-              ["fill", "Fill", fillColor],
-            ] as const
-          ).map(([id, label, swatch]) => (
+                ["edge", "Edge", edgeColor],
+                ["fill", "Fill", fillColor],
+              ] as const
+            ).map(([id, label, swatch]) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={target === id}
+                className={`color-picker__target${
+                  target === id ? " color-picker__target--active" : ""
+                }`}
+                onClick={() => onTargetChange(id)}
+              >
+                <span
+                  className="color-picker__target-swatch"
+                  style={{
+                    backgroundColor: `rgba(${swatch.r}, ${swatch.g}, ${swatch.b}, ${swatch.a / 255})`,
+                  }}
+                />
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* ── Swap, beside the tabs it exchanges ─────────────────────────
+              Next to the segmented group rather than inside it: the tablist
+              describes exactly two tabs, and a third child that is not a tab
+              would make a screen reader announce "3 tabs". Adjacency still
+              carries the meaning — the thing it swaps is the pair to its
+              left. Rendered only when a caller supplies `onSwapColors`; see
+              that prop's note on why it is unwired until task 11. */}
+          {onSwapColors ? (
             <button
-              key={id}
-              role="tab"
-              aria-selected={target === id}
-              className={`color-picker__target${
-                target === id ? " color-picker__target--active" : ""
-              }`}
-              onClick={() => onTargetChange(id)}
+              type="button"
+              className="color-picker__swap"
+              title="Swap edge and fill colors"
+              aria-label="Swap edge and fill colors"
+              onClick={onSwapColors}
             >
-              <span
-                className="color-picker__target-swatch"
-                style={{
-                  backgroundColor: `rgba(${swatch.r}, ${swatch.g}, ${swatch.b}, ${swatch.a / 255})`,
-                }}
-              />
-              {label}
+              <ArrowLeftRight size={14} aria-hidden="true" />
             </button>
-          ))}
+          ) : null}
         </div>
 
         {/* Color History */}

@@ -269,11 +269,21 @@
    `right-sidebar-top-controls__segmented` so the control reads as the same
    kind of segmented choice the shape Mode control uses, with a swatch added:
    the point is to see BOTH colours at once, not just the active one. */
+/* The tabs and the swap control on one line. The swap button is a SIBLING of
+   the tablist, not a member of it — see the JSX note: a third child inside
+   `role="tablist"` would be announced as a third tab. */
+.color-picker__target-row {
+  display: flex;
+  gap: var(--space-1);
+  align-items: stretch;
+  margin-bottom: var(--space-2);
+}
+
 .color-picker__targets {
   display: flex;
+  flex: 1;
   gap: var(--space-0-5);
   padding: var(--space-0-5);
-  margin-bottom: var(--space-2);
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
 }
@@ -307,6 +317,37 @@
   height: 12px;
   border: 1px solid var(--border-accent);
   border-radius: var(--radius-xs);
+}
+
+/* Swap edge ⇄ fill. Square, so the icon is not lopsided, and sized off the
+   tabs it sits beside on a fine pointer; the coarse-pointer rule below takes
+   it to 44px, Apple's minimum comfortable target — the same number and the
+   same reason as `.other-hand__grip` (OtherHand.css:334) and
+   `.thumb-buttons__btn` (:393). */
+.color-picker__swap {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.color-picker__swap:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+@media (pointer: coarse) {
+  .color-picker__swap {
+    width: 44px;
+    min-height: 44px;
+  }
 }
 
 /* modifiers */
