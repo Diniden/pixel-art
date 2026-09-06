@@ -144,12 +144,21 @@ export const PixelStudioPanelContainer = observer(
         eraserShape={tool.eraserShape}
         pencilBrushShape={tool.pencilBrushShape}
         pencilBrushMax={tool.pencilBrushMax}
+        // The tri-state fields are collapsed HERE, not in the component:
+        // `ui/` may not import a store and must not carry wire-format
+        // knowledge. `effectiveEraserSize` is `?? brushSize` — the migration
+        // that lets an existing project's single saved size serve as the
+        // eraser's until the user moves its slider.
+        eraserBrushSize={tool.effectiveEraserSize}
+        eraserBrushMax={tool.effectiveEraserMax}
         originColor={tool.originColor ?? DEFAULT_ORIGIN_COLOR}
         originPos={app.currentObject?.origin ?? null}
         onBrushSizeChange={(size) => tool.setBrushSize(size)}
         onEraserShapeChange={(shape) => tool.setEraserShape(shape)}
         onPencilBrushShapeChange={(shape) => tool.setPencilBrushShape(shape)}
         onPencilBrushMaxChange={(max) => tool.setPencilBrushMax(max)}
+        onEraserBrushSizeChange={(size) => tool.setEraserBrushSize(size)}
+        onEraserBrushMaxChange={(max) => tool.setEraserBrushMax(max)}
         onOriginColorChange={(color) => tool.setOriginColor(color)}
         colorPicker={<ColorPickerContainer />}
         paletteManager={<PaletteManagerContainer />}

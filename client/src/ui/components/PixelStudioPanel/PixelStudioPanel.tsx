@@ -92,12 +92,27 @@ interface PixelStudioPanelProps {
    * elsewhere but not here.
    */
   pencilBrushMax: 8 | 16 | 32 | 64 | 128 | undefined;
+  /**
+   * The ERASER's own size and max — its counterparts to `brushSize` and
+   * `pencilBrushMax` above (plan 09, task 09).
+   *
+   * ⚠️ ALREADY RESOLVED BY THE CONTAINER. Both are plain values, not the
+   * store's tri-state fields: the container passes `effectiveEraserSize` and
+   * `effectiveEraserMax`, which have already applied the `?? brushSize` /
+   * `?? pencilBrushMax ?? 16` fallbacks. This component must not know that
+   * the underlying fields can be absent — that is a wire-format concern, and
+   * `ui/` may not import a store.
+   */
+  eraserBrushSize: number;
+  eraserBrushMax: 8 | 16 | 32 | 64 | 128;
   originColor: Color;
   originPos: { x: number; y: number } | null;
   onBrushSizeChange: (size: number) => void;
   onEraserShapeChange: (shape: "circle" | "square") => void;
   onPencilBrushShapeChange: (shape: "circle" | "square") => void;
   onPencilBrushMaxChange: (max: 8 | 16 | 32 | 64 | 128) => void;
+  onEraserBrushSizeChange: (size: number) => void;
+  onEraserBrushMaxChange: (max: 8 | 16 | 32 | 64 | 128) => void;
   onOriginColorChange: (color: Color) => void;
   /** `ColorPickerContainer` element. */
   colorPicker: ReactNode;
@@ -141,12 +156,16 @@ export function PixelStudioPanel({
   eraserShape,
   pencilBrushShape,
   pencilBrushMax,
+  eraserBrushSize,
+  eraserBrushMax,
   originColor,
   originPos,
   onBrushSizeChange,
   onEraserShapeChange,
   onPencilBrushShapeChange,
   onPencilBrushMaxChange,
+  onEraserBrushSizeChange,
+  onEraserBrushMaxChange,
   onOriginColorChange,
   colorPicker,
   paletteManager,
@@ -247,21 +266,43 @@ export function PixelStudioPanel({
           </div>
           <div className="panel__body panel__body--dense">
             <div className="pixel-studio-panel__controls">
+              {/* ⚠️ The eraser's OWN size and max, bounded by its OWN max —
+                  it used to render `brushSize` bounded by `pencilBrushMax`,
+                  which is the interlacing the user reported. The displayed
+                  value is clamped exactly as the Pencil section clamps its
+                  own, so the two sections are symmetric in form as well as in
+                  the values they read. */}
               <div className="pixel-studio-panel__size-control">
                 <label>Size</label>
                 <div className="pixel-studio-panel__size-input-group">
                   <input
                     type="range"
                     min="1"
-                    max={pencilBrushMax ?? 16}
-                    value={brushSize}
+                    max={eraserBrushMax}
+                    value={Math.min(eraserBrushSize, eraserBrushMax)}
                     onChange={(e) =>
-                      onBrushSizeChange(parseInt(e.target.value))
+                      onEraserBrushSizeChange(parseInt(e.target.value))
                     }
                   />
                   <span className="pixel-studio-panel__size-value">
-                    {brushSize}
+                    {Math.min(eraserBrushSize, eraserBrushMax)}
                   </span>
+                </div>
+              </div>
+
+              <div className="pixel-studio-panel__max-control">
+                <label>Max</label>
+                <div className="pixel-studio-panel__shape-buttons">
+                  {maxOptions.map((opt) => (
+                    <button
+                      key={opt}
+                      className={`pixel-studio-panel__shape-btn ${eraserBrushMax === opt ? "pixel-studio-panel__shape-btn--active" : ""}`}
+                      onClick={() => onEraserBrushMaxChange(opt)}
+                      title={`Set max size to ${opt}`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
                 </div>
               </div>
 
