@@ -20,7 +20,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useCanvasViewport } from "../useCanvasViewport";
+import { useCanvasViewport, viewZoomFloor } from "../useCanvasViewport";
 
 /**
  * The shared pixel scale, and the 1:1 grid it now magnifies.
@@ -161,7 +161,16 @@ describe("two-finger ZOOM still works, and composes with pan", () => {
     for (let i = 0; i < 12; i++) {
       act(() => result.current.updatePinch(touches([399, 300], [401, 300])));
     }
-    expect(result.current.viewZoom).toBeGreaterThanOrEqual(0.25);
+    // ⚠️ The floor is DERIVED from the content size now, not the flat 0.25
+    // this once asserted (plan 09, task 04). This fixture's content is
+    // 400x400, so the pinch may shrink it until its longest side is
+    // `MIN_CANVAS_SCREEN_PX` — 50/400 = 0.125. The old assertion was the
+    // very limit the task removes: a hard 0.25 stopped a 2560px composition
+    // at 640px, so a large sprite could never be seen whole.
+    expect(result.current.viewZoom).toBeGreaterThanOrEqual(
+      viewZoomFloor(CONTENT_W, CONTENT_H),
+    );
+    expect(viewZoomFloor(CONTENT_W, CONTENT_H)).toBeCloseTo(0.125, 10);
   });
 });
 

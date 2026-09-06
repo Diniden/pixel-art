@@ -147,7 +147,10 @@ import type { SvgPathSpec } from "../ui/canvas/svg/gridOverlay";
 import { brushOutlineOverlay } from "../ui/canvas/svg/chromeOverlay";
 import { stampAt } from "../ui/canvas/tools/brushStamp";
 import { useCanvasRender } from "../ui/hooks/useCanvasRender";
-import { useCanvasViewport } from "../ui/hooks/useCanvasViewport";
+import {
+  useCanvasViewport,
+  viewZoomFloor,
+} from "../ui/hooks/useCanvasViewport";
 import { useLightingPaint } from "../ui/hooks/useLightingPaint";
 import { LightingSurface } from "../ui/components/LightingSurface/LightingSurface";
 import { CanvasViewControls } from "../ui/components/CanvasViewControls/CanvasViewControls";
@@ -360,7 +363,14 @@ export const LightingCanvasContainer = observer(
       panOffset: camera.panOffset,
       onCommitPan: (pan) => camera.setPanOffset(pan),
       viewZoom: camera.viewZoom,
-      onCommitViewZoom: (z) => camera.setViewZoom(z),
+      // ⚠️ The floor is passed IN. The store may not measure the DOM, so the
+      // derived zoom-out limit (longest on-screen dimension down to
+      // `MIN_CANVAS_SCREEN_PX`) is computed here, where the measurement
+      // already is, and handed to the clamp. Omitting it would silently
+      // re-impose the legacy flat 0.25 on the committed value while the
+      // gesture itself went lower — the two clamps must agree.
+      onCommitViewZoom: (z) =>
+        camera.setViewZoom(z, viewZoomFloor(contentWidth, contentHeight)),
       resyncKey: `${app.timelineUI.selectedObjectId ?? ""}|${
         app.timelineUI.selectedFrameId ?? ""
       }|${renderMode}`,

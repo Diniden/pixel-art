@@ -66,9 +66,38 @@ export interface ViewPoint {
 /** How long the zoom focal point stays locked after a zoom step, in ms. */
 export const ZOOM_ANCHOR_MS = 100;
 
-/** View-zoom limits. Both legacy copies used exactly this range. */
+/**
+ * View-zoom limits. Both legacy copies used exactly this range.
+ *
+ * ⚠️ `MIN_VIEW_ZOOM` is no longer the live floor for the gesture handlers —
+ * `viewZoomFloor()` below derives that from the content size. It remains the
+ * documented FALLBACK: the value used before the first measurement lands, and
+ * the default floor of both stores' `setViewZoom`.
+ */
 export const MIN_VIEW_ZOOM = 0.25;
 export const MAX_VIEW_ZOOM = 4;
+
+/** Smallest on-screen size, in CSS px, the canvas may be shrunk to. */
+export const MIN_CANVAS_SCREEN_PX = 50;
+
+/**
+ * The view-zoom floor for a given content size. Derived, not fixed: the old
+ * hard 0.25 stopped a 2560px composition at 640px, so a large sprite could
+ * never be seen whole. Clamped to <= 1 so 1:1 is always reachable, and
+ * falls back to the legacy 0.25 before the first measurement lands.
+ *
+ * ⚠️ Pure and dimension-only, deliberately. Stores may not read the DOM
+ * (`ViewportUIStore.setViewZoom`'s note), so the floor is computed here — at
+ * the layer that already has the measurement — and passed INTO them.
+ */
+export function viewZoomFloor(
+  contentWidth: number,
+  contentHeight: number,
+): number {
+  const longest = Math.max(contentWidth, contentHeight);
+  if (!(longest > 0)) return MIN_VIEW_ZOOM;
+  return Math.min(1, MIN_CANVAS_SCREEN_PX / longest);
+}
 
 /**
  * How long pan settles before being committed outward, in ms. Canvas debounced
@@ -343,8 +372,12 @@ export function useCanvasViewport({
         const anchor = zoomAnchorLockRef.current.anchor;
 
         const factor = Math.exp(-e.deltaY * WHEEL_ZOOM_RATE);
+        // Derived floor, not the flat `MIN_VIEW_ZOOM`: zoom out until the
+        // longest on-screen dimension is `MIN_CANVAS_SCREEN_PX`, whatever the
+        // sprite's size. `state.contentWidth/Height` are the live values kept
+        // fresh by the render-phase write above.
         const newViewZoom = Math.max(
-          MIN_VIEW_ZOOM,
+          viewZoomFloor(state.contentWidth, state.contentHeight),
           Math.min(MAX_VIEW_ZOOM, state.viewZoom * factor),
         );
         const ratio = newViewZoom / state.viewZoom;
@@ -460,8 +493,13 @@ export function useCanvasViewport({
       const anchor = zoomAnchorLockRef.current.anchor;
 
       const scale = Math.pow(dist / start.distance, PINCH_EXPONENT);
+      // Derived floor, not the flat `MIN_VIEW_ZOOM` — see the wheel handler.
+      // This is the path the iPad actually takes: pinching out now keeps
+      // shrinking a large sprite until its longest side is
+      // `MIN_CANVAS_SCREEN_PX`, instead of stopping a 2560px composition at
+      // 640px.
       const newViewZoom = Math.max(
-        MIN_VIEW_ZOOM,
+        viewZoomFloor(contentWidth, contentHeight),
         Math.min(MAX_VIEW_ZOOM, start.viewZoom * scale),
       );
       const zoomRatio = newViewZoom / start.viewZoom;
@@ -506,7 +544,13 @@ export function useCanvasViewport({
       };
       return true;
     },
-    [getTouchCenter, getTouchDistance, scheduleCommitPan],
+    [
+      contentWidth,
+      contentHeight,
+      getTouchCenter,
+      getTouchDistance,
+      scheduleCommitPan,
+    ],
   );
 
   const endPinch = useCallback(() => {

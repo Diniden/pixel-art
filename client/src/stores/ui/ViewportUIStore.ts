@@ -196,9 +196,20 @@ export class ViewportUIStore implements CanvasCamera {
     this.panOffset = offset;
   }
 
-  /** Clamped to the view-transform range the gesture engine enforces. */
-  setViewZoom(zoom: number): void {
-    this.viewZoom = Math.max(0.25, Math.min(4, zoom));
+  /**
+   * Clamped to the view-transform range the gesture engine enforces.
+   *
+   * ⚠️ The FLOOR IS SUPPLIED BY THE CALLER, and defaults to the legacy 0.25.
+   * The real floor is derived from the canvas's on-screen size — zoom out
+   * until the longest dimension is 50 CSS px, whatever the sprite — and that
+   * size is a DOM measurement, which a store may not take (same reason
+   * `resetView` below is handed its centred pan rather than computing it).
+   * The container computes it with `viewZoomFloor(contentWidth, contentHeight)`
+   * from `ui/hooks/useCanvasViewport` and passes it in. Callers that do not
+   * have a measurement omit it and keep exactly today's behaviour.
+   */
+  setViewZoom(zoom: number, floor: number = 0.25): void {
+    this.viewZoom = Math.max(floor, Math.min(4, zoom));
   }
 
   /**

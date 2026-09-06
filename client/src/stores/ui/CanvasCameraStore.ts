@@ -41,7 +41,12 @@ export interface CanvasCamera {
   /** `undefined` = never zoomed; readers use `?? 1`. */
   readonly viewZoom: number | undefined;
   setPanOffset(offset: { x: number; y: number }): void;
-  setViewZoom(zoom: number): void;
+  /**
+   * `floor` is the caller's derived zoom-out limit (`viewZoomFloor()`), and
+   * defaults to the legacy 0.25 when omitted — a store cannot measure the DOM
+   * for itself.
+   */
+  setViewZoom(zoom: number, floor?: number): void;
   resetView(centeredPan: { x: number; y: number }): void;
 }
 
@@ -66,9 +71,14 @@ export class CanvasCameraStore implements CanvasCamera {
     this.panOffset = offset;
   }
 
-  /** Same clamp as `ViewportUIStore.setViewZoom` — the gesture engine's range. */
-  setViewZoom(zoom: number): void {
-    this.viewZoom = Math.max(0.25, Math.min(4, zoom));
+  /**
+   * Same clamp as `ViewportUIStore.setViewZoom` — the gesture engine's range,
+   * including the caller-supplied `floor`. The two are twins and must stay
+   * identical; the reasoning for the parameter (a store may not measure the
+   * DOM) is written out in full on `ViewportUIStore.setViewZoom`.
+   */
+  setViewZoom(zoom: number, floor: number = 0.25): void {
+    this.viewZoom = Math.max(floor, Math.min(4, zoom));
   }
 
   /**
