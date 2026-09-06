@@ -32,7 +32,7 @@ whose device checks were skipped is **PARTIAL**, not `DONE`.
 | 07 | iPad (other-hand rail is tablet-only) | ❌ **0 of 6 performed** — rail is `deviceClass === "tablet"` only. Edge/Fill selector thumb-reachable; Fill slider hits fill not edge; Edge slider hits edge; rail Swap exchanges and one undo restores (⚠️ see the fillColor undo finding — it will NOT fully restore); eyedropper with Fill active lands in fill. ⚠️ Check 6 (desktop picker shows swap) **cannot pass until task 11 wires it** — see R8. |
 | 08 | iPad + Pencil | ❌ **0 of 8 device checks performed** — no iPad, no Pencil, no running app. Check 9 (desktop mouse regression) ✅ **covered automatically instead** — see the W4 task 08 notes. Owed: rect drag; lasso draw; flood/color tap; two-finger pinch must zoom and not select; draw with a finger resting; `touchcancel` mid-gesture; both other-hand-mode states; Grow/Shrink/Clear after committing. |
 | 09 | desktop + iPad + a pre-existing project | ❌ **0 of 9 performed** — no device, no running app, no pre-existing project opened. See the W2 notes for the per-check list. |
-| 10 | iPad (rotation) | |
+| 10 | iPad (rotation) | ❌ **0 of 8 performed** — no iPad, no running app, no pre-existing project. Owed: (1) arrange in landscape, rotate → portrait keeps its own; (2) arrange in portrait, rotate back → landscape intact; (3) rotate repeatedly → no drift; (4) save, reload, rotate → both survive; (5) open a project saved BEFORE this change → its one layout appears in both orientations and editing one no longer clobbers the other (R11); (6) **desktop** resize wide↔tall → layout must NOT swap; (7) **StrictMode** `bun run dev`, rotate → swaps once not twice, no duplicate-listener warning (R10); (8) other-hand mode positions correctly in both orientations. ⚠️ Checks 1–6 and 8 have automated analogues in `orientationLayout.test.ts`; check 7 is the one nothing can cover — StrictMode double-mount is not reproducible in the node lane. |
 | 11 | iPad — full-plan regression sweep | |
 
 ## W1 notes (coordinator-verified 2026-09-06)
@@ -558,6 +558,225 @@ work-in-progress, none in task 08's files; they were green by the final run.
   are true of the system as a whole because `commitSelection` guards
   `lassoPoints.length > 1`, so the container never hands the store one point.
   The guard is the container's and is tested there. Store untouched.
+
+### W4 — task 08 verified by the coordinator (2026-09-06)
+
+Commits `ab02e61` (feat), `8292732` (test), `e6a31c1` (docs).
+
+**R4 — the plan's highest-likelihood risk — verified by reading the file, not the report.**
+The selection touch branch sits at `CanvasContainer.tsx:5305`; the `isGestureTool` bail is
+at `:5367`. **Ahead of the bail**, matching the reflection/pose precedent at `:5277`/`:5292`.
+The placement decision is written into the code as the spec required, and it also records
+the subtler call: **the predicate was NOT narrowed.** `isGestureTool` still contains
+`"selection"` because it is consulted in three places and means "arbitrated ahead of
+`toolHandlers`, never dispatched through it" — still true of selection, whose
+`toolHandlers` entry is deliberately `{}`. Removing the member would have changed its
+meaning at three sites to fix it at one, and would let a selection touch fall through to
+`pointer.beginStroke` **and paint pixels**. A branch ahead of the bail is the local fix.
+
+**R5 — extraction confirmed.** `beginSelectionAt` / `updateSelectionAt` /
+`commitSelection` at `:4462`, `:4538`, `:4600`, with **7 call sites** shared between mouse
+and touch. The gesture body is not duplicated. File grew 5,848 → 6,033 lines, but the
+executable logic shrank — the growth is comment and helper headers.
+
+**`MOUSE_ONLY_TOOLS` correctly reduced to exactly `["eyedropper", "origin",
+"reference-trace"]`** — only `"selection"` removed, as locked.
+
+**Task 07's 3 eyedropper lines survived** task 08's rewrite of the same file
+(`grep -c "app.setActiveColor"` → 3).
+
+**🔴 The test quality here is the standard for the rest of the plan.** The executor proved
+the suite by re-injecting each of five possible mistakes (of 18 tests): branch below the
+bail → **10 fail**; `handleTouchEnd` commit deleted → 6; `handleTouchMove` update deleted →
+5; `handleTouchCancel` abandon deleted → 2; `"selection"` back in `MOUSE_ONLY_TOOLS` → 1.
+
+**It also threw away a round of its own tests as worthless.** Two store-first `touchcancel`
+tests scored **ZERO failures** against a deleted abandon — both passed for the same wrong
+reason. Rewritten to read the rendered SVG against a pre-gesture baseline; they now fail 2.
+The file header additionally documents a jsdom trap: without a `getBoundingClientRect`
+stub, `screenToPixel` returns `null` for every touch and every assertion would pass **for
+exactly the broken reason** the tests exist to catch.
+
+**Deviations, all accepted:**
+1. `useCanvasPointer.dom.test.ts` edited though not in `Touches` — it asserted "four
+   mouse-only tools", the exact behaviour the task was commissioned to change. It is the
+   test file of a file that IS in `Touches`, and no other task owns it.
+2. Steps 6 and 8 landed as one commit — written extracted from the start rather than
+   duplicating ~95 lines only to delete them next commit. `ARCHITECTURE.md` §6 argues
+   against creating the duplication at all.
+3. The existing-selection drag was folded into the helpers, beyond the literal three-helper
+   list. Required for correctness: `beginSelectionAt` can *open* that drag and only the
+   mouse handlers could previously close it, so omitting it would leave a Pencil press
+   inside a selection stuck with `isDraggingSelection` true, swallowing every later touch.
+
+**Recorded, not fixed:** `SelectionUIStore.selectLasso` commits a **1-cell mask** for a
+single point (`:463-466`), contra the task file's "commits nothing". Both statements hold
+for the system because `commitSelection` guards `lassoPoints.length > 1` — the guard is the
+container's and is tested there. Store untouched. The `endStroke` latent bug was already in
+Notes; confirmed present and untouched.
+
+## W4 notes — task 10 (2026-09-06)
+
+### Task 10 — orientation-aware layout · commits `3fd9049`, `a00091f`
+
+**Status: PARTIAL** — code complete, gate green, **0 of 8 device checks performed** (no
+iPad, no running app, no pre-existing project). Per MASTER rule 14 that is PARTIAL, not
+DONE.
+
+**Files changed** (all inside `Touches`, plus three test files — see Deviations):
+
+| File | What |
+| --- | --- |
+| `client/src/ui/layout/deviceClass.ts` | **Appended only.** `Orientation`, `PORTRAIT_QUERY`, `detectOrientation()`, `layoutKey()`. `detectDeviceClass` and its two breakpoints are **byte-for-byte untouched** — verified in the diff. |
+| `client/src/stores/ui/LayoutUIStore.ts` | Observable `orientation`; `setOrientation` action; `listenForOrientation()` + `disposeOrientation` + `dispose()`; `get layoutKey`; `get layout()` reads the composite key and falls back to the bare `deviceClass`; `write()` writes the composite key. `hydrate()` and `toPersistedRailLayouts()` structurally unchanged. |
+| `client/src/stores/ui/__tests__/orientationLayout.test.ts` (new) | 24 unit tests: keying, the two-orientation round trip, the legacy migration, the desktop exception, `layoutPresets`, and the wire-format invariant. |
+| `client/src/stores/ui/__tests__/orientationLayout.dom.test.ts` (new) | 11 jsdom tests: `detectOrientation`, the unchanged short-edge `detectDeviceClass`, and the listener lifecycle. |
+
+### 🔴 THE CORPUS DIGEST SUITE DOES NOT CATCH AN UNCONDITIONAL KEY — MEASURED, TWICE
+
+MASTER §8 E1 and R1 both state "the corpus suite is the only thing that catches" it.
+**That is wrong, and this task reproduced the coordinator's W2 measurement exactly.**
+
+With the composite key made deliberately unconditional (desktop included) *and* a hydrate
+that rewrote legacy keys into composite ones — i.e. both forbidden shapes at once:
+
+| Suite | Result under sabotage | Catches it? |
+| --- | --- | --- |
+| `corpus golden digests` (26 tests) | **26 passed, 0 failed** | ❌ **NO** |
+| `orientationLayout.test.ts` | **7 failed / 17 passed** | ✅ yes |
+| `persistedUIState.test.ts` | **18 failed / 25 passed** (incl. **all 11 real-corpus builder tests**) | ✅ yes |
+
+The digests hash the snapshots as they sit on disk; they never re-serialize through
+`toPersistedUIState()` with a mutated store. **A green corpus run is NOT evidence of wire
+safety.** Any future task adding a wire key must ship its own emits-nothing test and rely
+on `persistedUIState.test.ts` — not on the digests.
+
+The sabotage was then reverted and both files confirmed **byte-identical** to their
+pre-sabotage state (`diff` clean, both sabotage markers gone). The full suite returned to
+158 files / 3276 passed.
+
+**The emits-nothing test** is `orientationLayout.test.ts` → "⭐⭐ THE WIRE-FORMAT INVARIANT
+— an untouched store emits NOTHING", five cases. It asserts with `in` and `Object.keys()`,
+never truthiness, because "present but undefined" still counts as a key to the digest. Its
+sharpest case is **"merely ROTATING an untouched store still emits nothing"** — the failure
+mode this task newly makes reachable, since rotation is the one thing that now changes the
+key mid-session.
+
+### The locked decisions, as implemented
+
+- **`detectDeviceClass` UNCHANGED** — still short-edge, still the same two breakpoints. A
+  test stubs an 820×1180 screen both ways round and asserts `"tablet"` both times.
+- **Legacy migration in the GETTER** (R11). `get layout()` does
+  `railLayouts[composite] ?? railLayouts[deviceClass]`. Nothing rewrites the map on
+  hydrate; `write()` is the only writer and only runs because the user acted. Pinned by
+  "hydrating a LEGACY map does not rewrite it" and "once landscape is edited, PORTRAIT is
+  still the legacy layout".
+- **Desktop keyed by class alone.** `layoutKey("desktop", …)` returns `"desktop"` in both
+  orientations, so no desktop user's saved layout moves and a tall window does not swap it.
+- **`layoutPresets` stays `deviceClass`-only** — a preset saved in portrait is offered in
+  landscape, pinned by a test.
+
+### R10 — the StrictMode disposer
+
+`listenForOrientation()` returns a disposer; `dispose()` calls it. Three paths, each with a
+matching removal, each tested: `matchMedia` + `addEventListener` (primary), `addListener`
+(Safari < 14 — the iPad is exactly the device this is for), and `window.resize` (the
+`matchMedia`-less fallback). The key test asserts `removeEventListener` was called with the
+**same handler reference** that was added — removing a different reference silently removes
+nothing, which is the actual failure mode.
+
+⚠️ **`LayoutUIStore.dispose()` is NOT yet called by anything — see the blocker below.**
+
+### 🔴 BLOCKER — `UIStore.dispose()` does not call `this.layout.dispose()`
+
+`client/src/stores/ui/UIStore.ts:710` is the only construction site of `LayoutUIStore`
+(`:348`) and the natural place to release the listener, but **`UIStore.ts` is not in task
+10's `Touches`** (it belongs to task 09, W2). Per MASTER rule 11 the file was left
+untouched and this is recorded instead of edited.
+
+**One line is owed, in `UIStore.dispose()`:**
+
+```ts
+dispose(): void {
+  this.disposeVersionReaction();
+  this.layout.dispose();   // ← task 10 (R10): releases the orientation listener
+}
+```
+
+**Exposure until then:** the listener outlives a discarded `UIStore`. It holds only a
+reference to the dead store and sets an observable nobody reads, so it leaks a listener
+rather than corrupting anything — but under React 19 StrictMode's double mount it is
+precisely the R10 double-fire the disposer exists to prevent. The disposer itself is built
+and fully tested; only the call site is missing. **Task 11 should apply it.**
+
+### Gate — real output, run by the executing agent
+
+```
+$ bun run typecheck
+$ bun run --cwd client typecheck && bun run --cwd server typecheck
+$ tsc --noEmit
+$ tsc --noEmit
+                                                          → exit 0
+
+$ bun run lint
+✖ 65 problems (0 errors, 65 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+                                                          → exit 0, baseline HELD
+
+$ bun run test
+ Test Files  158 passed (158)
+      Tests  3276 passed (3276)
+                                                          → exit 0
+
+$ bun run build
+dist/index.html                         1.01 kB │ gzip:   0.54 kB
+dist/assets/index-BS3cuvzW.css        221.89 kB │ gzip:  28.08 kB
+dist/assets/index-D2SDQe0b.js         817.27 kB │ gzip: 238.25 kB
+✓ built in 2.24s                                          → exit 0
+
+$ cd client && bun run lint:boundaries
+check-boundaries: OK — all 5 boundary rules hold.         → exit 0
+
+$ find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules
+(no output — no lockfile)
+```
+
+**Corpus digests passed unchanged; no snapshot was updated anywhere.** `vitest -u` was
+never run. `bun run lint:css` was not run — this task adds **no CSS**.
+
+⚠️ The test counts overlap task 08, which ran in parallel in the same tree. Task 10's own
+contribution is **+2 files / +35 tests**. The 155/3223 baseline was measured mid-flight as
+155 files / 3222 passing **+ 1 pre-existing failure in task 08's
+`useCanvasPointer.dom.test.ts`**, which task 08 fixed during the wave.
+
+### Deviations
+
+1. **`persistedUIState.test.ts` edited outside `Touches`** — "emits railLayouts once a rail
+   actually moves" asserted `built.railLayouts?.tablet`, the exact key this task changes.
+   Same mechanism, same file, and the same accepted deviation as task 09's. Now asserts
+   `["tablet:landscape"]` with the orientation pinned, and carries a comment explaining the
+   second dimension. **The corpus-protecting case beside it is untouched.**
+2. **`LayoutUIStore.test.ts` and `LayoutUIStore.otherHand.test.ts` edited outside
+   `Touches`** — 5 sites constructed `new LayoutUIStore("tablet")` and read a key the store
+   **wrote**. They now pin the orientation and read the composite key. ⚠️ Sites that read a
+   **hydrated legacy** `tablet` key were deliberately left alone: that fallback is the
+   migration and must keep working. These are the test files of a file that IS in
+   `Touches`, and no other task owns them.
+3. **The new test is TWO files, not one.** The spec named
+   `orientationLayout.test.ts`; the `unit` lane runs in **node with no `window`**, so
+   `detectOrientation` and the whole listener lifecycle cannot run there. Split following
+   `ReferenceUIStore.dom.test.ts`, which sits in the same directory and is split from its
+   unit sibling for exactly this reason. All six cases the spec listed are covered.
+
+### Recorded, not fixed
+
+- `hydrate()` still assigns `railLayouts` verbatim, so a project can carry **both** a
+  legacy `tablet` key and composite keys indefinitely. Deliberate: the composite key wins
+  in the getter (pinned by a test), and pruning the legacy key would be exactly the
+  on-load rewrite R11 forbids. It costs one stale map entry in the project file.
+- `deviceClass` is still measured **once** at construction and orientation is now the only
+  live dimension. Moving a browser window between a laptop and an external display still
+  will not reclassify it — unchanged behaviour, and out of scope.
 
 ## Deferred follow-ups
 
