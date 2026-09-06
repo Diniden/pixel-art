@@ -10,7 +10,7 @@
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02, 03, 04 | PARTIAL (code complete; device checks owed) | 2026-09-06 | cb27aa0 | typecheck 0 · lint 65w/0e (baseline) · test 151 files / 3176 passed (was 148/3139; corpus unchanged, no snapshot changed) · build 0 · stylelint 71/2 (baseline) · boundaries OK |
 | W2 | 05 → 09 (**sequential**) | PARTIAL (code complete; task 09's device/project checks owed) | 2026-09-06 | c3bc5dd | typecheck 0 · lint 65w/0e (baseline) · test 153 files / 3209 passed (was 151/3176; corpus digests unchanged, no snapshot changed) · build 0 · boundaries OK · no lockfile |
-| W3 | 06, 07 | TODO | | | |
+| W3 | 06, 07 | PARTIAL (code complete; device checks owed) | 2026-09-06 | fa085e0 | typecheck 0 · lint 65w/0e (baseline) · test 155 files / 3223 passed · build 0 · stylelint 71/2 (baseline) · boundaries OK · no snapshot changed |
 | W4 | 08, 10 | TODO | | | |
 | W5 | 11 | TODO | | | |
 
@@ -28,8 +28,8 @@ whose device checks were skipped is **PARTIAL**, not `DONE`.
 | 02 | iPad + desktop | ❌ **0 of 6 performed** — no device/browser session. Clear a field → stays empty; over-max → clamps on blur; Escape reverts; Enter commits; iPad keyboard commits once on dismiss; undo/redo refreshes displayed values. ⚠️ Also eyeball the Pose **Elevation** clamp (deviation 1). |
 | 03 | iPad + Pencil | ❌ **0 of 7 performed** — no device. Pencil must select on contact in the SV grid and hue bar, track past the control's edge, and must NOT draw through onto the canvas. |
 | 04 | owner's real project | ❌ **0 of 6 performed** — no device/project. ⚠️ Zoom-out on the **pixel studio** canvas is still capped at 0.25 until task 11 applies the deferred line; only the lighting canvas has the new floor today. Re-check after W5. |
-| 06 | desktop or iPad | |
-| 07 | iPad (other-hand rail is tablet-only) | |
+| 06 | desktop or iPad | ❌ **0 of 6 performed**. Fill tab + palette swatch → fill changes not edge; same on Current Palette; edge tab → edge changes AND enters recent-colours; double-tap adjustment still toggles; Fill tab + add-current-colour adds the fill colour; draw with pencil and fill tool. |
+| 07 | iPad (other-hand rail is tablet-only) | ❌ **0 of 6 performed** — rail is `deviceClass === "tablet"` only. Edge/Fill selector thumb-reachable; Fill slider hits fill not edge; Edge slider hits edge; rail Swap exchanges and one undo restores (⚠️ see the fillColor undo finding — it will NOT fully restore); eyedropper with Fill active lands in fill. ⚠️ Check 6 (desktop picker shows swap) **cannot pass until task 11 wires it** — see R8. |
 | 08 | iPad + Pencil | |
 | 09 | desktop + iPad + a pre-existing project | ❌ **0 of 9 performed** — no device, no running app, no pre-existing project opened. See the W2 notes for the per-check list. |
 | 10 | iPad (rotation) | |
@@ -329,6 +329,94 @@ all 11 digests). `CanvasContainer.tsx` confirmed absent from the W2 diff.
 **Deviation accepted:** `persistedUIState.test.ts` was edited outside `Touches`
 (`toHaveLength(53)` → `55`). It asserts the declared field count by construction, so any
 new wire key fails it — the mechanism working as designed, not scope creep.
+
+### W3 — task 06 verified by the coordinator (2026-09-06)
+
+Commits `4983574` (fix), `7a3c416` (test). Diff scope confirmed: exactly its three
+`Touches` files, nothing under `ui/`.
+
+**Delegation verified by reading the source, not the report.** All three sites call the
+task-05 API — `onSelectColor={(color) => app.setActiveColor(color)}` and
+`selectedColor={app.activeColor}` in `PaletteManagerContainer`, `onSetColor` likewise in
+`ColorPickerContainer`, whose old inline branch is now a comment pointing at
+`setActiveColor`. No call site re-derives the edge/fill branch.
+
+**Accepted judgement call.** `PaletteManagerContainer:217` `currentPickerColor` still reads
+`ui.tool.selectedColor` deliberately. It only draws the ✎ colour-**adjustment** marker, and
+adjustment is edge-only-gated (`ColorPickerContainer` gates `colorAdjustment` to
+`colorTarget === "edge"`); following the target would put the marker on a swatch no
+adjustment could act on. Documented inline. Coordinator agrees.
+
+**The new test was proved to discriminate.** Its author reverted the container and measured
+**5 of 7 failing**; the 2 survivors are labelled in the file header as negative controls
+(edge-target cases where correct and broken agree by construction) rather than counted as
+coverage. The header also records two near-miss test bugs that were caught and fixed —
+a MobX write outside `act()` that captured the first render regardless of store state, and
+a seeding path where two defects masked each other exactly. This is the standard the
+remaining waves' tests should meet.
+
+### Task 07 — eyedropper bound held
+
+`52f2a00` changes **exactly 3 lines** of the 5,848-line `CanvasContainer.tsx`
+(`3 insertions, 3 deletions`), all `setColorAndAddToHistory(…)` → `setActiveColor(…)`.
+That bound matters because task 08 rewrites the touch handlers in the same file next wave.
+
+### W3 — task 07 verified by the coordinator (2026-09-06)
+
+Commits `f6b0d99`, `52f2a00`, `33d9fa6`, `fa085e0`. Full wave gate re-run by me:
+
+```
+bun run typecheck                    → exit 0
+bun run lint                         → 65 problems (0 errors, 65 warnings)  [baseline]
+bun run test                         → 155 files, 3223 tests, all passed
+bun run build                        → built in 2.14s
+cd client && bun run lint:css        → 71 problems (2 errors, 69 warnings)  [baseline]
+cd client && bun run lint:boundaries → OK — all 5 boundary rules hold
+git diff 9d6173a..HEAD -- '*__snapshots__*'  → empty
+```
+
+**R6 (a later wave reverting an earlier one's work in `ColorPicker.tsx`) — checked, holds,
+but the report's evidence was imprecise.** Task 07 reported "zero removed lines" since task
+03. That is **not true**: `git diff 26b2ef6..HEAD` removes **21 lines**. What matters is
+*which* — and **zero of the 21 mention pointer, capture or touch-action**. The removals are
+the edge/fill tablist markup being restructured into the new `__target-row`, i.e. task 07's
+own earlier markup. All 4 `setPointerCapture` calls and all 5 `touch-action: none`
+declarations survive. **Task 03's pointer work is intact — verified by grep over the
+removed lines, not by the summary claim.**
+
+`toolWidgets.ts` needed no change at all (the existing `buttons` spec already covered both
+new controls), so task 09's W2 work there is trivially preserved.
+
+### 🔴 Latent bug found by task 07 — pinned as characterisation, NOT fixed
+
+**One undo after a swap restores `selectedColor` but leaves `fillColor` where the swap put
+it.** Verified independent of the swap with a throwaway probe (bare `saveStateToHistory()`
+→ `setFillColor` → `undo()` reproduces it), so it is the snapshot/restore path, not the
+rail and not task 05.
+
+Cause, confirmed by the coordinator at `ApplicationStore.ts:1793-1797`: `selectedColor` has
+a ride-along copy in the hosted project's `uiState` and goes through
+`setColorAndAddToHistory`, which patches it; **`fillColor` is MobX-only with no equivalent
+sink**, so it has been outside the undo stack for *every* writer since the edge/fill split —
+this predates plan 09 entirely.
+
+Pinned at `OtherHandRailContainer.dom.test.tsx:205` as observed-behaviour characterisation,
+correctly labelled "CHARACTERISATION, NOT A DESIRED-BEHAVIOUR ASSERTION". Not fixed because
+the fix is a new sink on `ApplicationStore` — outside task 07's `Touches` and on the
+persistence perimeter. **This is owner-visible: swapping and undoing will half-revert.**
+Not in this plan's scope; worth a follow-up plan.
+
+### R8 — the swap control ships UNWIRED (expected, but note the spec conflict)
+
+`onSwapColors?: () => void` is optional and the button renders only when supplied. Nothing
+supplies it yet: `ColorPickerContainer.tsx` is task 06's and the `X` shortcut is task 11's.
+**So the desktop picker today shows no swap button at all.** The other-hand rail's swap
+**is** wired and works.
+
+⚠️ **Spec conflict recorded:** task 07's manual check 6 says "the color picker shows the
+swap control", but its own Constraints mandate the optional-render form. The executor
+followed the Constraints. Check 6 as literally written cannot pass until task 11 — this is
+exactly R8 and task 11 must not skip it.
 
 ## Deferred follow-ups
 
