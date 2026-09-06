@@ -1429,7 +1429,7 @@ export const CanvasContainer = observer(function CanvasContainer({
             // One canvas per variant SUB-layer: see the header on why this is
             // what makes `putImageData` safe.
             key: `${l.id}::${vl.id}`,
-              visible: l.visible && vl.visible,
+            visible: l.visible && vl.visible,
             opacity,
             pixels: vl.pixels,
             gridWidth: variant.gridSize.width,
@@ -1449,9 +1449,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       plan.push({
         key: l.id,
         visible: l.visible,
-        opacity: editing && layerFocusMode !== "normal"
-          ? VARIANT_EDIT_REGULAR_DIM
-          : 1,
+        opacity:
+          editing && layerFocusMode !== "normal" ? VARIANT_EDIT_REGULAR_DIM : 1,
         pixels: l.pixels,
         gridWidth: editing ? objWidth : gridWidth,
         gridHeight: editing ? objHeight : gridHeight,
@@ -1527,15 +1526,20 @@ export const CanvasContainer = observer(function CanvasContainer({
       // layer — the same walk `layerPlan` does, against the live tree.
       const parent = frameNow.layers.find((l) => l.id === key.slice(0, sep));
       if (!parent?.variantGroupId) return null;
-      const vg = app.domain.variants?.find((g) => g.id === parent.variantGroupId);
-      const variant = vg?.variants.find((v) => v.id === parent.selectedVariantId);
+      const vg = app.domain.variants?.find(
+        (g) => g.id === parent.variantGroupId,
+      );
+      const variant = vg?.variants.find(
+        (v) => v.id === parent.selectedVariantId,
+      );
       if (!variant || variant.frames.length === 0) return null;
       const idx =
         (app.timelineUI.variantFrameIndices?.[parent.variantGroupId] ?? 0) %
         variant.frames.length;
       const vFrame = variant.frames[idx];
       return (
-        vFrame?.layers.find((vl) => vl.id === key.slice(sep + 2))?.pixels ?? null
+        vFrame?.layers.find((vl) => vl.id === key.slice(sep + 2))?.pixels ??
+        null
       );
     },
     [app],
@@ -1724,7 +1728,8 @@ export const CanvasContainer = observer(function CanvasContainer({
         let maxX = -Infinity;
         let maxY = -Infinity;
         for (const cell of painted) {
-          if (cell.x < 0 || cell.y < 0 || cell.x >= gw || cell.y >= gh) continue;
+          if (cell.x < 0 || cell.y < 0 || cell.x >= gw || cell.y >= gh)
+            continue;
           const sx = cell.x + mdx;
           const sy = cell.y + mdy;
           if (sx < 0 || sy < 0 || sx >= gw || sy >= gh) continue;
@@ -1808,15 +1813,16 @@ export const CanvasContainer = observer(function CanvasContainer({
       }
     },
     [
-    layerPlan,
-    livePixelsFor,
-    isDraggingPixels,
-    moveDragOffset.dx,
-    moveDragOffset.dy,
-    isEditingVariantResolved,
-    viewMinX,
-    viewMinY,
-  ]);
+      layerPlan,
+      livePixelsFor,
+      isDraggingPixels,
+      moveDragOffset.dx,
+      moveDragOffset.dy,
+      isEditingVariantResolved,
+      viewMinX,
+      viewMinY,
+    ],
+  );
 
   /**
    * Everything that is NOT artwork, on the shared pointer surface.
@@ -1961,12 +1967,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       // The variant editing area.
       ctx.strokeStyle = ACCENT_VARIANT;
       ctx.lineWidth = CHROME_STROKE;
-      ctx.strokeRect(
-        variantOffset.x,
-        variantOffset.y,
-        gridWidth,
-        gridHeight,
-      );
+      ctx.strokeRect(variantOffset.x, variantOffset.y, gridWidth, gridHeight);
     }
 
     const offsetX = isEditingVariantResolved ? variantOffset.x : 0;
@@ -2809,7 +2810,8 @@ export const CanvasContainer = observer(function CanvasContainer({
             };
             holder.geometry?.dispose?.();
             const material = holder.material;
-            if (Array.isArray(material)) for (const m of material) m?.dispose?.();
+            if (Array.isArray(material))
+              for (const m of material) m?.dispose?.();
             else material?.dispose?.();
           });
           return;
@@ -3063,13 +3065,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       uniform * poseAxisScale.z,
     );
     invalidatePoseRef.current?.();
-  }, [
-    poseScale,
-    poseAxisScale,
-    poseFitGeneration,
-    poseEngineTick,
-    poseMeshId,
-  ]);
+  }, [poseScale, poseAxisScale, poseFitGeneration, poseEngineTick, poseMeshId]);
 
   /**
    * **Fit to canvas** returns the model to the fitted size (plan 08, F4).
@@ -3317,9 +3313,9 @@ export const CanvasContainer = observer(function CanvasContainer({
      * the originals back. Returns a COPY of the frame, or `null` if the pass
      * could not run — the caller decides how to degrade.
      */
-    const renderWithMaterial = (
-      material: { dispose?: () => void },
-    ): Uint8Array | null => {
+    const renderWithMaterial = (material: {
+      dispose?: () => void;
+    }): Uint8Array | null => {
       const saved: {
         node: { material?: unknown };
         material: unknown;
@@ -4469,7 +4465,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       selection.width === gridWidth &&
       selection.height === gridHeight;
     const isInsideSelection =
-      canUseSelectionMask && selection.mask.has(coords.y * gridWidth + coords.x);
+      canUseSelectionMask &&
+      selection.mask.has(coords.y * gridWidth + coords.x);
 
     // Clicking INSIDE a selection drags it — unless edit-mask mode is on,
     // where a click inside must not disturb the mask.
@@ -5158,9 +5155,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       // synthetic events do not fire from a native window listener, so there
       // is no double-dispatch to guard against here.
       if (e.target === canvasRef.current) return;
-      mouseMoveRef.current(
-        e as unknown as React.MouseEvent<HTMLCanvasElement>,
-      );
+      mouseMoveRef.current(e as unknown as React.MouseEvent<HTMLCanvasElement>);
     };
     window.addEventListener("mousemove", onWindowMouseMove);
     return () => window.removeEventListener("mousemove", onWindowMouseMove);
