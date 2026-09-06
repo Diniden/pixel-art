@@ -289,6 +289,47 @@ controls behaving correctly while check 6 (the footprint) will not, and erasing
 will use the pencil's width. **Task 09 is not fully delivered until that line
 lands.**
 
+### W2 — coordinator's independent verification (2026-09-06)
+
+Gate re-run by the coordinator on the post-W2 tree:
+
+```
+bun run typecheck  → exit 0
+bun run lint       → 65 problems (0 errors, 65 warnings)   [baseline held]
+bun run test       → 153 files, 3209 tests, all passed
+bun run build      → built in 2.10s
+git diff cb27aa0..HEAD -- '*__snapshots__*'  → empty (no snapshot changed anywhere)
+find . -maxdepth 2 -name 'bun.lock*'         → none
+```
+
+**The R1 guard was re-proved by the coordinator, not taken on trust.** I temporarily
+rewrote slot 50 as an unconditional `persisted.eraserBrushSize = …`, re-ran, and restored
+from a scratchpad copy (`git status` clean afterwards, `assign()` form confirmed back).
+Result:
+
+| Suite | With the key unconditional |
+| --- | --- |
+| `eraserBrush.test.ts` | **FAILED 2 of 20** ✅ catches it |
+| `persistedUIState.test.ts` (R3 real-corpus builder) | **FAILED** ✅ catches it |
+| `corpus golden digests` (23 tests) | **PASSED** ⚠️ does NOT catch it |
+
+**🔴 Correction to a plan assumption worth carrying forward.** MASTER §8 E1 and R1 both
+say "the corpus suite is the only thing that catches it". **That is not what the corpus
+suite actually does.** The golden digests hash snapshots as they exist on disk; they do
+not re-serialize through `toPersistedUIState()` with a mutated store, so an unconditional
+new key sails straight past them. The suites that genuinely bite are
+**`eraserBrush.test.ts`'s emits-NEITHER-key test** and **`persistedUIState.test.ts`'s R3
+builder**. Task 10 adds richer `railLayouts` keys under the same risk — **it must ship an
+equivalent emits-nothing test; a green corpus run is NOT sufficient evidence.**
+
+Both keys verified conditional at `UIStore.ts:612-613` via `assign()`, with an inline
+comment citing the measured `fillColor` incident (where a `key: undefined` form changed
+all 11 digests). `CanvasContainer.tsx` confirmed absent from the W2 diff.
+
+**Deviation accepted:** `persistedUIState.test.ts` was edited outside `Touches`
+(`toHaveLength(53)` → `55`). It asserts the declared field count by construction, so any
+new wire key fails it — the mechanism working as designed, not scope creep.
+
 ## Deferred follow-ups
 
 Tasks 04 and 09 may defer a one-line change into W5 because they are forbidden from
