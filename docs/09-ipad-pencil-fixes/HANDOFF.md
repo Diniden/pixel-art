@@ -1,15 +1,15 @@
 # HANDOFF — iPad Pencil fixes
 
-**Current position:** W1 IN PROGRESS
+**Current position:** W2 COMPLETE (code); W3 (06, 07) is next
 **Branch:** `feat/09-ipad-pencil-fixes` (created from `feat/08-pose-camera-model-space` @ 875c314)
-**Last commit:** 875c314 (baseline)
+**Last commit:** c3bc5dd
 
 ## Wave ledger
 
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02, 03, 04 | PARTIAL (code complete; device checks owed) | 2026-09-06 | cb27aa0 | typecheck 0 · lint 65w/0e (baseline) · test 151 files / 3176 passed (was 148/3139; corpus unchanged, no snapshot changed) · build 0 · stylelint 71/2 (baseline) · boundaries OK |
-| W2 | 05 → 09 (**sequential**) | TODO | | | |
+| W2 | 05 → 09 (**sequential**) | PARTIAL (code complete; task 09's device/project checks owed) | 2026-09-06 | c3bc5dd | typecheck 0 · lint 65w/0e (baseline) · test 153 files / 3209 passed (was 151/3176; corpus digests unchanged, no snapshot changed) · build 0 · boundaries OK · no lockfile |
 | W3 | 06, 07 | TODO | | | |
 | W4 | 08, 10 | TODO | | | |
 | W5 | 11 | TODO | | | |
@@ -31,7 +31,7 @@ whose device checks were skipped is **PARTIAL**, not `DONE`.
 | 06 | desktop or iPad | |
 | 07 | iPad (other-hand rail is tablet-only) | |
 | 08 | iPad + Pencil | |
-| 09 | desktop + iPad + a pre-existing project | |
+| 09 | desktop + iPad + a pre-existing project | ❌ **0 of 9 performed** — no device, no running app, no pre-existing project opened. See the W2 notes for the per-check list. |
 | 10 | iPad (rotation) | |
 | 11 | iPad — full-plan regression sweep | |
 
@@ -120,6 +120,175 @@ safe unchanged.
    **No snapshot was updated anywhere in W1** (`git diff` over `__snapshots__` is empty) —
    independent confirmation `vitest -u` was never run.
 
+## W2 notes (2026-09-06)
+
+W2 is the plan's one deliberately non-parallel wave: tasks 05 and 09 both edit
+`stores/ui/ToolUIStore.ts`. They were run **sequentially, 05 first**, by a single
+agent — never concurrently, and never in one combined commit.
+
+Gate run after each task, full output pasted below.
+
+### Task 05 — color target store API · commits `49488b3`, `5e1af2b`
+
+Files changed (exactly its `Touches`, nothing more):
+
+- `client/src/stores/ui/ToolUIStore.ts` — `swapColors()`, registered `action`
+- `client/src/stores/ApplicationStore.ts` — `setActiveColor()`, `activeColor`
+  (registered `computed`), `swapEdgeAndFillColors()`
+- `client/src/stores/ui/__tests__/colorTarget.test.ts` (new, 13 tests)
+
+```
+bun run typecheck  → exit 0
+bun run lint       → 65 problems (0 errors, 65 warnings)   [baseline, not raised]
+bun run test       → 152 files, 3189 tests, all passed     [was 151/3176]
+bun run build      → built in 2.13s
+```
+
+**Corpus golden digests passed unchanged. No snapshot was updated** (`git diff`
+over `__snapshots__` is empty for the whole wave). No `vitest -u` was run.
+No lockfile appeared.
+
+Locked decisions honoured: single entry point `ApplicationStore.setActiveColor`;
+edge adds to `colorHistory`, **fill does not**; `selectedColor` NOT renamed;
+`colorTarget` still unpersisted; `toPersistedUIState()` untouched; the swap
+materialises `fillColor`; `swapEdgeAndFillColors()` snapshots **once**.
+
+**Finding worth carrying into 06/07.** The two colour slots have DIFFERENT
+write paths, which is why `setActiveColor` is not a one-line ternary. The edge
+slot has a ride-along copy in the hosted project's `uiState` and must go through
+`setColorAndAddToHistory` (which calls `colorSink`); `fillColor` is MobX-only and
+is written directly. `ColorPickerContainer.tsx:100-105` carries the original
+note. `swapEdgeAndFillColors` therefore also calls `colorSink` after the swap.
+Call sites should use `app.setActiveColor` / `app.activeColor` and never
+re-derive the branch.
+
+### Task 09 — split pencil/eraser settings · commits `e17ea11`, `d9da671`, `c3bc5dd`
+
+**The sharpest task in the plan — it adds two wire keys.** Both are tri-state,
+`undefined` by default, and emitted through `assign()`, per the
+`UIStore.ts:539-547` precedent.
+
+Files changed:
+
+- `client/src/stores/ui/ToolUIStore.ts` — `eraserBrushSize`, `eraserBrushMax`,
+  their setters, `effectiveEraserSize` / `effectiveEraserMax`,
+  `activeToolBrushSize`, hydrate
+- `client/src/types/domain.ts`, `client/src/types/codecs/compactTypes.ts` — both
+  keys **optional**. `types/constants.ts` deliberately UNCHANGED: the fields are
+  optional, so `DEFAULT_UI_STATE` needs no entry, and adding one would have made
+  them defined.
+- `client/src/stores/ui/UIStore.ts` — slots 50/51, conditional, via `assign()`
+- `client/src/ui/components/PixelStudioPanel/PixelStudioPanel.tsx` — the Eraser
+  section binds the eraser's own size/max and gains a Max button row identical
+  to the Pencil's, with the same displayed-value clamp
+- `client/src/containers/PixelStudioPanelContainer.tsx` — supplies the props
+- `client/src/containers/otherHand/toolWidgets.ts` — `case "eraser"` gets its
+  own size slider and Max row; `case "pixel"` unchanged
+- `client/src/stores/ui/__tests__/eraserBrush.test.ts` (new, 20 tests)
+- `client/src/stores/ui/__tests__/persistedUIState.test.ts` — **deviation, see
+  below**
+
+```
+bun run typecheck  → exit 0
+bun run lint       → 65 problems (0 errors, 65 warnings)   [baseline, not raised]
+bun run test       → 153 files, 3209 tests, all passed     [was 152/3189]
+bun run build      → built in 2.10s
+cd client && bun run lint:boundaries → OK — all 5 boundary rules hold
+find . -maxdepth 2 -name 'bun.lock*' → none
+```
+
+**🔴 Corpus golden digests passed UNCHANGED with both new keys in place** —
+which is the proof they are genuinely conditional. **No snapshot was updated
+anywhere in W2**; `git diff cb27aa0..HEAD -- '*__snapshots__*'` is empty. No
+`vitest -u` was run.
+
+**The guard test was PROVED to bite, not assumed to.** `eraserBrushSize` was
+temporarily made unconditional (`persisted.eraserBrushSize = ...` instead of
+`assign(...)`) and the suites re-run:
+
+- `eraserBrush.test.ts` → **2 of 20 failed** (the emits-neither-key case and the
+  after-`setEraserBrushSize`-only-that-key case)
+- `persistedUIState.test.ts`'s *R3 — the builder against the real corpus* →
+  **15 failed**, one per corpus file
+
+The change was then reverted and `git diff` over `UIStore.ts` confirmed clean
+before proceeding. Both layers of defence work.
+
+`CanvasContainer.tsx`, `toolHandlers.ts` and `toolFootprint.ts` are **NOT** in
+the diff — verified by name against the full wave diff.
+
+### Manual checks — per item, as required
+
+**Task 05** has ONE manual check and it was **NOT performed** (no running app):
+
+1. ❌ Open the colour picker, switch Edge/Fill tabs, pick colours → behaviour must be
+   *exactly* as before, because this task adds API without rewiring anything. Code-level
+   confirmation stands in for it as far as it can: `git diff` shows **no container and no
+   `ui/` file** in task 05's commits, so no call site changed and no behaviour can have.
+
+**Task 09** has NINE and **none were performed** — no iPad, no running app, no
+pre-existing project:
+
+1. ❌ Pencil to size 12, switch to eraser → eraser at its own size (inherits 12 fresh).
+2. ❌ Eraser to size 3, back to pencil → pencil still 12.
+3. ❌ Back to eraser → still 3; the two no longer track each other.
+4. ❌ Eraser panel has a Max row identical to the Pencil's; the two maxes are independent.
+5. ❌ Eraser max to 8 while its size is 32 → size clamps to 8, pencil's size untouched.
+6. ❌ Hover footprint matches the ACTIVE tool's size. ⚠️ **This one is EXPECTED TO FAIL
+   until the W5 follow-up lands** — see the step-9 deferral above. It is not a defect in
+   what shipped; it is the deferred line.
+7. ❌ Same checks in the other-hand rail on the iPad.
+8. ❌ Save and reload → both tools' sizes and maxes come back correctly.
+9. ❌ **Open a pre-existing project** → the eraser inherits the saved `brushSize` and
+   nothing is lost. This is the most important of the nine and the only one that
+   exercises real owner data.
+
+Checks 1-5 and 7-9 are covered *at the store and wire level* by the 20 tests in
+`eraserBrush.test.ts` (including the hydrate round-trip and the absent-key cases that
+stand behind checks 8 and 9), and the corpus suite passing unchanged is strong evidence
+for check 9. **That is not the same as running them on the device**, and per plan rule 14
+this leaves W2 **PARTIAL**, not DONE.
+
+### Deviation (task 09) — one file edited outside `Touches`
+
+`client/src/stores/ui/__tests__/persistedUIState.test.ts`. It asserts
+`expect(declared).toHaveLength(53)` against `CompactUIState`'s declared field
+list read from source, so **any** new wire key fails it by construction — that
+is the mechanism working as designed, not a regression. Bumped to 55, and the
+running ledger of deliberate extensions above the assertion was extended with a
+`+2 (2026-09-06)` entry in the established house style. Its
+`fullyPopulatedProject()` fixture also had to gain both keys, or the
+every-field-reachable assertion would read the two new builder lines as missing.
+The eraser's fixture values are deliberately DIFFERENT from the pencil's
+(`eraserBrushSize: 3` / `eraserBrushMax: 8` vs `brushSize: 7` /
+`pencilBrushMax: 64`) — the whole point of the pair is that they are its own.
+This edit is unavoidable for any new key and is not scope creep.
+
+### Task 09 step 9 — the draw path, resolved as a DEFERRAL (not a blocker)
+
+Step 9 asked whether `ctx.brushSize` can be made tool-aware from within
+`ToolUIStore` alone. **Answer: yes, via a getter — but the consumption is a
+`CanvasContainer.tsx` edit, which task 09 is forbidden from making.**
+
+Measured: `CanvasContainer.tsx:607` reads `tool.brushSize` into ONE local that
+feeds four consumers — the hover footprint (`:2228`), `brushStampOptions`
+(`:4264`), `getToolContext` (`:4325`), and `fill-square` (`:4372`, `:4818`).
+Because `fill-square` must keep the PENCIL's size, `:607` cannot simply be
+swapped wholesale; the tool-aware getter must be consumed at the three
+tool-aware sites only.
+
+`ToolUIStore.activeToolBrushSize` is therefore **added and tested but not yet
+consumed**. It branches on `"eraser"` only — deliberately, since `fill-square`
+and reference-trace keep the pencil's size and giving them their own would mean
+more wire keys the user never asked for. The follow-up is in the table below.
+
+**User-visible consequence until W5 applies it:** the eraser's PANEL and RAIL
+sliders are already independent, but the eraser's actual DRAW size and its hover
+footprint still follow `brushSize`. So manual checks 1-5 and 7 will show the
+controls behaving correctly while check 6 (the footprint) will not, and erasing
+will use the pencil's width. **Task 09 is not fully delivered until that line
+lands.**
+
 ## Deferred follow-ups
 
 Tasks 04 and 09 may defer a one-line change into W5 because they are forbidden from
@@ -128,10 +297,12 @@ editing `CanvasContainer.tsx`. Record them here or task 11 will not know to appl
 | From | What | Where it must land | Applied? |
 | --- | --- | --- | --- |
 | 04 | Pass the derived floor into the commit call: `onCommitViewZoom: (z) => camera.setViewZoom(z, viewZoomFloor(contentWidth, contentHeight))`. Without it the **pixel studio's main canvas still clamps at the legacy 0.25** and the zoom-out fix is only half-delivered (the lighting canvas already has it). Task 04 was forbidden from `CanvasContainer.tsx`, so it correctly left the default at `0.25` and deferred this. | `containers/CanvasContainer.tsx:1087` | **NO — task 11** |
+| 09 | Consume the tool-aware brush size: replace `brushSize` with `tool.activeToolBrushSize` at the THREE tool-aware sites only — the footprint memo (`:2228`), `brushStampOptions` (`:4264`) and `getToolContext` (`:4325`). ⚠️ **Do NOT change `:607` itself and do NOT touch `fill-square`'s two sites (`:4372`, `:4818`)** — `fill-square` must keep reading the PENCIL's size. Without this the eraser's controls are independent but its actual draw width and hover footprint still follow the pencil, and task 09's manual check 6 cannot pass. | `containers/CanvasContainer.tsx` (~`:2228`, `:4264`, `:4325`) | **NO — task 11** |
 
 ## Deviations
 
-(none yet)
+- **W2 / task 09** — `stores/ui/__tests__/persistedUIState.test.ts` edited outside
+  `Touches`. Unavoidable for any new wire key; full reasoning in the W2 notes.
 
 ## Notes for the next session
 
@@ -139,9 +310,19 @@ editing `CanvasContainer.tsx`. Record them here or task 11 will not know to appl
   `client/src/ui/hooks/useCanvasPointer.ts:162-171` — `endStroke` nulls
   `lastStrokePixelRef.current` and then reads it, so any future `onUp` handler receives
   `{x:0, y:0}`. No tool defines `onUp` today, so it is latent.
-- **Out of scope, recorded** (task 09): the lighting studio's normal pencil shares
-  `brushSize` with the pixel studio, so changing one silently resizes the other. Fixing it
-  needs a third brush field; the user did not ask for it.
+- **Out of scope, recorded and CONFIRMED STILL TRUE after W2** (task 09): the lighting
+  studio's normal pencil shares `brushSize` with the pixel studio
+  (`LightingCanvasContainer.tsx:257, 439`; `LightingStudioPanelContainer.tsx:46, 51`), so
+  changing one silently resizes the other. Task 09 deliberately left those four call sites
+  reading `brushSize`. Fixing it needs a THIRD brush field — and therefore a third
+  conditional wire key — and the user did not ask for it. Recorded, not fixed.
+- **`brushSize` now means specifically THE PENCIL'S size** (W2/09). It keeps slot 9 and its
+  unconditional emission; the eraser falls back to it via
+  `ToolUIStore.effectiveEraserSize`. That `?? brushSize` fallback IS the migration — there
+  is no migration code and none should be written.
+- **The two colour slots have different write paths** (W2/05). `selectedColor` needs
+  `colorSink`; `fillColor` is MobX-only. Tasks 06 and 07 should call
+  `app.setActiveColor` / `app.activeColor` rather than re-deriving the branch.
 - `client/src/ui/primitives/ColorSwatch/` exists and is imported by nothing. Adopting it is
   not part of this plan.
 - `client/src/ui/primitives/Field`, `Slider` and `SliderWithNumber` have zero production
