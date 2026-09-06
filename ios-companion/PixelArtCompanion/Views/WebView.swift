@@ -83,6 +83,10 @@ struct WebView: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = false
         // Pinch-zoom would fight the canvas's own gesture handling.
         webView.scrollView.bouncesZoom = false
+        // `bouncesZoom` only kills the rubber-band animation. Pinning both scales
+        // is what actually stops WKWebView page zoom; the editor owns canvas zoom.
+        webView.scrollView.minimumZoomScale = 1.0
+        webView.scrollView.maximumZoomScale = 1.0
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.isOpaque = false
         webView.backgroundColor = .black
