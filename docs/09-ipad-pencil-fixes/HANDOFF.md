@@ -30,7 +30,7 @@ whose device checks were skipped is **PARTIAL**, not `DONE`.
 | 04 | owner's real project | ❌ **0 of 6 performed** — no device/project. ⚠️ Zoom-out on the **pixel studio** canvas is still capped at 0.25 until task 11 applies the deferred line; only the lighting canvas has the new floor today. Re-check after W5. |
 | 06 | desktop or iPad | ❌ **0 of 6 performed**. Fill tab + palette swatch → fill changes not edge; same on Current Palette; edge tab → edge changes AND enters recent-colours; double-tap adjustment still toggles; Fill tab + add-current-colour adds the fill colour; draw with pencil and fill tool. |
 | 07 | iPad (other-hand rail is tablet-only) | ❌ **0 of 6 performed** — rail is `deviceClass === "tablet"` only. Edge/Fill selector thumb-reachable; Fill slider hits fill not edge; Edge slider hits edge; rail Swap exchanges and one undo restores (⚠️ see the fillColor undo finding — it will NOT fully restore); eyedropper with Fill active lands in fill. ⚠️ Check 6 (desktop picker shows swap) **cannot pass until task 11 wires it** — see R8. |
-| 08 | iPad + Pencil | |
+| 08 | iPad + Pencil | ❌ **0 of 8 device checks performed** — no iPad, no Pencil, no running app. Check 9 (desktop mouse regression) ✅ **covered automatically instead** — see the W4 task 08 notes. Owed: rect drag; lasso draw; flood/color tap; two-finger pinch must zoom and not select; draw with a finger resting; `touchcancel` mid-gesture; both other-hand-mode states; Grow/Shrink/Clear after committing. |
 | 09 | desktop + iPad + a pre-existing project | ❌ **0 of 9 performed** — no device, no running app, no pre-existing project opened. See the W2 notes for the per-check list. |
 | 10 | iPad (rotation) | |
 | 11 | iPad — full-plan regression sweep | |
@@ -417,6 +417,147 @@ supplies it yet: `ColorPickerContainer.tsx` is task 06's and the `X` shortcut is
 swap control", but its own Constraints mandate the optional-render form. The executor
 followed the Constraints. Check 6 as literally written cannot pass until task 11 — this is
 exactly R8 and task 11 must not skip it.
+
+## W4 notes — task 08 (2026-09-06)
+
+### Task 08 — selection touch support · commits `ab02e61`, `8292732`
+
+**R4, the plan's highest-likelihood risk — where the branch went, and why.**
+
+`"selection"` is a member of `isGestureTool`, and every touch handler that
+consults that predicate returns for every member of it. A selection branch
+written *after* that bail is never reached, and it fails **silently**: no
+error, no warning, just a Pencil that does nothing. Placement, per handler:
+
+| Handler | Placement | Guard it sits ahead of |
+| --- | --- | --- |
+| `handleTouchStart` | after `getPixelCoords`, **before** the `!coords \|\| !layer` guard **and** before the `isGestureTool` bail | both |
+| `handleTouchMove` | after the `isDraggingPixels` branch, **before** `if (!isDrawing) return;` and before the `isGestureTool` bail | both |
+| `handleTouchEnd` | immediately after `posePointerUp()`, before every early return | — (**this handler has no `isGestureTool` bail at all**) |
+| `handleTouchCancel` | before `clearPreviewPixels`, calling `commitSelection(false)` | — |
+
+**The predicate was NOT narrowed.** `isGestureTool` still contains
+`"selection"`, deliberately. It is consulted in three places and means "this
+tool is arbitrated ahead of `toolHandlers`, never dispatched through it" —
+still true of selection, whose `toolHandlers` entry is deliberately `{}`.
+Removing the member would change its meaning at all three sites to fix one,
+and would let a selection touch fall through to `pointer.beginStroke` and
+paint pixels. The comment written into the code says exactly this.
+
+`handleTouchStart`'s split of the `!coords || !layer` guard is the other
+deliberate call: selection needs coords (nothing to select without a cell)
+but **not** a layer (a mask is object geometry, and selecting on an empty or
+layerless object is meaningful). `move` stays after the full guard because it
+drags pixels and genuinely does need one.
+
+### Step 7 / R5 — what was extracted
+
+Three local helpers in `CanvasContainer.tsx`, called by **both** devices:
+
+- `beginSelectionAt(coords)` — press. All four modes (`rect`, `flood`,
+  `color`, lasso fallthrough) **and** the drag-an-existing-selection branch.
+- `updateSelectionAt(coords)` — drag. Rect preview box, lasso accumulation
+  (with the jitter filter) **and** the existing-selection drag.
+- `commitSelection(commit = true)` — release. `commit: false` abandons
+  instead, which is the `touchcancel` path the mouse has no equivalent of.
+
+⚠️ **The existing-selection drag was pulled in deliberately, beyond the
+task's literal three-helper list.** `beginSelectionAt` can *open* that drag,
+and before this task only the mouse handlers could advance or close it — so
+leaving it out would have meant a Pencil press inside a selection opening a
+drag touch can never finish: `isDraggingSelection` stuck true, every later
+touch swallowed. A helper that opens a gesture has to be able to close it.
+
+Net effect on the file: the mouse handlers lost ~95 lines of inline body and
+the touch handlers gained **no copy of it**. `CanvasContainer.tsx` went
+5,848 → 6,033 lines (+185), and every one of those lines is comment or helper
+header — the four placement rationales R4 demanded be written down, plus the
+three helper doc-blocks. The executable logic shrank; had the gesture been
+copy-pasted per the literal step order, the file would have taken ~95 lines
+of duplicated logic on top.
+
+### The tests were proven by reverting the fix
+
+`containers/__tests__/selectionTouch.dom.test.tsx` — 18 tests, mounting the
+**real** `CanvasContainer` and firing real touch events at the same
+`<canvas>` the Pencil hits. Each of the five ways this task could have been
+got wrong was re-injected and the suite re-run:
+
+| Injected mistake | Failures, of 18 |
+| --- | --- |
+| **R4** — touchstart branch moved BELOW the `isGestureTool` bail | **10** |
+| `handleTouchEnd`'s commit branch deleted | 6 |
+| `handleTouchMove`'s `updateSelectionAt` call deleted | 5 |
+| `handleTouchCancel`'s abandon deleted | 2 |
+| `"selection"` put back into `MOUSE_ONLY_TOOLS` | 1 |
+
+🔴 **One round of tests was thrown away as worthless.** The two `touchcancel`
+tests, written store-first ("nothing was committed", "the next gesture is
+clean"), scored **ZERO** failures against a deleted abandon. Both passed for
+the same wrong reason: `beginSelectionAt` replaces `previewSelection` on
+every press, so the next gesture papers over whatever the cancel failed to
+clear, and a cancel commits nothing either way. What a botched cancel
+actually leaks is **visible, not stored** — a marching-ants box or lasso band
+left drawn with no gesture left to remove it. They were rewritten to read the
+rendered SVG chrome against a pre-gesture baseline, and now fail 2.
+
+Two further false-pass traps are documented in the file's header: jsdom's
+zero-size `getBoundingClientRect` (which makes `screenToPixel` return `null`
+for every touch, so every assertion would pass for exactly the broken
+reason), and `touchType: "stylus"` on the fixtures, without which the
+pencil-plus-resting-finger case tests a different gesture entirely.
+
+### Gate — real output, run by the executing agent
+
+```
+$ bun run typecheck        → exit 0 (client tsc --noEmit, server tsc --noEmit)
+$ bun run lint             → ✖ 65 problems (0 errors, 65 warnings)   ← baseline held
+$ bun run test             → Test Files 158 passed (158)
+                             Tests      3276 passed (3276)
+                             ✓ corpus golden digests — the real regression gate
+                               backup-02-24-2026.json / base-unit.json both pass
+$ bun run build            → ✓ built in 2.09s
+$ cd client && bun run lint:boundaries → OK — all 5 boundary rules hold.
+$ find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules → (nothing)
+```
+
+No `vitest -u` was run; no snapshot changed. `stylelint` not run — this task
+touched no CSS.
+
+⚠️ The 158/3276 figures include task 10's tests, which landed in the same
+working tree concurrently. Task 08 alone contributes
+`selectionTouch.dom.test.tsx` (18 tests). Mid-task runs showed 5 failures in
+`LayoutUIStore` / `orientationLayout` / `persistedUIState` — all task 10's
+work-in-progress, none in task 08's files; they were green by the final run.
+
+### Deviations
+
+1. **`ui/hooks/__tests__/useCanvasPointer.dom.test.ts` edited, and it is not
+   in `Touches`.** Its "touch does NOT dispatch the four mouse-only tools"
+   case asserted the exact behaviour this task was commissioned to change,
+   and failed the moment `"selection"` left `MOUSE_ONLY_TOOLS`. Updated to
+   three tools, with a comment pointing at the new suite. It is the test file
+   belonging to a file that IS in `Touches`; no other task owns it.
+2. **Steps 6 and 8 are one commit (`ab02e61`), not two.** The task asks for
+   the gesture to be written twice and then extracted. It was written
+   extracted from the start — the duplication step would have added ~95
+   duplicated lines to a 5,848-line file only to delete them in the next
+   commit, and `ARCHITECTURE.md` §6 argues against creating it in the first
+   place. The commit message records both halves. Reported rather than
+   papered over.
+3. **The existing-selection drag was folded into the helpers** — see step 7
+   above. Beyond the literal instruction, required for correctness.
+
+### Recorded, not fixed
+
+- The `endStroke` latent bug (`useCanvasPointer.ts:162-171`) is **already in
+  the Notes section below**, added when the plan was written. Confirmed still
+  present and still untouched. No tool defines `onUp`, so it stays latent.
+- `SelectionUIStore.selectLasso` commits a **1-cell mask** for a single
+  point (`:463-466`); the task file describes it as committing nothing. Both
+  are true of the system as a whole because `commitSelection` guards
+  `lassoPoints.length > 1`, so the container never hands the store one point.
+  The guard is the container's and is tested there. Store untouched.
 
 ## Deferred follow-ups
 
