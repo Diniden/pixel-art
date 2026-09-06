@@ -13,11 +13,13 @@ import { classNames } from "../../classNames";
  * `ResizeModal.tsx:65-85` and the IDENTICAL FPS clamp duplicated at
  * `PreviewModal.tsx:449-456` and `ExportPreviewModal.tsx:506-515`.
  *
- * Clamping semantics (the legacy behaviour, centralised): free typing is
- * allowed while focused — including a transiently empty or out-of-range
- * field — and the value is parsed, clamped to `[min, max]` and committed on
- * blur or Enter. Arrow keys / spinners commit immediately through the same
- * clamp.
+ * **Commits on blur and Enter only. Keystrokes update a local draft and never
+ * call `onChange`.** Escape reverts the draft to the incoming `value` and
+ * blurs. Free typing is allowed while focused — including a transiently empty
+ * or out-of-range field — and the draft is parsed and clamped to `[min, max]`
+ * at commit time. A live-committing branch used to exist here (task 09/02); it
+ * is what made a field with `min={1}` snap to `1` after the first keystroke of
+ * `10`, so it must not come back.
  */
 
 export interface NumberInputProps extends Omit<
@@ -74,18 +76,12 @@ export function NumberInput({
     [min, max, value, onChange],
   );
 
+  // Draft only. Never calls `onChange` — see the module header.
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setDraft(e.target.value);
-      // Spinner clicks / arrow keys produce complete numbers — commit those
-      // immediately, exactly like the legacy inline `onChange` clamps.
-      const parsed = Number(e.target.value);
-      if (e.target.value !== "" && Number.isFinite(parsed)) {
-        const next = clamp(parsed, min, max);
-        if (next === parsed && next !== value) onChange(next);
-      }
     },
-    [min, max, value, onChange],
+    [],
   );
 
   return (
@@ -107,6 +103,16 @@ export function NumberInput({
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") commit(e.currentTarget.value);
+        else if (e.key === "Escape") {
+          // Revert, then blur. The DOM value is written directly as well as
+          // through state because the blur handler fires synchronously, before
+          // React has re-rendered with the reverted draft — reading the stale
+          // DOM value there would commit exactly the entry Escape discards.
+          const reverted = String(value);
+          setDraft(reverted);
+          e.currentTarget.value = reverted;
+          e.currentTarget.blur();
+        }
         onKeyDown?.(e);
       }}
       {...(label ? { "aria-label": label } : {})}
