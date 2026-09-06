@@ -36,6 +36,18 @@ export interface NumberInputProps extends Omit<
   /** Accessible name for the input. */
   label?: string;
   className?: string;
+  /**
+   * Drop the `slider__input` base class and render with `className` alone.
+   *
+   * Task 02 adopts this primitive purely for its commit semantics at call
+   * sites that already have their own stylesheet — a modal field, a dialog
+   * size box. Most of those rules out-specify `.slider__input` (`.block input`
+   * is 0,1,1 against its 0,1,0) so the look survives, but not all of them set
+   * every property `.slider__input` does: `width: 42px` and `flex-shrink: 0`
+   * would leak into a field styled to fill its column. Those sites pass
+   * `unstyled` so the swap is a behaviour change and nothing else.
+   */
+  unstyled?: boolean;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -51,6 +63,7 @@ export function NumberInput({
   boxed = false,
   label,
   className,
+  unstyled = false,
   onBlur,
   onKeyDown,
   ...rest
@@ -88,8 +101,8 @@ export function NumberInput({
     <input
       type="number"
       className={classNames(
-        "slider__input",
-        boxed && "slider__input--boxed",
+        !unstyled && "slider__input",
+        !unstyled && boxed && "slider__input--boxed",
         className,
       )}
       value={draft}

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { AnchorGrid, AnchorPosition } from "../AnchorGrid/AnchorGrid";
 import { Icon } from "../../primitives/Icon/Icon";
+import { NumberInput } from "../../primitives/NumberInput/NumberInput";
 import { X } from "lucide-react";
 import "./ResizeModal.css";
 
@@ -66,17 +67,11 @@ export function ResizeModal({
           <div className="resize-modal__inputs">
             <div className="resize-modal__field">
               <label>Width</label>
-              <input
-                type="number"
+              <NumberInput
+                unstyled
+                label="Width"
                 value={width}
-                onChange={(e) =>
-                  setWidth(
-                    Math.max(
-                      1,
-                      Math.min(maxSize, parseInt(e.target.value) || 1),
-                    ),
-                  )
-                }
+                onChange={setWidth}
                 min={1}
                 max={maxSize}
               />
@@ -84,17 +79,11 @@ export function ResizeModal({
             <span className="resize-modal__separator">×</span>
             <div className="resize-modal__field">
               <label>Height</label>
-              <input
-                type="number"
+              <NumberInput
+                unstyled
+                label="Height"
                 value={height}
-                onChange={(e) =>
-                  setHeight(
-                    Math.max(
-                      1,
-                      Math.min(maxSize, parseInt(e.target.value) || 1),
-                    ),
-                  )
-                }
+                onChange={setHeight}
                 min={1}
                 max={maxSize}
               />
