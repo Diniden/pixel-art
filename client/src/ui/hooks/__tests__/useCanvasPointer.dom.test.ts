@@ -148,8 +148,11 @@ describe("useCanvasPointer — device parity and the touch subset", () => {
     expect(mouse.setPixels.mock.calls).toEqual(touch.setPixels.mock.calls);
   });
 
-  it("touch does NOT dispatch the four mouse-only tools", () => {
-    for (const t of ["eyedropper", "selection", "origin", "reference-trace"]) {
+  it("touch does NOT dispatch the three remaining mouse-only tools", () => {
+    // ⚠️ THREE, NOT FOUR. `"selection"` was the fourth until plan 09 task 08
+    // gave it the touch gesture design this comment used to say it needed —
+    // see `selectionTouch.dom.test.tsx`. These three still have none.
+    for (const t of ["eyedropper", "origin", "reference-trace"]) {
       expect(canDispatchTool(t, "mouse")).toBe(true);
       // Preserved asymmetry, not a bug: the legacy touch handlers never
       // implemented these, and extending them needs its own gesture design.

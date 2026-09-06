@@ -4416,6 +4416,225 @@ export const CanvasContainer = observer(function CanvasContainer({
   strokeCursor.current.ref = pointer.lastStrokePixelRef;
   const lastStrokePixelRef = pointer.lastStrokePixelRef;
 
+  /* ══ THE SELECTION GESTURE — ONE BODY, BOTH DEVICES (plan 09 task 08) ═══
+   *
+   * ══════════════════════════════════════════════════════════════════════
+   *  WHY THESE THREE FUNCTIONS EXIST
+   * ══════════════════════════════════════════════════════════════════════
+   *
+   * Selection used to be mouse-only, so its press/drag/release body lived
+   * inline in `handleMouseDown` / `handleMouseMove` / `handleMouseUp` and
+   * nowhere else. Wiring the Pencil (plan 09 task 08) would have copied all
+   * three into the touch handlers — a fourth near-duplicate pair in a file
+   * that is already 5,800 lines, and exactly the drift `useCanvasPointer`'s
+   * header describes as the reason the mouse and touch halves of the old
+   * `Canvas.tsx` diverged in the first place.
+   *
+   * `ARCHITECTURE.md` §6: "Prefer deleting duplication over abstracting it."
+   * So the body moved here ONCE and both devices call it. Anything that
+   * genuinely differs between a mouse and a Pencil — button arbitration,
+   * pinch rejection, which contact is drawing — stays in the caller, which is
+   * where the two input models legitimately differ.
+   *
+   * ⚠️ NO BEGIN/UPDATE/COMMIT TRIAD IN `SelectionUIStore`. Selection is
+   * fire-and-forget today: the in-flight gesture is this component's
+   * `useState` (`isSelectingRegion` / `selectionStart` / `previewSelection`
+   * and `isLassoSelecting` / `lassoPoints`) and the store is touched exactly
+   * once, at the end. Adding a triad would pull the data-safety perimeter
+   * into a gesture task for no behavioural gain. These helpers deliberately
+   * mirror the existing shape rather than inventing a new one.
+   *
+   * ⚠️ These are plain closures over render-scope state, NOT `useCallback`.
+   * They close over eight pieces of `useState` that change every gesture
+   * sample; memoising them would need a dependency list that invalidates on
+   * each one anyway, and both call sites are ordinary event handlers that are
+   * themselves rebuilt every render. `getPixelCoords` is the stable one and
+   * it is already `useCallback`'d.
+   */
+
+  /**
+   * Press: open a selection gesture at `coords`, for whichever mode is active.
+   *
+   * Returns `true` when the press was consumed — including the two one-shot
+   * modes (`flood`, `color`), which complete entirely here and open nothing.
+   * The caller returns on `true`; it must not fall through to a stroke.
+   *
+   * Verbatim in behaviour from the pre-task mouse path: the drag-an-existing-
+   * selection branch first, then rect / flood / color, then lasso as the
+   * fallthrough.
+   */
+  const beginSelectionAt = (coords: Point): boolean => {
+    const canUseSelectionMask =
+      selection &&
+      selection.width === gridWidth &&
+      selection.height === gridHeight;
+    const isInsideSelection =
+      canUseSelectionMask && selection.mask.has(coords.y * gridWidth + coords.x);
+
+    // Clicking INSIDE a selection drags it — unless edit-mask mode is on,
+    // where a click inside must not disturb the mask.
+    if (isInsideSelection && selectionBehavior !== "editMask") {
+      setIsDraggingSelection(true);
+      setSelectionDragMode(
+        selectionBehavior === "moveSelection" ? "selection" : "pixels",
+      );
+      setPixelDragOffset({ dx: 0, dy: 0 });
+      setLastSelectionDragPixel(coords);
+      return true;
+    }
+    if (isInsideSelection && selectionBehavior === "editMask") return true;
+
+    if (selectionMode === "rect") {
+      setIsSelectingRegion(true);
+      setSelectionStart(coords);
+      setPreviewSelection({ x: coords.x, y: coords.y, width: 1, height: 1 });
+      setIsLassoSelecting(false);
+      setLassoPoints([]);
+      actions.clearSelection();
+      return true;
+    }
+
+    if (selectionMode === "flood") {
+      setIsSelectingRegion(false);
+      setSelectionStart(null);
+      setPreviewSelection(null);
+      setIsLassoSelecting(false);
+      setLassoPoints([]);
+      actions.selectFloodFillAt(coords.x, coords.y);
+      return true;
+    }
+
+    if (selectionMode === "color") {
+      setIsSelectingRegion(false);
+      setSelectionStart(null);
+      setPreviewSelection(null);
+      setIsLassoSelecting(false);
+      setLassoPoints([]);
+      actions.selectAllByColorAt(coords.x, coords.y);
+      return true;
+    }
+
+    // lasso
+    setIsSelectingRegion(false);
+    setSelectionStart(null);
+    setPreviewSelection(null);
+    setIsLassoSelecting(true);
+    setLassoPoints([coords]);
+    actions.clearSelection();
+    return true;
+  };
+
+  /**
+   * Drag: advance whichever selection gesture is open.
+   *
+   * Returns `true` when a gesture was open and consumed the sample, `false`
+   * when there was none — the caller then falls through to its own branches
+   * (drawing, panning, the fill-square hover preview).
+   *
+   * ⚠️ THE DRAG-AN-EXISTING-SELECTION CASE IS IN HERE TOO, and it has to be.
+   * `beginSelectionAt` can OPEN that drag (a press inside an existing mask),
+   * and before this task only the mouse handlers could advance or close it.
+   * Leaving it out would mean a Pencil press inside a selection opens a drag
+   * that touch can never finish — `isDraggingSelection` stuck true, every
+   * later touch swallowed. A helper that opens a gesture owns closing it.
+   */
+  const updateSelectionAt = (coords: Point): boolean => {
+    if (isDraggingSelection && lastSelectionDragPixel && selectionDragMode) {
+      const dx = coords.x - lastSelectionDragPixel.x;
+      const dy = coords.y - lastSelectionDragPixel.y;
+      if (dx !== 0 || dy !== 0) {
+        if (selectionDragMode === "pixels") {
+          // Non-destructive preview; the real move commits on release.
+          setPixelDragOffset((prev) => ({
+            dx: prev.dx + dx,
+            dy: prev.dy + dy,
+          }));
+        } else {
+          actions.moveSelection(dx, dy);
+        }
+        setLastSelectionDragPixel(coords);
+      }
+      return true;
+    }
+
+    if (isSelectingRegion && selectionStart) {
+      const minX = Math.min(selectionStart.x, coords.x);
+      const minY = Math.min(selectionStart.y, coords.y);
+      const maxX = Math.max(selectionStart.x, coords.x);
+      const maxY = Math.max(selectionStart.y, coords.y);
+      setPreviewSelection({
+        x: minX,
+        y: minY,
+        width: maxX - minX + 1,
+        height: maxY - minY + 1,
+      });
+      return true;
+    }
+
+    if (isLassoSelecting) {
+      setLassoPoints((prev) => {
+        const last = prev[prev.length - 1];
+        // Drop jitter: only a CHANGED cell extends the path, or the array
+        // grows unboundedly during a slow drag.
+        if (last && last.x === coords.x && last.y === coords.y) return prev;
+        return [...prev, coords];
+      });
+      return true;
+    }
+
+    return false;
+  };
+
+  /**
+   * Release: commit whichever selection gesture is open and clear it.
+   *
+   * Returns `true` when there was one to commit. `commit: false` ABANDONS it
+   * instead — that is the `touchcancel` path, which the mouse never had an
+   * equivalent of: the system took the contact away, the user never lifted,
+   * and committing whatever the preview happened to show would leave a
+   * selection they did not finish drawing. Either way the in-flight state is
+   * cleared, so a cancelled gesture cannot leave a half-drawn preview or a
+   * stray lasso path on screen.
+   *
+   * ⚠️ The 1-point lasso commits NOTHING, and that is not this function's
+   * rule — `SelectionUIStore.selectLasso` has the same special case. Kept on
+   * both sides so the guard reads locally and the store stays authoritative.
+   */
+  const commitSelection = (commit = true): boolean => {
+    // The drag of an EXISTING selection — the counterpart to the branch
+    // `updateSelectionAt` owns; see its header for why it lives here.
+    if (isDraggingSelection) {
+      if (commit && selectionDragMode === "pixels") {
+        const { dx, dy } = pixelDragOffset;
+        // ⚠️ The bridge delegate moves the MASK after the pixels; without the
+        // second step the outline detaches from the art it describes.
+        if (dx !== 0 || dy !== 0) actions.moveSelectedPixels(dx, dy);
+      }
+      setIsDraggingSelection(false);
+      setSelectionDragMode(null);
+      setLastSelectionDragPixel(null);
+      setPixelDragOffset({ dx: 0, dy: 0 });
+      return true;
+    }
+
+    if (isSelectingRegion && previewSelection) {
+      if (commit) actions.setSelection(previewSelection);
+      setIsSelectingRegion(false);
+      setSelectionStart(null);
+      setPreviewSelection(null);
+      return true;
+    }
+
+    if (isLassoSelecting) {
+      if (commit && lassoPoints.length > 1) actions.selectLasso(lassoPoints);
+      setIsLassoSelecting(false);
+      setLassoPoints([]);
+      return true;
+    }
+
+    return false;
+  };
+
   /* ── mouse ─────────────────────────────────────────────────────────────── */
   const handleMouseDown = (e: React.MouseEvent) => {
     // Middle button, or alt+left, pans.
@@ -4565,65 +4784,12 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    // ⚠️ The body moved to `beginSelectionAt` so the touch path can call the
+    // SAME code — see its header. Behaviour is unchanged: it always consumes
+    // the press for the selection tool, so this `return` is unconditional in
+    // practice and the `if` only documents that.
     if (currentTool === "selection") {
-      const canUseSelectionMask =
-        selection &&
-        selection.width === gridWidth &&
-        selection.height === gridHeight;
-      const isInsideSelection =
-        canUseSelectionMask &&
-        selection.mask.has(coords.y * gridWidth + coords.x);
-
-      // Clicking INSIDE a selection drags it — unless edit-mask mode is on,
-      // where a click inside must not disturb the mask.
-      if (isInsideSelection && selectionBehavior !== "editMask") {
-        setIsDraggingSelection(true);
-        setSelectionDragMode(
-          selectionBehavior === "moveSelection" ? "selection" : "pixels",
-        );
-        setPixelDragOffset({ dx: 0, dy: 0 });
-        setLastSelectionDragPixel(coords);
-        return;
-      }
-      if (isInsideSelection && selectionBehavior === "editMask") return;
-
-      if (selectionMode === "rect") {
-        setIsSelectingRegion(true);
-        setSelectionStart(coords);
-        setPreviewSelection({ x: coords.x, y: coords.y, width: 1, height: 1 });
-        setIsLassoSelecting(false);
-        setLassoPoints([]);
-        actions.clearSelection();
-        return;
-      }
-
-      if (selectionMode === "flood") {
-        setIsSelectingRegion(false);
-        setSelectionStart(null);
-        setPreviewSelection(null);
-        setIsLassoSelecting(false);
-        setLassoPoints([]);
-        actions.selectFloodFillAt(coords.x, coords.y);
-        return;
-      }
-
-      if (selectionMode === "color") {
-        setIsSelectingRegion(false);
-        setSelectionStart(null);
-        setPreviewSelection(null);
-        setIsLassoSelecting(false);
-        setLassoPoints([]);
-        actions.selectAllByColorAt(coords.x, coords.y);
-        return;
-      }
-
-      // lasso
-      setIsSelectingRegion(false);
-      setSelectionStart(null);
-      setPreviewSelection(null);
-      setIsLassoSelecting(true);
-      setLassoPoints([coords]);
-      actions.clearSelection();
+      beginSelectionAt(coords);
       return;
     }
 
@@ -4768,48 +4934,9 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
-    if (isDraggingSelection && lastSelectionDragPixel && selectionDragMode) {
-      const dx = coords.x - lastSelectionDragPixel.x;
-      const dy = coords.y - lastSelectionDragPixel.y;
-      if (dx !== 0 || dy !== 0) {
-        if (selectionDragMode === "pixels") {
-          // Non-destructive preview; the real move commits on mouse-up.
-          setPixelDragOffset((prev) => ({
-            dx: prev.dx + dx,
-            dy: prev.dy + dy,
-          }));
-        } else {
-          actions.moveSelection(dx, dy);
-        }
-        setLastSelectionDragPixel(coords);
-      }
-      return;
-    }
-
-    if (isSelectingRegion && selectionStart) {
-      const minX = Math.min(selectionStart.x, coords.x);
-      const minY = Math.min(selectionStart.y, coords.y);
-      const maxX = Math.max(selectionStart.x, coords.x);
-      const maxY = Math.max(selectionStart.y, coords.y);
-      setPreviewSelection({
-        x: minX,
-        y: minY,
-        width: maxX - minX + 1,
-        height: maxY - minY + 1,
-      });
-      return;
-    }
-
-    if (isLassoSelecting) {
-      setLassoPoints((prev) => {
-        const last = prev[prev.length - 1];
-        // Drop jitter: only a CHANGED cell extends the path, or the array
-        // grows unboundedly during a slow drag.
-        if (last && last.x === coords.x && last.y === coords.y) return prev;
-        return [...prev, coords];
-      });
-      return;
-    }
+    // The existing-selection drag, the rect preview box and the lasso point
+    // accumulation — all shared with the touch path via `updateSelectionAt`.
+    if (updateSelectionAt(coords)) return;
 
     if (!isDrawing || !drawStartPoint) {
       // The hover preview for fill-square, which previews without a gesture.
@@ -4971,34 +5098,11 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
-    if (isDraggingSelection) {
-      if (selectionDragMode === "pixels") {
-        const { dx, dy } = pixelDragOffset;
-        // ⚠️ The bridge delegate moves the MASK after the pixels; without the
-        // second step the outline detaches from the art it describes.
-        if (dx !== 0 || dy !== 0) actions.moveSelectedPixels(dx, dy);
-      }
-      setIsDraggingSelection(false);
-      setSelectionDragMode(null);
-      setLastSelectionDragPixel(null);
-      setPixelDragOffset({ dx: 0, dy: 0 });
-      return;
-    }
-
-    if (isSelectingRegion && previewSelection) {
-      actions.setSelection(previewSelection);
-      setIsSelectingRegion(false);
-      setSelectionStart(null);
-      setPreviewSelection(null);
-      return;
-    }
-
-    if (isLassoSelecting) {
-      if (lassoPoints.length > 1) actions.selectLasso(lassoPoints);
-      setIsLassoSelecting(false);
-      setLassoPoints([]);
-      return;
-    }
+    // Commit the existing-selection drag, the rect, or the lasso — shared
+    // with the touch path via `commitSelection`. A mouse-up is always a real
+    // release, so `commit` keeps its default; only `touchcancel` passes
+    // `false`.
+    if (commitSelection()) return;
 
     if (!isDrawing || !drawStartPoint) return;
     finishDrawingStroke();
@@ -5201,6 +5305,51 @@ export const CanvasContainer = observer(function CanvasContainer({
     if (posePointerDown(touch.clientX, touch.clientY)) return;
 
     const coords = getPixelCoords(touch.clientX, touch.clientY);
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  ⚠️ SELECTION — ALSO BEFORE THE `isGestureTool` BAIL. READ THIS FIRST.
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // THE PLACEMENT DECISION, AND WHY IT IS THIS ONE (plan 09 task 08):
+    //
+    // `"selection"` is a member of `isGestureTool`, and the bail at the end
+    // of this handler returns for every member of that list. A selection
+    // branch written AFTER it never runs — and it fails SILENTLY: no error,
+    // no warning, just a Pencil that does nothing, which reads exactly like
+    // an unimplemented feature rather than a misplaced branch. That is the
+    // highest-likelihood risk in the plan's register (R4), and `reflection`
+    // and `pose` above are the two existing branches that had to solve it
+    // the same way. This is the third.
+    //
+    // ⚠️ THE PREDICATE WAS NOT NARROWED. `isGestureTool` still contains
+    // `"selection"` and must keep containing it: the predicate is consulted
+    // in THREE places (here, `handleTouchMove`, and through the stroke path),
+    // and it means "this tool is arbitrated ahead of `toolHandlers`, never
+    // dispatched through it" — which is still true of selection, whose
+    // `toolHandlers` entry is deliberately `{}`. Removing the member would
+    // change its meaning at all three sites to fix it at one, and would let a
+    // selection touch fall through to `pointer.beginStroke` and paint pixels.
+    // A branch placed ahead of the bail is the local, reviewable change.
+    //
+    // ⚠️ AFTER `getPixelCoords` BUT BEFORE THE `!coords || !layer` GUARD.
+    // Selection needs coords — there is nothing to select without a cell —
+    // but it does NOT need a layer: selecting a region of an empty or
+    // layerless object is meaningful, and the mask is object geometry, not
+    // pixel data. So the guard is split: `!coords` aborts here, `!layer` is
+    // left to the guard below, which the tools past this point genuinely do
+    // need. `move` (below) stays after the full guard because it drags
+    // PIXELS and therefore does need a layer.
+    //
+    // ⚠️ The pinch bail-out at the top of this handler already ran, so a
+    // two-finger gesture never reaches here: the viewport's native listener
+    // owns zoom/pan and nothing is selected. `touch` came from
+    // `drawingTouch`, so a Pencil with a palm resting on the glass is still
+    // the drawing contact and the selection tracks it.
+    if (currentTool === "selection") {
+      if (coords) beginSelectionAt(coords);
+      return;
+    }
+
     if (!coords || !layer) return;
 
     // The move tool is the ONE gesture tool touch implements.
@@ -5212,10 +5361,14 @@ export const CanvasContainer = observer(function CanvasContainer({
     }
 
     // ⚠️ Touch is a deliberate SUBSET (see the module header): the eyedropper,
-    // selection, origin and trace tools were never implemented for it and a
-    // touch on any of them falls through here. `canDispatchTool()` inside the
-    // hook returns false for them, so nothing happens — which is exactly what
-    // the legacy handlers did by simply not having the branches.
+    // origin and trace tools were never implemented for it and a touch on any
+    // of them falls through here. `canDispatchTool()` inside the hook returns
+    // false for them, so nothing happens — which is exactly what the legacy
+    // handlers did by simply not having the branches.
+    //
+    // ⚠️ `"selection"` NO LONGER REACHES THIS LINE — its branch is above,
+    // ahead of this bail, and returns. It is still a member of
+    // `isGestureTool` on purpose; see that branch's header.
     if (isGestureTool(currentTool)) return;
 
     pointer.beginStroke(touch.clientX, touch.clientY, "touch");
@@ -5368,6 +5521,19 @@ export const CanvasContainer = observer(function CanvasContainer({
       return;
     }
 
+    // ⚠️ BEFORE BOTH BAILS BELOW — the same ordering rule as `reflection` and
+    // `pose` above, and for a sharper reason here: a selection gesture sets
+    // NEITHER `isDrawing` nor anything the `!isDrawing` bail tests, so it
+    // would be discarded by that line before `isGestureTool` even got the
+    // chance to swallow it. Every sample of the drag would be lost and the
+    // preview box would never grow past its first cell.
+    //
+    // The two-finger bail-out at the top of this handler already ran and used
+    // `pinchTouches`, so a pinch that starts mid-drag stops updating the
+    // preview (it commits on the eventual lift, as the mouse would on a
+    // release) and a Pencil with a resting finger keeps tracking.
+    if (updateSelectionAt(coords)) return;
+
     if (!isDrawing) return;
     if (isGestureTool(currentTool)) return;
 
@@ -5418,6 +5584,21 @@ export const CanvasContainer = observer(function CanvasContainer({
     // from a stale origin.
     if (posePointerUp()) return;
 
+    // ⚠️ THERE IS NO `isGestureTool` BAIL IN THIS HANDLER — which is exactly
+    // why this branch still has to come FIRST rather than last. A selection
+    // gesture sets none of `isPanning` / `isDraggingPixels` / `isDrawing`, so
+    // without it the lift would fall through to `actions.endStroke()` /
+    // `endDrawing()` at the bottom, which close a DRAWING gesture and leave
+    // every piece of the selection's in-flight state (`isSelectingRegion`,
+    // `previewSelection`, `isLassoSelecting`, `lassoPoints`) set. Nothing
+    // would commit, the preview box would stay on screen, and the NEXT touch
+    // would resume a gesture the user believed they had released.
+    //
+    // A `touchend` IS a genuine release on iOS — including a Pencil sliding
+    // off the screen edge, which reports `touchend` and nothing else — so it
+    // COMMITS. `handleTouchCancel` is the one that must not.
+    if (commitSelection()) return;
+
     if (isPanning) {
       setIsPanning(false);
       setLastPanPoint(null);
@@ -5456,6 +5637,15 @@ export const CanvasContainer = observer(function CanvasContainer({
     // with the next one into a stamp the user never asked for.
     poseDragRef.current = null;
     poseLastDownRef.current = null;
+    // ⚠️ `false` — ABANDON the selection, do not commit it. The mouse path has
+    // no equivalent of this: there is no "the system took the button away".
+    // The user never lifted, so committing whatever the preview happened to
+    // show would leave a selection they did not finish drawing — and skipping
+    // the call entirely would be worse, leaving a half-drawn preview box or a
+    // stray lasso path on screen with no gesture left to clear it. Clearing
+    // without committing is the only correct response, and it is what the
+    // shape tools' `clearPreviewPixels` below does for the same reason.
+    commitSelection(false);
     actions.clearPreviewPixels();
     setIsPanning(false);
     setLastPanPoint(null);
