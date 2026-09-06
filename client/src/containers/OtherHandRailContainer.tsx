@@ -15,8 +15,10 @@
  *               "Size / Shape" the moment the Pencil double-taps. Positions
  *               are stored per TOOL (`tool:pixel`, `tool:eraser`, …) so each
  *               tool keeps the arrangement its thumb learned;
- *   - `color` — the colour picker as three (HSL or RGB) or four (+alpha)
- *               vertical sliders;
+ *   - `color` — an Edge/Fill slot chooser, a Swap action, and the colour
+ *               picker as three (HSL or RGB) or four (+alpha) vertical
+ *               sliders. Every write goes through `app.setActiveColor`, so
+ *               the rail honours the slot the same way the main picker does;
  *   - `light` — the lighting studio's light direction sphere, light /
  *               ambient colours and scale.
  *
@@ -71,9 +73,22 @@ const ColorSection = observer(function ColorSection() {
   const model = arrangement.colorModel ?? "hsl";
   const includeAlpha = arrangement.includeAlpha ?? false;
 
-  const color = ui.tool.selectedColor;
+  /* ── The rail edits whichever slot the target names (plan 09 task 07) ────
+     Read `app.activeColor`, not `ui.tool.selectedColor`: this section used to
+     be edge-only, so a thumb slider dragged with the Fill tab open silently
+     recoloured the pencil. `activeColor` / `setActiveColor` are the SINGLE
+     branch point task 05 added; the rail must not re-derive the branch, or
+     the two colour surfaces drift apart. */
+  const colorTarget = ui.tool.colorTarget;
+  const color = app.activeColor;
   const [hsl, setHsl] = useHslMirror(color);
-  const colorAdjustment = Boolean(ui.tool.colorAdjustment);
+  /* Colour ADJUSTMENT is an edge-slot operation only — the same reasoning as
+     `ColorPickerContainer.tsx:121-130`: there is no "adjust every pixel of
+     the fill colour" concept, and running it while the fill target is active
+     would recolour artwork the user is not looking at. On the fill target the
+     rail just sets the slot. */
+  const colorAdjustment =
+    colorTarget === "edge" && Boolean(ui.tool.colorAdjustment);
   const saveStateToHistory = useCallback(
     (label?: string) => app.saveStateToHistory(label),
     [app],
@@ -85,25 +100,65 @@ const ColorSection = observer(function ColorSection() {
 
   // `ColorPicker.applyColor`, verbatim in intent: adjust while an adjustment
   // is live (history tracked only when NOT dragging), else set + history.
+  // `setActiveColor` carries the edge/fill branch AND the history asymmetry.
   const apply = (next: Color) => {
     if (colorAdjustment) app.adjustColor(next, !draggingRef.current);
-    else app.setColorAndAddToHistory(next);
+    else app.setActiveColor(next);
   };
 
-  const widgets = colorChannelSliders({
-    idPrefix: "",
-    color,
-    hsl,
-    model,
-    includeAlpha,
-    onHsl: (next) => {
-      setHsl(next);
-      apply({ ...hslToRgb(next.h, next.s, next.l), a: color.a });
+  const widgets: ThumbWidgetSpec[] = [
+    /* Edge/Fill, as the same `buttons` stack the selection tool's Mode group
+       uses (`toolWidgets.ts:317-341`) — a choice is an N-button stack with
+       one active. Thumb-reachable and draggable like every other widget. */
+    {
+      kind: "buttons",
+      id: "target",
+      label: "Slot",
+      buttons: (
+        [
+          ["edge", "Edge"],
+          ["fill", "Fill"],
+        ] as ["edge" | "fill", string][]
+      ).map(([target, label]) => ({
+        id: target,
+        label,
+        title: `Edit the ${target} color`,
+        active: colorTarget === target,
+        onClick: () => ui.tool.setColorTarget(target),
+      })),
     },
-    onRgb: apply,
-    onDragStart,
-    onDragEnd,
-  });
+    /* One undo step, not two: `swapEdgeAndFillColors` snapshots BEFORE it
+       mutates. Do not bracket it with another `saveStateToHistory`. */
+    {
+      kind: "buttons",
+      id: "swap",
+      label: "Colors",
+      buttons: [
+        {
+          // No `active`: this is an ACTION, not a toggle or a choice — see
+          // `thumbWidgets.ts`'s note on the three shapes one stack serves.
+          id: "swap",
+          label: "Swap",
+          title: "Swap edge and fill colors",
+          onClick: () => app.swapEdgeAndFillColors(),
+        },
+      ],
+    },
+    ...colorChannelSliders({
+      idPrefix: "",
+      color,
+      hsl,
+      model,
+      includeAlpha,
+      onHsl: (next) => {
+        setHsl(next);
+        apply({ ...hslToRgb(next.h, next.s, next.l), a: color.a });
+      },
+      onRgb: apply,
+      onDragStart,
+      onDragEnd,
+    }),
+  ];
 
   return (
     <OtherHandSurface
