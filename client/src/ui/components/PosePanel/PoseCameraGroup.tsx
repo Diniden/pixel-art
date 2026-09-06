@@ -63,8 +63,24 @@ import type {
   CameraAdvancedPatch,
   CameraAdvancedPerspective,
 } from "./CameraAdvanced";
+import { NumberInput } from "../../primitives/NumberInput/NumberInput";
 import { POSE_SCALE_SLIDER_MAX, POSE_SCALE_SLIDER_MIN } from "./PoseSection";
 import "./PosePanel.css";
+
+/**
+ * The STORE's scale safety floor, restated (task 02).
+ *
+ * ⚠️ Not `POSE_SCALE_SLIDER_MIN`. That is the RANGE input's travel — an
+ * affordance — while this is the only value `PoseUIStore.setScale` will refuse
+ * to go below (`POSE_SCALE_MIN_SAFE`, `1e-3`). The number box now commits
+ * through `NumberInput`, which clamps to its `min`, so the two had to stop
+ * being the same number: clamping the box at the slider's `0.1` would cap a
+ * value the store happily stores, which MASTER E11 forbids.
+ *
+ * Restated rather than imported because `ui/` may not import a store (MASTER
+ * D15) — the same reason `poseCamera.ts` carries its own `MIN_FIT_SCALE`.
+ */
+const POSE_SCALE_STORE_MIN = 1e-3;
 
 const PROJECTIONS: readonly { id: PoseProjection; label: string }[] = [
   { id: "perspective", label: "Perspective" },
@@ -191,26 +207,25 @@ export function PoseCameraGroup({
           value={Math.min(scale, POSE_SCALE_SLIDER_MAX)}
           onChange={(e) => onSetScale(Number(e.target.value))}
         />
-        <input
-          type="number"
+        <NumberInput
           className="pose-panel__number"
-          aria-label="Scale value"
-          /* No `max`: this is the unbounded path (E11). `min` is the store's
-             safety floor, not a cap. */
-          min={POSE_SCALE_SLIDER_MIN}
+          unstyled
+          label="Scale value"
+          /* No `max`: this is the unbounded path (E11).
+             ⚠️ `min` is `POSE_SCALE_STORE_MIN`, the STORE's safety floor —
+             NOT `POSE_SCALE_SLIDER_MIN`. On the raw input this attribute was
+             advisory and never enforced, so typing `0.05` reached the store
+             and was kept; `NumberInput` CLAMPS to `min` on commit, so passing
+             the slider's travel here would turn an affordance into the cap
+             MASTER E11 exists to forbid. The slider's `min` is unchanged. */
+          min={POSE_SCALE_STORE_MIN}
           step={0.1}
           value={scale}
-          onChange={(e) => {
-            /* ⚠️ An EMPTY box must send nothing at all. A number input
-               sanitises anything unparseable to `""`, and `Number("")` is
-               `0` — not `NaN` — so a bare `Number.isFinite` guard would let
-               a half-typed value collapse the camera to the store's safety
-               floor mid-keystroke. Both cases are rejected here. */
-            const raw = e.target.value.trim();
-            if (raw === "") return;
-            const next = Number(raw);
-            if (Number.isFinite(next)) onSetScale(next);
-          }}
+          /* ⚠️ The old inline guard rejecting `""` mid-keystroke is GONE, and
+             deliberately: `NumberInput` never emits while typing at all, so
+             the half-typed `""` that `Number("")` turned into a real `0` is
+             no longer reachable. A box emptied and blurred re-reads `value`. */
+          onChange={onSetScale}
           title="Model scale multiplier — type any value; there is no upper limit"
         />
       </div>

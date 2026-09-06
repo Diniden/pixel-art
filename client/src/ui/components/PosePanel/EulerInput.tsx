@@ -4,8 +4,9 @@
  *
  * PURE. Like everything under `ui/`, this imports no store, no MobX, no API
  * and no `services/`: a `{x,y,z}` comes in as a prop and a new one leaves
- * through `onChange`. It holds **no state at all** — not even a draft — for
- * the reason under "Why there is no draft state" below.
+ * through `onChange`. It holds no state of its OWN; each box drafts what is
+ * being typed inside {@link NumberInput} and commits on blur or Enter — see
+ * "The measured trap" below for why that replaced holding nothing at all.
  *
  * ## Three exports, and why the file is shaped this way
  *
@@ -72,13 +73,21 @@
  *
  * **Elevation is reported in −90…90 and azimuth in −180…180.** `Math.asin`
  * cannot return anything outside ±90° and `Math.atan2` nothing outside ±180°,
- * so typing `elevation 100` puts the light 10° PAST the pole — which is
- * physically the same place as `elevation 80` with the azimuth flipped 180° —
- * and the boxes redisplay it in that canonical spelling. Likewise `azimuth
- * 370` comes back as `10`. **Nothing is lost: the light is exactly where the
- * typed numbers put it.** The numbers are re-expressed because they are read
- * back off a vector rather than remembered, and the vector genuinely does not
- * distinguish the two spellings.
+ * so `azimuth 370` comes back as `10`. **Nothing is lost: the light is exactly
+ * where the typed numbers put it.** The numbers are re-expressed because they
+ * are read back off a vector rather than remembered, and the vector genuinely
+ * does not distinguish the two spellings.
+ *
+ * ⚠️ **Elevation is now CLAMPED to its declared ±90 on commit** (task 02,
+ * plan 09), where it previously passed through verbatim. Before, typing
+ * `elevation 100` put the light 10° past the pole — physically the same place
+ * as `elevation 80` with the azimuth flipped 180° — and the box redisplayed it
+ * in that canonical spelling, which read as the control rewriting the entry
+ * AND silently swinging the azimuth half a turn. Since the boxes commit
+ * through `NumberInput`, whose contract is that `min`/`max` are enforced on
+ * commit rather than advisory, `100` now commits as `90`. The bounds this
+ * field always declared are simply true now. Azimuth remains genuinely
+ * unbounded — it wraps, so a cap there would be arbitrary — and is untouched.
  *
  * ⚠️ **This asymmetry with the model's rotation is deliberate.** The rotation's
  * yaw wraps freely and is **never** rewritten — `370` stays `370` — because
@@ -87,25 +96,28 @@
  * second copy, and it is the honest price: the alternative is a copy that goes
  * stale the first time the orb is touched.
  *
- * ## ⚠️ Why there is no draft state — the measured trap
- *
- * The obvious implementation keeps half-typed text in `useState` and emits on
- * blur. This one does not, and the naive alternative is actively harmful here.
+ * ## ⚠️ The measured trap, and why drafting is now what solves it
  *
  * `<input type="number">` **sanitises anything unparseable to `""`**, and
  * `Number("")` is **`0`, not `NaN`** — so a bare `Number.isFinite(next)` guard
  * lets a real `0` through mid-keystroke. For the Scale box that collapses the
  * model; for an ANGLE box it is worse, because typing `-45` passes through
  * `"-"` (empty, to the input) on the way, so the model would snap to 0 and
- * then to −45. Every field here rejects the empty string BEFORE parsing and
- * emits nothing for it. This is the guard the Scale box already uses, copied
- * deliberately rather than re-derived.
+ * then to −45.
  *
- * Rejecting rather than drafting is what makes the control safe to leave fully
- * controlled: an unparseable keystroke emits nothing, so the value fed back is
- * the last GOOD one, and the DOM keeps the owner's raw text until the next
- * parseable keystroke replaces it. They can type freely; the model simply does
- * not move until what they typed means something.
+ * ⚠️ **This file used to hold NO state at all** and beat the trap by rejecting
+ * `""` before parsing, on every keystroke. Task 02 (plan 09) replaced that with
+ * the {@link NumberInput} primitive, which keeps a local draft and commits on
+ * **blur and Enter only**, because rejecting was only ever half a fix: it kept
+ * a half-typed value from reaching the store, but the box still committed the
+ * moment a keystroke happened to parse, so typing `100` into a bounded field
+ * moved the model through `1` and `10` first. On an iPad that is unusable.
+ *
+ * With drafting, no half-typed string is parsed at all — the trap is
+ * structurally unreachable rather than guarded against — and Escape reverts.
+ * The boxes remain a VIEW of the prop between edits: an external change (the
+ * orb being dragged) still moves the numbers, because `NumberInput` re-syncs
+ * its draft whenever the incoming `value` changes.
  *
  * ## Display: rounded to `DEGREE_DECIMALS`, never re-wrapped
  *
@@ -150,6 +162,7 @@
  * mapping to the last bit, and is pinned by a test.
  */
 import type { ReactElement } from "react";
+import { NumberInput } from "../../primitives/NumberInput/NumberInput";
 import { applyEulerXYZ } from "../../canvas/pose/poseCamera";
 import type { PoseVector } from "../../canvas/pose/poseTypes";
 
@@ -258,10 +271,10 @@ export function EulerInput({
       {axes.map((axis) => (
         <span key={axis.label} className="pose-panel__slider-row">
           <span className="pose-panel__slider-label">{axis.label}</span>
-          <input
-            type="number"
+          <NumberInput
             className="pose-panel__number pose-panel__number--angle"
-            aria-label={`${name} ${axis.label}`}
+            unstyled
+            label={`${name} ${axis.label}`}
             min={axis.min}
             max={axis.max}
             /* Tenths, matching what is displayed, so the arrow keys and the
@@ -270,17 +283,16 @@ export function EulerInput({
             value={roundDegrees(axis.degrees)}
             disabled={disabled}
             title={axis.title}
-            onChange={(e) => {
-              /* ⚠️ THE MEASURED TRAP, explained in the header: a number input
-                 sanitises garbage to `""` and `Number("")` is `0`, so the
-                 empty case must be rejected BEFORE parsing or a half-typed
-                 `-45` snaps the model to 0 on its way through `"-"`. Emitting
-                 nothing leaves the caller's last good value in place. */
-              const raw = e.target.value.trim();
-              if (raw === "") return;
-              const next = Number(raw);
-              if (Number.isFinite(next)) onChange(axis.label, next);
-            }}
+            /* ⚠️ The old inline `""`/`"-"` guard is GONE, and its absence is
+               the point: it existed only because this box committed on every
+               keystroke, so `-45` passed through `"-"` — which a number input
+               reports as `""` and `Number` turns into a real `0` — and snapped
+               the model flat on the way. `NumberInput` emits on blur and Enter
+               ONLY, so no half-typed string is ever parsed and the trap the
+               header describes is structurally unreachable rather than
+               guarded against. A box left empty commits nothing new: the
+               parse fails and the incoming `value` is restored. */
+            onChange={(next) => onChange(axis.label, next)}
           />
         </span>
       ))}
@@ -359,24 +371,26 @@ export function ScaleAxisInput({
             disabled={disabled}
             onChange={(e) => emit(label, Number(e.target.value))}
           />
-          <input
-            type="number"
+          <NumberInput
             className="pose-panel__number pose-panel__number--angle"
-            aria-label={`Scale ${label} value`}
+            unstyled
+            label={`Scale ${label} value`}
             /* `min` is the safety floor, NOT a cap, and there is no `max` —
-               the store stores any positive finite number (E11). */
+               the store stores any positive finite number (E11).
+               ⚠️ Safe to hand to `NumberInput`, which clamps to `min` on
+               commit, ONLY because this number is the store's own floor:
+               `SCALE_AXIS_SLIDER_MIN` and `POSE_AXIS_SCALE_MIN_SAFE` are both
+               `1e-3`, so the clamp lands exactly where `setAxisScale` would.
+               (The Scale box in `PoseCameraGroup` is NOT in that position and
+               had to be given the store's floor explicitly — see it.) */
             min={SCALE_AXIS_SLIDER_MIN}
             step={0.001}
             value={value}
             disabled={disabled}
-            onChange={(e) => {
-              /* An empty box must send nothing: `Number("")` is `0`, which the
-                 store floors, flattening the axis mid-keystroke. */
-              const raw = e.target.value.trim();
-              if (raw === "") return;
-              const next = Number(raw);
-              if (Number.isFinite(next)) emit(label, next);
-            }}
+            /* The old inline `""` guard is gone with the live commit that
+               needed it: `NumberInput` emits on blur/Enter only, so there is
+               no mid-keystroke `Number("") === 0` to reject. */
+            onChange={(next) => emit(label, next)}
             title={`Model scale along ${label} — type any value; there is no upper limit`}
           />
         </span>

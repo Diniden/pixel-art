@@ -129,6 +129,20 @@ function byLabel(container: HTMLElement, label: string): HTMLInputElement {
   return el;
 }
 
+/**
+ * Type into a NUMBER box and COMMIT it, by leaving the field.
+ *
+ * ⚠️ Plan 09 task 02: every `type="number"` box in this rail is now a
+ * `NumberInput`, which commits on **blur and Enter only** — a lone
+ * `fireEvent.change` updates its draft and emits nothing. The SLIDERS are
+ * deliberately untouched and still fire live, so they keep using a bare
+ * `fireEvent.change`; only the boxes go through here.
+ */
+function commitBox(box: HTMLInputElement, value: string): void {
+  fireEvent.change(box, { target: { value } });
+  fireEvent.blur(box);
+}
+
 function byText(container: HTMLElement, text: string): HTMLButtonElement {
   const el = Array.from(container.querySelectorAll("button")).find(
     (b) => b.textContent === text,
@@ -683,16 +697,20 @@ describe("PoseSection — the camera group", () => {
     const onSetScale = composed.Orthographic.args.onSetScale;
     const box = byLabel(container, "Scale value");
 
-    fireEvent.change(box, { target: { value: "250" } });
+    commitBox(box, "250");
     expect(onSetScale).toHaveBeenLastCalledWith(250);
 
     // ⚠️ An emptied or half-typed box must send NOTHING. A number input
     // sanitises anything unparseable to `""`, and `Number("")` is `0` — not
     // `NaN` — so a naive finite-check would collapse the camera to the store's
     // safety floor on the way to typing a new value.
+    //
+    // ⚠️ Since plan 09 task 02 nothing is emitted while TYPING at all, so this
+    // now checks the stronger property: even committing an unparseable box
+    // sends nothing, because the parse fails and the incoming value stands.
     const before = spy(onSetScale).mock.calls.length;
-    fireEvent.change(box, { target: { value: "" } });
-    fireEvent.change(box, { target: { value: "not a number" } });
+    commitBox(box, "");
+    commitBox(box, "not a number");
     expect(spy(onSetScale).mock.calls.length).toBe(before);
   });
 
@@ -777,9 +795,7 @@ describe("PoseSection — exact angle entry", () => {
 
   it("accepts a model scale ABOVE 1 — the S is not a squash-only proportion", () => {
     const { container } = render(<composed.Primitive />);
-    fireEvent.change(byLabel(container, "Scale Y value"), {
-      target: { value: "12.5" },
-    });
+    commitBox(byLabel(container, "Scale Y value"), "12.5");
     // Verbatim and uncapped, and only Y moves — the other two axes are
     // carried through from the current value, not reset.
     expect(composed.Primitive.args.onSetAxisScale).toHaveBeenCalledWith({
@@ -791,9 +807,7 @@ describe("PoseSection — exact angle entry", () => {
 
   it("types DEGREES into a rotation box and emits RADIANS (F10)", () => {
     const { container } = render(<composed.Primitive />);
-    fireEvent.change(byLabel(container, "Rotation Y"), {
-      target: { value: "45" },
-    });
+    commitBox(byLabel(container, "Rotation Y"), "45");
     // The store is the single source of truth IN RADIANS; the conversion
     // happens at this component's edge and nowhere else.
     expect(composed.Primitive.args.onSetRotation).toHaveBeenLastCalledWith({
@@ -819,9 +833,7 @@ describe("PoseSection — exact angle entry", () => {
 
   it("emits a unit direction from the light's two angles", () => {
     const { container } = render(<composed.Primitive />);
-    fireEvent.change(byLabel(container, "Light Azimuth"), {
-      target: { value: "90" },
-    });
+    commitBox(byLabel(container, "Light Azimuth"), "90");
     const emitted = spy(composed.Primitive.args.onSetLightDirection).mock
       .lastCall?.[0] as { x: number; y: number; z: number };
     expect(Math.hypot(emitted.x, emitted.y, emitted.z)).toBeCloseTo(1, 10);

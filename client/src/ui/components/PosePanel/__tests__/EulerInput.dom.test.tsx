@@ -55,6 +55,21 @@ function byLabel(container: HTMLElement, label: string): HTMLInputElement {
   return el;
 }
 
+/**
+ * Type into a box and COMMIT it, the way the owner does — by leaving.
+ *
+ * ⚠️ Plan 09 task 02: these boxes are `NumberInput`s and commit on **blur and
+ * Enter only**. A bare `fireEvent.change` now updates the draft and emits
+ * NOTHING, which is the entire point of the change (typing `100` into a
+ * bounded box used to move the model through `1` and `10` on the way). Every
+ * assertion that used to fire a lone `change` therefore fires this instead —
+ * the behaviour being pinned is unchanged, only the moment it lands.
+ */
+function commit(box: HTMLInputElement, value: string): void {
+  fireEvent.change(box, { target: { value } });
+  fireEvent.blur(box);
+}
+
 /** The orb's own `vectorToSpherical`/`sphericalToVector`, transcribed. */
 function orbVector(yaw: number, pitch: number): PoseVector {
   const cosPitch = Math.cos(pitch);
@@ -128,7 +143,7 @@ describe("EulerInput — the primitive", () => {
 
     // … but rounding on the way IN would make the control lossy against its
     // own round-trip, so the emitted number is untouched.
-    fireEvent.change(byLabel(container, "R Y"), { target: { value: "12.345" } });
+    commit(byLabel(container, "R Y"), "12.345");
     expect(onChange).toHaveBeenLastCalledWith("Y", 12.345);
   });
 
@@ -185,6 +200,12 @@ describe("EulerInput — the empty/partial-input guard", () => {
     // The exact keystroke sequence for typing "-45": the browser reports `""`
     // for the lone "-", then the real value. Only ONE emission is correct, and
     // it must not be 0.
+    //
+    // ⚠️ Since plan 09 task 02 this holds for a STRONGER reason than it used
+    // to. It was true because the component rejected `""` before parsing; it
+    // is now true because no keystroke is parsed at all — the draft is only
+    // read when the box is left. The intermediate `""` is not merely ignored,
+    // it is never a candidate for emission.
     const onChange = vi.fn();
     const { container } = render(
       <EulerInput
@@ -195,7 +216,8 @@ describe("EulerInput — the empty/partial-input guard", () => {
     );
     const box = byLabel(container, "R Y");
     fireEvent.change(box, { target: { value: "" } });
-    fireEvent.change(box, { target: { value: "-45" } });
+    expect(onChange).not.toHaveBeenCalled();
+    commit(box, "-45");
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith("Y", -45);
@@ -210,8 +232,51 @@ describe("EulerInput — the empty/partial-input guard", () => {
         onChange={onChange}
       />,
     );
-    fireEvent.change(byLabel(container, "R Y"), { target: { value: "0" } });
+    commit(byLabel(container, "R Y"), "0");
     expect(onChange).toHaveBeenCalledWith("Y", 0);
+  });
+
+  it("⚠️ emits NOTHING while typing — it commits on blur and Enter only", () => {
+    // Plan 09 task 02, the owner's actual complaint: "it's impossible to use
+    // several fields without this". Every keystroke of `100` used to be a
+    // commit, so a box bounded at 90 walked the model through 1 and 10 first.
+    const onChange = vi.fn();
+    const { container } = render(
+      <EulerInput
+        name="R"
+        axes={[{ label: "Y", degrees: 0 }]}
+        onChange={onChange}
+      />,
+    );
+    const box = byLabel(container, "R Y");
+
+    for (const keystroke of ["1", "10", "100"]) {
+      fireEvent.change(box, { target: { value: keystroke } });
+    }
+    expect(onChange).not.toHaveBeenCalled();
+
+    // Enter commits, exactly once, with the whole typed value.
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith("Y", 100);
+  });
+
+  it("⚠️ reverts on Escape without emitting", () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <EulerInput
+        name="R"
+        axes={[{ label: "Y", degrees: 30 }]}
+        onChange={onChange}
+      />,
+    );
+    const box = byLabel(container, "R Y");
+
+    fireEvent.change(box, { target: { value: "77" } });
+    fireEvent.keyDown(box, { key: "Escape" });
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(box.value).toBe("30");
   });
 });
 
@@ -237,9 +302,7 @@ describe("RotationEulerInput — degrees in the UI, radians out (F10)", () => {
       <RotationEulerInput rotation={rotation} onChange={onChange} />,
     );
 
-    fireEvent.change(byLabel(container, "Rotation Y"), {
-      target: { value: "45" },
-    });
+    commit(byLabel(container, "Rotation Y"), "45");
     // ⚠️ F10: the store's language is radians. Typing 45 sends π/4.
     expect(onChange).toHaveBeenLastCalledWith({
       x: 0.25,
@@ -361,7 +424,7 @@ describe("LightAnglesInput — two fields, honestly labelled (F11)", () => {
       const { container } = render(
         <LightAnglesInput lightDirection={from} onChange={onChange} />,
       );
-      fireEvent.change(byLabel(container, box), { target: { value } });
+      commit(byLabel(container, box), value);
       const emitted = onChange.mock.lastCall?.[0] as PoseVector | undefined;
       if (!emitted) throw new Error(`no emission typing ${value} into ${box}`);
       return emitted;
@@ -397,9 +460,7 @@ describe("LightAnglesInput — two fields, honestly labelled (F11)", () => {
         onChange={onChange}
       />,
     );
-    fireEvent.change(byLabel(container, "Light Azimuth"), {
-      target: { value: "45" },
-    });
+    commit(byLabel(container, "Light Azimuth"), "45");
     const emitted = onChange.mock.lastCall?.[0] as PoseVector;
 
     // ⚠️ The anti-drift assertion: the boxes and the orb must produce the same
@@ -421,9 +482,7 @@ describe("LightAnglesInput — two fields, honestly labelled (F11)", () => {
         onChange={onChange}
       />,
     );
-    fireEvent.change(byLabel(container, "Light Elevation"), {
-      target: { value: "20" },
-    });
+    commit(byLabel(container, "Light Elevation"), "20");
     const emitted = onChange.mock.lastCall?.[0] as PoseVector;
 
     expectClose(emitted, orbVector(45 * DEG, 20 * DEG), 1e-3);
@@ -455,9 +514,7 @@ describe("LightAnglesInput — two fields, honestly labelled (F11)", () => {
         onChange={onChange}
       />,
     );
-    fireEvent.change(byLabel(first.container, "Light Azimuth"), {
-      target: { value: "370" },
-    });
+    commit(byLabel(first.container, "Light Azimuth"), "370");
     const emitted = onChange.mock.lastCall?.[0] as PoseVector;
 
     const second = render(

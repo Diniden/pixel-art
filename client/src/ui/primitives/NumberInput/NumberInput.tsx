@@ -81,7 +81,16 @@ export function NumberInput({
 
   const commit = useCallback(
     (raw: string) => {
-      const parsed = Number(raw);
+      // ⚠️ THE EMPTY STRING IS REJECTED BEFORE PARSING, and a `Number.isFinite`
+      // check alone does NOT cover it: `Number("")` is `0`, not `NaN`, so a
+      // box cleared and then blurred would commit `clamp(0, min, max)` — i.e.
+      // `min`. That is exactly the "clearing a field writes a value" bug this
+      // primitive exists to end, and it is invisible in a field whose minimum
+      // happens to be 0. `"   "` goes the same way for the same reason.
+      // Measured against `PoseSection.dom.test.tsx`'s scale box, whose store
+      // floor is 1e-3: clearing it collapsed the model instead of no-opping.
+      const trimmed = raw.trim();
+      const parsed = trimmed === "" ? Number.NaN : Number(trimmed);
       const next = Number.isFinite(parsed) ? clamp(parsed, min, max) : value;
       setDraft(String(next));
       if (next !== value) onChange(next);
