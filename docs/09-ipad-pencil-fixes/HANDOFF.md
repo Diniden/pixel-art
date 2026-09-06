@@ -11,7 +11,7 @@
 | W1 | 01, 02, 03, 04 | PARTIAL (code complete; device checks owed) | 2026-09-06 | cb27aa0 | typecheck 0 · lint 65w/0e (baseline) · test 151 files / 3176 passed (was 148/3139; corpus unchanged, no snapshot changed) · build 0 · stylelint 71/2 (baseline) · boundaries OK |
 | W2 | 05 → 09 (**sequential**) | PARTIAL (code complete; task 09's device/project checks owed) | 2026-09-06 | c3bc5dd | typecheck 0 · lint 65w/0e (baseline) · test 153 files / 3209 passed (was 151/3176; corpus digests unchanged, no snapshot changed) · build 0 · boundaries OK · no lockfile |
 | W3 | 06, 07 | PARTIAL (code complete; device checks owed) | 2026-09-06 | fa085e0 | typecheck 0 · lint 65w/0e (baseline) · test 155 files / 3223 passed · build 0 · stylelint 71/2 (baseline) · boundaries OK · no snapshot changed |
-| W4 | 08, 10 | TODO | | | |
+| W4 | 08, 10 | PARTIAL (code complete; device checks owed; 1 line owed to W5) | 2026-09-06 | c7ad081 | typecheck 0 · lint 65w/0e (baseline) · test 158 files / 3276 passed · build 0 · boundaries OK · no snapshot changed · no lockfile |
 | W5 | 11 | TODO | | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
@@ -778,6 +778,53 @@ contribution is **+2 files / +35 tests**. The 155/3223 baseline was measured mid
   live dimension. Moving a browser window between a laptop and an external display still
   will not reclassify it — unchanged behaviour, and out of scope.
 
+### W4 — task 10 verified by the coordinator (2026-09-06)
+
+Commits `3fd9049` (impl), `a00091f` (tests), `c7ad081` (docs). Full W4 gate re-run by me:
+
+```
+bun run typecheck                    → exit 0
+bun run lint                         → 65 problems (0 errors, 65 warnings)  [baseline]
+bun run test                         → 158 files, 3276 tests, all passed
+bun run build                        → built in 2.17s
+cd client && bun run lint:boundaries → OK — all 5 boundary rules hold
+git diff 6846833..HEAD -- '*__snapshots__*'  → empty
+find . -maxdepth 2 -name 'bun.lock*'         → none
+```
+
+**🔴 The W2 digest-suite correction was INDEPENDENTLY REPRODUCED.** Task 10 sabotaged its
+own key (unconditional + a hydrate that rewrote legacy keys) and measured:
+
+| Suite | Under sabotage | Catches it? |
+| --- | --- | --- |
+| `corpus golden digests` (26) | **26 passed, 0 failed** | ❌ **NO** |
+| `orientationLayout.test.ts` (its own guard) | 7 failed / 17 passed | ✅ |
+| `persistedUIState.test.ts` (R3 builder) | 18 failed / 25 passed | ✅ |
+
+Two independent executors on two different keys now agree: **MASTER §8 E1 and R1 are wrong
+that "the corpus suite is the only thing that catches" an unconditional key — it catches
+NOTHING of the kind.** This correction should be carried into any future plan touching the
+wire format. Reverted cleanly; suite back to 158/3276.
+
+Its emits-nothing test asserts with `in`/`Object.keys()`, never truthiness; its sharpest
+case is *"merely ROTATING an untouched store still emits nothing"* — the failure mode this
+task newly makes reachable.
+
+**R11 mitigations verified by the coordinator:** `deviceClass.ts` has **0 deleted lines**
+(append-only, so `detectDeviceClass` is byte-for-byte untouched — rotation still cannot
+reclassify an iPad); the legacy fallback is lazy in `get layout()` and **nothing rewrites
+`railLayouts` on hydrate**, so an untouched project's digest is unchanged on its next save.
+
+**R10 disposer:** three listener paths (matchMedia `addEventListener`, Safari<14
+`addListener`, `window.resize`), each with a matching removal, each tested for the **same
+handler reference**.
+
+**Deviations, all accepted:** `persistedUIState.test.ts` (same accepted mechanism as task
+09 — it asserts the exact key being changed); 5 sites in the two `LayoutUIStore` suites
+that read a key the store *wrote* (sites reading a **hydrated legacy** key deliberately left
+alone — that fallback IS the migration); the test split into `.test.ts` + `.dom.test.ts`
+because the `unit` lane is node with no `window`, per `ReferenceUIStore.dom.test.ts`.
+
 ## Deferred follow-ups
 
 Tasks 04 and 09 may defer a one-line change into W5 because they are forbidden from
@@ -786,6 +833,7 @@ editing `CanvasContainer.tsx`. Record them here or task 11 will not know to appl
 | From | What | Where it must land | Applied? |
 | --- | --- | --- | --- |
 | 04 | Pass the derived floor into the commit call: `onCommitViewZoom: (z) => camera.setViewZoom(z, viewZoomFloor(contentWidth, contentHeight))`. Without it the **pixel studio's main canvas still clamps at the legacy 0.25** and the zoom-out fix is only half-delivered (the lighting canvas already has it). Task 04 was forbidden from `CanvasContainer.tsx`, so it correctly left the default at `0.25` and deferred this. | `containers/CanvasContainer.tsx:1087` | **NO — task 11** |
+| 10 | 🔴 **`UIStore.dispose()` must call `this.layout.dispose()`.** Verified by the coordinator: `UIStore` owns `layout` (`:256`) and constructs it (`:348`), but `dispose()` (`:710`) disposes only its own reaction. `LayoutUIStore.dispose()` (`:716`) is fully built and tested and its own comment says it is "called from `UIStore.dispose()`" — **but that call does not exist**. Exposure: the orientation listener outlives a discarded store. A leak, not corruption — but it IS the R10 StrictMode double-fire. Task 10 correctly recorded it rather than editing `UIStore.ts` (task 09's file). | `stores/ui/UIStore.ts:710-712` | **NO — task 11** |
 | 09 | Consume the tool-aware brush size: replace `brushSize` with `tool.activeToolBrushSize` at the THREE tool-aware sites only — the footprint memo (`:2228`), `brushStampOptions` (`:4264`) and `getToolContext` (`:4325`). ⚠️ **Do NOT change `:607` itself and do NOT touch `fill-square`'s two sites (`:4372`, `:4818`)** — `fill-square` must keep reading the PENCIL's size. Without this the eraser's controls are independent but its actual draw width and hover footprint still follow the pencil, and task 09's manual check 6 cannot pass. | `containers/CanvasContainer.tsx` (~`:2228`, `:4264`, `:4325`) | **NO — task 11** |
 
 ## Deviations
