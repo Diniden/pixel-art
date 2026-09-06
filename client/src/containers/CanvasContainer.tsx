@@ -4524,7 +4524,7 @@ export const CanvasContainer = observer(function CanvasContainer({
             variantLayer.pixels[coords.y]?.[coords.x],
           );
           if (pixel && pixel.a > 0) {
-            app.setColorAndAddToHistory(pixel);
+            app.setActiveColor(pixel);
             app.ui.tool.revertToPreviousTool();
             return;
           }
@@ -4537,7 +4537,7 @@ export const CanvasContainer = observer(function CanvasContainer({
           if (!l.visible) continue;
           const pixel = getPixelColor(l.pixels[coords.y]?.[coords.x]);
           if (pixel && pixel.a > 0) {
-            app.setColorAndAddToHistory(pixel);
+            app.setActiveColor(pixel);
             app.ui.tool.revertToPreviousTool();
             return;
           }
@@ -4551,7 +4551,7 @@ export const CanvasContainer = observer(function CanvasContainer({
         const canvasY = hasVariantData ? coords.y + variantOffset.y : coords.y;
         const refPixel = getRefPixelAtCoord(canvasX, canvasY);
         if (refPixel && refPixel.a > 0) {
-          app.setColorAndAddToHistory(refPixel);
+          app.setActiveColor(refPixel);
           app.ui.tool.revertToPreviousTool();
         }
       }
