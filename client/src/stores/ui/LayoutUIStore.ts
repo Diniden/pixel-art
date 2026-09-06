@@ -74,8 +74,12 @@ import {
 } from "../../ui/layout/railLayout";
 import {
   detectDeviceClass,
+  detectOrientation,
   isDeviceClass,
+  layoutKey,
+  PORTRAIT_QUERY,
   type DeviceClass,
+  type Orientation,
 } from "../../ui/layout/deviceClass";
 import { isThemeId, type ThemeId } from "../../ui/theme/themes";
 import {
@@ -247,9 +251,33 @@ export class LayoutUIStore {
   readonly deviceClass: DeviceClass;
 
   /**
+   * Which way round the device is being held RIGHT NOW.
+   *
+   * ⚠️ Unlike `deviceClass`, this is NOT measured once — it is the one thing
+   * about the layout key that legitimately changes mid-session, because
+   * rotating an iPad really does mean the user wants their other saved
+   * arrangement. A media listener installed in the constructor updates it,
+   * and `get layout()` recomputes reactively off it.
+   *
+   * Desktop ignores it entirely: `layoutKey` keys desktop by class alone, so
+   * a resized desktop window changes nothing here even though this field
+   * still tracks the window's shape.
+   */
+  orientation: Orientation;
+
+  /**
    * Every device class's layout, exactly as persisted. `observableRef` — the
    * record is replaced wholesale, never mutated in place, so per-key
    * granularity would only add proxies.
+   *
+   * ⚠️ Since 2026-09-06 the KEYS are richer: a tablet or phone stores under
+   * `` `${deviceClass}:${orientation}` `` so portrait and landscape hold
+   * separate arrangements, while desktop keeps its bare `"desktop"`. The
+   * map's SHAPE is unchanged — it has always been keyed by an arbitrary
+   * string — so this is not a wire-format change and adds no new wire key.
+   * A project saved before that date carries a bare `"tablet"` key and is
+   * migrated lazily, in `get layout()`, never by rewriting this map: see
+   * that getter for why.
    */
   railLayouts: { [deviceClass: string]: PersistedRailLayout } = {};
 
@@ -278,14 +306,33 @@ export class LayoutUIStore {
    */
   otherHandSection: string | null = null;
 
-  constructor(deviceClass: DeviceClass = detectDeviceClass()) {
+  /**
+   * Removes the orientation listener. `null` outside a browser, and in the
+   * `matchMedia`-less contexts `detectOrientation` already guards for.
+   *
+   * ⚠️ R10 — this exists because React 19 StrictMode mounts twice in dev. A
+   * listener added without a matching removal leaves the first store's
+   * listener alive on the shared `window`, so one rotation fires two
+   * handlers and the discarded store keeps reacting. `dispose()` is called
+   * from `UIStore.dispose()`, the house pattern (`ReferenceUIStore.ts:412`,
+   * `ApplicationStore.ts:1890`).
+   */
+  private readonly disposeOrientation: (() => void) | null = null;
+
+  constructor(
+    deviceClass: DeviceClass = detectDeviceClass(),
+    orientation: Orientation = detectOrientation(),
+  ) {
     this.deviceClass = deviceClass;
+    this.orientation = orientation;
     makeObservable(this, {
       railLayouts: observableRef,
       layoutPresets: observableRef,
+      orientation: observable,
       theme: observable,
       layoutMode: observable,
       otherHandSection: observable,
+      setOrientation: action,
       setTheme: action,
       enterOtherHand: action,
       exitOtherHand: action,
@@ -306,11 +353,94 @@ export class LayoutUIStore {
       deleteLayoutPreset: action,
       hydrate: action,
     });
+
+    this.disposeOrientation = this.listenForOrientation();
   }
 
-  /** THIS device's arrangement, narrowed and defaulted. */
+  /**
+   * Watch for rotation and keep {@link orientation} current.
+   *
+   * `matchMedia` + `change` is the primary path — it is the same signal the
+   * app's CSS orientation queries already act on, so the key and the
+   * stylesheet cannot disagree. `resize` is the fallback for environments
+   * without `matchMedia` (jsdom in several suites) and, in that path, the
+   * value is re-derived rather than read from the event.
+   *
+   * ⚠️ This is for the layout KEY only. It deliberately drives no rendering
+   * — `OtherHandSurface.tsx:22-30` records that "no measurement, no resize
+   * listener and no orientation listener" is the design for rendering, which
+   * the CSS media queries handle. Nothing here measures the viewport for
+   * layout purposes.
+   *
+   * Returns the disposer, or `null` where there is nothing to listen to.
+   */
+  private listenForOrientation(): (() => void) | null {
+    if (typeof window === "undefined") return null;
+
+    const onChange = (): void => this.setOrientation(detectOrientation());
+
+    if (typeof window.matchMedia === "function") {
+      const query = window.matchMedia(PORTRAIT_QUERY);
+      // `addEventListener` is the modern form; Safari carried the deprecated
+      // `addListener` alone until 14, and the iPad is precisely the device
+      // this feature exists for, so both are handled.
+      if (typeof query.addEventListener === "function") {
+        query.addEventListener("change", onChange);
+        return () => query.removeEventListener("change", onChange);
+      }
+      if (typeof query.addListener === "function") {
+        query.addListener(onChange);
+        return () => query.removeListener(onChange);
+      }
+    }
+
+    if (typeof window.addEventListener !== "function") return null;
+    window.addEventListener("resize", onChange);
+    return () => window.removeEventListener("resize", onChange);
+  }
+
+  /**
+   * Adopt a new orientation. An idempotent set is skipped so a `resize`
+   * storm — which fires many times per rotation — does not churn observers
+   * that only care about the layout key.
+   */
+  setOrientation(orientation: Orientation): void {
+    if (this.orientation === orientation) return;
+    this.orientation = orientation;
+  }
+
+  /** The key THIS session reads and writes: class, plus orientation. */
+  get layoutKey(): string {
+    return layoutKey(this.deviceClass, this.orientation);
+  }
+
+  /**
+   * THIS device's arrangement for THIS orientation, narrowed and defaulted.
+   *
+   * ⚠️ THE FALLBACK IS THE MIGRATION, AND IT LIVES HERE ON PURPOSE (R11).
+   *
+   * Every layout saved before 2026-09-06 sits under a bare `"tablet"` or
+   * `"phone"` key. The obvious fix — rewriting the map into composite keys
+   * when a project hydrates — is the wrong one: it would change an untouched
+   * project's `railLayouts` the moment it loaded, and the next autosave
+   * would write a different key set into a file whose layout the owner never
+   * touched. The digest of a file nobody edited must not move.
+   *
+   * So the legacy key is resolved lazily, on READ. A pre-existing layout
+   * appears in BOTH orientations until the user actually arranges one, and
+   * the first arrangement in either orientation writes only the composite
+   * key it belongs to — leaving the legacy key in place as the other
+   * orientation's answer. `write()` is the only thing that ever changes the
+   * map, and it only ever runs because the user did something.
+   */
   get layout(): RailLayout {
-    return narrowLayout(this.railLayouts[this.deviceClass]);
+    const key = this.layoutKey;
+    const persisted =
+      this.railLayouts[key] ??
+      // The legacy bare-`deviceClass` entry. On desktop `key` already IS
+      // `deviceClass`, so this second lookup is the same one and is a no-op.
+      this.railLayouts[this.deviceClass];
+    return narrowLayout(persisted);
   }
 
   /** Whether this project has ever had a layout saved for ANY device. */
@@ -318,11 +448,16 @@ export class LayoutUIStore {
     return Object.keys(this.railLayouts).length > 0;
   }
 
-  /** Replace THIS device's entry, leaving every other device's untouched. */
+  /**
+   * Replace THIS device-and-orientation's entry, leaving every other one
+   * untouched — including the other orientation's, and including the legacy
+   * bare-`deviceClass` entry, which stays as the other orientation's answer
+   * until that orientation is itself arranged.
+   */
   private write(layout: RailLayout): void {
     this.railLayouts = {
       ...this.railLayouts,
-      [this.deviceClass]: widenLayout(layout),
+      [this.layoutKey]: widenLayout(layout),
     };
   }
 
@@ -567,6 +702,19 @@ export class LayoutUIStore {
       (list) => list.length > 0,
     );
     return anySaved ? this.layoutPresets : undefined;
+  }
+
+  /**
+   * Release the orientation listener. Idempotent — calling it twice, or on a
+   * store that never installed one, is a no-op.
+   *
+   * ⚠️ R10. Called from `UIStore.dispose()`, which `ApplicationStore` and
+   * the Storybook/Vitest teardowns already run. Without it, React 19
+   * StrictMode's double mount leaves a listener on the shared `window` bound
+   * to a store that has been thrown away.
+   */
+  dispose(): void {
+    this.disposeOrientation?.();
   }
 }
 
