@@ -113,11 +113,13 @@ export const ColorPickerContainer = observer(function ColorPickerContainer() {
       }
       colorHistory={session.colorHistory}
       colorAdjustment={ui.tool.colorTarget === "edge" && Boolean(colorAdjustment)}
-      onSetColor={(color) =>
-        ui.tool.colorTarget === "fill"
-          ? ui.tool.setFillColor(color)
-          : app.setColorAndAddToHistory(color)
-      }
+      /* ⚠️ The branch that used to live inline here IS `setActiveColor`
+         (plan 09, task 05/06). This call site was the only one of five that
+         got the edge/fill split right, so task 05 generalised it onto the
+         store and the other four now share it. Behaviour is identical —
+         including the history asymmetry — and there is exactly ONE branch
+         point in the app again. Do NOT re-inline it. */
+      onSetColor={(color) => app.setActiveColor(color)}
       onAdjustColor={(color, trackHistory) =>
         /* Colour ADJUSTMENT recolours existing pixels and is an edge-slot
            operation only: there is no "adjust every pixel of the fill colour"

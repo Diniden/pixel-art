@@ -173,8 +173,27 @@ export const PaletteManagerContainer = observer(
     return (
       <PaletteManager
         palettes={domain.palettes}
-        selectedColor={ui.tool.selectedColor}
-        onSelectColor={(color) => ui.tool.setColor(color)}
+        /* ⚠️ `app.activeColor`, NOT `ui.tool.selectedColor` (plan 09, task 06).
+           This prop is what `PaletteManager.handleAddCurrentColor` writes into
+           a palette, so on the Fill tab it must be the FILL colour. Reading
+           `selectedColor` here meant "add current colour to palette" always
+           added the edge slot, whichever tab was open. */
+        selectedColor={app.activeColor}
+        /* ⚠️ `app.setActiveColor` honours `colorTarget`; the old
+           `ui.tool.setColor` wrote the EDGE slot unconditionally (plan 09,
+           task 06). The branch lives in the store — do NOT re-derive it here.
+
+           This ONE callback serves BOTH consumer paths, so fixing it here
+           fixes both: the real palette swatches (`PaletteManager.tsx`'s
+           `onClick={() => onSelectColor(color)}`) and the pinned Current
+           Palette row, which `PaletteManager` hands the same function.
+
+           Side effect, and an intended one: the edge path now runs through
+           `setColorAndAddToHistory`, so a palette pick finally lands in the
+           recent-colours strip. It previously bypassed `colorHistory`
+           entirely. The fill path deliberately still does not — see
+           `ApplicationStore.setActiveColor`'s note on the asymmetry. */
+        onSelectColor={(color) => app.setActiveColor(color)}
         onAddPalette={(name) => palettes.addPalette(name)}
         onDeletePalette={(id) => palettes.deletePalette(id)}
         onRenamePalette={(id, name) => palettes.renamePalette(id, name)}
@@ -188,6 +207,13 @@ export const PaletteManagerContainer = observer(
           onExpandedChange: setExpanded,
           hasLayer: layer != null,
           uniqueColorsData: orderedColorsData,
+          /* ⚠️ DELIBERATELY still `selectedColor`, not `app.activeColor`
+             (plan 09, task 06). `CurrentPalette` uses this only to draw the ✎
+             colour-ADJUSTMENT marker on the swatch that matches it, and
+             adjustment is an edge-slot operation — `ColorPickerContainer`
+             gates `colorAdjustment` to `colorTarget === "edge"` for the same
+             reason. Following the target here would put the marker on a
+             swatch no adjustment could ever act on. */
           currentPickerColor: ui.tool.selectedColor,
           colorAdjustment: Boolean(colorAdjustment),
           colorAdjustmentAllFrames: Boolean(colorAdjustment?.allFrames),
