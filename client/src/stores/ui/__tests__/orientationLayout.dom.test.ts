@@ -20,6 +20,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LayoutUIStore } from "@/stores/ui/LayoutUIStore";
+import { UIStore } from "@/stores/ui/UIStore";
+import { SelectionMirror } from "@/stores/SelectionMirror";
+import { SessionStore } from "@/stores/session/SessionStore";
 import {
   detectDeviceClass,
   detectOrientation,
@@ -232,5 +235,117 @@ describe("⭐ the orientation listener and its disposer (R10)", () => {
     } finally {
       window.matchMedia = original;
     }
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  R10 — THE CALL SITE (plan 09, deferred by task 10, applied in task 11)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Every case above proves `LayoutUIStore.dispose()` WORKS. None of them
+ * proves anything CALLS it, and until task 11 nothing did: `UIStore` owns
+ * `layout` and constructs it, but `UIStore.dispose()` released only its own
+ * version reaction. The disposer was built, fully tested, and dead.
+ *
+ * That is the precise shape of a false-green suite — a green run above with
+ * the leak still live — and it is what these two cases close. Task 10 owns
+ * `LayoutUIStore.ts` but not `UIStore.ts`, so it recorded the missing line in
+ * HANDOFF.md rather than editing there; this is the coverage for the line
+ * task 11 wrote.
+ *
+ * `ApplicationStore` and the Storybook/Vitest teardowns already call
+ * `UIStore.dispose()`, so wiring it there is what actually releases the
+ * listener under React 19 StrictMode's double mount.
+ */
+describe("UIStore.dispose() releases the orientation listener — R10", () => {
+  function stub(matches = false) {
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
+    const query = { matches, addEventListener, removeEventListener };
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue(query));
+    return { query, addEventListener, removeEventListener };
+  }
+
+  it("⭐⭐ UIStore.dispose() removes the SAME handler LayoutUIStore added", () => {
+    const { addEventListener, removeEventListener } = stub();
+    const ui = new UIStore({
+      session: new SessionStore(),
+      selection: new SelectionMirror(),
+      layout: new LayoutUIStore("tablet", "landscape"),
+    });
+
+    expect(addEventListener).toHaveBeenCalledTimes(1);
+    // Before task 11 this was the end of the story: nothing removed it.
+    expect(removeEventListener).not.toHaveBeenCalled();
+
+    ui.dispose();
+
+    expect(removeEventListener).toHaveBeenCalledTimes(1);
+    // The same reference — removing a different function silently removes
+    // nothing, which is the actual failure mode.
+    expect(removeEventListener.mock.calls[0][1]).toBe(
+      addEventListener.mock.calls[0][1],
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it("⭐⭐ the StrictMode double mount leaves ONE live handler, not two", () => {
+    /* The behavioural consequence, modelled the way React 19 actually
+       produces it: mount, dispose the first store, mount again. A real
+       browser then has exactly ONE registered handler and one rotation fires
+       it once.
+
+       ⚠️ THE OBVIOUS VERSION OF THIS TEST IS WORTHLESS AND WAS WRITTEN FIRST.
+       "Dispose, then invoke the captured handler by hand and assert the
+       discarded store did not change" FAILS against correct code, because
+       calling a function reference directly bypasses the listener registry
+       entirely — removal has nothing to do with whether the closure still
+       works. It reported 'portrait', which is exactly right and exactly not
+       the question.
+
+       So the subject is the REGISTRY, maintained here as jsdom's stub cannot:
+       every `addEventListener` adds, every `removeEventListener` with a
+       matching reference removes, and "rotate" fires whatever is left. With
+       `this.layout.dispose()` missing, two handlers survive — the double-fire
+       R10 names. */
+    const live = new Set<() => void>();
+    const addEventListener = vi.fn((_type: string, fn: () => void) =>
+      live.add(fn),
+    );
+    const removeEventListener = vi.fn((_type: string, fn: () => void) =>
+      live.delete(fn),
+    );
+    const query = { matches: false, addEventListener, removeEventListener };
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue(query));
+
+    const first = new UIStore({
+      session: new SessionStore(),
+      selection: new SelectionMirror(),
+      layout: new LayoutUIStore("tablet", "landscape"),
+    });
+    first.dispose(); // StrictMode throws the first mount away.
+
+    const second = new UIStore({
+      session: new SessionStore(),
+      selection: new SelectionMirror(),
+      layout: new LayoutUIStore("tablet", "landscape"),
+    });
+
+    expect(live.size).toBe(1);
+
+    // Rotate, and count how many handlers the browser would run.
+    query.matches = true;
+    let fired = 0;
+    for (const fn of live) {
+      fired += 1;
+      fn();
+    }
+    expect(fired).toBe(1);
+    expect(second.layout.orientation).toBe("portrait");
+
+    second.dispose();
+    expect(live.size).toBe(0);
+    vi.unstubAllGlobals();
   });
 });

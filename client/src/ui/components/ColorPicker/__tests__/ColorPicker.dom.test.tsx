@@ -90,10 +90,19 @@ interface Harness {
   sv: HTMLCanvasElement;
   hue: HTMLCanvasElement;
   capture: ReturnType<typeof vi.fn>;
+  hex: HTMLInputElement;
+  container: HTMLElement;
+  onSaveStateToHistory: ReturnType<typeof vi.fn>;
 }
 
-function mount(): Harness {
+/**
+ * @param onSwapColors omitted by default — the prop is OPTIONAL and the swap
+ * control renders only when a caller supplies it, which is the behaviour the
+ * R8 cases below assert in both directions.
+ */
+function mount(onSwapColors?: () => void): Harness {
   const onSetColor = vi.fn();
+  const onSaveStateToHistory = vi.fn();
   const { container } = render(
     <ColorPicker
       selectedColor={RED}
@@ -107,7 +116,8 @@ function mount(): Harness {
       colorAdjustment={false}
       onSetColor={onSetColor}
       onAdjustColor={vi.fn()}
-      onSaveStateToHistory={vi.fn()}
+      onSaveStateToHistory={onSaveStateToHistory}
+      onSwapColors={onSwapColors}
     />,
   );
 
@@ -117,11 +127,22 @@ function mount(): Harness {
   const hue = container.querySelector(
     ".color-picker__hue-canvas",
   ) as HTMLCanvasElement;
+  const hex = container.querySelector(
+    ".color-picker__hex-input",
+  ) as HTMLInputElement;
 
   const { capture } = equip(sv, SV_WIDTH, SV_HEIGHT);
   equip(hue, SV_WIDTH, 12);
 
-  return { onSetColor, sv, hue, capture };
+  return {
+    onSetColor,
+    sv,
+    hue,
+    capture,
+    hex,
+    container,
+    onSaveStateToHistory,
+  };
 }
 
 /** A left-button pointer event. `button: 0` clears the primary-button guard. */
@@ -241,5 +262,187 @@ describe("ColorPicker — hue bar pointer drag", () => {
     const calls = h.onSetColor.mock.calls;
     const later = calls[calls.length - 1][0] as Color;
     expect(later).not.toEqual(first);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  THE HEX FIELD — draft while typing, commit on blur (plan 09 task 11)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * The last live-`onChange` input in the app. Task 02 converted every other
+ * field and explicitly excluded this file (task 03 was rewriting its pointer
+ * handling in the same wave); task 03 in turn excluded the commit semantics.
+ *
+ * ⚠️ WHAT MAKES THESE TESTS DISCRIMINATE, and what does not.
+ *
+ * The old code ran the SAME regex on every keystroke and simply did nothing
+ * when it did not match. So "typing `#ab` emits nothing" passes against the
+ * broken code too — it is a NEGATIVE CONTROL, kept because it pins the
+ * invalid-draft contract, not because it catches the regression.
+ *
+ * The cases that genuinely discriminate are the ones where a COMPLETE value
+ * is typed:
+ *
+ *   - typing a full `#00ff00` and NOT blurring must emit NOTHING. The old
+ *     code emitted on that keystroke; this is the defect the task removes.
+ *   - the same value then commits on blur, and on Enter.
+ *   - Escape reverts, and the box redisplays the live colour.
+ *   - a partial draft on blur reverts rather than writing garbage.
+ *
+ * Measured by reverting the fix — see the report.
+ */
+describe("ColorPicker — the hex field commits on blur", () => {
+  let h: Harness;
+  beforeEach(() => {
+    h = mount();
+  });
+
+  /** Type a whole value into the field, one `change` (React reads `.value`). */
+  function type(value: string) {
+    fireEvent.change(h.hex, { target: { value } });
+  }
+
+  it("⭐ does NOT emit while a COMPLETE value is being typed", () => {
+    // The discriminating case: `#00ff00` parses, and the old live-`onChange`
+    // code committed it on this very keystroke.
+    type("#00ff00");
+    expect(h.onSetColor).not.toHaveBeenCalled();
+  });
+
+  it("shows the draft verbatim while typing, over the live colour", () => {
+    type("#00ff0");
+    // Not `#ff0000` (RED, the prop) — a half-typed value must stay on screen
+    // for correction instead of snapping back under the caret.
+    expect(h.hex.value).toBe("#00ff0");
+  });
+
+  it("⭐ commits a valid draft on blur", () => {
+    type("#00ff00");
+    fireEvent.blur(h.hex);
+    expect(h.onSetColor).toHaveBeenCalledTimes(1);
+    expect(h.onSetColor.mock.calls[0][0]).toEqual({
+      r: 0,
+      g: 255,
+      b: 0,
+      a: 255,
+    });
+  });
+
+  it("⭐ commits a valid draft on Enter", () => {
+    type("#0000ff");
+    fireEvent.keyDown(h.hex, { key: "Enter" });
+    expect(h.onSetColor).toHaveBeenCalledTimes(1);
+    expect(h.onSetColor.mock.calls[0][0]).toEqual({
+      r: 0,
+      g: 0,
+      b: 255,
+      a: 255,
+    });
+  });
+
+  it("Enter commits exactly ONCE, not twice via the blur it triggers", () => {
+    // `handleHexKeyDown` commits and then blurs the field, and blur commits
+    // too. The draft is cleared by the first, so the second is a no-op — but
+    // a refactor that cleared it later would double-write.
+    type("#0000ff");
+    fireEvent.keyDown(h.hex, { key: "Enter" });
+    fireEvent.blur(h.hex);
+    expect(h.onSetColor).toHaveBeenCalledTimes(1);
+  });
+
+  it("⭐ REVERTS a partial draft on blur rather than writing garbage", () => {
+    type("#ab");
+    fireEvent.blur(h.hex);
+    expect(h.onSetColor).not.toHaveBeenCalled();
+    // The box goes back to the live colour, so no dead value is left on screen.
+    expect(h.hex.value).toBe("#ff0000");
+  });
+
+  it("reverts a draft that is hex but the wrong LENGTH", () => {
+    // `#fff` is a legal CSS shorthand and NOT accepted by this field's regex —
+    // pinned so a future "helpfully" widened regex is a deliberate change.
+    type("#fff");
+    fireEvent.blur(h.hex);
+    expect(h.onSetColor).not.toHaveBeenCalled();
+    expect(h.hex.value).toBe("#ff0000");
+  });
+
+  it("⭐ Escape reverts the draft and emits nothing", () => {
+    type("#00ff00");
+    fireEvent.keyDown(h.hex, { key: "Escape" });
+    expect(h.onSetColor).not.toHaveBeenCalled();
+    expect(h.hex.value).toBe("#ff0000");
+  });
+
+  it("Escape then blur still emits nothing — the draft is gone, not pending", () => {
+    type("#00ff00");
+    fireEvent.keyDown(h.hex, { key: "Escape" });
+    fireEvent.blur(h.hex);
+    expect(h.onSetColor).not.toHaveBeenCalled();
+  });
+
+  it("blurring an untouched field emits nothing", () => {
+    // Tab-through must not rewrite the colour with its own hex readout.
+    fireEvent.blur(h.hex);
+    expect(h.onSetColor).not.toHaveBeenCalled();
+  });
+
+  it("accepts the 8-digit form, alpha included", () => {
+    type("#0102037f");
+    fireEvent.blur(h.hex);
+    expect(h.onSetColor.mock.calls[0][0]).toEqual({
+      r: 1,
+      g: 2,
+      b: 3,
+      a: 127,
+    });
+  });
+
+  it("accepts a value with no leading '#'", () => {
+    type("00ff00");
+    fireEvent.blur(h.hex);
+    expect(h.onSetColor).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  THE SWAP CONTROL — R8 (plan 09 tasks 07 and 11)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * `onSwapColors` is OPTIONAL and the control renders only when a caller
+ * supplies it, so the component stays pure and the button cannot half-exist
+ * as a visible dead control. Task 07 shipped it that way and nothing supplied
+ * the prop, so the desktop picker showed no swap button at all — task 07's
+ * manual check 6 could not pass. Task 11 supplies it from
+ * `ColorPickerContainer`; the container half is pinned in
+ * `containers/__tests__/ColorPickerContainer.dom.test.tsx`.
+ *
+ * Both directions are asserted: a rendered-when-supplied case would pass
+ * against a component that ALWAYS renders the button, and the absent case is
+ * what pins the optionality that keeps the intermediate state honest.
+ */
+describe("ColorPicker — the swap control", () => {
+  it("⭐ renders the swap button when a caller supplies onSwapColors", () => {
+    const h = mount(vi.fn());
+    expect(h.container.querySelector(".color-picker__swap")).not.toBeNull();
+  });
+
+  it("does NOT render it when the prop is omitted", () => {
+    const h = mount();
+    expect(h.container.querySelector(".color-picker__swap")).toBeNull();
+  });
+
+  it("calls the callback on click, and does not save history itself", () => {
+    const onSwapColors = vi.fn();
+    const h = mount(onSwapColors);
+    fireEvent.click(
+      h.container.querySelector(".color-picker__swap") as HTMLButtonElement,
+    );
+    expect(onSwapColors).toHaveBeenCalledTimes(1);
+    // The store's `swapEdgeAndFillColors` snapshots ONCE on its own. If the
+    // component ever brackets the callback with `onSaveStateToHistory`, one
+    // swap costs two undos — this is the assertion that would catch it.
+    expect(h.onSaveStateToHistory).not.toHaveBeenCalled();
+    expect(h.onSetColor).not.toHaveBeenCalled();
   });
 });
