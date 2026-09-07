@@ -1,8 +1,11 @@
 # HANDOFF — iPad Pencil fixes
 
-**Current position:** W2 COMPLETE (code); W3 (06, 07) is next
+**Current position:** W5 COMPLETE (code) — **the plan's last wave.** All 11 tasks have
+landed; every code deliverable is in the tree and the exit gate is green. The plan is
+**PARTIAL overall**: 0 of 54 physical-device manual checks have been performed, and per
+MASTER rule 14 that is PARTIAL, not DONE.
 **Branch:** `feat/09-ipad-pencil-fixes` (created from `feat/08-pose-camera-model-space` @ 875c314)
-**Last commit:** c3bc5dd
+**Last commit:** e345d0f
 
 ## Wave ledger
 
@@ -12,7 +15,7 @@
 | W2 | 05 → 09 (**sequential**) | PARTIAL (code complete; task 09's device/project checks owed) | 2026-09-06 | c3bc5dd | typecheck 0 · lint 65w/0e (baseline) · test 153 files / 3209 passed (was 151/3176; corpus digests unchanged, no snapshot changed) · build 0 · boundaries OK · no lockfile |
 | W3 | 06, 07 | PARTIAL (code complete; device checks owed) | 2026-09-06 | fa085e0 | typecheck 0 · lint 65w/0e (baseline) · test 155 files / 3223 passed · build 0 · stylelint 71/2 (baseline) · boundaries OK · no snapshot changed |
 | W4 | 08, 10 | PARTIAL (code complete; device checks owed; 1 line owed to W5) | 2026-09-06 | c7ad081 | typecheck 0 · lint 65w/0e (baseline) · test 158 files / 3276 passed · build 0 · boundaries OK · no snapshot changed · no lockfile |
-| W5 | 11 | TODO | | | |
+| W5 | 11 | PARTIAL (code complete; the full-plan device sweep is owed) | 2026-09-06 | e345d0f | **`bun run verify` exit 0** · typecheck 0 · lint 65w/0e (baseline) · format:check clean · test 162 files / 3325 passed (was 158/3276) · build 0 · stylelint 71/2 (baseline) · boundaries OK · no snapshot changed · no lockfile |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
@@ -27,13 +30,13 @@ whose device checks were skipped is **PARTIAL**, not `DONE`.
 | 01 | iPad | ❌ **0 of 6 performed** — no device. Page must not zoom on double-tap / pinch / palm rest; canvas pinch-zoom must still work; rails, panels, timeline and modal bodies must still scroll. |
 | 02 | iPad + desktop | ❌ **0 of 6 performed** — no device/browser session. Clear a field → stays empty; over-max → clamps on blur; Escape reverts; Enter commits; iPad keyboard commits once on dismiss; undo/redo refreshes displayed values. ⚠️ Also eyeball the Pose **Elevation** clamp (deviation 1). |
 | 03 | iPad + Pencil | ❌ **0 of 7 performed** — no device. Pencil must select on contact in the SV grid and hue bar, track past the control's edge, and must NOT draw through onto the canvas. |
-| 04 | owner's real project | ❌ **0 of 6 performed** — no device/project. ⚠️ Zoom-out on the **pixel studio** canvas is still capped at 0.25 until task 11 applies the deferred line; only the lighting canvas has the new floor today. Re-check after W5. |
+| 04 | owner's real project | ❌ **0 of 6 performed** — no device/project. ✅ **The deferred line landed in W5 (`7e54255`), so the pixel studio's canvas now has the derived floor too** — the check is finally meaningful and is still owed. |
 | 06 | desktop or iPad | ❌ **0 of 6 performed**. Fill tab + palette swatch → fill changes not edge; same on Current Palette; edge tab → edge changes AND enters recent-colours; double-tap adjustment still toggles; Fill tab + add-current-colour adds the fill colour; draw with pencil and fill tool. |
-| 07 | iPad (other-hand rail is tablet-only) | ❌ **0 of 6 performed** — rail is `deviceClass === "tablet"` only. Edge/Fill selector thumb-reachable; Fill slider hits fill not edge; Edge slider hits edge; rail Swap exchanges and one undo restores (⚠️ see the fillColor undo finding — it will NOT fully restore); eyedropper with Fill active lands in fill. ⚠️ Check 6 (desktop picker shows swap) **cannot pass until task 11 wires it** — see R8. |
+| 07 | iPad (other-hand rail is tablet-only) | ❌ **0 of 6 performed** — rail is `deviceClass === "tablet"` only. Edge/Fill selector thumb-reachable; Fill slider hits fill not edge; Edge slider hits edge; rail Swap exchanges and one undo restores (⚠️ see the fillColor undo finding — it will NOT fully restore); eyedropper with Fill active lands in fill. ✅ Check 6 (desktop picker shows swap) **is now wired by W5 (`183a635`) and can pass** — R8 closed; the check itself is still owed. |
 | 08 | iPad + Pencil | ❌ **0 of 8 device checks performed** — no iPad, no Pencil, no running app. Check 9 (desktop mouse regression) ✅ **covered automatically instead** — see the W4 task 08 notes. Owed: rect drag; lasso draw; flood/color tap; two-finger pinch must zoom and not select; draw with a finger resting; `touchcancel` mid-gesture; both other-hand-mode states; Grow/Shrink/Clear after committing. |
 | 09 | desktop + iPad + a pre-existing project | ❌ **0 of 9 performed** — no device, no running app, no pre-existing project opened. See the W2 notes for the per-check list. |
-| 10 | iPad (rotation) | ❌ **0 of 8 performed** — no iPad, no running app, no pre-existing project. Owed: (1) arrange in landscape, rotate → portrait keeps its own; (2) arrange in portrait, rotate back → landscape intact; (3) rotate repeatedly → no drift; (4) save, reload, rotate → both survive; (5) open a project saved BEFORE this change → its one layout appears in both orientations and editing one no longer clobbers the other (R11); (6) **desktop** resize wide↔tall → layout must NOT swap; (7) **StrictMode** `bun run dev`, rotate → swaps once not twice, no duplicate-listener warning (R10); (8) other-hand mode positions correctly in both orientations. ⚠️ Checks 1–6 and 8 have automated analogues in `orientationLayout.test.ts`; check 7 is the one nothing can cover — StrictMode double-mount is not reproducible in the node lane. |
-| 11 | iPad — full-plan regression sweep | |
+| 10 | iPad (rotation) | ❌ **0 of 8 performed** ✅ (check 7's `UIStore.dispose()` line landed in W5, `09a1a66`) — no iPad, no running app, no pre-existing project. Owed: (1) arrange in landscape, rotate → portrait keeps its own; (2) arrange in portrait, rotate back → landscape intact; (3) rotate repeatedly → no drift; (4) save, reload, rotate → both survive; (5) open a project saved BEFORE this change → its one layout appears in both orientations and editing one no longer clobbers the other (R11); (6) **desktop** resize wide↔tall → layout must NOT swap; (7) **StrictMode** `bun run dev`, rotate → swaps once not twice, no duplicate-listener warning (R10); (8) other-hand mode positions correctly in both orientations. ⚠️ Checks 1–6 and 8 have automated analogues in `orientationLayout.test.ts`; check 7 is the one nothing can cover — StrictMode double-mount is not reproducible in the node lane. |
+| 11 | iPad — full-plan regression sweep | ❌ **0 of 6 performed** (and check 4's nine sub-items are 0 of 9) — no iPad, no Pencil, no desktop browser session, no access to the owner's real project. Itemised in the W5 notes below. ✅ Check 5 (`bun run dev` starts) IS performed — see below. |
 
 ## W1 notes (coordinator-verified 2026-09-06)
 
@@ -234,9 +237,9 @@ pre-existing project:
 3. ❌ Back to eraser → still 3; the two no longer track each other.
 4. ❌ Eraser panel has a Max row identical to the Pencil's; the two maxes are independent.
 5. ❌ Eraser max to 8 while its size is 32 → size clamps to 8, pencil's size untouched.
-6. ❌ Hover footprint matches the ACTIVE tool's size. ⚠️ **This one is EXPECTED TO FAIL
-   until the W5 follow-up lands** — see the step-9 deferral above. It is not a defect in
-   what shipped; it is the deferred line.
+6. ❌ Hover footprint matches the ACTIVE tool's size. ⚠️ Was EXPECTED TO FAIL until the
+   W5 follow-up landed; ✅ **it landed (`514d51b`)**, so the check is now meaningful and
+   is still owed.
 7. ❌ Same checks in the other-hand rail on the iPad.
 8. ❌ Save and reload → both tools' sizes and maxes come back correctly.
 9. ❌ **Open a pre-existing project** → the eraser inherits the saved `brushSize` and
@@ -277,7 +280,9 @@ Because `fill-square` must keep the PENCIL's size, `:607` cannot simply be
 swapped wholesale; the tool-aware getter must be consumed at the three
 tool-aware sites only.
 
-`ToolUIStore.activeToolBrushSize` is therefore **added and tested but not yet
+✅ **RESOLVED IN W5 (commit `514d51b`)** — consumed at the three tool-aware sites.
+
+`ToolUIStore.activeToolBrushSize` was therefore **added and tested but not yet
 consumed**. It branches on `"eraser"` only — deliberately, since `fill-square`
 and reference-trace keep the pencil's size and giving them their own would mean
 more wire keys the user never asked for. The follow-up is in the table below.
@@ -417,6 +422,10 @@ supplies it yet: `ColorPickerContainer.tsx` is task 06's and the `X` shortcut is
 swap control", but its own Constraints mandate the optional-render form. The executor
 followed the Constraints. Check 6 as literally written cannot pass until task 11 — this is
 exactly R8 and task 11 must not skip it.
+
+✅ **R8 CLOSED IN W5 (commit `183a635`).** `ColorPickerContainer` passes `onSwapColors` and
+the button renders; pinned by a test that queries the rendered DOM. Task 07's check 6 is
+now able to pass and is still owed on the device.
 
 ## W4 notes — task 08 (2026-09-06)
 
@@ -687,7 +696,10 @@ nothing, which is the actual failure mode.
 
 ⚠️ **`LayoutUIStore.dispose()` is NOT yet called by anything — see the blocker below.**
 
-### 🔴 BLOCKER — `UIStore.dispose()` does not call `this.layout.dispose()`
+### 🔴 BLOCKER — `UIStore.dispose()` does not call `this.layout.dispose()` — ✅ RESOLVED IN W5
+
+✅ **Applied verbatim in W5, commit `09a1a66`.** The record below is kept as written at the
+time, because it is the reasoning that produced the deferral.
 
 `client/src/stores/ui/UIStore.ts:710` is the only construction site of `LayoutUIStore`
 (`:348`) and the natural place to release the listener, but **`UIStore.ts` is not in task
@@ -825,6 +837,354 @@ that read a key the store *wrote* (sites reading a **hydrated legacy** key delib
 alone — that fallback IS the migration); the test split into `.test.ts` + `.dom.test.ts`
 because the `unit` lane is node with no `window`, per `ReferenceUIStore.dom.test.ts`.
 
+## W5 notes — task 11, the closing task (2026-09-06)
+
+**Status: PARTIAL** — every code deliverable is in the tree, `bun run verify` exits 0, and
+**0 of the 6 manual checks that need a device were performed**. Per MASTER rule 14 that is
+PARTIAL, not DONE.
+
+Eight commits, at task granularity:
+
+| Commit | What |
+| --- | --- |
+| `7e54255` | **deferred (a)** — the main canvas passes the derived zoom floor |
+| `514d51b` | **deferred (b)** — the eraser draws and previews at its OWN size (3 sites) |
+| `09a1a66` | **deferred (c)** — `UIStore.dispose()` releases the orientation listener (R10) |
+| `183a635` | **R8 CLOSED** — the edge/fill swap control is wired |
+| `ccded27` | the hex field commits on blur, not on every keystroke |
+| `6030285` | `X` swaps edge and fill |
+| `7f9b70e` | the tests (+4 files / +49 tests) |
+| `e345d0f` | two typecheck fixes the gate caught in the new suites |
+
+### 🔴 THE THREE DEFERRED ONE-LINERS — ALL THREE APPLIED
+
+**(a) task 04 — `CanvasContainer.tsx`, the `useCanvasViewport` options block.** Was
+`onCommitViewZoom: (z) => camera.setViewZoom(z)`. Now:
+
+```ts
+onCommitViewZoom: (z) =>
+  camera.setViewZoom(z, viewZoomFloor(contentWidth, contentHeight)),
+```
+
+plus `viewZoomFloor` added to the existing `useCanvasViewport` import. **The pixel
+studio's main canvas no longer clamps at the legacy 0.25.** `useCanvasViewport` already
+applied the same floor to its own internal clamps (`:380`, `:502`); this makes the COMMIT
+agree with them, so a zoom the gesture allowed is not snapped back by the store.
+
+**(b) task 09 — `CanvasContainer.tsx`, exactly the THREE tool-aware sites.** A new local
+`const activeToolBrushSize = tool.activeToolBrushSize;` sits beside `brushSize` (`:607`,
+**unchanged**), and each of the three reads `brushSize: activeToolBrushSize`:
+
+| Site | Now |
+| --- | --- |
+| the hover-footprint memo | `brushSize: activeToolBrushSize` (+ its dep array) |
+| `brushStampOptions` | `brushSize: activeToolBrushSize` (+ its dep array) |
+| `getToolContext`'s `ToolContext.brushSize` | `brushSize: activeToolBrushSize` |
+
+⚠️ **`fill-square`'s two sites are untouched and still read the raw `brushSize`** —
+`getToolContext.squarePixelsAt` and the mouse-move hover preview. Verified by grep after
+the edit: the only remaining raw `brushSize` reads are those two, the declaration, and its
+entry in `getToolContext`'s dep array (which `squarePixelsAt` still closes over). Both
+locals now carry a comment saying why they are not one local.
+
+**Task 09's manual check 6 (hover footprint follows the ACTIVE tool) is now reachable** —
+it was expected to fail until this landed.
+
+**(c) task 10 — `UIStore.dispose()`.** Now:
+
+```ts
+dispose(): void {
+  this.disposeVersionReaction();
+  this.layout.dispose();
+}
+```
+
+R10 closed. `ApplicationStore` and the Storybook/Vitest teardowns already call
+`UIStore.dispose()`, so the orientation listener is now actually released.
+
+### R8 CLOSED — the swap control renders
+
+`ColorPickerContainer` passes `onSwapColors={() => app.swapEdgeAndFillColors()}`.
+**Confirmed by a test that queries the rendered DOM, not by a prop recorder** — see below.
+The prop stays OPTIONAL deliberately (it is what keeps the component pure and stops the
+button half-existing as a visible dead control), so task 07's now-stale "deliberately
+unwired" doc comment was corrected rather than the signature changed.
+
+⚠️ **Task 07's manual check 6 can now pass** — but it has NOT been run; there is no
+browser session. What is proved is that the button is in the DOM and clicking it swaps
+both slots through the store.
+
+⚠️ **The `fillColor` undo gap task 07 pinned is UNCHANGED and still owner-visible.** One
+undo after a swap restores `selectedColor` and leaves `fillColor` where the swap put it,
+because `fillColor` is MobX-only with no sink. It predates this plan, the fix is a new
+sink on `ApplicationStore` (the persistence perimeter), and it is not in scope here. The
+new container suite deliberately does NOT assert undo behaviour and says so in its header,
+so the characterisation at `OtherHandRailContainer.dom.test.tsx:205` stays the single
+record of it.
+
+### The hex field — the last live-`onChange` input in the app
+
+Draft while typing, commit on blur AND Enter, revert on Escape, resync when the colour
+changes underneath. Shape copied from `PosePanel/CameraAdvanced.tsx:258-269` as MASTER's
+alignment guide requires. The regex is the ORIGINAL, unchanged — only WHEN it runs.
+
+⚠️ **The wrinkle the number fields do not have.** A partial hex is not out of range, it is
+not a colour: `#ab` matches nothing. The old code silently ignored every unparseable
+keystroke, which read as a dead field three characters in. Now the draft shows verbatim
+and an unparseable draft REVERTS on blur.
+
+**Two implementation notes worth carrying:**
+
+1. The resync is **folded into the existing `useEffect([selectedColor])` mirror**, not
+   given its own effect. A second `useEffect([selectedColor])` adds a second
+   `react-hooks/set-state-in-effect` warning — measured, 3 → 4 in this file — and the lint
+   baseline may not be raised. Same dependency, no behavioural difference.
+2. `hexDraft`'s `useState` is declared **above** that effect. Below it, lint reports
+   "Cannot access variable before it is declared" — also measured, and also a new warning.
+
+### The `X` shortcut
+
+Bound in `GlobalHotkeys`, guarded by the file's own `isTypingTarget` (now three call sites
+of it). Confirmed unclaimed before binding: absent from `useCanvasKeyboard`'s
+`TOOL_HOTKEYS` (digits plus `g`/`G`, `o`/`O`, `r`/`R`, `p`/`P`) and from both backquote
+branches. Bare `x` only, so Cmd/Ctrl/Alt+X are left alone; Shift is not tested, so a
+capital `X` also swaps — matching how the tool hotkeys list both cases.
+
+⚠️ **The Escape asymmetry was NOT tidied.** Escape still clears `colorAdjustment` even
+while a text field has focus — the transcribed legacy contract documented in the
+container's header. A test now pins it, so hoisting the guard above every branch fails
+rather than silently changing behaviour.
+
+### ⭐ EVERY SUITE WAS PROVED BY REVERTING THE FIX
+
+**162 files / 3325 passed** (was 158/3276): **+4 files, +49 tests.**
+
+| Suite | Injected revert | Failures |
+| --- | --- | --- |
+| `ColorPicker.dom.test.tsx` (hex, +15) | back to live `onChange` | **4 of 27** |
+| `ColorPickerContainer.dom.test.tsx` (new, 9) | drop `onSwapColors` | **6 of 9** |
+| `GlobalHotkeys.dom.test.tsx` (new, 13) | drop the typing guard | **4 of 13** |
+| " | drop the binding entirely | **5 of 13** |
+| `eraserBrushWidth.dom.test.tsx` (new, 7) | revert the 3 tool-aware sites | **3 of 7** |
+| `zoomFloorCallSite.dom.test.tsx` (new, 3) | revert to the 0.25 default | **2 of 3** |
+| `orientationLayout.dom.test.ts` (+2) | drop `this.layout.dispose()` | **2 of 37** |
+
+Every revert was restored and confirmed byte-clean by `git diff` before proceeding.
+
+The cases that do NOT move under each revert are labelled in the files as **negative
+controls** rather than counted as coverage: the pencil and fill-square groups, the
+store-level zoom clamp, and the hex blur-commit cases (which pass under live-`onChange`
+too, because typing already emitted so blur emits nothing either way).
+
+### 🔴 WHY FOUR NEW FILES WERE NEEDED — the failure mode this wave is about
+
+**All three deferred one-liners had thorough CALLEE-side coverage that stayed green the
+entire time the call site was missing.** `viewZoomFloor.test.ts` (12 tests),
+`eraserBrush.test.ts` (20) and `orientationLayout.dom.test.ts`'s whole disposer group
+proved their values were computed correctly and proved nothing about whether anything read
+them. A defaulted parameter and an uncalled disposer are both invisible to a suite that
+tests the callee.
+
+So the new suites pin the ARGUMENT and the CONSUMPTION, at the container, through real
+events. This is worth carrying into any future plan that defers a call site.
+
+### 🔴 TWO ROUNDS OF TESTS WERE THROWN AWAY AS WORTHLESS
+
+1. **`eraserBrushWidth`'s cell counter first tested `cell.color.a === 0`.** The eraser does
+   not write `{ …, a: 0 }` — it writes the packed empty sentinel `color: 0`. A real,
+   working eraser stroke therefore reported **zero** erased cells and every "greater than"
+   assertion failed against CORRECT code. A "not greater than" phrasing would have passed
+   against BROKEN code for exactly the same reason. Found by probing the actual cell
+   contents rather than reasoning about them; both forms are now accepted and the
+   measurement is written into the helper.
+2. **The R10 case first did "dispose, then invoke the captured handler by hand and assert
+   the discarded store did not change".** That FAILS against correct code — calling a
+   function reference directly bypasses the listener registry entirely, so removal has
+   nothing to do with whether the closure still works. It reported `portrait`, which is
+   right and is not the question. Rewritten to model the StrictMode double mount against a
+   maintained registry (mount → dispose → mount) and assert **one** live handler, which is
+   what a real browser would have.
+
+Two further traps are documented in the new file headers:
+
+- **jsdom implements neither the `contentEditable` setter nor `isContentEditable`** —
+  measured: the attribute stays `null` and the getter `undefined`. Without a stub the
+  contenteditable case tests jsdom's gap, not the app's guard, and fails against correct
+  code.
+- **`handleMouseDown` sets `isPanning` with `useState` while `handleMouseMove` reads it
+  from the render closure**, so a press and a move batched into ONE `act()` never starts
+  the pan and the zoom-floor commit never fires. One `act()` per event.
+
+### Earlier waves' work — verified preserved, by grep, not by claim
+
+| Wave | Artefact | Count |
+| --- | --- | --- |
+| 03 | `setPointerCapture` in `ColorPicker.tsx` | **4** ✅ |
+| 03 | `touch-action: none` in `ColorPicker.css` | **5** ✅ |
+| 03 | `onMouseDown={handleSliderMouseDown}` on the RGBA range sliders | **5** ✅ (deliberate; left alone) |
+| 03 | live `onMouseLeave` handlers | **0** ✅ (the 1 grep hit is the doc comment explaining why) |
+| 07 | `app.setActiveColor` in `CanvasContainer.tsx` | **3** ✅ |
+| 07 | `color-picker__target-row` | **1** ✅ |
+| 08 | `beginSelectionAt` / `updateSelectionAt` / `commitSelection` | **5 / 5 / 5** ✅ |
+| 08 | **R4 ordering** — the selection touch branch at `:5389`, the `isGestureTool` bail at `:5412` | ✅ **branch is AHEAD of the bail** |
+
+### Gate — real output, run by the executing agent
+
+```
+$ bun run verify
+$ bun run typecheck && bun run lint && bun run format:check && bun run test && bun run build
+
+$ bun run --cwd client typecheck && bun run --cwd server typecheck
+$ tsc --noEmit
+$ tsc --noEmit
+                                                          → exit 0
+
+$ eslint .
+✖ 65 problems (0 errors, 65 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+                                                          → baseline HELD
+
+$ bunx prettier --check "*.{json,md,yaml,yml}" "client/*.{ts,js,json}" \
+    "server/*.{ts,js,json}" "client/src/types/**/*.{ts,tsx}"
+Checking formatting...
+All matched files use Prettier code style!
+
+$ vitest run
+ ✓ corpus golden digests — the real regression gate
+   backup-01-31 / 02-01 / 02-07 / 02-08 / 02-09 / 02-10 / 02-23 / 02-24 / base-unit
+   — pipeline no-op + frozen digest + round-trip stability, all pass
+ Test Files  162 passed (162)
+      Tests  3325 passed (3325)
+   Duration  69.68s
+
+$ tsc --noEmit && vite build
+dist/index.html                         1.01 kB │ gzip:   0.54 kB
+dist/assets/index-BS3cuvzW.css        221.89 kB │ gzip:  28.08 kB
+dist/assets/GLTFLoader--NCVAYW2.js     45.56 kB │ gzip:  13.70 kB
+dist/assets/three.module-PDSP0dbZ.js  734.33 kB │ gzip: 189.46 kB
+dist/assets/index-D7veZVMm.js         817.70 kB │ gzip: 238.38 kB
+✓ built in 2.16s
+
+                                            bun run verify → EXIT 0
+```
+
+And the three checks `verify` does not include:
+
+```
+$ cd client && bun run lint:css
+✖ 71 problems (2 errors, 69 warnings)                     → baseline HELD
+
+$ cd client && bun run lint:boundaries
+check-boundaries: OK — all 5 boundary rules hold.         → exit 0
+
+$ find . -maxdepth 2 -name 'bun.lock*' | grep -v node_modules
+(no output)
+$ find . -name 'bun.lock*' -not -path '*/node_modules/*'
+(no output)                                               → R14 clean
+```
+
+**No snapshot changed anywhere in the wave** — `git diff c7ad081..HEAD -- '*__snapshots__*'`
+is empty. **No snapshot changed anywhere in the ENTIRE PLAN**:
+`git diff 875c314..HEAD -- '*__snapshots__*'` is also empty. `vitest -u` was never run.
+
+⚠️ **R14 FIRED ONCE AND WAS CAUGHT.** `bunx eslint … -f compact` printed `Saved lockfile`
+while resolving `eslint-formatter-compact` (which is not installed). **No lockfile reached
+the repo** — both `find` forms above returned nothing, immediately and again at the end.
+The formatter was abandoned and the project's own `bun run lint` used instead. Recorded
+because it is exactly the side effect `CLAUDE.md` warns about, and it came from a
+`bunx` invocation of a package that is *not* a project script.
+
+### Manual checks — per item, as MASTER rule 14 requires
+
+**Task 11's own six.** ✅ 1 performed, ❌ 5 not.
+
+1. ❌ The colour picker shows a swap control; tapping it exchanges edge and fill, and one
+   undo restores both. **NOT PERFORMED** — no browser session. The first two clauses are
+   covered by `ColorPickerContainer.dom.test.tsx` (the button is queried in the DOM and
+   clicked). ⚠️ **The third clause is EXPECTED TO FAIL** on the device: task 07's pinned
+   `fillColor` undo gap means one undo restores `selectedColor` only. That is pre-existing
+   and out of scope, not a regression from this task.
+2. ❌ `X` swaps on a desktop keyboard; `X` while typing in the hex field types an `x` and
+   does not swap. **NOT PERFORMED** — no browser session. Both halves are covered by
+   `GlobalHotkeys.dom.test.tsx`, including the three focus contexts.
+3. ❌ The hex field: partial value + blur reverts; full valid value + blur commits;
+   Escape reverts. **NOT PERFORMED** — no browser session. All three are covered by
+   `ColorPicker.dom.test.tsx`.
+4. ❌ **The end-to-end regression sweep — 0 of 9 performed.** Itemised below.
+5. ✅ **PERFORMED.** `bun run dev` starts. Vite came up in 108 ms and served
+   `http://localhost:5174/` (5173 was already occupied by a pre-existing session, so it
+   fell back — not a fault). ⚠️ **Only the client process was started**, not the full
+   three-process mprocs run, and **the app was not loaded in a browser** — so this is
+   "the dev server starts and compiles", not "the app loads".
+6. ❌ Save and reload the owner's real project → nothing lost, nothing corrupted.
+   **NOT PERFORMED** — no access to the owner's project or a running server. The corpus
+   golden digests passing unchanged is evidence about the wire format and **not** about
+   this; ⚠️ MASTER §8 E1/R1's claim that the digests catch an unconditional key was
+   disproved twice in this plan, so they must not be cited as proof of anything they do
+   not prove. This task adds **no wire key at all**.
+
+**Check 4 — the full-plan regression sweep. 0 of 9 performed.** Every one needs an iPad,
+a Pencil, a running app, or the owner's real project, and none was available:
+
+| # | Task | Item | Result |
+| --- | --- | --- | --- |
+| 1 | 01 | pinch/double-tap outside the canvas does not zoom the page | ❌ not performed |
+| 2 | 02 | number fields commit on blur | ❌ not performed |
+| 3 | 03 | the colour picker drags from the Pencil's first contact | ❌ not performed |
+| 4 | 04 | the canvas zooms out to a ~50 px thumbnail on the owner's real project | ❌ not performed — ⚠️ **but the deferred line it needed is now in**, so it is finally testable |
+| 5 | 06 | palette clicks honour the Fill tab | ❌ not performed |
+| 6 | 07 | the eyedropper writes the targeted slot | ❌ not performed |
+| 7 | 08 | rect and lasso selection work with the Pencil | ❌ not performed |
+| 8 | 09 | pencil and eraser sizes are independent | ❌ not performed — ⚠️ **check 6 (the hover footprint) is now reachable**, having been expected to fail before this wave |
+| 9 | 10 | rotating the iPad swaps to the other saved layout | ❌ not performed — ⚠️ its StrictMode sub-check (R10) is the one nothing automatable covers, and it is the one this wave's `UIStore.dispose()` line exists for |
+
+**Plan-wide: 0 of 54 device checks performed across tasks 01, 02, 03, 04, 06, 07, 08, 09,
+10 and 11.** Per rule 14 the plan is **PARTIAL**. Saying so is the correct outcome.
+
+### Deviations
+
+1. **`stores/ui/__tests__/orientationLayout.dom.test.ts` edited, and it is not in
+   `Touches`.** It is the R10 suite and the natural home for the R10 CALL-SITE test that
+   task 11's own one-liner needs; it belongs to a file (`LayoutUIStore.ts`) that task 10
+   owns and no other task owns it now that the plan is closing. Two cases added, nothing
+   existing changed. Same accepted mechanism as tasks 09 and 10's edits to
+   `persistedUIState.test.ts`.
+2. **Four test files created outside the literal `Touches` list** —
+   `containers/__tests__/ColorPickerContainer.dom.test.tsx`,
+   `containers/__tests__/GlobalHotkeys.dom.test.tsx`,
+   `containers/__tests__/eraserBrushWidth.dom.test.tsx` and
+   `containers/__tests__/zoomFloorCallSite.dom.test.tsx`. The task's step 7 asks for the
+   first two (swap wiring, hex field, `X`); the last two exist because deferred
+   follow-ups (a) and (b) had **no call-site coverage at all** and this is the wave that
+   applies them — see the "why four new files were needed" section above. All four are new
+   files that collide with nothing and no other task owns them.
+3. **`ui/components/ColorPicker/ColorPicker.tsx`'s `onSwapColors` doc comment was
+   rewritten.** Not a decision reopened — the prop's shape and optionality are unchanged.
+   The comment asserted "deliberately unwired as of task 07 … task 11 is what passes this
+   prop", which became false the moment task 11 passed it. Left as-is it would have been a
+   comment that lies.
+4. **The (a) and (b) one-liners were briefly committed together and the commit was
+   un-done before it was pushed anywhere** (`git reset --soft`), then re-made as two
+   commits. The project commits at task granularity and these are two different tasks'
+   deferrals. Recorded rather than hidden; the final history has them separate.
+
+### Recorded, not fixed
+
+- **The `fillColor` undo gap** (task 07's pin) is untouched and still owner-visible.
+  Swapping and undoing half-reverts. The fix is a new sink on `ApplicationStore`, on the
+  persistence perimeter, and was out of scope for task 07 and is out of scope here.
+  **Worth its own follow-up plan.**
+- **The lighting studio's normal pencil still shares `brushSize` with the pixel studio**
+  (`LightingCanvasContainer.tsx:257, 439`; `LightingStudioPanelContainer.tsx:46, 51`).
+  Task 09 recorded it; task 11 deliberately did NOT change those four call sites — they
+  are outside both the deferred instruction and `Touches`, and fixing it needs a third
+  brush field and therefore a third wire key the user did not ask for.
+- **The `endStroke` latent bug** (`useCanvasPointer.ts:162-171`) is still present and
+  still latent — no tool defines `onUp`.
+- **`fill-square` reads the pencil's size**, deliberately, and is now pinned by a
+  characterisation group in `eraserBrushWidth.dom.test.tsx` so the locked decision cannot
+  be undone by accident.
+
 ## Deferred follow-ups
 
 Tasks 04 and 09 may defer a one-line change into W5 because they are forbidden from
@@ -832,16 +1192,40 @@ editing `CanvasContainer.tsx`. Record them here or task 11 will not know to appl
 
 | From | What | Where it must land | Applied? |
 | --- | --- | --- | --- |
-| 04 | Pass the derived floor into the commit call: `onCommitViewZoom: (z) => camera.setViewZoom(z, viewZoomFloor(contentWidth, contentHeight))`. Without it the **pixel studio's main canvas still clamps at the legacy 0.25** and the zoom-out fix is only half-delivered (the lighting canvas already has it). Task 04 was forbidden from `CanvasContainer.tsx`, so it correctly left the default at `0.25` and deferred this. | `containers/CanvasContainer.tsx:1087` | **NO — task 11** |
-| 10 | 🔴 **`UIStore.dispose()` must call `this.layout.dispose()`.** Verified by the coordinator: `UIStore` owns `layout` (`:256`) and constructs it (`:348`), but `dispose()` (`:710`) disposes only its own reaction. `LayoutUIStore.dispose()` (`:716`) is fully built and tested and its own comment says it is "called from `UIStore.dispose()`" — **but that call does not exist**. Exposure: the orientation listener outlives a discarded store. A leak, not corruption — but it IS the R10 StrictMode double-fire. Task 10 correctly recorded it rather than editing `UIStore.ts` (task 09's file). | `stores/ui/UIStore.ts:710-712` | **NO — task 11** |
-| 09 | Consume the tool-aware brush size: replace `brushSize` with `tool.activeToolBrushSize` at the THREE tool-aware sites only — the footprint memo (`:2228`), `brushStampOptions` (`:4264`) and `getToolContext` (`:4325`). ⚠️ **Do NOT change `:607` itself and do NOT touch `fill-square`'s two sites (`:4372`, `:4818`)** — `fill-square` must keep reading the PENCIL's size. Without this the eraser's controls are independent but its actual draw width and hover footprint still follow the pencil, and task 09's manual check 6 cannot pass. | `containers/CanvasContainer.tsx` (~`:2228`, `:4264`, `:4325`) | **NO — task 11** |
+| 04 | Pass the derived floor into the commit call: `onCommitViewZoom: (z) => camera.setViewZoom(z, viewZoomFloor(contentWidth, contentHeight))`. Without it the **pixel studio's main canvas still clamps at the legacy 0.25** and the zoom-out fix is only half-delivered (the lighting canvas already has it). Task 04 was forbidden from `CanvasContainer.tsx`, so it correctly left the default at `0.25` and deferred this. | `containers/CanvasContainer.tsx:1087` | ✅ **YES — task 11, commit `7e54255`** |
+| 10 | 🔴 **`UIStore.dispose()` must call `this.layout.dispose()`.** Verified by the coordinator: `UIStore` owns `layout` (`:256`) and constructs it (`:348`), but `dispose()` (`:710`) disposes only its own reaction. `LayoutUIStore.dispose()` (`:716`) is fully built and tested and its own comment says it is "called from `UIStore.dispose()`" — **but that call does not exist**. Exposure: the orientation listener outlives a discarded store. A leak, not corruption — but it IS the R10 StrictMode double-fire. Task 10 correctly recorded it rather than editing `UIStore.ts` (task 09's file). | `stores/ui/UIStore.ts:710-712` | ✅ **YES — task 11, commit `09a1a66`** |
+| 09 | Consume the tool-aware brush size: replace `brushSize` with `tool.activeToolBrushSize` at the THREE tool-aware sites only — the footprint memo (`:2228`), `brushStampOptions` (`:4264`) and `getToolContext` (`:4325`). ⚠️ **Do NOT change `:607` itself and do NOT touch `fill-square`'s two sites (`:4372`, `:4818`)** — `fill-square` must keep reading the PENCIL's size. Without this the eraser's controls are independent but its actual draw width and hover footprint still follow the pencil, and task 09's manual check 6 cannot pass. | `containers/CanvasContainer.tsx` (~`:2228`, `:4264`, `:4325`) | ✅ **YES — task 11, commit `514d51b`** |
 
 ## Deviations
 
 - **W2 / task 09** — `stores/ui/__tests__/persistedUIState.test.ts` edited outside
   `Touches`. Unavoidable for any new wire key; full reasoning in the W2 notes.
+- **W5 / task 11** — `stores/ui/__tests__/orientationLayout.dom.test.ts` edited outside
+  `Touches` (the R10 suite, given the R10 CALL-SITE test), and four new test files created
+  outside it. Full reasoning in the W5 notes. Also: `ColorPicker.tsx`'s `onSwapColors` doc
+  comment was rewritten, because it asserted the prop was unwired and task 11 wired it.
 
 ## Notes for the next session
+
+- 🔴 **THE PLAN IS CODE-COMPLETE AND PARTIAL. What remains is entirely the device pass:
+  0 of 54 manual checks across ten tasks.** Every one is itemised, per task, in the manual
+  check ledger and in each wave's notes. Nothing else is owed.
+- 🔴 **The `fillColor` undo gap deserves its own plan.** Swapping the colours and undoing
+  half-reverts, because `fillColor` is MobX-only with no `colorSink` equivalent — it has
+  been outside the undo stack for every writer since the edge/fill split, predating this
+  plan entirely. Pinned as characterisation at `OtherHandRailContainer.dom.test.tsx:205`.
+  The fix is a new sink on `ApplicationStore`, i.e. the persistence perimeter.
+- 🔴 **A callee-side suite is not evidence that a call site exists.** All three of this
+  plan's deferred one-liners had thorough, green tests on the thing being called while the
+  caller was missing: a defaulted parameter and an uncalled disposer are both invisible
+  from the callee. Any future plan that defers a call site should ship the call-site test
+  with it, not with the helper.
+- **Vitest runs code the typechecker rejects.** Two type errors in new test files
+  (`ColorAdjustmentState`'s required `affectedPixels`; `Array.prototype.at`, which is
+  outside the client `tsconfig`'s lib) passed a green `vitest run` and were caught only by
+  `bun run verify`. ⚠️ **`cd client && bunx tsc --noEmit` DOES cover the test files** —
+  verified by injecting a bogus field and watching it fail — so the lesson is to run the
+  typechecker *after* writing tests, not that the gate covers more.
 
 - **Known latent bug, deliberately not fixed** (task 08 records it, does not touch it):
   `client/src/ui/hooks/useCanvasPointer.ts:162-171` — `endStroke` nulls
