@@ -706,9 +706,20 @@ export class UIStore {
     this.lightingUI?.hydrate(ui);
   }
 
-  /** Storybook/Vitest teardown. */
+  /**
+   * Storybook/Vitest teardown.
+   *
+   * ⚠️ `this.layout.dispose()` is R10 (plan 09 task 10, applied in task 11).
+   * `LayoutUIStore` binds an orientation listener to the shared `window`; its
+   * disposer was built and tested but had NO caller, so under React 19
+   * StrictMode's double mount the first, discarded store's listener survived
+   * and the rotation handler double-fired. Task 10 owns `LayoutUIStore.ts`
+   * but not this file, so it recorded the missing line rather than editing
+   * here. This is that line.
+   */
   dispose(): void {
     this.disposeVersionReaction();
+    this.layout.dispose();
   }
 }
 
