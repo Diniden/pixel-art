@@ -607,7 +607,27 @@ export const CanvasContainer = observer(function CanvasContainer({
    * did, with one colour driving both roles.
    */
   const fillColor = tool.fillColorOrSelected;
+  /**
+   * ⚠️ `brushSize` IS THE PENCIL'S SIZE, and only the pencil's (plan 09 task
+   * 09). It keeps wire slot 9 and its unconditional emission; the eraser's
+   * own `eraserBrushSize` is tri-state and falls back to it, which IS the
+   * migration for every project saved before the split.
+   *
+   * This local is still read by the two sites that must keep the PENCIL's
+   * size whatever tool is active — `fill-square`'s `squarePixelsAt` and its
+   * hover preview. Every TOOL-AWARE site reads `activeToolBrushSize` below.
+   * Do not collapse the two: swapping this one wholesale silently resizes
+   * fill-square with the eraser's slider.
+   */
   const brushSize = tool.brushSize;
+  /**
+   * The size of whatever tool is selected — the eraser's when erasing, the
+   * pencil's otherwise (`ToolUIStore.activeToolBrushSize`). Task 09 added and
+   * tested the getter but was forbidden from this file; task 11 consumes it
+   * at the three tool-aware sites: the hover-footprint memo,
+   * `brushStampOptions` and `getToolContext`.
+   */
+  const activeToolBrushSize = tool.activeToolBrushSize;
   const pencilBrushShape = tool.pencilBrushShape;
   const eraserShape = tool.eraserShape;
   const shapeMode = tool.shapeMode;
@@ -2243,7 +2263,9 @@ export const CanvasContainer = observer(function CanvasContainer({
     if (currentTool === "reflection") return [];
     return toolFootprint(center, {
       tool: currentTool,
-      brushSize,
+      // Tool-aware (task 09, consumed in task 11): the hover marker must show
+      // the ACTIVE tool's width, so the eraser stops previewing the pencil's.
+      brushSize: activeToolBrushSize,
       pencilShape: pencilBrushShape,
       eraserShape,
       circle: getCirclePixels,
@@ -2254,7 +2276,7 @@ export const CanvasContainer = observer(function CanvasContainer({
   }, [
     layer,
     currentTool,
-    brushSize,
+    activeToolBrushSize,
     pencilBrushShape,
     eraserShape,
     gridWidth,
@@ -4274,11 +4296,13 @@ export const CanvasContainer = observer(function CanvasContainer({
     (shape: "circle" | "square") => ({
       gridWidth,
       gridHeight,
-      brushSize,
+      // Tool-aware (task 09, consumed in task 11): both paint tools stamp
+      // through here, so the eraser must stamp at ITS width.
+      brushSize: activeToolBrushSize,
       shape: shape === "circle" ? getCirclePixels : getSquarePixels,
       shapeColor: currentColor,
     }),
-    [gridWidth, gridHeight, brushSize, currentColor],
+    [gridWidth, gridHeight, activeToolBrushSize, currentColor],
   );
 
   const traceSpace = useMemo(
@@ -4335,7 +4359,10 @@ export const CanvasContainer = observer(function CanvasContainer({
     (): ToolContext => ({
       gridWidth,
       gridHeight,
-      brushSize,
+      // Tool-aware (task 09, consumed in task 11). ⚠️ `squarePixelsAt` below
+      // deliberately keeps the raw `brushSize`: it is `fill-square`'s, and
+      // fill-square reads the PENCIL's size by design.
+      brushSize: activeToolBrushSize,
       currentColor,
       pencilShape:
         pencilBrushShape === "circle" ? getCirclePixels : getSquarePixels,
@@ -4393,6 +4420,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       gridWidth,
       gridHeight,
       brushSize,
+      activeToolBrushSize,
       currentColor,
       pencilBrushShape,
       eraserShape,
