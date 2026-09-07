@@ -149,6 +149,12 @@ export function ColorPicker({
   const historySaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasSavedInitialStateRef = useRef<boolean>(false);
 
+  /* The hex field's draft while the caret is in it, `null` otherwise — the
+     blur-commit semantics are documented at `commitHex` below. Declared up
+     here with the other UI state because the `selectedColor` mirror effect
+     resets it. */
+  const [hexDraft, setHexDraft] = useState<string | null>(null);
+
   const svCanvasRef = useRef<HTMLCanvasElement>(null);
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -157,6 +163,14 @@ export function ColorPicker({
   // from this echo is precisely the drift described above.
   useEffect(() => {
     if (selectedColor) setLocalColor(selectedColor);
+    /* ⚠️ Folded in here rather than given its own effect (task 11). The hex
+       DRAFT must be dropped when the colour changes underneath the field —
+       an undo, a palette pick, a swap, a drag on the SV square — or a stale
+       draft keeps displaying over the new colour. It shares this effect's
+       dependency exactly, and a second `useEffect([selectedColor])` would
+       add a second `set-state-in-effect` warning to a lint baseline this
+       plan may not raise, for no behavioural difference. */
+    setHexDraft(null);
   }, [selectedColor]);
 
   // Draw the saturation/value gradient
@@ -507,19 +521,66 @@ export function ColorPicker({
     endSurfaceDrag();
   };
 
-  const handleHexChange = (hex: string) => {
-    const match = hex.match(
-      /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i,
-    );
-    if (match) {
-      const r = parseInt(match[1], 16);
-      const g = parseInt(match[2], 16);
-      const b = parseInt(match[3], 16);
-      const a = match[4] ? parseInt(match[4], 16) : 255;
-      const newColor = { r, g, b, a };
-      setLocalColor(newColor);
-      applyColor(newColor);
-      setHsl(rgbToHsl(r, g, b, hsl));
+  /**
+   * Parse a hex draft, or `null` if it is not a complete colour.
+   *
+   * The regex is the ORIGINAL one, unchanged: `#` optional, 6 or 8 hex
+   * digits, the alpha pair defaulting to opaque. What changed is only WHEN it
+   * runs — see `commitHex`.
+   */
+  const parseHex = (hex: string): Color | null => {
+    const match = hex
+      .trim()
+      .match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i);
+    if (!match) return null;
+    return {
+      r: parseInt(match[1], 16),
+      g: parseInt(match[2], 16),
+      b: parseInt(match[3], 16),
+      a: match[4] ? parseInt(match[4], 16) : 255,
+    };
+  };
+
+  /* ── The hex field commits on BLUR, not on every keystroke ───────────────
+     Plan 09 task 11, the last input in the app to be converted. Task 02 swept
+     every other field onto draft-plus-blur semantics but explicitly excluded
+     this file, whose pointer handling task 03 was rewriting in the same wave.
+
+     Shape copied from `PosePanel/CameraAdvanced.tsx:258-269`: a local draft
+     while the caret is in the box, commit on blur AND on Enter, revert on
+     Escape, and a `useEffect` resync so an external colour change (a palette
+     click, an undo, a swap) is not masked by a stale draft.
+
+     ⚠️ THE HEX FIELD HAS A WRINKLE THE NUMBER FIELDS DO NOT: a partially
+     typed value is not merely out of range, it is not a colour at all. `#ab`
+     parses to nothing, and the OLD live-`onChange` code silently ignored it —
+     which read as the field being ignored while the user was three keystrokes
+     in. Now the draft is shown verbatim while typing and, on blur, an
+     unparseable draft REVERTS to the current colour rather than writing
+     garbage or leaving a dead value on screen.
+
+     Blur/Enter: write the draft if it is a colour, otherwise discard it. */
+  const commitHex = () => {
+    if (hexDraft === null) return;
+    const parsed = parseHex(hexDraft);
+    setHexDraft(null);
+    if (!parsed) return; // invalid → revert; `getHexColor()` redisplays.
+    setLocalColor(parsed);
+    applyColor(parsed);
+    setHsl(rgbToHsl(parsed.r, parsed.g, parsed.b, hsl));
+  };
+
+  const handleHexKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitHex();
+      e.currentTarget.blur();
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setHexDraft(null);
+      e.currentTarget.blur();
     }
   };
 
@@ -691,8 +752,14 @@ export function ColorPicker({
           <input
             type="text"
             className="color-picker__hex-input"
-            value={getHexColor()}
-            onChange={(e) => handleHexChange(e.target.value)}
+            aria-label="Hex color"
+            /* The draft while one exists, the live colour otherwise — so a
+               half-typed value stays on screen for correction instead of
+               snapping back under the caret. */
+            value={hexDraft ?? getHexColor()}
+            onChange={(e) => setHexDraft(e.target.value)}
+            onBlur={commitHex}
+            onKeyDown={handleHexKeyDown}
             placeholder="#000000"
           />
         </div>
