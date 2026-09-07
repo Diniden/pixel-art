@@ -87,12 +87,14 @@ interface ColorPickerProps {
    * `swapEdgeAndFillColors` snapshots before it mutates, so do not bracket
    * this callback with a second history save).
    *
-   * ⚠️ OPTIONAL, AND DELIBERATELY UNWIRED AS OF PLAN 09 TASK 07. The control
-   * renders only when a caller supplies this, so the component stays pure and
-   * the button cannot half-exist. `ColorPickerContainer` belongs to task 06
-   * and the `X` shortcut to task 11 — task 11 is what passes this prop. Until
-   * then the desktop picker shows no swap button at all, which is the correct
-   * intermediate state: a visible dead control would be worse.
+   * ⚠️ OPTIONAL, AND THAT IS LOAD-BEARING. The control renders only when a
+   * caller supplies this, so the component stays pure and the button cannot
+   * half-exist as a visible dead control. Task 07 shipped it unwired because
+   * `ColorPickerContainer` belonged to task 06 in the same wave; task 11
+   * passes it (`ColorPickerContainer`, alongside the `X` shortcut in
+   * `GlobalHotkeys`), which is what closes R8. The other-hand rail supplies
+   * it too (`OtherHandRailContainer`). Callers that legitimately have no
+   * swap — the ColorPicker tests, a story — simply omit it.
    */
   onSwapColors?: () => void;
   /** Hands the rail to the colour sliders in Other Hand Mode (tablets only). */
@@ -610,7 +612,7 @@ export function ColorPicker({
               would make a screen reader announce "3 tabs". Adjacency still
               carries the meaning — the thing it swaps is the pair to its
               left. Rendered only when a caller supplies `onSwapColors`; see
-              that prop's note on why it is unwired until task 11. */}
+              that prop's note on why the prop is optional. */}
           {onSwapColors ? (
             <button
               type="button"

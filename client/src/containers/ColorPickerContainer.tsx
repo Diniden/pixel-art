@@ -131,6 +131,17 @@ export const ColorPickerContainer = observer(function ColorPickerContainer() {
           : app.adjustColor(color, trackHistory)
       }
       onSaveStateToHistory={(label) => app.saveStateToHistory(label)}
+      /* ⚠️ THIS PROP IS WHAT MAKES THE SWAP BUTTON EXIST (plan 09, R8).
+         `ColorPicker.onSwapColors` is OPTIONAL and the control renders only
+         when a caller supplies it — task 07 shipped the button that way
+         because `ColorPickerContainer` belonged to task 06 in the same wave,
+         so until this line the desktop picker showed no swap control at all.
+
+         ⚠️ DO NOT bracket this with `saveStateToHistory`.
+         `swapEdgeAndFillColors` already snapshots ONCE before it mutates and
+         then calls `colorSink`, which is what makes the swap a single undo
+         step. A second save here would make one swap take two undos. */
+      onSwapColors={() => app.swapEdgeAndFillColors()}
       onOtherHand={
         ui.layout.otherHandAvailable
           ? () => ui.layout.enterOtherHand(OTHER_HAND_SECTIONS.color)
