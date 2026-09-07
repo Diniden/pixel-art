@@ -254,7 +254,10 @@ import { useCanvasPointer } from "../ui/hooks/useCanvasPointer";
 import { useCanvasRender } from "../ui/hooks/useCanvasRender";
 import type { DirtyScope } from "../ui/hooks/useCanvasRender";
 import { useDashTicker } from "../ui/hooks/useDashTicker";
-import { useCanvasViewport } from "../ui/hooks/useCanvasViewport";
+import {
+  useCanvasViewport,
+  viewZoomFloor,
+} from "../ui/hooks/useCanvasViewport";
 import { usePencilHover } from "../ui/hooks/usePencilHover";
 import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
 
@@ -1084,7 +1087,21 @@ export const CanvasContainer = observer(function CanvasContainer({
     // project across devices exactly as `panOffset` always has (Full mode;
     // the Layer camera is session-only).
     viewZoom: camera.viewZoom,
-    onCommitViewZoom: (z) => camera.setViewZoom(z),
+    /* ⚠️ THE DERIVED FLOOR IS PASSED HERE, NOT DEFAULTED (plan 09 task 04,
+       applied in task 11). `CanvasCameraStore.setViewZoom`'s `floor`
+       parameter defaults to the legacy 0.25 — stores may not read the DOM,
+       so the limit has to arrive from the caller that knows the content box.
+       Task 04 shipped `viewZoomFloor()` and wired `LightingCanvasContainer`,
+       but was forbidden from this file (task 07 owned three of its lines in
+       the same wave), so it deferred this one line into W5.
+
+       Without it the pixel studio's main canvas still clamps at 0.25 and the
+       "zoom out until the canvas is a ~50 px thumbnail" request is only half
+       delivered. `useCanvasViewport` already applies the same floor to its
+       own internal clamps (`:380`, `:502`); this makes the COMMIT agree with
+       them, so a zoom the gesture allowed is not snapped back by the store. */
+    onCommitViewZoom: (z) =>
+      camera.setViewZoom(z, viewZoomFloor(contentWidth, contentHeight)),
     resyncKey: `${app.timelineUI.selectedObjectId ?? ""}|${
       app.timelineUI.selectedFrameId ?? ""
     }|${app.ui.lightingUI?.studioMode ?? ""}|${renderMode}`,
