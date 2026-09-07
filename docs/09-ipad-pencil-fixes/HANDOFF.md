@@ -1185,6 +1185,39 @@ a Pencil, a running app, or the owner's real project, and none was available:
   characterisation group in `eraserBrushWidth.dom.test.tsx` so the locked decision cannot
   be undone by accident.
 
+### W5 / FINAL — verified by the coordinator (2026-09-06)
+
+```
+bun run verify                       → EXIT 0   (re-run by me, twice)
+  typecheck · eslint 65w/0e · prettier clean
+  vitest    → 162 files, 3325 tests, all passed   [baseline was 148/3139]
+  build     → built in 2.14s
+cd client && bun run lint:css        → 71 problems (2 errors, 69 warnings)  [baseline]
+cd client && bun run lint:boundaries → OK — all 5 boundary rules hold
+git diff 875c314..HEAD -- '*__snapshots__*'      → EMPTY across the WHOLE PLAN
+find . -name 'bun.lock*' -not -path '*/node_modules/*' → none
+```
+
+**All three deferrals verified in the source by the coordinator:**
+- **(a)** `CanvasContainer.tsx:1123-1124` — `camera.setViewZoom(z, viewZoomFloor(contentWidth, contentHeight))`. The pixel studio's canvas no longer clamps at 0.25.
+- **(b)** `activeToolBrushSize` consumed at exactly **3** sites (`:2268`, `:4301`, `:4365`) with dep arrays; **`fill-square` still reads the raw pencil `brushSize`** at `:4412` and `:4987`, as required. `:607` untouched.
+- **(c)** `UIStore.dispose()` now calls `this.layout.dispose()`. R10 closed.
+
+**R8 closed:** `ColorPickerContainer:144` passes `onSwapColors={() => app.swapEdgeAndFillColors()}`; the swap button renders. Proved by a test that queries `.color-picker__swap` in the **rendered DOM** and clicks it — not a prop recorder, which would happily record a function while the component rendered nothing (R8 exactly).
+
+**Cross-wave preservation re-verified by grep at final HEAD:** R4 ordering holds (selection branch `:5350`, `isGestureTool` bail `:5412`); task 07's 3 `app.setActiveColor`; task 03's 4 `setPointerCapture` and 5 `touch-action: none`.
+
+**⚠️ R14 fired once and was caught.** `bunx eslint -f compact` printed `Saved lockfile` while resolving a formatter that is not installed. No lockfile reached the repo — confirmed by both `find` forms, by the executor and again by me.
+
+**Two more rounds of tests thrown away as worthless** (the plan-wide pattern): the eraser writes the packed sentinel `color: 0`, not `{a: 0}`, so the first counter read zero erased cells after a *working* stroke; and the R10 case first invoked the captured handler by hand, bypassing the listener registry so it failed against correct code.
+
+### Lessons carried forward from this plan
+
+1. **A green `corpus golden digests` run is NOT evidence of wire safety.** Measured twice, independently, on two different keys. MASTER §8 E1 and R1 say the opposite and are wrong. The suites that bite are an emits-nothing test using `in`/`Object.keys()` and `persistedUIState.test.ts`.
+2. **A callee-side suite is not evidence a call site exists.** All three deferrals had green callee tests the entire time while the call site was missing — including a disposer whose own comment claimed a caller that did not exist.
+3. **Prove a test by reverting the fix and counting failures.** Every wave did this; four rounds of tests across the plan were discarded as worthless because they passed identically against broken code.
+4. **vitest runs code the typechecker rejects** — run `tsc` after writing tests.
+
 ## Deferred follow-ups
 
 Tasks 04 and 09 may defer a one-line change into W5 because they are forbidden from
