@@ -248,10 +248,13 @@ describe("GlobalHotkeys — the Escape asymmetry is preserved", () => {
     const app = mount();
     act(() =>
       runInAction(() =>
+        // The minimal complete `ColorAdjustmentState`. The Escape branch only
+        // tests it for truthiness, so an empty `affectedPixels` is enough —
+        // but the field is required and the gate's typecheck says so.
         app.ui.tool.setColorAdjustment({
           originalColor: RED,
-          newColor: BLUE,
           allFrames: false,
+          affectedPixels: [],
         }),
       ),
     );

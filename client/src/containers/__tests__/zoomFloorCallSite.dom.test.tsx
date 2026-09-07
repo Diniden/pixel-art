@@ -191,7 +191,11 @@ describe("⭐⭐ CanvasContainer passes the derived zoom floor, not the default"
     // would be vacuous — this is the guard against a silently inert gesture.
     expect(app.ui.viewport.panOffset).not.toEqual({ x: 0, y: 0 });
     expect(setViewZoom).toHaveBeenCalled();
-    const call = setViewZoom.mock.calls.at(-1)!;
+    /* ⚠️ Indexed, not `.at(-1)` — the client's `tsconfig` lib predates
+       `Array.prototype.at` and `bun run typecheck` rejects it, though vitest
+       runs it happily. Measured on the gate. */
+    const calls = setViewZoom.mock.calls;
+    const call = calls[calls.length - 1];
     expect(call).toHaveLength(2);
     expect(call[1]).toBeTypeOf("number");
   });
@@ -205,7 +209,8 @@ describe("⭐⭐ CanvasContainer passes the derived zoom floor, not the default"
 
     panAndCommit();
 
-    const floor = setViewZoom.mock.calls.at(-1)![1] as number;
+    const calls = setViewZoom.mock.calls;
+    const floor = calls[calls.length - 1][1] as number;
     // Computed from the same helper the container uses, against the same
     // content box the rect stub reports — so this asserts agreement, not a
     // magic number that would need editing if MIN_CANVAS_SCREEN_PX moved.
