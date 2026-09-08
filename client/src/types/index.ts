@@ -8,6 +8,9 @@
 export * from "./domain";
 export * from "./constants";
 export * from "./factories";
+// Brush Studio (docs/01-brush-studio, task 01): a separate document family
+// that never extends Project/Layer; the in-memory shape is the wire shape.
+export * from "./brush";
 export * from "./codecs/pixel";
 export * from "./codecs/compactTypes";
 export * from "./codecs/serialize";
