@@ -1,8 +1,8 @@
 # HANDOFF — Brush Studio
 
-**Current position:** W4 IN PROGRESS (W1–W3 code-complete; W1/W2 manual checks owed, see Notes)
+**Current position:** W5 BLOCKED — awaiting owner decision on the dirty `ApplicationStore.ts` (W1–W4 code-complete; W1/W2 manual checks owed, see Notes)
 **Branch:** `feat/01-brush-studio` (cut 2026-09-08 from `feat/09-ipad-pencil-fixes` @ `3845480`)
-**Last commit:** `fe9ee25` (W3)
+**Last commit:** `ea4d592` (W4)
 
 Planned 2026-08-29 from `feat/rail-layout-controls` @ `37a4bce` with a dirty worktree (103
 uncommitted files of unrelated in-flight work — see MASTER §4). Executors stage only their
@@ -15,8 +15,8 @@ uncommitted files of unrelated in-flight work — see MASTER §4). Executors sta
 | W1 | 01, 02, 03, 05 | PARTIAL (code DONE, gate green; task 03 manual checks owed) | 2026-09-08 | `f1d0e0b` | client: tsc clean · eslint 0 err/65 warn · vitest 165 files, 3394 tests pass (baseline 164/3362), no snapshot diff · boundaries OK · server: tsc clean · vitest 102 pass (52+50) · eslint clean · no lockfile |
 | W2 | 04, 06, 12, 13, 14, 15 | PARTIAL (code DONE, gate green; Storybook visual checks owed for 12/13/14) | 2026-09-08 | `226da76` | tsc clean · eslint 0 err/65 warn · vitest 170 files, 3480 tests pass (W1: 165/3394), no snapshot diff · boundaries OK · stylelint 2 errors = pre-existing `OtherHand.css:338,359` baseline, 0 new · storybook ✓ built in 6.02s · no lockfile |
 | W3 | 07, 10 | DONE | 2026-09-08 | `fe9ee25` | tsc clean · eslint 0 err/65 warn · vitest 173 files, 3549 tests pass (W2: 170/3480), no snapshot diff · boundaries OK · no lockfile |
-| W4 | 08, 09 | IN PROGRESS | 2026-09-08 | | |
-| W5 | 11 | TODO | | | |
+| W4 | 08, 09 | DONE | 2026-09-08 | `ea4d592` | tsc clean · eslint 0 err/66 warn (+1 `max-lines` on `BrushStructureStore.ts`, same as the other domain stores) · vitest 175 files, 3647 tests pass (W3: 173/3549), no snapshot diff · perf: 100-write drag on 64×64 worst 1.372 ms, undo 0.587 ms, redo 0.556 ms (budget 16 ms) · boundaries OK · no lockfile |
+| W5 | 11 | BLOCKED | 2026-09-08 | | `ApplicationStore.ts` is dirty with the owner's uncommitted thumbnail-cache work (+73). Task 11 must edit and stage that file; an executor cannot stage only its hunks. Waiting on the owner. |
 | W6 | 16, 17, 18 | TODO | | | |
 | W7 | 19 | TODO | | | |
 | W8 | 20 | TODO | | | |
@@ -73,10 +73,37 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   ignores non-finite input; `setDelta` clamps and copies; no `hydrate` (nothing persisted).
   **Task 11 must wire `reaction(() => brushes.document, doc => brushUI.adoptDocument(doc))`** —
   the UI store does not observe the domain itself.
+- **W4 — commit collision, resolved:** executors 08 and 09 shared the git index; 09's `git commit`
+  swept 08's staged files into `bc226dc`. 09 repaired it (`reset --soft`, recommitted its own two
+  files as `40b5e57`, left 08's files staged); the coordinator then committed 08's files as
+  `ea4d592` with 08's prepared message. `bc226dc` is unreachable. Content verified identical.
+  **Lesson for later waves:** parallel executors in one worktree must `git commit -- <paths>`
+  (pathspec form), not bare `git commit`.
+- **W4/08 —** delete ops move the selection only when the deleted item was selected;
+  `assertUniformLayers` runs unconditionally (throw aborts before `history.record`); no phantom
+  history entries for same-value ops (`reorderFrame` to own slot, same channel type, same group,
+  same size); `duplicateLayer` inserts directly above its source; `toggleLayerVisibility` writes
+  `!frames[0].visible` to every frame. File is 447 lines (`max-lines` warning, not error).
+- **W4/09 —** `moveLayerCells(dx, dy, opts?: { trackHistory? })` — no mask (masked move = task 21);
+  `setCells` clamps deltas on the way in; **`applyPatch` bumps `pixelVersion` during replay** (the
+  brush canvas has no dirty channel) so an undo wakes the brush autosave — consistent with 07(g);
+  a composite undo bumps once per child inside one action; strict target resolution (stale id →
+  no-op, no frame-0 fallback). **Not done:** MASTER risk-register's "pixel store asserts layer
+  exists in every frame" — `resolveTarget` checks the selected frame only. Extra exports
+  `BrushSelectionSource`, `BrushMoveOptions`, `ResolvedBrushTarget`, `brushCellsEqual`.
 - **Coordinator —** cut `feat/01-brush-studio` from `feat/09-ipad-pencil-fixes` instead of staying
   on the 09 branch: every prior plan in this repo has its own `feat/NN-*` branch.
 
 ## Notes for the next session
+- 🔴 **W5 is blocked on the owner.** Options: (A) owner commits (or stashes) the thumbnail-cache
+  work so `ApplicationStore.ts` is clean, then re-run `/plan-go` — it resumes at W5; (B) owner
+  says "accept a mixed commit" and task 11 stages the whole file (their +73 lines ride along in
+  `brush-studio(11)`); (C) owner says "stash it" — the coordinator runs `git stash -u`, executes W5,
+  then `git stash pop` (conflict risk in the ctor region of `ApplicationStore.ts`, where both edit).
+  Recommended: A.
+- **Task 11 must also decide** (see W3/07(g), W4/09): undo/redo bumps brush versions, so a replay
+  schedules a brush autosave. Either accept (simplest; the saved doc is correct) or gate the
+  brush controller's trigger on `!history.isReplaying`.
 - **Manual checks owed for W1/03 (no browser available to executors):** (1) three studio buttons
   render, stacked when the toolbar is vertical, active state on current; (2) Brush → placeholder
   with working "Back to Pixel Studio", project intact; (3) hotkey from pixel↔lighting, from brush →
