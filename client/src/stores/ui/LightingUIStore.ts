@@ -84,7 +84,7 @@ export class LightingUIStore {
 
   /* ══ THE 9 PERSISTED FIELDS ═══════════════════════════════════════════ */
 
-  /** 1. `"pixel" | "lighting"` — the top-level mode switch. */
+  /** 1. `"pixel" | "lighting" | "brush"` — the top-level mode switch. */
   studioMode: StudioMode = DEFAULT_UI_STATE.studioMode;
 
   /**
@@ -185,6 +185,10 @@ export class LightingUIStore {
    * in ONE commit, exactly as `lightingActions.ts:22-34` did. The tool reset
    * is not incidental: entering lighting mode with the pixel pencil selected
    * leaves the toolbar in a state no lighting tool handles.
+   *
+   * `"brush"` (brush studio, MASTER D1) takes the pixel branch on purpose: the
+   * brush studio drives the pixel studio's tool table, so its default tool is
+   * the pixel pencil. Only `"lighting"` gets the lighting default.
    */
   setStudioMode(mode: StudioMode): void {
     this.studioMode = mode;
