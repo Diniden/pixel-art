@@ -1,8 +1,8 @@
 # HANDOFF — Brush Studio
 
-**Current position:** W5 IN PROGRESS (W1–W4 code-complete; W1/W2 manual checks owed, see Notes)
+**Current position:** W6 IN PROGRESS (W1–W5 code-complete; W1/W2 manual checks owed, see Notes)
 **Branch:** `feat/01-brush-studio` (cut 2026-09-08 from `feat/09-ipad-pencil-fixes` @ `3845480`)
-**Last commit:** `be92287` (owner's checkpoint commit of the thumbnail-cache work, which unblocked W5)
+**Last commit:** `6de0317` (W5)
 
 Planned 2026-08-29 from `feat/rail-layout-controls` @ `37a4bce` with a dirty worktree (103
 uncommitted files of unrelated in-flight work — see MASTER §4). Executors stage only their
@@ -16,8 +16,8 @@ uncommitted files of unrelated in-flight work — see MASTER §4). Executors sta
 | W2 | 04, 06, 12, 13, 14, 15 | PARTIAL (code DONE, gate green; Storybook visual checks owed for 12/13/14) | 2026-09-08 | `226da76` | tsc clean · eslint 0 err/65 warn · vitest 170 files, 3480 tests pass (W1: 165/3394), no snapshot diff · boundaries OK · stylelint 2 errors = pre-existing `OtherHand.css:338,359` baseline, 0 new · storybook ✓ built in 6.02s · no lockfile |
 | W3 | 07, 10 | DONE | 2026-09-08 | `fe9ee25` | tsc clean · eslint 0 err/65 warn · vitest 173 files, 3549 tests pass (W2: 170/3480), no snapshot diff · boundaries OK · no lockfile |
 | W4 | 08, 09 | DONE | 2026-09-08 | `ea4d592` | tsc clean · eslint 0 err/66 warn (+1 `max-lines` on `BrushStructureStore.ts`, same as the other domain stores) · vitest 175 files, 3647 tests pass (W3: 173/3549), no snapshot diff · perf: 100-write drag on 64×64 worst 1.372 ms, undo 0.587 ms, redo 0.556 ms (budget 16 ms) · boundaries OK · no lockfile |
-| W5 | 11 | IN PROGRESS | 2026-09-08 | | (was BLOCKED on the dirty `ApplicationStore.ts`; owner committed it as `be92287`) |
-| W6 | 16, 17, 18 | TODO | | | |
+| W5 | 11 | DONE | 2026-09-08 | `6de0317` | tsc clean · eslint 0 err/66 warn · vitest 176 files, 3658 tests pass (W4: 175/3647), no snapshot diff · boundaries OK · no lockfile. (Was BLOCKED on the dirty `ApplicationStore.ts`; owner committed it as `be92287`; W4 gate re-run green on that HEAD before dispatch.) |
+| W6 | 16, 17, 18 | IN PROGRESS | 2026-09-08 | | |
 | W7 | 19 | TODO | | | |
 | W8 | 20 | TODO | | | |
 | W9 | 21 | TODO | | | |
@@ -91,6 +91,16 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   no-op, no frame-0 fallback). **Not done:** MASTER risk-register's "pixel store asserts layer
   exists in every frame" — `resolveTarget` checks the selected frame only. Extra exports
   `BrushSelectionSource`, `BrushMoveOptions`, `ResolvedBrushTarget`, `brushCellsEqual`.
+- **W5/11 — replay-autosave ACCEPTED:** a brush undo/redo schedules one debounced save of the
+  restored document once `isReplaying` clears (the file then matches what the owner sees after
+  ⌘Z). Pinned by a test; comment at the brush autosave construction site.
+- **W5/11 —** brush stores constructed after `selectionUI` (the last pixel-studio store), before
+  `makeObservable`/`autoSave`; `brushUI.adoptDocument` wired via `BrushStore`'s
+  `onDocumentInstalled` dep (no extra reaction); `brushApi.save(doc, name ?? "")` instead of
+  `name!`; project undo path still goes through `historyOps`/`historyControl`, brush path is a
+  bare `HistoryStore` call. **Design consequence to keep in mind (19/22):** both autosave
+  controllers share `SessionStore` — they write the same `saveStatus` dot and `BrushStore` flows
+  toggle the same `saveSuspended` the project controller reads.
 - **Coordinator —** cut `feat/01-brush-studio` from `feat/09-ipad-pencil-fixes` instead of staying
   on the 09 branch: every prior plan in this repo has its own `feat/NN-*` branch.
 
