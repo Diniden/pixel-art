@@ -88,6 +88,19 @@ export const uiStateLighting: UIState = makeUIState({
   heightScale: 140,
 });
 
+/**
+ * Brush studio (brush-studio task 03). `studioMode: "brush"` is persisted in
+ * the project's `uiState` exactly like `"lighting"`; the selected tool is the
+ * pixel default because the brush studio shares the pixel tool table.
+ */
+export const uiStateBrushMode: UIState = makeUIState({
+  selectedObjectId: "obj-hero",
+  selectedFrameId: "obj-hero-frame-1",
+  selectedLayerId: "obj-hero-frame-1-layer-2",
+  studioMode: "brush",
+  selectedTool: "pixel",
+});
+
 /** Focus mode on: side and bottom panels hidden. */
 export const uiStateFocus: UIState = makeUIState({
   selectedObjectId: "obj-hero",

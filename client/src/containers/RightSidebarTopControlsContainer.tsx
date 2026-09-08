@@ -71,7 +71,9 @@ export const RightSidebarTopControlsContainer = observer(
 
     return (
       <RightSidebarTopControls
-        isPixelMode={lightingUI.studioMode !== "lighting"}
+        // Exact match (brush-studio task 03): "brush" must not inherit the
+        // pixel studio's tool-options panel by falling through a `!==`.
+        isPixelMode={lightingUI.studioMode === "pixel"}
         selectedTool={tool.selectedTool}
         frameTraceActive={referenceUI.frameTraceActive}
         brushSize={tool.brushSize}

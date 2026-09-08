@@ -57,6 +57,8 @@ export interface ToolSectionPlan {
 export function planToolSection(app: ApplicationStore): ToolSectionPlan {
   const { ui, lightingUI, referenceUI, selectionUI } = app;
   const tool = ui.tool;
+  // Exact match on purpose: "brush" intentionally takes the pixel branch below
+  // (the brush studio shares the pixel tool set — brush-studio task 03).
   const isLighting = lightingUI.studioMode === "lighting";
   const editMode = lightingUI.lightingDataLayerEditMode ?? "normals";
 

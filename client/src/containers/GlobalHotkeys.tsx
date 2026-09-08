@@ -92,7 +92,10 @@ export const GlobalHotkeys = observer(function GlobalHotkeys() {
         tool.setColorAdjustment(null);
       }
 
-      // Shift + ` to cycle studio modes
+      // Shift + ` toggles pixel <-> lighting. Per brush-studio MASTER D22 the
+      // hotkey does NOT reach "brush" (that mode is entered only from the
+      // toolbar button); from brush it goes to PIXEL, never to lighting by
+      // accident — hence `=== "pixel"`, not `=== "lighting"`.
       if (
         e.code === "Backquote" &&
         e.shiftKey &&
@@ -103,9 +106,7 @@ export const GlobalHotkeys = observer(function GlobalHotkeys() {
         if (isTypingTarget(e.target)) return;
 
         e.preventDefault();
-        lightingUI.setStudioMode(
-          studioMode === "lighting" ? "pixel" : "lighting",
-        );
+        lightingUI.setStudioMode(studioMode === "pixel" ? "lighting" : "pixel");
         return;
       }
 

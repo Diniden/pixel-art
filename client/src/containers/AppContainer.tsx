@@ -65,6 +65,52 @@ import { GlobalHotkeys } from "./GlobalHotkeys";
 import { PixelStudioContainer } from "./PixelStudioContainer";
 import { LightingStudioContainer } from "./LightingStudioContainer";
 import { useStores } from "../stores/context";
+import type { StudioMode } from "../types";
+
+/**
+ * Route the studio mode to its page. EXHAUSTIVE on purpose (brush-studio
+ * task 03): the previous `=== "lighting" ? … : …` ternary would have shown
+ * the pixel studio for any new mode without anyone noticing. The `never`
+ * guard makes a fourth mode a compile error here.
+ *
+ * `"brush"` renders a placeholder until task 19 lands `BrushStudioContainer`.
+ * It carries a Back button so a user who lands here (or reloads into a project
+ * persisted with `studioMode: "brush"`) is never stranded. Inline `style` is
+ * deliberate — no CSS file for markup task 19 deletes.
+ */
+function renderStudio(mode: StudioMode, onBackToPixel: () => void) {
+  switch (mode) {
+    case "pixel":
+      return <PixelStudioContainer />;
+    case "lighting":
+      return <LightingStudioContainer />;
+    case "brush":
+      return (
+        <div
+          className="app__placeholder"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "var(--space-3)",
+            height: "100vh",
+            color: "var(--text-primary)",
+            background: "var(--bg-primary)",
+          }}
+        >
+          <p>Brush Studio — task 19</p>
+          <button type="button" onClick={onBackToPixel}>
+            Back to Pixel Studio
+          </button>
+        </div>
+      );
+    default: {
+      const _exhaustive: never = mode;
+      return _exhaustive;
+    }
+  }
+}
 
 export const AppContainer = observer(function AppContainer() {
   const { domain, lightingUI } = useStores();
@@ -100,10 +146,8 @@ export const AppContainer = observer(function AppContainer() {
   return (
     <>
       <GlobalHotkeys />
-      {lightingUI.studioMode === "lighting" ? (
-        <LightingStudioContainer />
-      ) : (
-        <PixelStudioContainer />
+      {renderStudio(lightingUI.studioMode, () =>
+        lightingUI.setStudioMode("pixel"),
       )}
     </>
   );
