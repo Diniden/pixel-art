@@ -396,12 +396,26 @@
   color: var(--white);
 }
 
+/* Per-mode active tints. Each studio button always carries its `--<mode>`
+   modifier; the tint applies only when `--active` joins it. This replaced an
+   `[aria-label="Lighting Studio"]` attribute selector (brush-studio task 03)
+   so that styling no longer depends on the accessible name's exact text. */
+
 /* Lighting mode indicator */
-.toolbar__studio-mode-btn--active[aria-label="Lighting Studio"] {
+.toolbar__studio-mode-btn--active.toolbar__studio-mode-btn--lighting {
   background: linear-gradient(
     135deg,
     var(--status-warn) 0%,
     var(--status-warn-deep) 100%
+  );
+}
+
+/* Brush mode indicator */
+.toolbar__studio-mode-btn--active.toolbar__studio-mode-btn--brush {
+  background: linear-gradient(
+    135deg,
+    var(--accent-variant) 0%,
+    var(--accent-variant-deep) 100%
   );
 }
 
