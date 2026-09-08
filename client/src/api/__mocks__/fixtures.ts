@@ -6,7 +6,11 @@
  * Payload shapes mirror what the Express server actually sends (verified
  * against `server/src/routes/*.ts` and `server/src/export/exportRouter.ts`).
  */
-import type { CompactProject } from "../../types";
+import {
+  createBrushDocument,
+  type BrushDocument,
+  type CompactProject,
+} from "../../types";
 import type { BackupEntry } from "../resources/backupApi";
 import type {
   AiConfigResult,
@@ -143,4 +147,24 @@ export function fixtureJob(
       status === "completed" ? ["ZnJhbWUx", "ZnJhbWUy", "ZnJhbWUz"] : undefined,
     ...overrides,
   };
+}
+
+// ============================================
+// Brush Studio (docs/01-brush-studio, task 04)
+// ============================================
+
+export const FIXTURE_BRUSH_NAME = "Soft Round";
+
+export const fixtureBrushList: string[] = [FIXTURE_BRUSH_NAME, "Scatter"];
+
+/**
+ * An 8×8 `brush-1` document with two painted cells. The in-memory shape IS
+ * the wire shape (MASTER D3), so this is exactly what `GET /api/brush` sends.
+ */
+export function fixtureBrushDocument(): BrushDocument {
+  const doc = createBrushDocument(8, 8);
+  const grid = doc.frames[0].layers[0].pixels;
+  grid[1][1] = [255, 0, -255, 0];
+  grid[6][6] = [-100, 100, 0, 255];
+  return doc;
 }

@@ -17,6 +17,8 @@ import {
   fixtureAiConfig,
   fixtureAiHealthOk,
   fixtureBackups,
+  fixtureBrushDocument,
+  fixtureBrushList,
   fixtureCompactProject,
   fixtureExportResult,
   fixtureFramesJson,
@@ -45,6 +47,37 @@ export const handlers = [
   http.post("*/api/project/rename", () => HttpResponse.json({ success: true })),
   http.delete("*/api/project", () => HttpResponse.json({ success: true })),
   http.post("*/api/project/switch", () => HttpResponse.json({ success: true })),
+  // Brush Studio (task 04). `*/api/brush/create` and `*/api/brush/rename` are
+  // registered BEFORE the bare `*/api/brush` predicates so nothing can swallow
+  // them (MSW matches in array order). `*/api/brush` and `*/api/brushes` are
+  // distinct paths.
+  http.get("*/api/brushes", () =>
+    HttpResponse.json({ brushes: fixtureBrushList }),
+  ),
+  http.post("*/api/brush/create", async ({ request }) => {
+    const body = (await request.json()) as { name?: string };
+    const name = body?.name ?? "unnamed";
+    if (fixtureBrushList.includes(name)) {
+      return HttpResponse.json(
+        { error: "Brush already exists" },
+        { status: 409 },
+      );
+    }
+    return HttpResponse.json({ success: true, name });
+  }),
+  http.post("*/api/brush/rename", () => HttpResponse.json({ success: true })),
+  http.get("*/api/brush", ({ request }) => {
+    const name = new URL(request.url).searchParams.get("name") ?? "";
+    if (!fixtureBrushList.includes(name)) {
+      return HttpResponse.json(
+        { error: "No brush found", name },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(fixtureBrushDocument());
+  }),
+  http.post("*/api/brush", () => HttpResponse.json({ success: true })),
+  http.delete("*/api/brush", () => HttpResponse.json({ success: true })),
   http.get("*/api/project/backups", () =>
     HttpResponse.json({ backups: fixtureBackups }),
   ),
@@ -81,6 +114,9 @@ export function notFoundHandlers() {
   return [
     http.get("*/api/project", () =>
       HttpResponse.json({ error: "No project found" }, { status: 404 }),
+    ),
+    http.get("*/api/brush", () =>
+      HttpResponse.json({ error: "No brush found" }, { status: 404 }),
     ),
     http.get("*/exports/:kebabName/frames.json", () =>
       HttpResponse.json({ error: "Not found" }, { status: 404 }),
