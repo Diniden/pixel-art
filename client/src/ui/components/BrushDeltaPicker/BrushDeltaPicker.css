@@ -1,0 +1,163 @@
+/*
+ * brush-delta-picker — per-channel delta sliders for the brush studio
+ * (Brush Studio plan, task 14; BEM block per MASTER D24, tokens only).
+ *
+ * Elements, DOM order:
+ *   brush-delta-picker__preview       swatch + readout + reset row
+ *   brush-delta-picker__swatch        colourised result (127 = zero delta)
+ *   brush-delta-picker__swatch-bg     transparency checkerboard
+ *   brush-delta-picker__swatch-color  the rgba fill
+ *   brush-delta-picker__readout       hex + alpha caption
+ *   brush-delta-picker__hex
+ *   brush-delta-picker__alpha
+ *   brush-delta-picker__reset
+ *   brush-delta-picker__channels      the slider rows
+ *   brush-delta-picker__row           label + track + number input
+ *   brush-delta-picker__label
+ *   brush-delta-picker__track         positioned wrapper; carries the zero tick
+ *   brush-delta-picker__slider        the `.slider` primitive, stretched
+ *
+ * Modifiers:
+ *   brush-delta-picker--disabled
+ *
+ * The number input is the shared `slider__input` primitive; the track is the
+ * shared `slider` primitive. Neither block file is edited here (task rule).
+ *
+ * `touch-action: none` on the root and the slider is the CSS half of the
+ * two-part iPad touch fix recorded in ColorPicker.css — without it iPadOS
+ * gives the Pencil's first movement to the rail's scroll and the drag is
+ * never delivered.
+ */
+
+.brush-delta-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.brush-delta-picker--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ── Preview row ───────────────────────────────────────────────────────── */
+
+.brush-delta-picker__preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brush-delta-picker__swatch {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: transparent;
+}
+
+/* Transparency checkerboard behind the colour (the `swatch__bg` idea). */
+.brush-delta-picker__swatch-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(45deg, var(--white-15) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--white-15) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--white-15) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--white-15) 75%);
+  background-size: 8px 8px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0;
+}
+
+.brush-delta-picker__swatch-color {
+  position: absolute;
+  inset: 0;
+}
+
+.brush-delta-picker__readout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+}
+
+.brush-delta-picker__hex {
+  color: var(--text-primary);
+}
+
+.brush-delta-picker__alpha {
+  color: var(--text-muted);
+}
+
+.brush-delta-picker__reset {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-65);
+}
+
+/* ── Channel rows ──────────────────────────────────────────────────────── */
+
+.brush-delta-picker__channels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.brush-delta-picker__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  height: 22px;
+}
+
+.brush-delta-picker__label {
+  width: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* The track wrapper exists so the zero tick can be positioned against the
+   slider alone, not the whole row. −255..255 is symmetric, so the thumb's
+   centre sits at exactly 50% of the track when the delta is 0. */
+.brush-delta-picker__track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.brush-delta-picker__track::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  background: var(--text-muted);
+  border-radius: var(--radius-xs);
+  pointer-events: none;
+}
+
+.brush-delta-picker__slider {
+  width: 100%;
+  position: relative;
+  z-index: var(--z-raised);
+  touch-action: none;
+}
