@@ -1,0 +1,229 @@
+/* brush-select-modal — BEM block (Brush Studio plan, task 13; MASTER D24).
+
+   Modal chrome (overlay, header, close, body, footer) comes from
+   styles/blocks/modal.css via the Modal primitive; the confirm comes from
+   blocks/confirm-dialog.css via ConfirmDialog. This sheet keeps only what is
+   specific to choosing a brush file. Geometry and the `current` chip follow
+   ProjectSelectModal.css's measured values so the two choosers read as one
+   family. Tokens only. */
+
+.brush-select-modal {
+  width: 440px;
+  animation: brush-select-modal-slide-in 0.2s ease-out;
+}
+
+@keyframes brush-select-modal-slide-in {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* elements, DOM order */
+
+.brush-select-modal__error {
+  margin-bottom: var(--space-3);
+  padding: var(--space-2-5) var(--space-4);
+  background: var(--accent-danger-10);
+  border: 1px solid var(--accent-danger-30);
+  border-radius: var(--radius-md);
+  color: var(--accent-danger);
+  font-size: var(--text-85);
+}
+
+.brush-select-modal__rename {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  margin-bottom: var(--space-4);
+}
+
+.brush-select-modal__label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+}
+
+.brush-select-modal__rename-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brush-select-modal__input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: var(--space-2-5) var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-90);
+  transition: border-color var(--transition-fast);
+}
+
+.brush-select-modal__input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.brush-select-modal__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.brush-select-modal__empty {
+  margin-bottom: var(--space-4);
+}
+
+.brush-select-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  margin-bottom: var(--space-4);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.brush-select-modal__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  color: var(--text-primary);
+  font-size: var(--text-90);
+}
+
+.brush-select-modal__item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.brush-select-modal__item:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+}
+
+.brush-select-modal__icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.brush-select-modal__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brush-select-modal__badge {
+  font-size: var(--text-70);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-1) var(--space-2);
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.brush-select-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2-5);
+}
+
+.brush-select-modal__size-inputs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brush-select-modal__size-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brush-select-modal__size-input {
+  width: 72px;
+  padding: var(--space-2) var(--space-2-5);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.brush-select-modal__size-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.brush-select-modal__size-separator {
+  color: var(--text-muted);
+}
+
+.brush-select-modal__form-actions {
+  display: flex;
+  gap: var(--space-2-5);
+  justify-content: flex-end;
+}
+
+.brush-select-modal__new-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  background: transparent;
+  border: 2px dashed var(--border-secondary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-90);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.brush-select-modal__new-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.brush-select-modal__new-btn:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-primary-05);
+}
+
+.brush-select-modal__plus-icon {
+  display: flex;
+  align-items: center;
+}
+
+/* modifiers */
+
+/* base.base--modifier compound: wins over the `:hover:not(:disabled)` rule. */
+.brush-select-modal__item.brush-select-modal__item--current {
+  background: var(--accent-primary-08);
+  border-color: var(--accent-primary);
+}
