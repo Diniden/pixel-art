@@ -1,8 +1,8 @@
 # HANDOFF — Brush Studio
 
-**Current position:** W7 IN PROGRESS (W1–W6 code-complete; W1/W2/W6 manual checks owed, see Notes)
+**Current position:** W8 IN PROGRESS (W1–W7 code-complete; W1/W2/W6/W7 manual checks owed, see Notes)
 **Branch:** `feat/01-brush-studio` (cut 2026-09-08 from `feat/09-ipad-pencil-fixes` @ `3845480`)
-**Last commit:** `f2474d3` (W6)
+**Last commit:** `04335d7` (W7)
 
 Planned 2026-08-29 from `feat/rail-layout-controls` @ `37a4bce` with a dirty worktree (103
 uncommitted files of unrelated in-flight work — see MASTER §4). Executors stage only their
@@ -18,8 +18,8 @@ uncommitted files of unrelated in-flight work — see MASTER §4). Executors sta
 | W4 | 08, 09 | DONE | 2026-09-08 | `ea4d592` | tsc clean · eslint 0 err/66 warn (+1 `max-lines` on `BrushStructureStore.ts`, same as the other domain stores) · vitest 175 files, 3647 tests pass (W3: 173/3549), no snapshot diff · perf: 100-write drag on 64×64 worst 1.372 ms, undo 0.587 ms, redo 0.556 ms (budget 16 ms) · boundaries OK · no lockfile |
 | W5 | 11 | DONE | 2026-09-08 | `6de0317` | tsc clean · eslint 0 err/66 warn · vitest 176 files, 3658 tests pass (W4: 175/3647), no snapshot diff · boundaries OK · no lockfile. (Was BLOCKED on the dirty `ApplicationStore.ts`; owner committed it as `be92287`; W4 gate re-run green on that HEAD before dispatch.) |
 | W6 | 16, 17, 18 | PARTIAL (code DONE, gate green; manual checks deferred to W7/19 by design — nothing mounted yet) | 2026-09-08 | `f2474d3` | tsc clean · eslint 0 err/66 warn · vitest 177 files, 3703 tests pass (W5: 176/3658), no snapshot diff · boundaries OK · stylelint 2 errors = `OtherHand.css` baseline, 0 new · no lockfile |
-| W7 | 19 | IN PROGRESS | 2026-09-08 | | |
-| W8 | 20 | TODO | | | |
+| W7 | 19 | PARTIAL (code DONE, gate green; all 8 manual checks owed) | 2026-09-08 | `04335d7` | tsc clean · eslint 0 err/66 warn · vitest 179 files, 3709 tests pass (W6: 177/3703), no snapshot diff · boundaries OK · stylelint 2 errors = `OtherHand.css` baseline, 0 new · storybook ✓ built in 6.12s · `bun run build` ✓ 2.16s · no lockfile |
+| W8 | 20 | IN PROGRESS | 2026-09-08 | | |
 | W9 | 21 | TODO | | | |
 | W10 | 22 | TODO | | | |
 
@@ -122,6 +122,16 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   so an id key would collide). Drag callbacks are inert no-ops (a drag ghost still appears).
   `onOpenPreview` no-op. Header ops keyed by layer NAME (pure component contract). No unit test
   (no precedent to copy). Root wrapped in `.frame-timeline` for CSS parity.
+- **W7/19 — two test files outside `Touches`** (co-located-test precedent):
+  `containers/__tests__/BrushStudioContainer.dom.test.tsx` (brush branch mounts every region;
+  StrictMode → exactly one `GET /api/brushes`; header reads "Brushes"/"No brush" and opens the
+  brush modal) and `ui/components/Toolbar/__tests__/PixelStudioTools.dom.test.tsx` (13 → 12 tool
+  buttons). `reference-trace` has no tool-table entry, so `hiddenTools` containing it hides the
+  reference-image group + divider. `ToolbarContainer.tsx` untouched (03's `toolsForStudio` already
+  routes brush → pixel tools). No exhaustiveness gate exists in `PixelStudioTools.tsx`. Header
+  rename copy is now name-agnostic. `HeaderContainer` passes `brushList` as `projectList` in brush
+  mode so duplicate-rename checks the right list. **Cosmetic debt:** `RAIL_LABELS` in
+  `hooks/useRailLayout.tsx` still says "Objects & Layers" over the brush library.
 - **Coordinator —** cut `feat/01-brush-studio` from `feat/09-ipad-pencil-fixes` instead of staying
   on the 09 branch: every prior plan in this repo has its own `feat/NN-*` branch.
 
@@ -140,6 +150,15 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   with working "Back to Pixel Studio", project intact; (3) hotkey from pixel↔lighting, from brush →
   pixel; (4) reload while in brush mode boots into the placeholder and Back works; (5) iPad: the
   new button is tappable.
+- **Manual checks owed for W7/19 — all eight** (`bun run dev`): (1) Pixel → Brush: header
+  "Brushes", empty library, create "Test Brush" 16×16 → loads, layer panel "Layer 1 · RGB",
+  timeline 1×1; (2) pencil at delta 0 → grey, R=+255 → red-ish, eraser clears; (3) add HSL
+  layer in every frame, add frame (copy) → 2 columns, move layer reorders both, play/stop;
+  (4) ⌘Z/⇧⌘Z on brush edits, then Pixel → ⌘Z undoes the project, not the brush; (5) save dot
+  pending→saved, `curl 'localhost:3001/api/brush?name=Test%20Brush'` shows cells, reload restores
+  brush mode; (6) modal rename updates header, delete → next/empty, project list never shows
+  brushes; (7) focus mode hides rails, Other-Hand rail toggles, no origin/trace tools;
+  (8) Network tab shows one `GET /api/brushes` (jsdom-proven under StrictMode already).
 - **Manual checks owed for W6 (need task 19's mount; fold into the W7 sweep):** 16 — pencil at
   delta 0 paints 127-grey, L=+255 renders blue-ish; eraser clears; line/rect/ellipse preview then
   commit; ⌘Z undoes one whole stroke; 100-cell drag at zoom 16 smooth (< 16 ms frames);
