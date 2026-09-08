@@ -78,6 +78,14 @@ interface PixelStudioToolsProps {
   onFlipHorizontal: () => void;
   onFlipVertical: () => void;
   /**
+   * Tools to leave out of the bar (brush-studio task 19). The brush studio
+   * shares this tool set but has no anchor point and no reference image, so
+   * its container passes `origin` and `reference-trace`. The table below is
+   * filtered by id; `reference-trace` has no table entry — its UI is the
+   * reference-image group, which is hidden with it. Absent = show everything.
+   */
+  hiddenTools?: ReadonlySet<Tool>;
+  /**
    * Renders `ReferenceImageContainer` with the supplied open/close/confirm
    * wiring — injected because it is a container (see the note above).
    */
@@ -291,6 +299,7 @@ export function PixelStudioTools({
   canRedo,
   onFlipHorizontal,
   onFlipVertical,
+  hiddenTools,
   referenceImageModal,
 }: PixelStudioToolsProps) {
   const [isRefModalOpen, setIsRefModalOpen] = useState(false);
@@ -313,11 +322,18 @@ export function PixelStudioTools({
     onReferenceImageChange?.(null);
   };
 
+  // See `hiddenTools`: the table is filtered by id, and the reference-image
+  // group goes with the trace tool it exists to enter.
+  const visibleTools = hiddenTools
+    ? tools.filter((tool) => !hiddenTools.has(tool.id))
+    : tools;
+  const showReferenceGroup = !hiddenTools?.has("reference-trace");
+
   return (
     <>
       <div className="toolbar__section">
         <div className="toolbar__group">
-          {tools.map((tool) => {
+          {visibleTools.map((tool) => {
             const isEyedropper = tool.id === "eyedropper";
             return (
               <ToolButton
@@ -442,34 +458,36 @@ export function PixelStudioTools({
           </Tooltip>
         </div>
 
-        <div className="toolbar__divider" />
+        {showReferenceGroup && <div className="toolbar__divider" />}
 
-        <div className="toolbar__group toolbar__group--reference">
-          <Tooltip content="Add Reference Image">
-            <button
-              className={`toolbar__tool-btn ${hasReferenceImage ? "toolbar__tool-btn--has-reference" : ""}`}
-              onClick={() => setIsRefModalOpen(true)}
-              aria-label="Add Reference Image"
-            >
-              <span className="toolbar__tool-icon">
-                <Icon icon={Camera} />
-              </span>
-            </button>
-          </Tooltip>
-          {hasReferenceImage && (
-            <Tooltip content="Clear Reference Image">
+        {showReferenceGroup && (
+          <div className="toolbar__group toolbar__group--reference">
+            <Tooltip content="Add Reference Image">
               <button
-                className="toolbar__tool-btn toolbar__clear-reference-btn"
-                onClick={handleClearReference}
-                aria-label="Clear Reference Image"
+                className={`toolbar__tool-btn ${hasReferenceImage ? "toolbar__tool-btn--has-reference" : ""}`}
+                onClick={() => setIsRefModalOpen(true)}
+                aria-label="Add Reference Image"
               >
                 <span className="toolbar__tool-icon">
-                  <Icon icon={X} />
+                  <Icon icon={Camera} />
                 </span>
               </button>
             </Tooltip>
-          )}
-        </div>
+            {hasReferenceImage && (
+              <Tooltip content="Clear Reference Image">
+                <button
+                  className="toolbar__tool-btn toolbar__clear-reference-btn"
+                  onClick={handleClearReference}
+                  aria-label="Clear Reference Image"
+                >
+                  <span className="toolbar__tool-icon">
+                    <Icon icon={X} />
+                  </span>
+                </button>
+              </Tooltip>
+            )}
+          </div>
+        )}
       </div>
 
       {referenceImageModal({

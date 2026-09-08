@@ -19,7 +19,18 @@ import { observer } from "mobx-react-lite";
 import { PixelStudioTools } from "../ui/components/Toolbar/PixelStudioTools";
 import { ReferenceImageContainer } from "./ReferenceImageContainer";
 import { useStores } from "../stores/context";
+import type { Tool } from "../types";
 import type { ReferenceImageData } from "../types/referenceImage";
+
+/**
+ * Brush-studio task 19: the brush studio shares this bar but has no anchor
+ * point and no reference image, so these two are left out there. Module-level
+ * so the set's identity is stable across renders.
+ */
+const BRUSH_HIDDEN_TOOLS: ReadonlySet<Tool> = new Set<Tool>([
+  "origin",
+  "reference-trace",
+]);
 
 interface PixelStudioToolsContainerProps {
   onReferenceImageChange?: (data: ReferenceImageData | null) => void;
@@ -32,9 +43,15 @@ export const PixelStudioToolsContainer = observer(
     hasReferenceImage,
   }: PixelStudioToolsContainerProps) {
     const app = useStores();
-    const { domain, ui, pixels } = app;
+    const { domain, ui, pixels, brushPixels, lightingUI } = app;
 
     if (!domain.hasProject) return null;
+
+    // The bar is rendered in brush mode too (`Toolbar`'s `toolsForStudio`,
+    // task 03). Flips act on the document under the canvas; undo/redo go
+    // through `app.undo()` (already routed by `activeHistory`, task 11) and
+    // the enabled state reads the same stack.
+    const isBrushMode = lightingUI.studioMode === "brush";
 
     return (
       <PixelStudioTools
@@ -62,10 +79,17 @@ export const PixelStudioToolsContainer = observer(
         // the pre-undo stack. See `ApplicationStore.undo`'s header.
         onUndo={() => app.undo()}
         onRedo={() => app.redo()}
-        canUndo={app.history.canUndo}
-        canRedo={app.history.canRedo}
-        onFlipHorizontal={() => pixels.flipHorizontal()}
-        onFlipVertical={() => pixels.flipVertical()}
+        // `activeHistory` (D10): the brush's own stack in brush mode, the
+        // shared editor history otherwise — the same one `app.undo()` pops.
+        canUndo={app.activeHistory.canUndo}
+        canRedo={app.activeHistory.canRedo}
+        onFlipHorizontal={() =>
+          isBrushMode ? brushPixels.flipHorizontal() : pixels.flipHorizontal()
+        }
+        onFlipVertical={() =>
+          isBrushMode ? brushPixels.flipVertical() : pixels.flipVertical()
+        }
+        hiddenTools={isBrushMode ? BRUSH_HIDDEN_TOOLS : undefined}
         referenceImageModal={(modalProps) => (
           <ReferenceImageContainer {...modalProps} />
         )}
