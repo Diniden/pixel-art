@@ -1,8 +1,8 @@
 # HANDOFF — Brush Studio
 
-**Current position:** W3 IN PROGRESS (W1–W2 code-complete; manual checks owed, see Notes)
+**Current position:** W4 IN PROGRESS (W1–W3 code-complete; W1/W2 manual checks owed, see Notes)
 **Branch:** `feat/01-brush-studio` (cut 2026-09-08 from `feat/09-ipad-pencil-fixes` @ `3845480`)
-**Last commit:** `226da76` (W2)
+**Last commit:** `fe9ee25` (W3)
 
 Planned 2026-08-29 from `feat/rail-layout-controls` @ `37a4bce` with a dirty worktree (103
 uncommitted files of unrelated in-flight work — see MASTER §4). Executors stage only their
@@ -14,8 +14,8 @@ uncommitted files of unrelated in-flight work — see MASTER §4). Executors sta
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02, 03, 05 | PARTIAL (code DONE, gate green; task 03 manual checks owed) | 2026-09-08 | `f1d0e0b` | client: tsc clean · eslint 0 err/65 warn · vitest 165 files, 3394 tests pass (baseline 164/3362), no snapshot diff · boundaries OK · server: tsc clean · vitest 102 pass (52+50) · eslint clean · no lockfile |
 | W2 | 04, 06, 12, 13, 14, 15 | PARTIAL (code DONE, gate green; Storybook visual checks owed for 12/13/14) | 2026-09-08 | `226da76` | tsc clean · eslint 0 err/65 warn · vitest 170 files, 3480 tests pass (W1: 165/3394), no snapshot diff · boundaries OK · stylelint 2 errors = pre-existing `OtherHand.css:338,359` baseline, 0 new · storybook ✓ built in 6.02s · no lockfile |
-| W3 | 07, 10 | IN PROGRESS | 2026-09-08 | | |
-| W4 | 08, 09 | TODO | | | |
+| W3 | 07, 10 | DONE | 2026-09-08 | `fe9ee25` | tsc clean · eslint 0 err/65 warn · vitest 173 files, 3549 tests pass (W2: 170/3480), no snapshot diff · boundaries OK · no lockfile |
+| W4 | 08, 09 | IN PROGRESS | 2026-09-08 | | |
 | W5 | 11 | TODO | | | |
 | W6 | 16, 17, 18 | TODO | | | |
 | W7 | 19 | TODO | | | |
@@ -59,6 +59,20 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   optional `className?` prop; 12-test jsdom suite. Positive values show no `+` prefix.
 - **W2/04 —** `brushApi.save` sends no `syncOriginHeaders()` (D12: no broadcast); `notFoundHandlers()`
   gained a `*/api/brush` 404 entry.
+- **W3/07 — contracts downstream tasks must honour:** (a) `commit(label, mutate, options?: { bumpPixels?: boolean })`
+  — third arg added so structural ops that change rendering (hide layer, delete frame) redraw
+  without a separate `bumpPixelVersion()`; (b) **`createBrushPixelCommand.undo()` reverses the
+  cells itself** — `BrushPatchHost.applyPatch` receives them already ordered and must NOT reverse
+  again (differs from `PixelStore`, where the host reverses); (c) `installDocument` accepts `null`;
+  (d) `loadBrush` sets `brushName`; (e) `createBrush` re-loads from the API after create;
+  (f) snapshot commands keep `before` by reference (documents are immutable per D8);
+  (g) `restore` during replay bumps versions, so an undo schedules a brush autosave once
+  `isReplaying` clears — unlike the pixel project. **Task 11 must decide whether that is wanted.**
+- **W3/10 —** mobx 7 exports `observable.ref` as `observableRef` (repo-wide convention). Extra
+  `selectedLayerIn(doc)`, exported `BRUSH_ZOOM_MIN/MAX/DEFAULT` + `BrushDeltaIndex`; `setZoom`
+  ignores non-finite input; `setDelta` clamps and copies; no `hydrate` (nothing persisted).
+  **Task 11 must wire `reaction(() => brushes.document, doc => brushUI.adoptDocument(doc))`** —
+  the UI store does not observe the domain itself.
 - **Coordinator —** cut `feat/01-brush-studio` from `feat/09-ipad-pencil-fixes` instead of staying
   on the 09 branch: every prior plan in this repo has its own `feat/NN-*` branch.
 
