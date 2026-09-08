@@ -44,11 +44,33 @@
  *
  * ## Stroke width and dash under non-scaling-stroke
  *
- * Both are interpreted in SCREEN units when `vector-effect` is
- * `non-scaling-stroke`. So `stroke-width: 2` really is 2 screen px at zoom 50,
- * and `REFLECTION_DASH = 4` and the marching ants' `[4,4]` keep their
- * documented meaning with no conversion at all. This is why the existing style
- * constants transfer verbatim and why no new width or dash is invented here.
+ * ⚠️ CORRECTED 2026-09-07 — THE ORIGINAL CLAIM HERE WAS FALSE. It read: "both
+ * are interpreted in SCREEN units when `vector-effect` is `non-scaling-stroke`,
+ * so `stroke-width: 2` really is 2 screen px at zoom 50". It is not.
+ *
+ * `non-scaling-stroke` exempts a stroke from the transforms the SVG can see —
+ * its own `viewBox` mapping and any `<g transform>` within it. The consumer
+ * mounts this SVG at `viewBox="0 0 W H"` with `width=W height=H`, a 1:1
+ * internal mapping, so there is nothing there to exempt the stroke from. ALL
+ * of the magnification is the CSS `scale(combinedScale)` on `.canvas__layout`,
+ * an HTML ANCESTOR, which scales the rasterised SVG as a unit and which
+ * `vector-effect` cannot see.
+ *
+ * So every width and dash in this module is in CELL units after all:
+ * `stroke-width: 2` is two CELLS, or 100 screen px at zoom 50. For most of
+ * this chrome that is tolerable — it is transient, or drawn where the user is
+ * already looking. For the SELECTION BOX it was not: it persists on a cell
+ * boundary while the user works inside it, so it covered the artwork on both
+ * sides of every edge (owner report, 2026-09-07).
+ *
+ * The correction lives in the CONSUMER, not here: `CanvasSurface`'s
+ * `ScreenWidthPath` counter-scales the ants' width and dash by
+ * `1 / combinedScale`. It is deliberately not fixed here — this module is pure
+ * cell-space geometry with no zoom input, an invariant `chromeOverlay.test.ts`
+ * pins, and threading the zoom in to fix a width would break it.
+ *
+ * The `vector-effect` attributes stay on every spec: they are harmless, and
+ * they become correct the day the transform moves inside the SVG.
  *
  * ## What non-scaling-stroke does NOT fix: screen-constant LENGTHS
  *
@@ -289,6 +311,29 @@ export function lassoOverlay(
  * ------------------------------------------------------------------ */
 
 /**
+ * Nominal width of BOTH marching-ants strokes, before the consumer's
+ * counter-scale.
+ *
+ * ⚠️ THIS IS IN CELL UNITS, NOT SCREEN UNITS — see the header's correction.
+ * `non-scaling-stroke` does not reach the ancestor CSS transform, so on its
+ * own this would render as one whole CELL. `CanvasSurface`'s `ScreenWidthPath`
+ * is what turns it into one SCREEN pixel, by counter-scaling it by
+ * `1 / combinedScale`; this constant is the value it counter-scales, and the
+ * two must be read together.
+ *
+ * A centred stroke straddles its path and this path runs along the boundary
+ * BETWEEN cells, so at one screen pixel the box covers half a screen pixel of
+ * each neighbouring cell — the thinnest a boundary line can be, and invisible
+ * as occlusion at any zoom.
+ *
+ * The outer and inner strokes are deliberately the SAME width now. They share
+ * one path and differ only in colour and dash phase, so equal widths make the
+ * cyan and the white alternate along a single hairline rather than the white
+ * sitting in a groove down the middle of a thicker cyan line.
+ */
+const ANTS_STROKE = 1;
+
+/**
  * The marching-ants selection box: two nested dashed rectangles, the inner one
  * half a dash period out of phase with the outer, which is what reads as
  * motion even though nothing animates.
@@ -329,7 +374,7 @@ export function marchingAntsOverlay(
       d,
       attrs: {
         stroke: SELECTION_COLOR,
-        "stroke-width": 2,
+        "stroke-width": ANTS_STROKE,
         "stroke-dasharray": "4 4",
         "vector-effect": "non-scaling-stroke",
         fill: "none",
@@ -339,7 +384,7 @@ export function marchingAntsOverlay(
       d,
       attrs: {
         stroke: WHITE,
-        "stroke-width": 1,
+        "stroke-width": ANTS_STROKE,
         "stroke-dasharray": "4 4",
         // The constant `4` from `drawMarchingAnts` — half a dash period, the
         // phase difference that makes the ants read as marching.
@@ -350,6 +395,68 @@ export function marchingAntsOverlay(
     },
   };
 }
+
+/* ------------------------------------------------------------------ *
+ * Variant edit box
+ * ------------------------------------------------------------------ */
+
+/**
+ * The violet box around the variant's edit area, shown while a variant is
+ * being edited in the composite (Full) view.
+ *
+ * ## Why this is here and not on the overlay canvas
+ *
+ * It used to be a `strokeRect` at the end of `CanvasContainer`'s
+ * `drawOverlayCanvas`, drawn into the frame-overlay canvas — which, under the
+ * 1:1 canvas model (plan 05), is `gridWidth × gridHeight` device pixels
+ * magnified by the CSS `scale(combinedScale)` on `.canvas__layout`. So its
+ * `lineWidth = 2` was two CELLS, or 100 screen px at zoom 50, and its `[6,6]`
+ * dash was six cells on, six cells off.
+ *
+ * That is the SAME defect the selection box had (owner report 2026-09-07):
+ * a persistent stroke on a cell boundary, drawn while the user works inside
+ * it, covering the artwork on both sides of every edge. The owner asked for
+ * the same remedy (2026-09-08) — "a rendering strategy like the selection
+ * box: between pixels, scale agnostic, 1px wide at all times".
+ *
+ * So it is emitted here in CELL space with no zoom input, exactly like
+ * {@link marchingAntsOverlay}, and the consumer renders it through
+ * `CanvasSurface`'s `ScreenWidthPath`, which counter-scales the width and the
+ * dash by `1 / combinedScale`. `vector-effect` alone does NOT do this — see
+ * this module's header and `ScreenWidthPath`'s own comment for why.
+ *
+ * ⚠️ Like the ants, the box lands ON cell boundaries — `x`/`y` are cell
+ * corners, not centres, and no `+ 0.5` is applied. That is what "between
+ * pixels" means: the stroke straddles the seam between the last variant cell
+ * and the first one outside it, rather than sitting on top of either.
+ *
+ * The dash stays `[6,6]` in SCREEN px (the consumer scales it), which is what
+ * the canvas version was always trying to be, and the colour stays
+ * `ACCENT_VARIANT` — the owner kept the box, only its rendering was wrong.
+ */
+export function variantBoxOverlay(box: SelectionBounds): SvgPathSpec {
+  return {
+    d: rectPath(box),
+    attrs: {
+      stroke: ACCENT_VARIANT,
+      "stroke-width": VARIANT_BOX_STROKE,
+      "stroke-dasharray": `${VARIANT_BOX_DASH} ${VARIANT_BOX_DASH}`,
+      "vector-effect": "non-scaling-stroke",
+      fill: "none",
+    },
+  };
+}
+
+/** The variant box's stroke width, in SCREEN px once counter-scaled. */
+export const VARIANT_BOX_STROKE = 1;
+
+/**
+ * The variant box's dash period, in SCREEN px once counter-scaled. Carried
+ * over verbatim from the canvas version's `borderDash: [6, 6]`, which is
+ * wider than the ants' `4` so the two read as different chrome when a
+ * selection sits inside a variant.
+ */
+export const VARIANT_BOX_DASH = 6;
 
 /** A closed rectangle as path data, in whatever units it arrives in. */
 function rectPath(r: SelectionBounds): string {

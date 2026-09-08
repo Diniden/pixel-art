@@ -140,3 +140,71 @@ describe("CanvasCameraStore — the Layer camera", () => {
     expect(c.panOffset).toEqual({ x: 1, y: 2 });
   });
 });
+
+describe("presentVariantPanes — the variant-selection arrangement", () => {
+  it("from the default single Full pane: opens both, Layer LEFT", () => {
+    // The case that matters. The owner asked (2026-09-08) for the variant's
+    // own canvas as the editor and the composed view "automatically opened and
+    // on the right as the default".
+    const s = new CanvasViewsUIStore();
+    runInAction(() => s.presentVariantPanes());
+    expect(s.bothOpen).toBe(true);
+    expect(s.openModes).toEqual(["layer", "full"]);
+  });
+
+  it("⚠️ DELIBERATELY INVERTS the D6 'new pane goes right' rule", () => {
+    // This is the assertion that documents why the action exists at all.
+    // `openMode` from the same start puts the NEW pane on the right, which is
+    // the opposite arrangement — so the two are contrasted directly here. If a
+    // future tidy-up "simplifies" `presentVariantPanes` into an `openMode`
+    // call, this test is what fails.
+    const viaOpenMode = new CanvasViewsUIStore();
+    runInAction(() => viaOpenMode.openMode("layer"));
+    expect(viaOpenMode.openModes).toEqual(["full", "layer"]);
+
+    const viaAction = new CanvasViewsUIStore();
+    runInAction(() => viaAction.presentVariantPanes());
+    expect(viaAction.openModes).toEqual(["layer", "full"]);
+  });
+
+  it("is idempotent — a second call changes nothing", () => {
+    const s = new CanvasViewsUIStore();
+    runInAction(() => s.presentVariantPanes());
+    const before = s.openModes;
+    runInAction(() => s.presentVariantPanes());
+    expect(s.openModes).toEqual(before);
+    expect(s.bothOpen).toBe(true);
+  });
+
+  it("overrides a manual swap, and that is the documented intent", () => {
+    // Selecting a variant layer is the user's own act, so it re-imposes the
+    // arrangement rather than preserving a hand-swapped order.
+    const s = new CanvasViewsUIStore();
+    runInAction(() => s.presentVariantPanes());
+    runInAction(() => s.swap());
+    expect(s.openModes).toEqual(["full", "layer"]);
+    runInAction(() => s.presentVariantPanes());
+    expect(s.openModes).toEqual(["layer", "full"]);
+  });
+
+  it("recovers from Layer-only: it OPENS Full rather than assuming it is there", () => {
+    // Reachable by closing Full while both were open. The action sets both
+    // flags outright, so it does not depend on the state it starts from.
+    const s = new CanvasViewsUIStore();
+    runInAction(() => s.openMode("layer"));
+    runInAction(() => s.closeMode("full"));
+    expect(s.fullOpen).toBe(false);
+    runInAction(() => s.presentVariantPanes());
+    expect(s.openModes).toEqual(["layer", "full"]);
+  });
+
+  it("leaves the keyboard owner as Full — one pane, as D6 requires", () => {
+    // Both panes are open afterwards, and `keyboardOwner` prefers Full
+    // whenever it is open. Pinned because arranging the panes must not
+    // accidentally hand the map to two of them (every WASD and ⌘Z would fire
+    // twice).
+    const s = new CanvasViewsUIStore();
+    runInAction(() => s.presentVariantPanes());
+    expect(s.keyboardOwner).toBe("full");
+  });
+});

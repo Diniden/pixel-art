@@ -38,7 +38,6 @@
  * Pure: buffer in, buffer out. No store, no MobX, no DOM.
  */
 
-import { ACCENT_VARIANT_60, WARN_ORANGE_60 } from "../../theme/canvasTokens";
 import { resolveVariantOffset } from "../model/variantOffset";
 import type { Offset } from "../model/variantOffset";
 import { blendOverInto, writeOverInto } from "../../../utils/alphaBlend";
@@ -315,6 +314,26 @@ export function renderFrameOverlay(
   return buffer;
 }
 
+/* ⚠️ `borderColor` / `borderDash` USED TO LIVE ON BOTH MODES — removed
+   2026-09-08, and difference #3 in the table above is now historical.
+
+   Neither was ever drawn by THIS module; the consumer
+   (`CanvasContainer.drawOverlayCanvas`) read them and closed with a
+   `strokeRect` onto the overlay canvas. Under the 1:1 canvas model that
+   canvas is magnified by a CSS `scale(combinedScale)`, so a `lineWidth` of 2
+   was two CELLS and a `[6,6]` dash was six cells on, six off.
+
+   - #8's violet box is still wanted. It moved to SVG chrome
+     (`variantBoxOverlay` in `ui/canvas/svg/chromeOverlay`), rendered through
+     `CanvasSurface`'s `ScreenWidthPath`, which counter-scales width and dash
+     so it holds a 1px hairline on the cell boundary at every zoom.
+   - #9's amber box was dropped outright as noise (owner report: "the edit
+     mode showing all layers composed doesn't need those orangey yellow dotted
+     lines"). Its PIXELS are unaffected — only the border is gone.
+
+   The golden-hash tests below never covered either field: the borders were
+   stroked outside this function, so no buffer hash changes here. */
+
 /** The settled parameter set for the frame overlay (#8). */
 export const FRAME_OVERLAY_MODE = {
   composite: "blend",
@@ -322,8 +341,6 @@ export const FRAME_OVERLAY_MODE = {
   cellFill: "clamped",
   renderOrphanVariantLayers: false,
   opacity: 0.4,
-  borderColor: ACCENT_VARIANT_60,
-  borderDash: [6, 6],
 } as const;
 
 /** The settled parameter set for the frame-trace overlay (#9). */
@@ -333,6 +350,4 @@ export const FRAME_TRACE_MODE = {
   cellFill: "whole",
   renderOrphanVariantLayers: true,
   opacity: 0.5,
-  borderColor: WARN_ORANGE_60,
-  borderDash: [4, 4],
 } as const;

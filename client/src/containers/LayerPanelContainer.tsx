@@ -57,6 +57,26 @@
  * a UX change this task did not license — but it now lives on this side of the
  * boundary, so the presentational half stays pure and testable.
  *
+ * ── ⚠️ THE PER-ROW THUMBNAIL PAINTS THROUGH `makeCellThumbnailDraw` ───────
+ *
+ * The siderail shows the CURRENT frame's thumbnail for each layer, and it
+ * reuses the timeline's painter rather than growing a second one — the two
+ * would otherwise drift on the two documented quirks that painter preserves
+ * (the single-axis divisor, and the wrapping variant-frame index).
+ *
+ * The projection puts a bound `draw(ctx, size)` closure on the row model, so
+ * `layer.pixels` still stops at this file: R2 says a `Layer` reference may
+ * not reach `ui/`, and a closure over one is not a reference the diffing
+ * path can walk.
+ *
+ * `domain.pixelVersion` is the revision — the SAME counter
+ * `TimelineCellContainer` reads, and reading it here is what makes an edit
+ * repaint the siderail. It is also half the cache key, which is why the
+ * siderail and the timeline share cached paints instead of duplicating them:
+ * the second panel to ask for `layer@version@size` gets a blit. The key
+ * carries the frame index too, because a variant layer paints a DIFFERENT
+ * image per frame from the same layer id.
+ *
  * `observer()` lives here and only here (ESLint, task 05).
  */
 import { useCallback, useEffect, useState } from "react";
@@ -70,6 +90,9 @@ import type {
 import { VariantSelectModalContainer } from "./VariantSelectModalContainer";
 import { CopyFromModalContainer } from "./CopyFromModalContainer";
 import { AddVariantModalContainer } from "./AddVariantModalContainer";
+import { makeCellThumbnailDraw } from "./hooks/timelineCellThumbnail";
+import { thumbnailCacheKey } from "../ui/canvas/thumbnailCache";
+import { LAYER_THUMB_SIZE } from "../ui/components/LayerPanel/LayerRow";
 import { useStores } from "../stores/context";
 
 export const LayerPanelContainer = observer(function LayerPanelContainer() {
@@ -251,6 +274,12 @@ export const LayerPanelContainer = observer(function LayerPanelContainer() {
   const selectedLayerId = timelineUI.selectedLayerId;
   const projectVariants = domain.variants;
 
+  // The thumbnail revision and the frame index — see the header. `gridSize`
+  // and `frameIndex` are what `makeCellThumbnailDraw` needs beyond the layer.
+  const currentObject = store.currentObject;
+  const pixelRevision = domain.pixelVersion;
+  const frameIndex = currentObject.frames.findIndex((f) => f.id === frame.id);
+
   const rows: LayerRowModel[] = storedLayers
     .map((layer, actualIndex): LayerRowModel => {
       const variantGroup =
@@ -277,6 +306,22 @@ export const LayerPanelContainer = observer(function LayerPanelContainer() {
           !layer.isVariant &&
           actualIndex < storedLayers.length - 1 &&
           !storedLayers[actualIndex + 1]?.isVariant,
+
+        // The closure keeps `layer.pixels` on this side of the boundary.
+        drawThumbnail: makeCellThumbnailDraw(
+          layer,
+          currentObject.gridSize,
+          projectVariants,
+          frameIndex,
+        ),
+        thumbnailRevision: pixelRevision,
+        // A variant layer paints a different image per frame from the same
+        // id, so the frame index is part of the identity, not just the id.
+        thumbnailCacheKey: thumbnailCacheKey(
+          `layer:${layer.id}:${frameIndex}:${layer.selectedVariantId ?? ""}`,
+          pixelRevision,
+          LAYER_THUMB_SIZE,
+        ),
       };
     })
     .reverse();

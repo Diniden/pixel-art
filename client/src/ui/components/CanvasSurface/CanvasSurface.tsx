@@ -123,10 +123,18 @@
  * onion skins stacked on one sprite are unreadable. Passing the flags in
  * rather than deriving them keeps that policy where the store data lives.
  *
- * ── ⚠️ THE ORIGIN CROSS IS THE ONE OVERLAY WITH A TRANSFORM OF ITS OWN ────
+ * ── ⚠️ TWO OVERLAYS COUNTER-SCALE; THE REST DO NOT ──────────────────────
  *
- * `vector-effect: non-scaling-stroke` exempts a stroke's WIDTH from the
- * transform. It does not exempt GEOMETRY. `ORIGIN_CROSS_SIZE = 12` emitted as
+ * The origin cross counter-scales its GEOMETRY (below) and the marching ants
+ * counter-scale their WIDTH (`ScreenWidthPath`). Both exist because
+ * `vector-effect: non-scaling-stroke` does NOT survive this component's own
+ * layout: it exempts a stroke from transforms INSIDE the SVG, and this SVG's
+ * `viewBox` is 1:1 while all the magnification is the CSS scale on the HTML
+ * ancestor `.canvas__layout`. Read `ScreenWidthPath` before trusting any
+ * comment in this file that says a width is in screen pixels.
+ *
+ * Even where it did work, `vector-effect` exempts a stroke's WIDTH only. It
+ * never exempts GEOMETRY. `ORIGIN_CROSS_SIZE = 12` emitted as
  * 12 user units would render 600 screen px at zoom 50 — the original bug in
  * new clothes. So `originCrossOverlay` returns the centre in CELL space plus
  * arm length and radius in SCREEN px, and this component wraps them in
@@ -165,6 +173,14 @@ import type {
   OriginCrossOverlay,
   ReflectionGuideOverlay,
   SvgPathSpec,
+} from "@/ui/canvas/svg/chromeOverlay";
+// ⚠️ The ONLY value import `ui/components` takes from `ui/canvas` — two
+// numbers describing how the variant box must LOOK on screen, which is a
+// presentation fact and belongs with the spec that sets its `stroke-width`
+// and `stroke-dasharray`. Duplicating them here would let the two drift.
+import {
+  VARIANT_BOX_DASH,
+  VARIANT_BOX_STROKE,
 } from "@/ui/canvas/svg/chromeOverlay";
 import "./CanvasSurface.css";
 
@@ -394,6 +410,17 @@ export interface CanvasSurfaceProps {
    */
   marchingAnts?: { outer: SvgPathSpec; inner: SvgPathSpec } | null;
   /**
+   * The violet box around the variant's edit area, from `variantBoxOverlay` —
+   * shown while a variant is being edited in the composite (Full) view.
+   *
+   * ⚠️ Like `marchingAnts` and for the same reason, this is rendered through
+   * {@link ScreenWidthPath}, NOT `OverlayPath`. It persists on a cell boundary
+   * while the user works inside it, so a width that scales with the zoom
+   * covers the artwork on both sides of every edge. It was a `strokeRect` on
+   * the frame-overlay canvas until 2026-09-08 and had exactly that defect.
+   */
+  variantBox?: SvgPathSpec | null;
+  /**
    * The origin cross, from `originCrossOverlay`.
    *
    * ⚠️ The only overlay that is NOT a path spec, and the only one this
@@ -518,6 +545,64 @@ function OverlayPath({ spec }: { spec: SvgPathSpec }) {
   return <path d={spec.d} {...spec.attrs} />;
 }
 
+/**
+ * One stroked path whose width is held to N SCREEN pixels at any zoom.
+ *
+ * ⚠️ THIS EXISTS BECAUSE `vector-effect: non-scaling-stroke` DOES NOT WORK
+ * HERE, and the module headers that claim it does are wrong.
+ *
+ * `non-scaling-stroke` exempts a stroke from the transforms it can see: the
+ * `viewBox` mapping and any `<g transform>` INSIDE the SVG. This SVG has
+ * `viewBox="0 0 W H"` at `width=W height=H` — a 1:1 internal mapping — so
+ * there is nothing there for it to exempt the stroke from. Every bit of the
+ * magnification is the CSS `scale(combinedScale)` on `.canvas__layout`, an
+ * HTML ancestor, which rasterises the whole SVG and scales it as a unit.
+ * `vector-effect` has no visibility into that at all.
+ *
+ * So a `stroke-width: 1` renders as `combinedScale` screen pixels — one whole
+ * CELL — which is the "selection box eats a pixel of the grid" report. The
+ * counter-scale is the same correction `.canvas__svg-origin` already applies
+ * to its GEOMETRY, applied here to the WIDTH.
+ *
+ * `non-scaling-stroke` is left on the specs: it is harmless, and on the day
+ * the transform moves inside the SVG it becomes correct again.
+ */
+function ScreenWidthPath({
+  spec,
+  screenWidth,
+  inverseScale,
+  screenDash = ANTS_DASH,
+}: {
+  spec: SvgPathSpec;
+  screenWidth: number;
+  inverseScale: number;
+  /**
+   * Dash period in SCREEN px. Defaults to the ants' 4, the only value this
+   * took before the variant box (which uses 6) started sharing the component.
+   */
+  screenDash?: number;
+}) {
+  return (
+    <path
+      d={spec.d}
+      {...spec.attrs}
+      strokeWidth={screenWidth * inverseScale}
+      // The dash pattern is a LENGTH, so it scales with the geometry exactly
+      // as the width did. Counter-scaling it too keeps the ants' 4-on/4-off
+      // period at 4 screen px per segment instead of 4 cells.
+      strokeDasharray={`${screenDash * inverseScale} ${screenDash * inverseScale}`}
+      strokeDashoffset={
+        spec.attrs["stroke-dashoffset"] === undefined
+          ? undefined
+          : Number(spec.attrs["stroke-dashoffset"]) * inverseScale
+      }
+    />
+  );
+}
+
+/** Screen-pixel dash period of the marching ants. Mirrors the `"4 4"` spec. */
+const ANTS_DASH = 4;
+
 export function CanvasSurface({
   canvasRef,
   overlayCanvasRef,
@@ -546,6 +631,7 @@ export function CanvasSurface({
   hoverOutline,
   lasso,
   marchingAnts,
+  variantBox,
   originCross,
   reflectionGuides,
   onMouseDown,
@@ -570,6 +656,7 @@ export function CanvasSurface({
     hasPath(hoverOutline) ||
     hasPath(lasso) ||
     !!marchingAnts ||
+    hasPath(variantBox) ||
     !!originCross ||
     (reflectionGuides?.length ?? 0) > 0;
 
@@ -801,10 +888,49 @@ export function CanvasSurface({
                 {hasPath(hoverOutline) && <OverlayPath spec={hoverOutline} />}
                 {hasPath(lasso) && <OverlayPath spec={lasso} />}
                 {marchingAnts && hasPath(marchingAnts.outer) && (
+                  /*
+                    ⚠️ NOT `OverlayPath`. The selection box is the one piece of
+                    chrome that sits ON a cell boundary and persists while the
+                    user works inside it, so a width that scales with the zoom
+                    covers the artwork on both sides of every edge. See
+                    `ScreenWidthPath` for why `non-scaling-stroke` does not
+                    already handle this.
+                  */
                   <>
-                    <OverlayPath spec={marchingAnts.outer} />
-                    <OverlayPath spec={marchingAnts.inner} />
+                    <g className="canvas__svg-ants">
+                      <ScreenWidthPath
+                        spec={marchingAnts.outer}
+                        screenWidth={1}
+                        inverseScale={inverseScale}
+                      />
+                      <ScreenWidthPath
+                        spec={marchingAnts.inner}
+                        screenWidth={1}
+                        inverseScale={inverseScale}
+                      />
+                    </g>
                   </>
+                )}
+                {hasPath(variantBox) && (
+                  /*
+                    ⚠️ NOT `OverlayPath` — same reason as the ants directly
+                    above. This box sits ON a cell boundary and persists for
+                    the whole variant edit, so at zoom 50 a `stroke-width: 1`
+                    would be 50 screen px of violet lying across the artwork.
+                    It was a `strokeRect` on the frame-overlay canvas with
+                    exactly that defect until 2026-09-08.
+
+                    `screenDash={VARIANT_BOX_DASH}` keeps the 6-on/6-off
+                    period the canvas version had, now in screen px.
+                  */
+                  <g className="canvas__svg-variant-box">
+                    <ScreenWidthPath
+                      spec={variantBox}
+                      screenWidth={VARIANT_BOX_STROKE}
+                      screenDash={VARIANT_BOX_DASH}
+                      inverseScale={inverseScale}
+                    />
+                  </g>
                 )}
                 {reflectionGuides?.map((guide, i) => (
                   // Index keys: the guides are a positional list rebuilt on

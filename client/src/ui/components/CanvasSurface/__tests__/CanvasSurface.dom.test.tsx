@@ -35,7 +35,7 @@
  */
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { composeStories } from "@storybook/react-vite";
 import { createRef } from "react";
 import type { RefObject } from "react";
@@ -949,8 +949,56 @@ describe("CanvasSurface — the SVG chrome mount (plan 05, D5)", () => {
     const paths = container.querySelectorAll(".canvas__svg path");
     expect(paths).toHaveLength(2);
     expect(paths[0]!.getAttribute("d")).toBe(paths[1]!.getAttribute("d"));
+    // The phase difference survives the counter-scale: the offset is half a
+    // dash period in the SAME units as the dash, whatever those units are.
     expect(paths[0]!.getAttribute("stroke-dashoffset")).toBeNull();
-    expect(paths[1]!.getAttribute("stroke-dashoffset")).toBe("4");
+    expect(Number(paths[1]!.getAttribute("stroke-dashoffset"))).toBeCloseTo(
+      4 / SCALE,
+    );
+  });
+
+  /**
+   * ⭐ THE ZOOM-INDEPENDENCE OF THE SELECTION BOX.
+   *
+   * `vector-effect: non-scaling-stroke` does NOT deliver this: it exempts a
+   * stroke from transforms inside the SVG, and this SVG's viewBox is 1:1
+   * while every bit of the magnification is the CSS scale on the HTML
+   * ancestor `.canvas__layout`. Left alone, `stroke-width: 1` renders as one
+   * whole CELL — the "selection box takes a literal pixel on the grid"
+   * report. `ScreenWidthPath` counter-scales width AND dash by
+   * `1 / combinedScale` so both are screen-constant.
+   *
+   * Pinned at two scales, because a single-scale assertion cannot tell a
+   * counter-scaled width from a hardcoded one.
+   */
+  it("⭐ holds the ants' width and dash at screen-constant size across zooms", () => {
+    const spec = {
+      d: "M3 3h8v7h-8Z",
+      attrs: { ...GRID_SPEC.attrs, "stroke-dasharray": "4 4" },
+    } as const;
+
+    for (const scale of [SCALE, SCALE * 4]) {
+      const { container } = render(
+        <CanvasSurface
+          {...baseProps()}
+          combinedScale={scale}
+          marchingAnts={{ outer: spec, inner: spec }}
+        />,
+      );
+      for (const path of container.querySelectorAll(".canvas__svg path")) {
+        // width × scale === 1 screen px, at every scale.
+        expect(
+          Number(path.getAttribute("stroke-width")) * scale,
+        ).toBeCloseTo(1);
+        const [on, off] = path
+          .getAttribute("stroke-dasharray")!
+          .split(" ")
+          .map(Number);
+        expect(on! * scale).toBeCloseTo(4);
+        expect(off! * scale).toBeCloseTo(4);
+      }
+      cleanup();
+    }
   });
 
   it("renders each reflection guide as a base + highlight pair", () => {
@@ -1004,20 +1052,27 @@ describe("CanvasSurface — the SVG chrome mount (plan 05, D5)", () => {
     // and marching ants — axis-aligned rectangles sitting exactly on cell
     // boundaries — drew soft grey half-covered pixels on every edge.
     //
-    // The two exceptions are the point of this test. `crispEdges` on a
-    // diagonal or counter-scaled shape does not sharpen it, it makes it a
-    // staircase: the origin cross is sub-pixel geometry inside a
-    // `1/combinedScale` group (and a circle is nothing but curves), and the
-    // reflection guides are drawn at arbitrary angles. A future "make
-    // everything crisp" sweep that deletes the exception block would make
-    // those two visibly worse, so both halves are asserted.
+    // The exceptions are the point of this test. `crispEdges` on a diagonal
+    // or counter-scaled shape does not sharpen it, it makes it a staircase:
+    // the origin cross is sub-pixel geometry inside a `1/combinedScale` group
+    // (and a circle is nothing but curves), and the reflection guides are
+    // drawn at arbitrary angles. A future "make everything crisp" sweep that
+    // deletes the exception block would make them visibly worse, so both
+    // halves are asserted.
+    //
+    // ⚠️ THE MARCHING ANTS JOINED THE EXCEPTIONS on 2026-09-07. They ARE
+    // cell-aligned, but `ScreenWidthPath` counter-scales their stroke to one
+    // screen pixel, making it a FRACTION of a cell in this element's user
+    // space — sub-pixel geometry exactly like the cross's arms. `crispEdges`
+    // would snap that hairline to zero (invisible) or back up to a whole cell,
+    // which is the bug the counter-scale exists to fix.
     const css = readFileSync(
       "src/ui/components/CanvasSurface/CanvasSurface.css",
       "utf8",
     );
     expect(css).toMatch(/\.canvas__svg \{[^}]*shape-rendering: crispEdges/);
     expect(css).toMatch(
-      /\.canvas__svg-origin,\s*\.canvas__svg-guide \{[^}]*shape-rendering: geometricPrecision/,
+      /\.canvas__svg-origin,\s*\.canvas__svg-guide,\s*\.canvas__svg-ants \{[^}]*shape-rendering: geometricPrecision/,
     );
   });
 });

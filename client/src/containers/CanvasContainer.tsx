@@ -178,14 +178,12 @@ import { observer } from "mobx-react-lite";
 import { reaction } from "mobx";
 import {
   ACCENT_PRIMARY_14,
-  ACCENT_VARIANT,
   BLACK_12,
   PREVIEW_ALPHA,
   PREVIEW_RING,
   PREVIEW_RING_WIDTH,
   VARIANT_EDIT_OTHER_DIM,
   VARIANT_EDIT_REGULAR_DIM,
-  WARN_ORANGE_40,
   WARN_ORANGE_60,
 } from "../ui/theme/canvasTokens";
 import { useStores } from "../stores/context";
@@ -230,6 +228,7 @@ import {
   marchingAntsOverlay,
   originCrossOverlay,
   reflectionGuideOverlays,
+  variantBoxOverlay,
 } from "../ui/canvas/svg/chromeOverlay";
 import {
   gridOverlayAttrs,
@@ -437,8 +436,11 @@ const CELL_SCALE = 1;
  */
 const CHROME_STROKE = 2;
 
-/** The object-bounds rectangle's dash, preserved verbatim. */
-const OBJECT_BOUNDS_DASH = [6, 4];
+/* `OBJECT_BOUNDS_DASH` ([6, 4]) lived here until 2026-09-08. Its only user
+   was the orange dashed object-bounds rectangle in `renderChrome`, removed as
+   noise on owner report; `ACCENT_VARIANT` and `WARN_ORANGE_40` went with it,
+   the violet rectangle having moved to SVG chrome. `TRACE_BORDER_DASH` below
+   is a DIFFERENT border — the reference-trace one — and still in use. */
 
 /** The reference-trace border's dash, preserved verbatim. */
 const TRACE_BORDER_DASH = [4, 4];
@@ -1992,20 +1994,27 @@ export const CanvasContainer = observer(function CanvasContainer({
       }
     }
 
-    if (isEditingVariantResolved) {
-      // Object bounds — the dashed orange rectangle showing where the OBJECT
-      // is while a variant that may overhang it is being edited.
-      ctx.strokeStyle = WARN_ORANGE_40;
-      ctx.lineWidth = CHROME_STROKE;
-      ctx.setLineDash(OBJECT_BOUNDS_DASH);
-      ctx.strokeRect(0, 0, objWidth, objHeight);
-      ctx.setLineDash([]);
-
-      // The variant editing area.
-      ctx.strokeStyle = ACCENT_VARIANT;
-      ctx.lineWidth = CHROME_STROKE;
-      ctx.strokeRect(variantOffset.x, variantOffset.y, gridWidth, gridHeight);
-    }
+    // ⚠️ THE TWO VARIANT-EDIT RECTANGLES THAT USED TO BE STROKED HERE ARE
+    // GONE (owner report, 2026-09-08). This is the pair the user actually
+    // sees while editing a variant — do not confuse them with the frame
+    // OVERLAY's border in `drawOverlayCanvas`, which only appears during
+    // onion-skinning and was fixed in the same change.
+    //
+    //  - The ORANGE DASHED object-bounds rectangle (`WARN_ORANGE_40`,
+    //    `OBJECT_BOUNDS_DASH`) is deleted outright: "the edit mode showing all
+    //    layers composed doesn't need those orangey yellow dotted lines,
+    //    useless UX".
+    //
+    //  - The VIOLET variant-area rectangle is still wanted, but not as a
+    //    canvas stroke. This canvas is 1:1 with the pixel data and magnified
+    //    by the CSS `scale(combinedScale)` on `.canvas__layout`, so
+    //    `lineWidth = CHROME_STROKE` was two CELLS — 100 screen px of violet
+    //    at zoom 50, thickening with every zoom step. It is SVG chrome now
+    //    (`variantBox` below → `variantBoxOverlay` → `ScreenWidthPath`),
+    //    which holds it to a 1px hairline on the cell boundary at every zoom.
+    //
+    // Nothing replaces them in this function; the `isEditingVariantResolved`
+    // branch that held them had no other effect.
 
     const offsetX = isEditingVariantResolved ? variantOffset.x : 0;
     const offsetY = isEditingVariantResolved ? variantOffset.y : 0;
@@ -2103,8 +2112,8 @@ export const CanvasContainer = observer(function CanvasContainer({
     drawStartPoint,
     gridWidth,
     gridHeight,
-    objWidth,
-    objHeight,
+    // `objWidth` / `objHeight` left this list on 2026-09-08: their only reader
+    // in this callback was the orange object-bounds `strokeRect`, now removed.
     selection,
     previewSelection,
     isEditingVariantResolved,
@@ -3874,11 +3883,26 @@ export const CanvasContainer = observer(function CanvasContainer({
       ctx.drawImage(tempCanvas, drawX, drawY);
       ctx.globalAlpha = 1;
 
-      ctx.strokeStyle = mode.borderColor;
-      ctx.lineWidth = CHROME_STROKE;
-      ctx.setLineDash([...mode.borderDash]);
-      ctx.strokeRect(drawX, drawY, refObjWidth, refObjHeight);
-      ctx.setLineDash([]);
+      // ⚠️ NO BORDER IS STROKED HERE ANY MORE — both dashed rectangles that
+      // used to close this function are gone (owner report, 2026-09-08).
+      //
+      // #8's violet box is still wanted, but not like this: `lineWidth = 2`
+      // and `setLineDash([6, 6])` on a 1:1 canvas magnified by the CSS
+      // `scale(combinedScale)` meant two CELLS wide with a six-cell dash —
+      // 100 screen px at zoom 50, straddling the artwork on both sides of
+      // every edge. It is SVG chrome now (`variantBoxOverlay` in
+      // `ui/canvas/svg/chromeOverlay`), rendered through `CanvasSurface`'s
+      // `ScreenWidthPath` so it stays a 1px hairline on the cell boundary at
+      // every zoom — the same treatment the selection box got on 2026-09-07,
+      // which is exactly what the owner asked for.
+      //
+      // #9's amber box is gone outright: "the edit mode showing all layers
+      // composed doesn't need those orangey yellow dotted lines, useless UX".
+      // The trace's own pixels still render — only its border was dropped.
+      //
+      // `mode.borderColor` / `mode.borderDash` were removed from both mode
+      // objects in `renderFrameOverlay.ts` in the same change; nothing reads
+      // them now.
     },
     [
       app.domain,
@@ -5986,6 +6010,60 @@ export const CanvasContainer = observer(function CanvasContainer({
     reflectionTick,
   ]);
 
+  /**
+   * The violet box around the variant's edit area.
+   *
+   * ⚠️ THIS REPLACES A `strokeRect` IN `renderChrome`, NOT the one in
+   * `drawOverlayCanvas`. Getting these two confused is the reason the first
+   * attempt at this fix changed nothing the owner could see, so both are named
+   * here:
+   *
+   *  - `renderChrome`'s pair — an `ACCENT_VARIANT` rectangle at
+   *    `variantOffset` plus a `WARN_ORANGE_40` dashed object-bounds rectangle
+   *    — is what shows while a variant is being EDITED, which is the state the
+   *    owner reported against. That is the code this memo replaces; the orange
+   *    one is deleted rather than ported.
+   *  - `drawOverlayCanvas`'s border belongs to the frame OVERLAY (onion skin)
+   *    and only appears when an overlay frame is on.
+   *
+   * Both were `lineWidth = CHROME_STROKE` on a canvas that is 1:1 with the
+   * pixel data and magnified by the CSS `scale(combinedScale)`, so the stroke
+   * was two CELLS wide and grew with the zoom. As SVG chrome this goes through
+   * `CanvasSurface`'s `ScreenWidthPath`, which counter-scales width and dash
+   * by `1 / combinedScale` and holds the 1px hairline the owner asked for.
+   *
+   * ── The geometry, and why it is shifted ───────────────────────────────────
+   *
+   * `renderChrome` drew this INSIDE a `ctx.translate(-viewMinX, -viewMinY)`,
+   * so its `(variantOffset.x, variantOffset.y)` was in WORLD space and the
+   * translate moved it into view space. The SVG has no such transform — its
+   * user units are the view's own cells — so the shift is applied here
+   * instead. Dropping it would misplace the box by the view origin on every
+   * variant that overhangs the object, which is exactly the case it exists to
+   * mark.
+   *
+   * The gate is `isEditingVariantResolved`, verbatim from the branch this
+   * replaces: it is already false in Layer mode, where the view IS the
+   * editable grid at the origin and a box around the whole canvas would be
+   * noise.
+   */
+  const variantBox = useMemo(() => {
+    if (!isEditingVariantResolved) return null;
+    return variantBoxOverlay({
+      x: variantOffset.x - viewMinX,
+      y: variantOffset.y - viewMinY,
+      width: gridWidth,
+      height: gridHeight,
+    });
+  }, [
+    isEditingVariantResolved,
+    variantOffset,
+    viewMinX,
+    viewMinY,
+    gridWidth,
+    gridHeight,
+  ]);
+
   const onNudgeOffset =
     !layerMode && editingVariant
       ? (dx: number, dy: number, allFrames: boolean) =>
@@ -6051,6 +6129,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       grid={gridPath}
       lasso={lasso}
       marchingAnts={marchingAnts}
+      variantBox={variantBox}
       originCross={originCross}
       reflectionGuides={reflectionGuides}
       onMouseDown={handleMouseDown}

@@ -393,15 +393,31 @@ describe("overlayVariantFrameIndices", () => {
 });
 
 describe("mode constants stay as the originals had them", () => {
-  it("frame overlay: 0.4 opacity, purple dashed [6,6] border", () => {
+  it("frame overlay keeps its 0.4 opacity", () => {
     expect(FRAME_OVERLAY_MODE.opacity).toBe(0.4);
-    expect(FRAME_OVERLAY_MODE.borderColor).toBe("rgba(139, 92, 246, 0.6)");
-    expect(FRAME_OVERLAY_MODE.borderDash).toEqual([6, 6]);
   });
 
-  it("trace overlay: 0.5 opacity, amber dashed [4,4] border", () => {
+  it("trace overlay keeps its 0.5 opacity", () => {
     expect(FRAME_TRACE_MODE.opacity).toBe(0.5);
-    expect(FRAME_TRACE_MODE.borderColor).toBe("rgba(255, 171, 0, 0.6)");
-    expect(FRAME_TRACE_MODE.borderDash).toEqual([4, 4]);
+  });
+
+  /*
+    ⚠️ THE BORDER ASSERTIONS THAT USED TO SIT HERE ARE DELETED, NOT RELAXED.
+
+    They pinned `borderColor` / `borderDash` on both modes. Neither field
+    exists any more (2026-09-08): neither was ever drawn by this module — the
+    consumer read them and stroked the rectangle itself — and on a 1:1 canvas
+    under a CSS scale that stroke was cells wide, not pixels.
+
+    #8's violet box moved to `variantBoxOverlay` in `ui/canvas/svg/
+    chromeOverlay`, where `chromeOverlay.test.ts` pins its colour and dash.
+    #9's amber box was removed as noise. Re-adding either field here without
+    a consumer would recreate the dead code this change removed.
+  */
+  it("neither mode carries border styling any more", () => {
+    expect(FRAME_OVERLAY_MODE).not.toHaveProperty("borderColor");
+    expect(FRAME_OVERLAY_MODE).not.toHaveProperty("borderDash");
+    expect(FRAME_TRACE_MODE).not.toHaveProperty("borderColor");
+    expect(FRAME_TRACE_MODE).not.toHaveProperty("borderDash");
   });
 });

@@ -29,6 +29,9 @@ import {
   marchingAntsOverlay,
   originCrossOverlay,
   reflectionGuideOverlays,
+  variantBoxOverlay,
+  VARIANT_BOX_DASH,
+  VARIANT_BOX_STROKE,
   type SvgPathSpec,
   type SvgStrokeAttrs,
 } from "@/ui/canvas/svg/chromeOverlay";
@@ -245,16 +248,44 @@ describe("marchingAntsOverlay", () => {
     expect(outer.d).toBe("M13 25h4v3h-4Z");
   });
 
-  it("keeps the two-pass phase trick: cyan 2px, white 1px offset by half a period", () => {
+  it("keeps the two-pass phase trick: cyan and white, offset by half a period", () => {
     const { outer, inner } = marchingAntsOverlay(BOX, 0, 0);
     expect(outer.attrs.stroke).toBe(SELECTION_COLOR);
-    expect(outer.attrs["stroke-width"]).toBe(2);
     expect(outer.attrs["stroke-dasharray"]).toBe("4 4");
 
     expect(inner.attrs.stroke).toBe(WHITE);
-    expect(inner.attrs["stroke-width"]).toBe(1);
     expect(inner.attrs["stroke-dasharray"]).toBe("4 4");
     expect(inner.attrs["stroke-dashoffset"]).toBe(4);
+  });
+
+  /**
+   * The occlusion fix, HALF of it. This module emits `1` in CELL units;
+   * `CanvasSurface`'s `ScreenWidthPath` counter-scales it by
+   * `1 / combinedScale` to make it one SCREEN pixel. `non-scaling-stroke`
+   * does NOT do that here — see the module header's correction.
+   *
+   * What this pins is that the two widths are EQUAL and nominal-1. Equal
+   * because the strokes share one path and differ only in colour and dash
+   * phase: an unequal pair puts the white in a groove inside a thicker cyan
+   * line instead of alternating with it along a single hairline.
+   */
+  it("emits both strokes at an equal nominal width of 1", () => {
+    const { outer, inner } = marchingAntsOverlay(BOX, 0, 0);
+    expect(outer.attrs["stroke-width"]).toBe(1);
+    expect(inner.attrs["stroke-width"]).toBe(1);
+  });
+
+  /**
+   * `vector-effect` is kept on both specs even though it is inert against an
+   * ancestor CSS transform (header correction): it costs nothing, and it
+   * becomes correct if the transform ever moves inside the SVG. It is NOT
+   * what makes the box zoom-independent today — `ScreenWidthPath` is.
+   */
+  it("still declares non-scaling-stroke on both passes", () => {
+    const { outer, inner } = marchingAntsOverlay(BOX, 0, 0);
+    for (const spec of [outer, inner]) {
+      expect(spec.attrs["vector-effect"]).toBe("non-scaling-stroke");
+    }
   });
 });
 
@@ -549,5 +580,68 @@ describe("zoom independence", () => {
       0,
     );
     expect(outer.d).toBe("M0 0h4v4h-4Z");
+  });
+});
+
+describe("variantBoxOverlay — the violet variant edit box", () => {
+  it("is emitted in CELL space: a 16x16 object spans 16 user units", () => {
+    // The whole point of the move off the overlay canvas. A surviving `* zoom`
+    // would make this "h800" at zoom 50, which is the defect being fixed.
+    const spec = variantBoxOverlay({ x: 0, y: 0, width: 16, height: 16 });
+    expect(spec.d).toBe("M0 0h16v16h-16Z");
+  });
+
+  it("lands ON the cell boundary — no half-pixel offset", () => {
+    // "Between pixels" (owner, 2026-09-08): the corners are cell corners, so
+    // the stroke straddles the seam rather than sitting on a cell. The `+ 0.5`
+    // the canvas painters baked in is deliberately absent — see the module
+    // header.
+    const spec = variantBoxOverlay({ x: 3, y: 5, width: 2, height: 4 });
+    expect(spec.d).toBe("M3 5h2v4h-2Z");
+  });
+
+  it("asks for a 1px stroke and a 6px dash, both SCREEN units", () => {
+    // These are the numbers `ScreenWidthPath` counter-scales by
+    // `1 / combinedScale`. The stroke is 1 — the canvas version's `lineWidth`
+    // was 2, and 2 CELLS is what covered the artwork.
+    const spec = variantBoxOverlay({ x: 0, y: 0, width: 1, height: 1 });
+    expect(VARIANT_BOX_STROKE).toBe(1);
+    expect(VARIANT_BOX_DASH).toBe(6);
+    expect(spec.attrs["stroke-width"]).toBe(VARIANT_BOX_STROKE);
+    expect(spec.attrs["stroke-dasharray"]).toBe("6 6");
+  });
+
+  it("keeps the violet the canvas version had", () => {
+    // The owner kept the BOX; only its rendering was wrong.
+    const spec = variantBoxOverlay({ x: 0, y: 0, width: 1, height: 1 });
+    expect(spec.attrs.stroke).toBe(ACCENT_VARIANT);
+    expect(spec.attrs.fill).toBe("none");
+  });
+
+  it("carries the variant offset, shifted into VIEW space", () => {
+    // The geometry `renderChrome` used to get from `ctx.translate(-viewMinX,
+    // -viewMinY)` wrapped around a `strokeRect(variantOffset.x,
+    // variantOffset.y, …)`. The SVG has no such transform, so the caller
+    // subtracts the view origin itself. This pins the arithmetic that
+    // replaces the translate: a variant at world (2,3) in a view whose origin
+    // is (-4,-1) draws at (6,4).
+    const spec = variantBoxOverlay({
+      x: 2 - -4,
+      y: 3 - -1,
+      width: 10,
+      height: 10,
+    });
+    expect(spec.d).toBe("M6 4h10v10h-10Z");
+  });
+
+  it("is scale-agnostic: the module takes no zoom and cannot vary with one", () => {
+    // The same invariant the ants carry. This function has no scale parameter
+    // at all, so the guard is that its output is a pure function of the box —
+    // any future `* zoom` would have to change the signature to compile.
+    const box = { x: 2, y: 2, width: 8, height: 8 };
+    const first = variantBoxOverlay(box);
+    const second = variantBoxOverlay({ ...box });
+    expect(second.d).toBe(first.d);
+    expect(second.attrs).toEqual(first.attrs);
   });
 });

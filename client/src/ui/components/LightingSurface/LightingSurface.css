@@ -96,12 +96,29 @@
    browser smooths the upscale and a crisp normal map becomes a blurry mess.
    Never remove it. The `crisp-edges` line below is the Firefox fallback and
    must stay paired with it. Same for `.lighting-canvas__overlay`. */
+/* ⚠️ NO BORDER, NO RADIUS, NO SHADOW — the same rule `.canvas__frame` carries
+   in `CanvasSurface.css`, and for the same reason.
+
+   Reported 2026-08-31 against the pixel studio: "the edit area has bizarre
+   weird borders around it. I don't want borders or chrome on the edit area".
+   That change stripped the border, radius and shadow from `.canvas__frame`
+   and the four compensating `2px solid transparent` borders beneath it — but
+   it never reached this sheet, so the lighting studio kept a rounded corner
+   and an inset ring around its artwork while the pixel studio had none.
+   Reported again 2026-09-08: the chrome must be the SAME across studio types,
+   which means absent in both.
+
+   Unlike `.canvas__frame` this is a one-element change: nothing in this sheet
+   ever carried a compensating border, because the radius and shadow here were
+   drawn INSIDE the element's box and displaced nothing. `.lighting-canvas__
+   overlay` and the SVG chrome are positioned at this element's border-box
+   origin and stay in register. If chrome is ever reintroduced here, it has to
+   be reintroduced in `CanvasSurface.css` too, or the two studios diverge
+   again. */
 .lighting-canvas__edit-canvas {
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border-radius: var(--radius-sm);
-  box-shadow: var(--inset-panel);
   cursor: crosshair;
 }
 

@@ -360,9 +360,20 @@
    circle are sub-pixel geometry in the parent's space — a circle in particular
    is nothing but curves. The reflection guides are drawn at arbitrary angles.
    Neither sits on a cell boundary, so neither is what the "no antialiasing"
-   report was about; both want the default. */
+   report was about; both want the default.
+
+   ⚠️ THE MARCHING ANTS JOINED THEM, and for the same reason as the cross even
+   though they ARE axis-aligned. Their stroke width is counter-scaled by
+   `1/combinedScale` (see `ScreenWidthPath`) to hold it at one SCREEN pixel, so
+   in this element's user space it is a FRACTION of a cell — sub-pixel geometry
+   exactly like the cross's arms. `crispEdges` snaps edges to whole device
+   pixels, which rounds that hairline to zero (invisible) or back up to a whole
+   cell (the bug it was counter-scaled to fix). The 2026-08-30 blur report was
+   about cell-WIDE chrome with soft edges; a deliberate one-screen-pixel line
+   is not that. */
 .canvas__svg-origin,
-.canvas__svg-guide {
+.canvas__svg-guide,
+.canvas__svg-ants {
   shape-rendering: geometricPrecision;
 }
 

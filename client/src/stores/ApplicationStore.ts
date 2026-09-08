@@ -40,6 +40,7 @@ import {
   type SyncControllerOptions,
 } from "./session/SyncController";
 import { SyncClient, type ProjectSavedEvent } from "../api";
+import { clearThumbnailCache } from "../ui/canvas/thumbnailCache";
 import { DomainStore, type ProjectHost } from "./domain/DomainStore";
 import { DomainMutator, type DomainMirror } from "./domain/DomainMutator";
 import { UIStore } from "./ui/UIStore";
@@ -439,6 +440,18 @@ export class ApplicationStore {
    */
   private readonly disposePoseReaction: () => void;
 
+  /**
+   * Stops the `loadGeneration` → `clearThumbnailCache()` reaction; run by
+   * {@link ApplicationStore.dispose}.
+   */
+  private readonly disposeThumbnailCacheReaction: () => void;
+
+  /**
+   * Stops the "a variant layer was selected" → `presentVariantPanes()`
+   * reaction; run by {@link ApplicationStore.dispose}.
+   */
+  private readonly disposeVariantPanesReaction: () => void;
+
   readonly options: Readonly<{
     api: unknown;
     autoSaveEnabled: boolean;
@@ -566,6 +579,15 @@ export class ApplicationStore {
       () => this.domain.loadGeneration,
       () => this.pose.clear(),
     );
+    // The thumbnail LRU is keyed by LAYER ID, and layer ids are unique within
+    // a project, not across projects. A fresh install must therefore drop it —
+    // the same `loadGeneration` signal, and NOT `adoptProject`, which also
+    // runs on snapshot undo/redo where the cached thumbnails are still valid
+    // for the ids they name (`pixelVersion` moves them along anyway).
+    this.disposeThumbnailCacheReaction = reaction(
+      () => this.domain.loadGeneration,
+      () => clearThumbnailCache(),
+    );
     // ── task 38: the NATIVE sinks — the hosted `uiState` replaces Zustand ──
     //
     // During the bridge era these wrote the Zustand SOURCE and the bridge
@@ -650,6 +672,55 @@ export class ApplicationStore {
     });
     this.timelineUI = timelineUI;
     this.selection = timelineUI;
+
+    // ⚠️ THIS REACTION MUST BE CREATED AFTER `this.selection` IS ASSIGNED,
+    // WHICH IS THE LINE ABOVE — do not move it up with the other three.
+    //
+    // `reaction` evaluates its tracked expression EAGERLY, at construction.
+    // The expression here reaches `this.currentLayer`, which reads
+    // `this.currentFrame` and then `this.selection.selectedLayerId`; with the
+    // reaction created alongside the `loadGeneration` ones it ran while
+    // `this.selection` was still undefined and threw
+    // `Cannot read properties of undefined (reading 'selectedObjectId')` on
+    // every construction. MobX swallows that into an "uncaught exception in
+    // Reaction" log rather than failing, so the suite stayed green and only
+    // the console showed it — measured 2026-09-08.
+    //
+    // Selecting a VARIANT layer opens both canvas panes with the variant's own
+    // canvas LEFT and the composite view RIGHT (owner report, 2026-09-08:
+    // "the default editor should be the variant canvas and NOT the composed
+    // view on the left, BUT the composed view should be automatically opened
+    // and on the right as the default").
+    //
+    // ⚠️ WHY A REACTION HERE AND NOT A CALL IN `selectLayer`.
+    //
+    // `TimelineUIStore` owns the selection, but it reaches the rest of the app
+    // only through the injected `TimelineContext` callbacks — deliberately, so
+    // that no store type crosses that boundary (see its header). Handing it a
+    // `canvasViews` reference to call would be the exact cross-module edge
+    // task 28 exists to remove. A layer is also selected from more than one
+    // place — the layer panel, the timeline's carry-over ladder in
+    // `selectFrame`, variant creation — and a reaction on the SELECTION covers
+    // all of them, where a call site would have to be repeated in each and
+    // would silently miss the next one added.
+    //
+    // The tracked expression is the selected layer's `isVariant`, NOT the
+    // layer id: it fires when the selection ARRIVES on a variant layer and
+    // stays quiet while the user moves between variant layers, so the panes
+    // are arranged once rather than re-imposed on every click. Moving to a
+    // normal layer sets it false and leaves the panes exactly as they are —
+    // this reaction never closes a pane.
+    //
+    // `fireImmediately` is deliberately OFF. A project that loads with a
+    // variant layer already selected must come back to the single Full pane a
+    // reload has always shown (this store persists nothing); rearranging the
+    // panes is a response to the user's act of selecting, not to a restore.
+    this.disposeVariantPanesReaction = reaction(
+      () => this.currentLayer?.isVariant === true,
+      (isVariant) => {
+        if (isVariant) this.canvasViews.presentVariantPanes();
+      },
+    );
     this.ui = new UIStore({
       session: this.session,
       selection: timelineUI,
@@ -1891,6 +1962,8 @@ export class ApplicationStore {
     this.autoSave?.dispose();
     this.disposeReflectionReaction();
     this.disposePoseReaction();
+    this.disposeThumbnailCacheReaction();
+    this.disposeVariantPanesReaction();
     this.syncClient?.dispose();
     this.ui.dispose();
     this.referenceUI.dispose();
