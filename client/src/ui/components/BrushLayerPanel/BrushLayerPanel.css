@@ -1,0 +1,256 @@
+/* brush-layer-panel — BEM block (Brush Studio plan, task 12; MASTER D24).
+
+   The brush-mode layer list. Copied structurally from LayerPanel.css with the
+   variant / squash / drag rules removed, plus the channel badge. The same
+   block's portalled menu elements (`__menu*`) live in BrushChannelMenu.css,
+   split out only to keep each sheet under the ~300-line guideline. */
+
+.brush-layer-panel {
+  flex-shrink: 0;
+}
+
+/* elements, DOM order */
+
+.brush-layer-panel__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.brush-layer-panel__header-btn {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  padding: 0;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-primary);
+  border: none;
+  color: var(--white);
+}
+
+.brush-layer-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.brush-layer-panel__item {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-1-5) var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+.brush-layer-panel__item:hover {
+  background: var(--bg-hover);
+}
+
+.brush-layer-panel__visibility-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.brush-layer-panel__visibility-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: var(--text-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.brush-layer-panel__visibility-btn:hover {
+  border-color: var(--accent-primary);
+}
+
+.brush-layer-panel__main-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.brush-layer-panel__label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  width: 100%;
+}
+
+/* The badge is the menu trigger: a small labelled chip, colour-coded per
+   channel by the `--<type>` modifiers below. */
+.brush-layer-panel__channel-badge {
+  flex-shrink: 0;
+  padding: var(--space-px) var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-60);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.3px;
+  line-height: var(--leading-snug);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.brush-layer-panel__channel-badge:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.brush-layer-panel__name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-81);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brush-layer-panel__name-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-0-5) var(--space-1-5);
+  font-size: var(--text-81);
+}
+
+.brush-layer-panel__group-badge {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: var(--space-px) var(--space-1);
+  font-size: var(--text-60);
+  background: var(--accent-variant-30);
+  border-radius: var(--radius-base);
+  color: var(--accent-variant-light);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.brush-layer-panel__actions {
+  display: flex;
+  gap: var(--space-0-5);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  align-self: flex-start;
+}
+
+.brush-layer-panel__item:hover .brush-layer-panel__actions {
+  opacity: 1;
+}
+
+/* iOS two-tap trap (see LayerPanel.css): on a device with no hover there is
+   nothing to reveal, so keep the strip visible. */
+@media (hover: none) {
+  .brush-layer-panel__actions {
+    opacity: 1;
+  }
+}
+
+.brush-layer-panel__action-btn {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: var(--text-px-9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.brush-layer-panel__action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.brush-layer-panel__action-btn:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.brush-layer-panel__empty {
+  text-align: center;
+  padding: var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* modifiers */
+
+.brush-layer-panel__header-btn--open {
+  background: var(--accent-secondary);
+}
+
+.brush-layer-panel__item--selected {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-10);
+}
+
+.brush-layer-panel__visibility-btn--visible {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+/* One colour per channel family, so a glance down the stack reads the types. */
+.brush-layer-panel__channel-badge--hsl {
+  background: var(--accent-variant-20);
+  border-color: var(--accent-variant-30);
+  color: var(--accent-variant-light);
+}
+
+.brush-layer-panel__channel-badge--rgb {
+  background: var(--accent-primary-20);
+  border-color: var(--accent-primary-30);
+  color: var(--accent-primary);
+}
+
+.brush-layer-panel__channel-badge--normal {
+  background: var(--accent-info-20);
+  border-color: var(--accent-info-30);
+  color: var(--accent-info-light);
+}
+
+.brush-layer-panel__channel-badge--heightmap {
+  background: var(--accent-warning-20);
+  border-color: var(--accent-warning-30);
+  color: var(--accent-warning);
+}
+
+.brush-layer-panel__channel-badge--open {
+  border-color: var(--accent-primary);
+  box-shadow: var(--ring-accent);
+}
+
+.brush-layer-panel__action-btn--danger:hover:not(:disabled) {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
