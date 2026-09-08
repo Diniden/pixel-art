@@ -1,8 +1,8 @@
 # HANDOFF — Brush Studio
 
-**Current position:** W6 IN PROGRESS (W1–W5 code-complete; W1/W2 manual checks owed, see Notes)
+**Current position:** W7 IN PROGRESS (W1–W6 code-complete; W1/W2/W6 manual checks owed, see Notes)
 **Branch:** `feat/01-brush-studio` (cut 2026-09-08 from `feat/09-ipad-pencil-fixes` @ `3845480`)
-**Last commit:** `6de0317` (W5)
+**Last commit:** `f2474d3` (W6)
 
 Planned 2026-08-29 from `feat/rail-layout-controls` @ `37a4bce` with a dirty worktree (103
 uncommitted files of unrelated in-flight work — see MASTER §4). Executors stage only their
@@ -17,8 +17,8 @@ uncommitted files of unrelated in-flight work — see MASTER §4). Executors sta
 | W3 | 07, 10 | DONE | 2026-09-08 | `fe9ee25` | tsc clean · eslint 0 err/65 warn · vitest 173 files, 3549 tests pass (W2: 170/3480), no snapshot diff · boundaries OK · no lockfile |
 | W4 | 08, 09 | DONE | 2026-09-08 | `ea4d592` | tsc clean · eslint 0 err/66 warn (+1 `max-lines` on `BrushStructureStore.ts`, same as the other domain stores) · vitest 175 files, 3647 tests pass (W3: 173/3549), no snapshot diff · perf: 100-write drag on 64×64 worst 1.372 ms, undo 0.587 ms, redo 0.556 ms (budget 16 ms) · boundaries OK · no lockfile |
 | W5 | 11 | DONE | 2026-09-08 | `6de0317` | tsc clean · eslint 0 err/66 warn · vitest 176 files, 3658 tests pass (W4: 175/3647), no snapshot diff · boundaries OK · no lockfile. (Was BLOCKED on the dirty `ApplicationStore.ts`; owner committed it as `be92287`; W4 gate re-run green on that HEAD before dispatch.) |
-| W6 | 16, 17, 18 | IN PROGRESS | 2026-09-08 | | |
-| W7 | 19 | TODO | | | |
+| W6 | 16, 17, 18 | PARTIAL (code DONE, gate green; manual checks deferred to W7/19 by design — nothing mounted yet) | 2026-09-08 | `f2474d3` | tsc clean · eslint 0 err/66 warn · vitest 177 files, 3703 tests pass (W5: 176/3658), no snapshot diff · boundaries OK · stylelint 2 errors = `OtherHand.css` baseline, 0 new · no lockfile |
+| W7 | 19 | IN PROGRESS | 2026-09-08 | | |
 | W8 | 20 | TODO | | | |
 | W9 | 21 | TODO | | | |
 | W10 | 22 | TODO | | | |
@@ -101,6 +101,27 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   bare `HistoryStore` call. **Design consequence to keep in mind (19/22):** both autosave
   controllers share `SessionStore` — they write the same `saveStatus` dot and `BrushStore` flows
   toggle the same `saveSuspended` the project controller reads.
+- **W6/16 — rendering model differs from the task text (task predates plan 05):** `CanvasSurface`
+  is now 1:1 with `combinedScale` doing magnification, checkerboard is CSS, grid is SVG — so no
+  `renderNormalEdit`/`paintCheckerboard`/`strokeGrid`. The frame is an `ImageData` from
+  `renderBrushFrame`, `putImageData` onto one layer canvas, `combinedScale = brushUI.zoom`, grid
+  via `gridOverlayPath` at zoom ≥ 8. Shape preview is painted into the frame render. Inert set is
+  broader (also `reflection`, `pose`, `normal-pencil`, `auto-normal`, `height-map`). Camera:
+  ctrl/meta+wheel zoom, plain wheel pan, two-finger pinch zoom; **space/middle-drag pan omitted**.
+  Window-level `mouseup` ends strokes. 45 unit tests drive the real `toolHandlers`. 497 raw lines
+  (under `max-lines` after moving geometry into `containers/brush/`).
+- **W6/17 —** rail `thumbnailRevision = (pixelVersion + domainVersion) * 65536 + selectedFrameIndex`
+  (frame selection bumps no counter). Studio panel composed from primitives (`Panel`,
+  `SliderWithNumber`, `Field`, `Button`), with Pencil **and Eraser** sections; stroke section is
+  a lowercase render helper (react-refresh lint). Layer panel container returns `null` with no
+  document. Modal container omits the `container?` prop.
+- **W6/18 —** `TimelineView` has no frame-op props, so the five frame buttons (add / duplicate /
+  delete / left / right) render in the `viewModeDropdown` slot beside a static "Timeline" label,
+  styled with `timeline-view__action-btn`. **Task 19/22 may lift this into a pure `ui/` component.**
+  Thumbnail cache not used (no `cacheKey` on `TimelineCell`; layer ids are uniform across frames
+  so an id key would collide). Drag callbacks are inert no-ops (a drag ghost still appears).
+  `onOpenPreview` no-op. Header ops keyed by layer NAME (pure component contract). No unit test
+  (no precedent to copy). Root wrapped in `.frame-timeline` for CSS parity.
 - **Coordinator —** cut `feat/01-brush-studio` from `feat/09-ipad-pencil-fixes` instead of staying
   on the 09 branch: every prior plan in this repo has its own `feat/NN-*` branch.
 
@@ -119,6 +140,14 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   with working "Back to Pixel Studio", project intact; (3) hotkey from pixel↔lighting, from brush →
   pixel; (4) reload while in brush mode boots into the placeholder and Back works; (5) iPad: the
   new button is tappable.
+- **Manual checks owed for W6 (need task 19's mount; fold into the W7 sweep):** 16 — pencil at
+  delta 0 paints 127-grey, L=+255 renders blue-ish; eraser clears; line/rect/ellipse preview then
+  commit; ⌘Z undoes one whole stroke; 100-cell drag at zoom 16 smooth (< 16 ms frames);
+  StrictMode does not double-record; hover marker, wheel/pinch zoom, cursor switching.
+  17 — rail thumbnail repaints on frame step and brush switch; delta sliders follow the selected
+  layer's channel type; primitives-based Max/Shape buttons look acceptable in the rail.
+  18 — playback cycles at 200 ms and stops; edit during playback keeps playing; frame
+  add/dup/delete/swap and layer swap/rename from the header; thumbnails repaint on edit.
 - **Manual checks owed for W2 (Storybook, `bun run storybook` → http://localhost:6006):**
   12 — channel menu renders *above* the panel un-clipped (jsdom proves the portal, not layout);
   keyboard nav and inline rename felt in a real browser. 13 — visual look only (name validation,
