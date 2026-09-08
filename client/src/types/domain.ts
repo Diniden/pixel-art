@@ -477,7 +477,7 @@ export type Tool =
   | "auto-normal"
   | "height-map";
 
-export type StudioMode = "pixel" | "lighting";
+export type StudioMode = "pixel" | "lighting" | "brush";
 
 export interface SelectionBox {
   x: number;
