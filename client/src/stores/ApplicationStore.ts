@@ -39,8 +39,12 @@ import {
   SyncController,
   type SyncControllerOptions,
 } from "./session/SyncController";
-import { SyncClient, type ProjectSavedEvent } from "../api";
+import { SyncClient, brushApi, type ProjectSavedEvent } from "../api";
 import { clearThumbnailCache } from "../ui/canvas/thumbnailCache";
+import { BrushStore } from "./domain/BrushStore";
+import { BrushStructureStore } from "./domain/BrushStructureStore";
+import { BrushPixelStore } from "./domain/BrushPixelStore";
+import { BrushUIStore } from "./ui/BrushUIStore";
 import { DomainStore, type ProjectHost } from "./domain/DomainStore";
 import { DomainMutator, type DomainMirror } from "./domain/DomainMutator";
 import { UIStore } from "./ui/UIStore";
@@ -71,6 +75,7 @@ import { createSnapshotCommand } from "./history/commands";
 import type { Command, SnapshotHost } from "./history/commands";
 import type { HistoryStore } from "./history/HistoryStore";
 import type {
+  BrushDocument,
   Color,
   CurrentVariant,
   Frame,
@@ -134,6 +139,13 @@ export interface ApplicationStoreOptions {
   projectHost?: ProjectHost;
   /** Auto-save transport/clock overrides for tests. */
   autoSave?: AutoSaveControllerOptions;
+  /**
+   * The BRUSH auto-save's transport/clock overrides for tests (Brush Studio
+   * task 11). Separate from `autoSave` because the two controllers save
+   * different document types through different transports; MSW errors on an
+   * unhandled request, so a test that edits a brush injects a spy `save`.
+   */
+  brushAutoSave?: AutoSaveControllerOptions<BrushDocument>;
   /**
    * Where a committed domain mutation is published for the not-yet-migrated
    * Zustand consumers (task 23). Defaults to the Zustand mirror; tests
@@ -356,6 +368,34 @@ export class ApplicationStore {
    * `LightingUIStore`'s header.
    */
   readonly lightingUI: LightingUIStore;
+
+  /* ── Brush Studio (docs/01-brush-studio, task 11; MASTER D7/D10/D11) ──── */
+  /**
+   * The brush studio's session state: selected frame/layer, the delta vector
+   * the tools paint, the brush canvas camera, the play flag. Nothing here is
+   * persisted. It is ALSO the selection source/sink the two brush behaviour
+   * stores are wired to, and the sink of `BrushStore`'s `onDocumentInstalled`
+   * callback — so it is constructed before `brushes`.
+   */
+  readonly brushUI: BrushUIStore;
+  /**
+   * The loaded brush document and its lifecycle, with its OWN `HistoryStore`
+   * (D7). `brushes.init()` is deliberately NOT called here — the brush
+   * studio container calls it on entering brush mode, so a pixel-studio boot
+   * (and every test) makes no brush request.
+   */
+  readonly brushes: BrushStore;
+  /** Structural brush edits (frames, layers, applied groups, resize). */
+  readonly brushStructure: BrushStructureStore;
+  /** Cell writes on the selected brush layer. */
+  readonly brushPixels: BrushPixelStore;
+  /**
+   * The SECOND auto-save controller (D11), saving `brushes` through
+   * `brushApi.save`. `null` when `autoSaveEnabled: false`, exactly like
+   * `autoSave`. Shares `session` (status dot, `saveSuspended`) with the
+   * project controller.
+   */
+  readonly brushAutoSave: AutoSaveController<BrushDocument> | null;
 
   /**
    * Task 29: the reference-image + trace-overlay slice, and the replacement
@@ -894,6 +934,36 @@ export class ApplicationStore {
       publish: options.selectionPublisher ?? (() => {}),
     });
 
+    // ── Brush Studio (task 11): the four brush stores ──────────────────────
+    //
+    // Appended after every pixel-studio store — none of them is needed by
+    // anything above, and they need nothing above but `session`. Within the
+    // block the order IS load-bearing: `brushUI` first, because `BrushStore`
+    // takes it as the `onDocumentInstalled` sink, and the two behaviour
+    // stores take it as their selection source/sink (the `FrameStore` /
+    // `LayerStore` injection pattern — `stores/domain/**` may not import
+    // `stores/ui/**`).
+    //
+    // `onDocumentInstalled` fires from `BrushStore.adoptDocument`, the SINGLE
+    // writer of `document` (install, replace, commit, undo/redo restore all
+    // funnel through it), so the UI selection is re-seated on every document
+    // change without a separate `reaction` here.
+    const brushUI = new BrushUIStore();
+    this.brushUI = brushUI;
+    this.brushes = new BrushStore({
+      session: this.session,
+      onDocumentInstalled: (doc) => brushUI.adoptDocument(doc),
+    });
+    this.brushStructure = new BrushStructureStore({
+      brush: this.brushes,
+      source: brushUI,
+      select: brushUI,
+    });
+    this.brushPixels = new BrushPixelStore({
+      brush: this.brushes,
+      source: brushUI,
+    });
+
     makeObservable(this, {
       currentObject: computed,
       currentFrame: computed,
@@ -912,6 +982,8 @@ export class ApplicationStore {
       // (`colorTarget`, `selectedColor`, `fillColor`), so it re-evaluates
       // when either slot or the target changes and is memoised in between.
       activeColor: computed,
+      // Brush Studio task 11 (D10): which undo stack ⌘Z drives.
+      activeHistory: computed,
     });
 
     // The save reaction — constructed LAST so it observes fully-built stores.
@@ -932,6 +1004,42 @@ export class ApplicationStore {
           this.history,
           options.autoSave,
           this.ui,
+        )
+      : null;
+
+    // ── Brush Studio (task 11, D11): the SECOND auto-save controller ───────
+    //
+    // Same class, a different document: the trigger is `BrushStore`'s
+    // `[loadGeneration, domainVersion, pixelVersion]` (no UI source — nothing
+    // brush-studio is persisted), gated by `brushes.loadState === "loaded"`
+    // and `brushes.history.isReplaying`, and the transport is `brushApi.save`.
+    //
+    // ⚠️ Replay DOES schedule a brush save, and that is accepted (HANDOFF
+    // W3/07(g), W4/09). Brush undo/redo restores bump `domainVersion` /
+    // `pixelVersion` (the brush canvas has no dirty channel; it redraws from
+    // the counter), so once `isReplaying` clears the counters sit past the
+    // last-saved baseline and the controller debounces a save of the
+    // restored document. That save is CORRECT — the file on disk ends up
+    // matching what the owner sees after ⌘Z — and it costs one debounced
+    // request per undo burst. Gating it away would leave an undone brush
+    // unsaved until the next edit, which is the worse outcome.
+    this.brushAutoSave = this.options.autoSaveEnabled
+      ? new AutoSaveController<BrushDocument>(
+          this.brushes,
+          this.session,
+          this.brushes.history,
+          {
+            ...options.brushAutoSave,
+            // `saveName` is `brushes.brushName`; the controller passes it as
+            // `undefined` when empty. A brush is only ever `loaded` through
+            // `loadBrush`, which sets the name, so the fallback is unreachable
+            // in practice — and if it is reached the server's 400 surfaces as
+            // `saveStatus = "error"` rather than silently saving nowhere.
+            save:
+              options.brushAutoSave?.save ??
+              ((doc, name) => brushApi.save(doc, name ?? "")),
+          },
+          null,
         )
       : null;
 
@@ -1766,14 +1874,39 @@ export class ApplicationStore {
    * methods become bare `HistoryStore` calls.
    */
 
-  /** Undo one entry, keeping the bridge-era history mirror consistent. */
-  undo(): void {
-    this.historyOps.undo();
+  /**
+   * Brush Studio task 11 (D10): the undo stack ⌘Z drives — the brush's own
+   * `HistoryStore` in brush mode, the shared editor history otherwise. A
+   * `computed` so the toolbar's canUndo/canRedo can observe the switch.
+   */
+  get activeHistory(): HistoryStore {
+    return this.lightingUI.studioMode === "brush"
+      ? this.brushes.history
+      : this.history;
   }
 
-  /** Redo one entry, keeping the bridge-era history mirror consistent. */
+  /**
+   * Undo one entry on {@link activeHistory}. The PROJECT path is unchanged —
+   * it still goes through `historyOps` (the `historyControl` seam); only the
+   * brush path is a bare `HistoryStore` call, since nothing mirrors it.
+   */
+  undo(): void {
+    const target = runInAction(() => this.activeHistory);
+    if (target === this.history) {
+      this.historyOps.undo();
+      return;
+    }
+    runInAction(() => target.undo());
+  }
+
+  /** Redo one entry on {@link activeHistory}; same routing as {@link undo}. */
   redo(): void {
-    this.historyOps.redo();
+    const target = runInAction(() => this.activeHistory);
+    if (target === this.history) {
+      this.historyOps.redo();
+      return;
+    }
+    runInAction(() => target.redo());
   }
 
   /**
@@ -1960,6 +2093,7 @@ export class ApplicationStore {
 
   dispose(): void {
     this.autoSave?.dispose();
+    this.brushAutoSave?.dispose();
     this.disposeReflectionReaction();
     this.disposePoseReaction();
     this.disposeThumbnailCacheReaction();
