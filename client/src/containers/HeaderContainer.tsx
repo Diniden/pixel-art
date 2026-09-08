@@ -66,6 +66,18 @@
  * `session.aiServiceUrl` would never be populated from a loaded project.
  * Task 38 replaces those hydration points when it deletes the bridge; the
  * list move belongs there, in one piece.
+ *
+ * ── Brush mode (brush-studio task 19, MASTER D21) ─────────────────────────
+ *
+ * The header is the same element in every studio; in brush mode four props
+ * change so it stands over the BRUSH document instead of the project: the
+ * switcher button reads "Brushes" and opens `BrushSelectModalContainer`, the
+ * title shows the brush's name (`"No brush"` until one exists), and the
+ * inline rename dispatches `brushes.renameBrush` against the brush list.
+ * `projectName` is still passed — `Header` uses it for the export, which
+ * remains a project export. The save-status dot keeps reading
+ * `session.saveStatus`: both auto-save controllers write it (task 11), so it
+ * reports the brush save in brush mode without any switch here.
  */
 import { useState, useEffect, useCallback } from "react";
 import { observer } from "mobx-react-lite";
@@ -74,6 +86,7 @@ import { flowResult } from "mobx";
 import { Header } from "../ui/components/Header/Header";
 import type { AiHealthStatus } from "../ui/components/AiConfigPopover/AiConfigPopover";
 import { ProjectSelectModalContainer } from "./ProjectSelectModalContainer";
+import { BrushSelectModalContainer } from "./BrushSelectModalContainer";
 import { BrowseBackupsModalContainer } from "./BrowseBackupsModalContainer";
 import { ExportPreviewModalContainer } from "./ExportPreviewModalContainer";
 import { useSessionStore, useStores } from "../stores/context";
@@ -87,9 +100,14 @@ import {
 
 export const HeaderContainer = observer(function HeaderContainer() {
   const app = useStores();
-  const { domain } = app;
+  const { domain, brushes, lightingUI } = app;
   const session = useSessionStore();
   const aiServiceUrl = session.aiServiceUrl;
+
+  // Brush mode re-points the title, the rename and the switcher — see the
+  // header block. Reading `studioMode` here is what re-renders the header
+  // when the studio changes.
+  const isBrushMode = lightingUI.studioMode === "brush";
 
   // Phase B — MobX owns these; Zustand only held a mirror (W29c).
   const projectName = domain.projectName;
@@ -204,8 +222,19 @@ export const HeaderContainer = observer(function HeaderContainer() {
       saveSuspended={session.saveSuspended}
       aiServiceUrl={aiServiceUrl}
       projectName={projectName}
-      projectList={projectList}
-      onRenameProject={(name) => flowResult(domain.renameProject(name))}
+      documentName={isBrushMode ? brushes.brushName || "No brush" : undefined}
+      // The duplicate-rename check runs against the list the rename targets.
+      // `brushList` is `observable.shallow`; hand over a plain array.
+      projectList={isBrushMode ? brushes.brushList.slice() : projectList}
+      onRenameProject={(name) =>
+        isBrushMode
+          ? brushes.hasBrush
+            ? flowResult(brushes.renameBrush(name))
+            : // Nothing to rename yet — the title reads "No brush".
+              Promise.resolve(false)
+          : flowResult(domain.renameProject(name))
+      }
+      projectButtonLabel={isBrushMode ? "Brushes" : undefined}
       aiHealthStatus={aiHealthStatus}
       aiHealthDetail={aiHealthDetail}
       serverDefaultUrl={serverDefaultUrl}
@@ -233,7 +262,13 @@ export const HeaderContainer = observer(function HeaderContainer() {
       layoutMode={layoutStore.layoutMode}
       onToggleLayoutMode={() => layoutStore.toggleLayoutMode()}
       onExport={() => exportApi.run(projectName)}
-      projectModal={(props) => <ProjectSelectModalContainer {...props} />}
+      projectModal={(props) =>
+        isBrushMode ? (
+          <BrushSelectModalContainer {...props} />
+        ) : (
+          <ProjectSelectModalContainer {...props} />
+        )
+      }
       backupsModal={(props) => <BrowseBackupsModalContainer {...props} />}
       exportPreviewModal={(props) => <ExportPreviewModalContainer {...props} />}
     />

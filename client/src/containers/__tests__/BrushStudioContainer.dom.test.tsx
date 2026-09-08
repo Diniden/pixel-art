@@ -113,4 +113,33 @@ describe("AppContainer in brush mode", () => {
     expect(runInAction(() => app.brushes.loadState)).toBe("idle");
     expect(runInAction(() => app.brushes.document)).toBeNull();
   });
+
+  it("the header stands over the brush: 'Brushes' button, 'No brush' title, brush modal", async () => {
+    const { container } = render(
+      <StoreProvider store={app}>
+        <AppContainer />
+      </StoreProvider>,
+    );
+    await settle();
+
+    // MASTER D21: the switcher is relabelled, not replaced.
+    const switcher = container.querySelector<HTMLButtonElement>(
+      ".header__switch-btn",
+    );
+    expect(switcher).not.toBeNull();
+    expect(switcher!.textContent).toBe("Brushes");
+    expect(screen.queryByText("Projects")).toBeNull();
+
+    // No brush on disk → the title says so (and the export guard still reads
+    // the PROJECT name, which is what `projectName` remains).
+    expect(container.querySelector(".header__project-name")!.textContent).toBe(
+      "No brush",
+    );
+
+    // The button opens the BRUSH chooser, not the project one. The modal
+    // primitive portals to `document.body`, so query the document.
+    act(() => switcher!.click());
+    expect(document.querySelector(".brush-select-modal")).not.toBeNull();
+    expect(document.querySelector(".project-select-modal")).toBeNull();
+  });
 });
