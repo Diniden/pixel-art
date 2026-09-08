@@ -298,6 +298,10 @@ export class DomainStore {
     return this.loadState === "loading";
   }
 
+  get saveName(): string {
+    return this.projectName;
+  }
+
   /**
    * One committed domain mutation. During the bridge era the ONLY caller
    * was the Zustand bridge, the single place that saw every `project`

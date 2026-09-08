@@ -49,6 +49,9 @@
  *                     `markSaved()` owns the 2 s `saved → idle` cycle.
  *  Testability        A class taking its collaborators and a clock —
  *                     constructed per test under `vi.useFakeTimers()`.
+ *  Document           Generic (brush-studio 05). The store under save is any
+ *                     `AutoSaveDocument<TDoc>`, not `DomainStore`: the
+ *                     same class saves brush files through a second instance.
  */
 import {
   IReactionDisposer,
@@ -58,7 +61,7 @@ import {
 } from "mobx";
 import { CompactProject } from "../../types";
 import { isApiError, projectApi } from "../../api";
-import type { DomainStore } from "../domain/DomainStore";
+import type { LoadState } from "../domain/DomainStore";
 import type { SessionStore } from "./SessionStore";
 
 /** The slice of the future HistoryStore (task 17) the trigger consults. */
@@ -96,9 +99,33 @@ export const realClock: Clock = {
   clearTimeout: (handle) => clearTimeout(handle),
 };
 
-export interface AutoSaveControllerOptions {
-  /** Transport override for tests. Defaults to `projectApi.save`. */
-  save?: (project: CompactProject, name?: string) => Promise<unknown>;
+/**
+ * The slice of a document store the controller observes and saves —
+ * brush-studio task 05.
+ *
+ * STRUCTURAL, not `DomainStore`: the same controller class saves the pixel
+ * project (`TDoc = CompactProject`; `DomainStore` satisfies this through its
+ * `saveName` getter) and, from task 11 on, a brush document through a second
+ * instance. The four counters are the trigger, `serialize()` is the payload,
+ * and `saveName` is the file identity — an empty string means "let the
+ * transport default", exactly as `projectName` always did.
+ */
+export interface AutoSaveDocument<TDoc> {
+  readonly loadState: LoadState;
+  readonly loadGeneration: number;
+  readonly domainVersion: number;
+  readonly pixelVersion: number;
+  readonly saveName: string;
+  serialize(): TDoc | null;
+}
+
+export interface AutoSaveControllerOptions<TDoc = CompactProject> {
+  /**
+   * Transport override for tests. Defaults to `projectApi.save`, which is
+   * correct ONLY for the default `TDoc = CompactProject`; a controller over
+   * any other document type must inject its own transport (see the ctor).
+   */
+  save?: (doc: TDoc, name?: string) => Promise<unknown>;
   clock?: Clock;
 }
 
@@ -117,21 +144,18 @@ type Trigger = readonly [
   ui: number,
 ];
 
-export class AutoSaveController {
+export class AutoSaveController<TDoc = CompactProject> {
   static readonly DEBOUNCE_MS = 500;
   static readonly MAX_ATTEMPTS = 6;
   static readonly BACKOFF_BASE_MS = 500;
   static readonly BACKOFF_CAP_MS = 30_000;
 
-  private readonly domain: DomainStore;
+  private readonly domain: AutoSaveDocument<TDoc>;
   private readonly session: SessionStore;
   private readonly history: ReplayGuard | null;
   /** W29d. `null` keeps the task-16 two-counter trigger exactly. */
   private readonly persistedUI: PersistedUISource | null;
-  private readonly save: (
-    project: CompactProject,
-    name?: string,
-  ) => Promise<unknown>;
+  private readonly save: (doc: TDoc, name?: string) => Promise<unknown>;
   private readonly clock: Clock;
 
   private readonly disposeReaction: IReactionDisposer;
@@ -146,10 +170,10 @@ export class AutoSaveController {
   private lastGeneration: number;
 
   constructor(
-    domain: DomainStore,
+    domain: AutoSaveDocument<TDoc>,
     session: SessionStore,
     history: ReplayGuard | null = null,
-    options: AutoSaveControllerOptions = {},
+    options: AutoSaveControllerOptions<TDoc> = {},
     persistedUI: PersistedUISource | null = null,
   ) {
     this.domain = domain;
@@ -157,7 +181,13 @@ export class AutoSaveController {
     this.history = history;
     this.persistedUI = persistedUI;
     this.save =
-      options.save ?? ((project, name) => projectApi.save(project, name));
+      options.save ??
+      // The default transport is the PROJECT transport, correct only for the
+      // default `TDoc = CompactProject`. The cast lives on this one line so
+      // the public `save` option keeps its exact `TDoc` signature; a
+      // controller over any other document injects its own transport
+      // (task 11 passes `brushApi.save`).
+      ((doc, name) => projectApi.save(doc as unknown as CompactProject, name));
     this.clock = options.clock ?? realClock;
     // The construction-time counters are the clean baseline: a load that
     // merely OPENS the gate (trigger `null` → `[g, n, n]`) is not an edit and
@@ -290,20 +320,20 @@ export class AutoSaveController {
           // Nothing unsaved (e.g. a fresh install was adopted mid-flight).
           return null;
         }
-        const compact = this.domain.serialize();
-        if (!compact) return null;
+        const doc = this.domain.serialize();
+        if (!doc) return null;
         return {
-          compact,
+          doc,
           generation,
           versions: [domainV, pixelV, uiV] as Versions,
-          name: this.domain.projectName || undefined,
+          name: this.domain.saveName || undefined,
         };
       });
       if (attempt === null) return;
 
       this.session.setSaveStatus("saving");
       try {
-        await this.save(attempt.compact, attempt.name);
+        await this.save(attempt.doc, attempt.name);
       } catch (error) {
         this.attempts += 1;
         if (this.attempts >= AutoSaveController.MAX_ATTEMPTS) {
