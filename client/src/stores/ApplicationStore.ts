@@ -396,6 +396,13 @@ export class ApplicationStore {
    * project controller.
    */
   readonly brushAutoSave: AutoSaveController<BrushDocument> | null;
+  /**
+   * The brush studio's Full/Layer pane state (docs/11-brush-studio-followups
+   * task 09 consumes it); independent of `canvasViews`; layer pane camera =
+   * `brushViews.layerCamera`, full pane camera = `brushUI`. Session-only,
+   * nothing persisted; `presentVariantPanes` is never called on it.
+   */
+  readonly brushViews: CanvasViewsUIStore;
 
   /**
    * Task 29: the reference-image + trace-overlay slice, and the replacement
@@ -963,6 +970,10 @@ export class ApplicationStore {
       brush: this.brushes,
       source: brushUI,
     });
+    // docs/11-brush-studio-followups task 04: a SECOND, independent pane
+    // store for the brush split view. No dependencies in either direction;
+    // its own observable, so no `makeObservable` entry here.
+    this.brushViews = new CanvasViewsUIStore();
 
     makeObservable(this, {
       currentObject: computed,

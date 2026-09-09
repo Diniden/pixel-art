@@ -22,6 +22,7 @@ import { runInAction } from "mobx";
 
 import { ApplicationStore } from "@/stores/ApplicationStore";
 import { AutoSaveController } from "@/stores/session/AutoSaveController";
+import { CanvasViewsUIStore } from "@/stores/ui/CanvasViewsUIStore";
 import { createBrushDocument } from "@/types";
 import type { BrushDocument } from "@/types";
 
@@ -102,6 +103,29 @@ describe("construction", () => {
     runInAction(() => app.brushes.installDocument(null));
     expect(app.brushUI.selectedFrameId).toBeNull();
     expect(app.brushUI.selectedLayerId).toBeNull();
+  });
+});
+
+describe("brushViews — the brush studio's own pane store (docs/11-brush-studio-followups task 04)", () => {
+  it("is a second CanvasViewsUIStore, distinct from the pixel studio's canvasViews", () => {
+    expect(app.brushViews).toBeInstanceOf(CanvasViewsUIStore);
+    expect(app.brushViews).not.toBe(app.canvasViews);
+    // Each pane store owns its own Layer-pane camera.
+    expect(app.brushViews.layerCamera).not.toBe(app.canvasViews.layerCamera);
+    // Fresh defaults: only Full is open, and Full owns the keyboard.
+    expect(app.brushViews.openModes).toEqual(["full"]);
+    expect(app.brushViews.keyboardOwner).toBe("full");
+  });
+
+  it("opening a Layer pane in brushViews leaves canvasViews untouched", () => {
+    const pixelModesBefore = app.canvasViews.openModes;
+
+    app.brushViews.openMode("layer");
+
+    expect(app.brushViews.openModes).toEqual(["full", "layer"]);
+    expect(app.canvasViews.openModes).toEqual(pixelModesBefore);
+    expect(app.canvasViews.openModes).toEqual(["full"]);
+    expect(app.canvasViews.isOpen("layer")).toBe(false);
   });
 });
 
