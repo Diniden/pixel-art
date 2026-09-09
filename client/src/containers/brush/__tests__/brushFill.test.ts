@@ -14,11 +14,18 @@ import { describe, expect, it, vi } from "vitest";
 import type { BrushCell, BrushDelta } from "../../../types";
 import { getToolHandler } from "../../../ui/canvas/tools/toolHandlers";
 import { brushFloodFill, cellsMatch } from "../brushFill";
-import { DUMMY_TOOL_COLOR, buildBrushToolContext } from "../brushToolContext";
+import {
+  DUMMY_FILL_COLOR,
+  DUMMY_TOOL_COLOR,
+  buildBrushToolContext,
+} from "../brushToolContext";
 import type { BrushToolContextArgs } from "../brushToolContext";
 
 const A: BrushDelta = [100, -50, 255, 0];
 const B: BrushDelta = [1, 2, 3, 4];
+/** The FILL slot (follow-ups D9) — distinct from the edge delta `A` so a
+ *  fill is proven to copy the fill slot, not the edge one. */
+const FILL: BrushDelta = [-20, 40, 60, 80];
 
 const key = (cells: ReadonlyArray<{ x: number; y: number }>) =>
   cells.map((c) => `${c.x},${c.y}`).sort();
@@ -211,6 +218,7 @@ function makeArgs(
     shapeMode: "outline",
     borderRadius: 0,
     delta: A,
+    fillDelta: FILL,
     readGrid: () => null,
     lastStrokePixel: null,
     setLastStrokePixel: vi.fn(),
@@ -230,13 +238,14 @@ describe("the fills through buildBrushToolContext", () => {
     drawStartPoint: null,
   });
 
-  it("floodFillAt returns the region carrying the dummy colour", () => {
+  it("floodFillAt returns the region carrying the FILL sentinel colour", () => {
     const ctx = buildBrushToolContext(
       makeArgs({ readGrid: () => gridFrom(RING, { B }) }),
     );
     const writes = ctx.floodFillAt({ x: 1, y: 1 });
     expect(key(writes)).toEqual(key(cellsOf(RING, ".")));
-    expect(writes.every((w) => w.color === DUMMY_TOOL_COLOR)).toBe(true);
+    expect(writes.every((w) => w.color === DUMMY_FILL_COLOR)).toBe(true);
+    expect(writes.some((w) => w.color === DUMMY_TOOL_COLOR)).toBe(false);
   });
 
   it("gaussianFillAt is the same fill", () => {
@@ -264,7 +273,7 @@ describe("the fills through buildBrushToolContext", () => {
   });
 
   it.each(["flood-fill", "gaussian-fill"])(
-    "⭐ a %s click is ONE setCells of delta copies, no transaction, gesture closed",
+    "⭐ a %s click is ONE setCells of FILL delta copies, no transaction, gesture closed",
     (tool) => {
       const args = makeArgs({ readGrid: () => gridFrom(RING, { B }) });
       const ctx = buildBrushToolContext(args);
@@ -276,8 +285,9 @@ describe("the fills through buildBrushToolContext", () => {
         .calls[0][0] as { x: number; y: number; value: BrushDelta | 0 }[];
       expect(key(cells)).toEqual(key(cellsOf(RING, ".")));
       for (const cell of cells) {
-        expect(cell.value).toEqual(A);
-        expect(cell.value).not.toBe(A);
+        expect(cell.value).toEqual(FILL);
+        expect(cell.value).not.toBe(FILL);
+        expect(cell.value).not.toEqual(A);
       }
       expect(new Set(cells.map((c) => c.value)).size).toBe(cells.length);
       expect(args.endDrawing).toHaveBeenCalledTimes(1);

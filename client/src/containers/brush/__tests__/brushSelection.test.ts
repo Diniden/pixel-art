@@ -37,6 +37,8 @@ import {
 import type { BrushMoveWrites, BrushSelectionHost } from "../brushSelection";
 
 const DELTA: BrushDelta = [100, -50, 255, 0];
+/** The FILL slot (follow-ups D9); these tests only assert WHERE writes land. */
+const FILL_DELTA: BrushDelta = [-20, 40, 60, 80];
 
 const key = (cells: ReadonlyArray<{ x: number; y: number }>) =>
   cells.map((c) => `${c.x},${c.y}`).sort();
@@ -400,6 +402,7 @@ function contextFor(
     shapeMode: "outline",
     borderRadius: 0,
     delta: DELTA,
+    fillDelta: FILL_DELTA,
     readGrid: () => rig.grid(),
     lastStrokePixel: null,
     setLastStrokePixel: () => {},
