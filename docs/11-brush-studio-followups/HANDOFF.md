@@ -1,12 +1,36 @@
 # HANDOFF — Brush Studio follow-ups
 
-**Current position:** W5 IN PROGRESS
+**Current position:** COMPLETE (PARTIAL — every automated gate green; 0 of 30 manual QA rows performed)
 **Branch:** `feat/01-brush-studio` (already on it at start; plan-go stays on the feature branch)
-**Last commit:** `97fea4b` (W5 ARCHITECTURE.md commit, 2026-09-09; this ledger commit sits on top of it)
+**Last commit:** `97fea4b` (last code commit, 2026-09-09); ledger commits `03535fb` and this close-out sit on top of it
 
 Planned 2026-09-09 from `feat/01-brush-studio` @ `4ed1d3c` with a clean tree. The plan-01 ledger
 (`docs/01-brush-studio/HANDOFF.md`) still lists 29 owed manual QA rows; the owner's first pass
 produced the four requests this plan addresses.
+
+## Coordinator final gate (run by /plan-go after W5, 2026-09-09, tree clean at `03535fb`)
+
+```
+bun run verify                        exit 0
+  client tsc                          clean
+  server tsc                          clean
+  client eslint                       ✖ 66 problems (0 errors, 66 warnings)   = baseline
+  server eslint                       clean
+  prettier --check                    All matched files use Prettier code style!
+  client vitest                       Test Files 187 passed (187) · Tests 3919 passed (3919)
+  vite build                          ✓ built in 2.24s
+client: bun run lint:boundaries       check-boundaries: OK — all 5 boundary rules hold.  exit 0
+client: stylelint "src/**/*.css"      ✖ 71 problems (2 errors, 69 warnings) — errors = pre-existing OtherHand.css:338,359 (= baseline)
+client: storybook build               ✓ built in 6.18s
+server: tsc --noEmit                  exit 0
+server: eslint .                      exit 0
+server: vitest run                    Test Files 4 passed (4) · Tests 102 passed (102)
+lockfile check (repo root)            nothing found
+corpus diff 52b9d6a..HEAD (codecs / services / server export)   empty
+git status --short                    clean
+```
+
+Baseline at `4ed1d3c` was 183 files / 3825 tests; the plan added 4 test files and 94 tests.
 
 ## Wave ledger
 
