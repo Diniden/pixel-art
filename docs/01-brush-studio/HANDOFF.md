@@ -1,8 +1,8 @@
 # HANDOFF — Brush Studio
 
-**Current position:** W9 IN PROGRESS (W1–W8 code-complete; W1/W2/W6/W7/W8 manual checks owed, see Notes)
+**Current position:** W10 IN PROGRESS (W1–W9 code-complete; W1/W2/W6/W7/W8/W9 manual checks owed, see Notes)
 **Branch:** `feat/01-brush-studio` (cut 2026-09-08 from `feat/09-ipad-pencil-fixes` @ `3845480`)
-**Last commit:** `576675c` (W8)
+**Last commit:** `f85d78a` (W9)
 
 Planned 2026-08-29 from `feat/rail-layout-controls` @ `37a4bce` with a dirty worktree (103
 uncommitted files of unrelated in-flight work — see MASTER §4). Executors stage only their
@@ -20,8 +20,8 @@ uncommitted files of unrelated in-flight work — see MASTER §4). Executors sta
 | W6 | 16, 17, 18 | PARTIAL (code DONE, gate green; manual checks deferred to W7/19 by design — nothing mounted yet) | 2026-09-08 | `f2474d3` | tsc clean · eslint 0 err/66 warn · vitest 177 files, 3703 tests pass (W5: 176/3658), no snapshot diff · boundaries OK · stylelint 2 errors = `OtherHand.css` baseline, 0 new · no lockfile |
 | W7 | 19 | PARTIAL (code DONE, gate green; all 8 manual checks owed) | 2026-09-08 | `04335d7` | tsc clean · eslint 0 err/66 warn · vitest 179 files, 3709 tests pass (W6: 177/3703), no snapshot diff · boundaries OK · stylelint 2 errors = `OtherHand.css` baseline, 0 new · storybook ✓ built in 6.12s · `bun run build` ✓ 2.16s · no lockfile |
 | W8 | 20 | PARTIAL (code DONE, gate green; 5 manual checks owed) | 2026-09-08 | `576675c` | tsc clean · eslint 0 err/66 warn (`max-lines` does NOT fire on the container: 379 counted / 400) · vitest 181 files, 3776 tests pass (W7: 179/3709), no snapshot diff · boundaries OK · no lockfile |
-| W9 | 21 | IN PROGRESS | 2026-09-08 | | |
-| W10 | 22 | TODO | | | |
+| W9 | 21 | PARTIAL (code DONE, gate green; 7 manual checks owed) | 2026-09-08 | `f85d78a` | tsc clean · eslint 0 err/66 warn (`max-lines` off on the container: 498 raw / 379 counted) · vitest 183 files, 3825 tests pass (W8: 181/3776), no snapshot diff · boundaries OK · no lockfile |
+| W10 | 22 | IN PROGRESS | 2026-09-08 | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
@@ -140,6 +140,18 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   Eyedropper uses `copyDelta(cell)`; move applies steps live so a round-trip records one net-zero
   entry (matches the pixel canvas). Extra exports `brushCursor`, `pickBrushDelta`,
   `BRUSH_MOVE_LABEL`, `BrushGestureHost/Controller`, `BRUSH_GESTURE_TOOLS`.
+- **W9/21 — `SelectionUIStore` reuse: NO** (its geometry helpers `pack/unpack :59-65`,
+  `computeBounds :67-82`, `clampBoxToMask :84-100`, `isPointInPolygon :102-120` are module-private
+  and every public entry writes the pixel studio's observable mask). Brush-local
+  `containers/brush/brushSelection.ts` instead. **Lasso DEFERRED** (rectangle only). Extra files
+  under `containers/brush/`: `useBrushSelection.ts` (+ dom test), `useBrushHover.ts`,
+  `useBrushCamera.ts` (verbatim lifts from the container to stay under `max-lines`). Marching
+  ants are SVG chrome via `CanvasSurface`'s `marchingAnts` slot (a 1:1 backing store cannot draw
+  a 1-screen-px dashed line — the defect the pixel canvas fixed 2026-09-07); mask fill and drag
+  preview use `renderSelectionOverlay` on the overlay canvas. Move-selection issues `clears` then
+  `writes` as two `setCells` inside one transaction (one undo entry, label "Move selection";
+  degenerate all-off-grid case labels "Draw"). Selection resets on `loadGeneration` or grid-size
+  change; not persisted, not undoable. `brushCursor("selection")` is `"crosshair"`.
 - **Coordinator —** cut `feat/01-brush-studio` from `feat/09-ipad-pencil-fixes` instead of staying
   on the 09 branch: every prior plan in this repo has its own `feat/NN-*` branch.
 
@@ -158,6 +170,11 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   with working "Back to Pixel Studio", project intact; (3) hotkey from pixel↔lighting, from brush →
   pixel; (4) reload while in brush mode boots into the placeholder and Back works; (5) iPad: the
   new button is tappable.
+- **Manual checks owed for W9/21** (brush mode, selection tool): rect selection → ants at the
+  right zoom; pencil outside does nothing, inside paints; Delete clears; drag inside moves cells
+  with preview, one undo entry; Escape clears; switching brush clears the selection; StrictMode
+  does not double-apply the move; first-selection overlay canvas mount paints the fill on the
+  first frame; iPad touch/pinch abort path.
 - **Manual checks owed for W8/20** (brush mode): paint a ring, flood-fill inside → interior only,
   one undo entry; gaussian-fill same; eyedropper on a painted cell sets the sliders; move drag
   shifts the layer, out-of-bounds cells dropped, one undo per drag; iPad touch drag. Also:
