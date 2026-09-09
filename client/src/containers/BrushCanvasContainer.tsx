@@ -6,9 +6,13 @@
  * colourised through the 127-centred mapping and composited by
  * `renderBrushFrame` — into `CanvasSurface`, shows the hover marker, zooms
  * through `brushUI`, and drives the SHARED `toolHandlers` for pencil, eraser,
- * line, rectangle, ellipse and fill-square on the selected layer. Each stroke
- * is ONE entry on the brush's own history. Flood-fill / eyedropper / move /
- * selection are visibly inert until tasks 20–21 (`isBrushInertTool`).
+ * line, rectangle, ellipse, fill-square and the two fills on the selected
+ * layer. Each stroke is ONE entry on the brush's own history. The eyedropper
+ * and move are GESTURE tools (task 20): `beginPointer` hands them to
+ * `createBrushGestureController` ahead of the handler table — a pick sets the
+ * delta sliders, a move drag shifts the layer live inside one transaction that
+ * the ordinary release path closes. Selection is visibly inert until task 21
+ * (`isBrushInertTool`).
  *
  * ── ⚠️ `observer()` HERE, rAF-SCHEDULED REDRAW FOR THE CELLS (D8) ────────
  * This component reads only scalars, ids and `observableRef` objects: the
@@ -49,20 +53,25 @@ import { renderBrushFrame } from "../ui/canvas/render/renderBrushFrame";
 import { paintHoverCells } from "../ui/canvas/render/renderHoverMarker";
 import { toolFootprint } from "../ui/canvas/tools/toolFootprint";
 import type { StampPoint } from "../ui/canvas/tools/brushStamp";
+import type { PointerDevice } from "../ui/canvas/tools/toolHandlers";
 import { gridOverlayPath } from "../ui/canvas/svg/gridOverlay";
 import { hoverOutlineOverlay } from "../ui/canvas/svg/chromeOverlay";
 import { screenToPixel } from "../ui/canvas/model/coords";
 import { useCanvasPointer } from "../ui/hooks/useCanvasPointer";
 import { useCanvasRender } from "../ui/hooks/useCanvasRender";
 import {
+  BRUSH_MOVE_LABEL,
   brushCoordGeometry,
+  brushCursor,
   brushStrokeLabel,
   buildBrushToolContext,
+  createBrushGestureController,
+  isBrushGestureTool,
   isBrushInertTool,
   isBrushShapeTool,
   pointsToBrushCells,
-  touchDistance,
 } from "./brush/brushToolContext";
+import { useBrushPointerHandlers } from "./brush/useBrushPointerHandlers";
 
 /** One layer canvas holds the whole composited frame. Ids only cross the boundary. */
 const FRAME_LAYER_ID = "brush-frame";
@@ -96,7 +105,6 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   const frameCanvasRef = useRef<HTMLCanvasElement | null>(null);
   /** The `width × height` RGBA buffer, reused across frames of the same size. */
   const bufferRef = useRef<ImageData | null>(null);
-  const pinchDistanceRef = useRef<number | null>(null);
 
   /* ── observable reads (scalars, ids, refs — never a grid) ──────────────── */
   const doc = brushes.document;
@@ -172,9 +180,10 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
         clientY,
         canvas.getBoundingClientRect(),
         coordGeom,
-        // A shape drag keeps tracking the pointer off-grid; the commit drops
-        // off-grid cells (`BrushPixelStore.setCells` bounds-filters).
-        isDrawing && isBrushShapeTool(currentTool)
+        // A shape or move drag keeps tracking the pointer off-grid; the
+        // store drops off-grid cells (`setCells` bounds-filters, and
+        // `moveLayerCells` discards what leaves the grid on every step).
+        isDrawing && (isBrushShapeTool(currentTool) || currentTool === "move")
           ? "pixel-unbounded"
           : "pixel",
       );
@@ -200,6 +209,8 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
         shapeMode,
         borderRadius,
         delta: selectedDelta,
+        // The LIVE grid at click time — the container itself never reads it.
+        readGrid: () => brushPixels.resolveTarget()?.layer.pixels ?? null,
         lastStrokePixel: strokeCursor.current.ref?.current ?? null,
         setLastStrokePixel: (p) => {
           const ref = strokeCursor.current.ref;
@@ -243,13 +254,53 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     strokeCursor.current.ref = pointer.lastStrokePixelRef;
   }, [pointer.lastStrokePixelRef]);
 
+  /* ── the gesture tools (eyedropper, move) — ahead of the handler table ─── */
+  // A move drag opens the SAME drawing gesture a stroke does, so the window
+  // `mouseup`, touch-end and pinch-abort paths below close its transaction.
+  const gesture = useMemo(
+    () =>
+      createBrushGestureController({
+        cellAt: (x, y) => brushPixels.cellAt(x, y),
+        setDelta: (delta) => brushUI.setDelta(delta),
+        beginMove: (coords) => {
+          brushes.history.beginTransaction(BRUSH_MOVE_LABEL);
+          interaction.startDrawing(coords);
+        },
+        moveBy: (dx, dy) => brushPixels.moveLayerCells(dx, dy),
+      }),
+    [brushPixels, brushUI, brushes, interaction],
+  );
+
+  /** Pointer-down for either device: a gesture tool first, else the table. */
+  const beginPointer = useCallback(
+    (clientX: number, clientY: number, device: PointerDevice) => {
+      if (!isBrushGestureTool(currentTool)) {
+        pointer.beginStroke(clientX, clientY, device);
+        return;
+      }
+      const coords = getCoords(clientX, clientY);
+      if (coords) gesture.down(currentTool, coords);
+    },
+    [currentTool, pointer, getCoords, gesture],
+  );
+
+  /** Pointer-move while a gesture is open: a move drag steps, else the table. */
+  const continuePointer = useCallback(
+    (clientX: number, clientY: number, device: PointerDevice) => {
+      if (gesture.isMoving) gesture.move(getCoords(clientX, clientY));
+      else pointer.continueStroke(clientX, clientY, device);
+    },
+    [gesture, getCoords, pointer],
+  );
+
   /**
    * The release, for both devices. A shape tool commits its preview as ONE
-   * `setCells` (one history entry); a paint tool's open transaction closes.
-   * `endTransaction` is a no-op when nothing is open.
+   * `setCells` (one history entry); a paint tool's — or a move drag's — open
+   * transaction closes. `endTransaction` is a no-op when nothing is open.
    */
   const finishStroke = useCallback(() => {
     pointer.lastStrokePixelRef.current = null;
+    gesture.end();
     if (isBrushShapeTool(currentTool) && previewPixels.length > 0) {
       brushes.history.beginTransaction(brushStrokeLabel(currentTool));
       brushPixels.setCells(pointsToBrushCells(previewPixels, selectedDelta));
@@ -258,6 +309,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     interaction.endDrawing();
   }, [
     pointer.lastStrokePixelRef,
+    gesture,
     currentTool,
     previewPixels,
     selectedDelta,
@@ -266,13 +318,18 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     interaction,
   ]);
 
-  /** A pinch or a cancel: drop the preview, close whatever is open, commit nothing new. */
+  /**
+   * A pinch or a cancel: drop the preview, close whatever is open, commit
+   * nothing new. A move drag's steps so far STAY applied — closing the
+   * transaction commits them as one entry the owner can undo.
+   */
   const abortStroke = useCallback(() => {
     pointer.lastStrokePixelRef.current = null;
+    gesture.end();
     interaction.clearPreviewPixels();
     brushes.history.endTransaction();
     interaction.endDrawing();
-  }, [pointer.lastStrokePixelRef, interaction, brushes]);
+  }, [pointer.lastStrokePixelRef, gesture, interaction, brushes]);
 
   /* ── render: the frame (THE ONLY place cells are read) ─────────────────── */
   const renderFrame = useCallback(() => {
@@ -369,86 +426,24 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [brushUI, hasDoc]);
-
-  /* ── pointer handlers ──────────────────────────────────────────────────── */
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (e.button !== 0 || inert || !layer) return;
-      pointer.beginStroke(e.clientX, e.clientY, "mouse");
-    },
-    [inert, layer, pointer],
+  const zoomBy = useCallback(
+    (ratio: number) => brushUI.zoomBy(ratio),
+    [brushUI],
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      // A mouse leaves its cells visible, so the marker hides during a stroke.
-      setHoverPixel(isDrawing ? null : getCoords(e.clientX, e.clientY));
-      if (!isDrawing || inert) return;
-      pointer.continueStroke(e.clientX, e.clientY, "mouse");
-    },
-    [setHoverPixel, isDrawing, inert, getCoords, pointer],
-  );
-
-  const handleMouseLeave = useCallback(
-    () => setHoverPixel(null),
-    [setHoverPixel],
-  );
-
-  // The release may land anywhere — over a rail, outside the window — so it
-  // is a window listener, bound only while a gesture is open.
-  useEffect(() => {
-    if (!isDrawing) return;
-    const onUp = () => finishStroke();
-    window.addEventListener("mouseup", onUp);
-    return () => window.removeEventListener("mouseup", onUp);
-  }, [isDrawing, finishStroke]);
-
-  const handleTouchStart = useCallback(
-    (e: React.TouchEvent<HTMLCanvasElement>) => {
-      if (e.touches.length >= 2) {
-        pinchDistanceRef.current = touchDistance(e.touches);
-        if (isDrawing) abortStroke();
-        return;
-      }
-      if (inert || !layer) return;
-      const t = e.touches[0];
-      if (!t) return;
-      // No hover marker on touch: the finger covers the cells anyway.
-      pointer.beginStroke(t.clientX, t.clientY, "touch");
-    },
-    [isDrawing, abortStroke, inert, layer, pointer],
-  );
-
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent<HTMLCanvasElement>) => {
-      if (e.touches.length >= 2) {
-        const d = touchDistance(e.touches);
-        const last = pinchDistanceRef.current;
-        if (last && last > 0) brushUI.zoomBy(d / last);
-        pinchDistanceRef.current = d;
-        return;
-      }
-      if (!isDrawing || inert) return;
-      const t = e.touches[0];
-      if (!t) return;
-      pointer.continueStroke(t.clientX, t.clientY, "touch");
-    },
-    [brushUI, isDrawing, inert, pointer],
-  );
-
-  const handleTouchEnd = useCallback(
-    (e: React.TouchEvent<HTMLCanvasElement>) => {
-      if (e.touches.length > 0) return; // a finger remains
-      pinchDistanceRef.current = null;
-      if (isDrawing) finishStroke();
-    },
-    [isDrawing, finishStroke],
-  );
-
-  const handleTouchCancel = useCallback(() => {
-    pinchDistanceRef.current = null;
-    abortStroke();
-  }, [abortStroke]);
+  /* ── pointer handlers: the device layer lives in `useBrushPointerHandlers` ── */
+  const pointerHandlers = useBrushPointerHandlers({
+    inert,
+    hasLayer: layer !== null && layer !== undefined,
+    isDrawing,
+    getCoords,
+    setHoverPixel,
+    beginPointer,
+    continuePointer,
+    finishStroke,
+    abortStroke,
+    zoomBy,
+  });
 
   const registerLayerCanvas = useCallback(
     (_id: string, el: HTMLCanvasElement | null) => {
@@ -479,19 +474,13 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
       combinedScale={zoom}
       lightGridMode={lightGridMode}
       checkerParity={NO_PARITY}
-      cursor={inert ? "default" : "crosshair"}
+      cursor={brushCursor(currentTool)}
       showReferenceOverlay={false}
       showFrameOverlay={false}
       showFrameTraceOverlay={false}
       grid={grid}
       hoverOutline={hoverOutline}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchCancel}
+      {...pointerHandlers}
     />
   );
 });
