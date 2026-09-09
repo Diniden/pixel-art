@@ -47,7 +47,7 @@ export const Typical: Story = {};
 
 /**
  * Empty: no brush files on disk and nothing loaded. The rename row and the
- * delete button are absent / disabled; only "New Brush" is actionable.
+ * delete button are absent / disabled; only "New Brush Project" is actionable.
  */
 export const Empty: Story = {
   args: { brushList: [], brushName: null },

@@ -71,8 +71,8 @@
  *
  * The header is the same element in every studio; in brush mode four props
  * change so it stands over the BRUSH document instead of the project: the
- * switcher button reads "Brushes" and opens `BrushSelectModalContainer`, the
- * title shows the brush's name (`"No brush"` until one exists), and the
+ * switcher button reads "Brush Projects" and opens `BrushSelectModalContainer`, the
+ * title shows the brush's name (`"No brush project"` until one exists), and the
  * inline rename dispatches `brushes.renameBrush` against the brush list.
  * `projectName` is still passed — `Header` uses it for the export, which
  * remains a project export. The save-status dot keeps reading
@@ -222,7 +222,9 @@ export const HeaderContainer = observer(function HeaderContainer() {
       saveSuspended={session.saveSuspended}
       aiServiceUrl={aiServiceUrl}
       projectName={projectName}
-      documentName={isBrushMode ? brushes.brushName || "No brush" : undefined}
+      documentName={
+        isBrushMode ? brushes.brushName || "No brush project" : undefined
+      }
       // The duplicate-rename check runs against the list the rename targets.
       // `brushList` is `observable.shallow`; hand over a plain array.
       projectList={isBrushMode ? brushes.brushList.slice() : projectList}
@@ -230,11 +232,11 @@ export const HeaderContainer = observer(function HeaderContainer() {
         isBrushMode
           ? brushes.hasBrush
             ? flowResult(brushes.renameBrush(name))
-            : // Nothing to rename yet — the title reads "No brush".
+            : // Nothing to rename yet — the title reads "No brush project".
               Promise.resolve(false)
           : flowResult(domain.renameProject(name))
       }
-      projectButtonLabel={isBrushMode ? "Brushes" : undefined}
+      projectButtonLabel={isBrushMode ? "Brush Projects" : undefined}
       aiHealthStatus={aiHealthStatus}
       aiHealthDetail={aiHealthDetail}
       serverDefaultUrl={serverDefaultUrl}

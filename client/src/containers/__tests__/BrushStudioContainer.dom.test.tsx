@@ -114,7 +114,7 @@ describe("AppContainer in brush mode", () => {
     expect(runInAction(() => app.brushes.document)).toBeNull();
   });
 
-  it("the header stands over the brush: 'Brushes' button, 'No brush' title, brush modal", async () => {
+  it("the header stands over the brush: 'Brush Projects' button, 'No brush project' title, brush modal", async () => {
     const { container } = render(
       <StoreProvider store={app}>
         <AppContainer />
@@ -127,13 +127,13 @@ describe("AppContainer in brush mode", () => {
       ".header__switch-btn",
     );
     expect(switcher).not.toBeNull();
-    expect(switcher!.textContent).toBe("Brushes");
+    expect(switcher!.textContent).toBe("Brush Projects");
     expect(screen.queryByText("Projects")).toBeNull();
 
     // No brush on disk → the title says so (and the export guard still reads
     // the PROJECT name, which is what `projectName` remains).
     expect(container.querySelector(".header__project-name")!.textContent).toBe(
-      "No brush",
+      "No brush project",
     );
 
     // The button opens the BRUSH chooser, not the project one. The modal

@@ -54,7 +54,7 @@ describe("BrushLibrary — rows", () => {
       currentSize: null,
       thumbnailDraw: null,
     });
-    expect(screen.getByText(/No brushes yet/)).toBeInTheDocument();
+    expect(screen.getByText(/No brush projects yet/)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Dither|Grass|Soft/ }),
     ).toBeNull();
@@ -64,7 +64,9 @@ describe("BrushLibrary — rows", () => {
 describe("BrushLibrary — create form validates names", () => {
   it("rejects an invalid name and never calls onCreateBrush", async () => {
     const { props } = renderLibrary();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "bad/name");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
 
@@ -76,7 +78,9 @@ describe("BrushLibrary — create form validates names", () => {
 
   it("rejects a duplicate name", async () => {
     const { props } = renderLibrary();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "Grass Tuft");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
 
@@ -86,7 +90,9 @@ describe("BrushLibrary — create form validates names", () => {
 
   it("creates with the trimmed name and the default 16×16, then closes", async () => {
     const { props } = renderLibrary();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "  Leaf Scatter  ");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
 
@@ -96,7 +102,9 @@ describe("BrushLibrary — create form validates names", () => {
 
   it("passes edited width and height through", async () => {
     const { props } = renderLibrary();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "Wide");
     const width = screen.getByLabelText("W");
     await userEvent.clear(width);
@@ -111,11 +119,15 @@ describe("BrushLibrary — create form validates names", () => {
 
   it("Enter in the name field submits; Escape cancels the form", async () => {
     const { props } = renderLibrary();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "Quick{Enter}");
     expect(props.onCreateBrush).toHaveBeenCalledWith("Quick", 16, 16);
 
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "Nope{Escape}");
     expect(screen.queryByLabelText("Name")).toBeNull();
     expect(props.onCreateBrush).toHaveBeenCalledTimes(1);
@@ -124,7 +136,9 @@ describe("BrushLibrary — create form validates names", () => {
   it("disables Create and the rows while loading", async () => {
     renderLibrary({ isLoading: true });
     expect(screen.getByRole("button", { name: /Soft Round/ })).toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
   });
 });

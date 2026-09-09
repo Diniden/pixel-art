@@ -117,7 +117,7 @@ export function BrushSelectModal({
     if (ok) {
       onClose();
     } else {
-      setError("Failed to switch brush");
+      setError("Failed to switch brush project");
       setIsLoading(false);
     }
   };
@@ -134,7 +134,7 @@ export function BrushSelectModal({
     if (ok) {
       onClose();
     } else {
-      setError("Failed to create brush");
+      setError("Failed to create brush project");
       setIsLoading(false);
     }
   };
@@ -156,7 +156,7 @@ export function BrushSelectModal({
     setIsLoading(true);
     setError(null);
     const ok = await onRenameBrush(trimmedRename);
-    if (!ok) setError("Failed to rename brush");
+    if (!ok) setError("Failed to rename brush project");
     setIsLoading(false);
   };
 
@@ -169,7 +169,7 @@ export function BrushSelectModal({
       await onRefreshBrushList();
       onClose();
     } else {
-      setError("Failed to delete brush");
+      setError("Failed to delete brush project");
       setIsLoading(false);
     }
   };
@@ -178,7 +178,7 @@ export function BrushSelectModal({
 
   return (
     <Modal
-      title="Brushes"
+      title="Brush Projects"
       className="brush-select-modal"
       onClose={onClose}
       container={container}
@@ -190,13 +190,20 @@ export function BrushSelectModal({
           onClick={() => setConfirmDelete(true)}
           disabled={isLoading || brushName === null}
           title={
-            brushName === null ? "No brush is loaded" : `Delete "${brushName}"`
+            brushName === null
+              ? "No brush project is loaded"
+              : `Delete "${brushName}"`
           }
         >
-          Delete Current Brush
+          Delete Current Brush Project
         </button>
       }
     >
+      <p className="brush-select-modal__intro">
+        Each brush project is one file holding a whole brush — its layers and
+        frames. Switch, create, rename or delete brush project files here.
+      </p>
+
       {error && (
         <div className="brush-select-modal__error" role="alert">
           {error}
@@ -206,7 +213,7 @@ export function BrushSelectModal({
       {brushName !== null && (
         <div className="brush-select-modal__rename">
           <label className="brush-select-modal__label" htmlFor={renameId}>
-            Current brush
+            Current brush project
           </label>
           <div className="brush-select-modal__rename-row">
             <input
@@ -237,7 +244,7 @@ export function BrushSelectModal({
 
       {brushList.length === 0 ? (
         <EmptyState className="brush-select-modal__empty">
-          No brushes yet. Create one to start.
+          No brush projects yet. Create one to start.
         </EmptyState>
       ) : (
         <div className="brush-select-modal__list">
@@ -293,7 +300,7 @@ export function BrushSelectModal({
                 resetCreateForm();
               }
             }}
-            placeholder="Enter brush name..."
+            placeholder="Enter brush project name..."
             autoFocus
             disabled={isLoading}
           />
@@ -359,7 +366,7 @@ export function BrushSelectModal({
           <span className="brush-select-modal__plus-icon">
             <Icon icon={Plus} size={14} />
           </span>
-          New Brush
+          New Brush Project
         </button>
       )}
 
@@ -368,7 +375,7 @@ export function BrushSelectModal({
           danger
           title={
             <>
-              <Icon icon={AlertTriangle} size={14} /> Delete Brush
+              <Icon icon={AlertTriangle} size={14} /> Delete Brush Project
             </>
           }
           message={
@@ -376,7 +383,7 @@ export function BrushSelectModal({
               Are you sure you want to delete <strong>"{brushName}"</strong>?
             </>
           }
-          warning="This permanently deletes the brush file. It cannot be undone."
+          warning="This permanently deletes the brush project file. It cannot be undone."
           confirmLabel="Delete"
           cancelLabel="Cancel"
           onConfirm={() => void handleDeleteConfirmed()}

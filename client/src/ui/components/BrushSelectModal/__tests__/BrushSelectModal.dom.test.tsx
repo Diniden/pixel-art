@@ -63,7 +63,9 @@ describe("BrushSelectModal — closing", () => {
 
   it("Escape inside the create form cancels the form, not the modal", async () => {
     const { props } = renderModal();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "Draft{Escape}");
     expect(screen.queryByLabelText("Name")).toBeNull();
     expect(props.onClose).not.toHaveBeenCalled();
@@ -74,7 +76,7 @@ describe("BrushSelectModal — delete asks first", () => {
   it("shows a confirm; cancelling it deletes nothing", async () => {
     const { props } = renderModal();
     await userEvent.click(
-      screen.getByRole("button", { name: "Delete Current Brush" }),
+      screen.getByRole("button", { name: "Delete Current Brush Project" }),
     );
     const confirm = screen.getByRole("alertdialog");
     expect(confirm).toHaveTextContent(/Soft Round/);
@@ -87,7 +89,7 @@ describe("BrushSelectModal — delete asks first", () => {
   it("confirming deletes, refreshes the list and closes", async () => {
     const { props } = renderModal();
     await userEvent.click(
-      screen.getByRole("button", { name: "Delete Current Brush" }),
+      screen.getByRole("button", { name: "Delete Current Brush Project" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(props.onClose).toHaveBeenCalledTimes(1));
@@ -98,9 +100,9 @@ describe("BrushSelectModal — delete asks first", () => {
   it("is disabled when no brush is loaded", () => {
     renderModal({ brushName: null, brushList: [] });
     expect(
-      screen.getByRole("button", { name: "Delete Current Brush" }),
+      screen.getByRole("button", { name: "Delete Current Brush Project" }),
     ).toBeDisabled();
-    expect(screen.getByText(/No brushes yet/)).toBeInTheDocument();
+    expect(screen.getByText(/No brush projects yet/)).toBeInTheDocument();
   });
 
   it("a failed delete keeps the modal open with an error", async () => {
@@ -108,11 +110,11 @@ describe("BrushSelectModal — delete asks first", () => {
       onDeleteBrush: vi.fn(async () => false),
     });
     await userEvent.click(
-      screen.getByRole("button", { name: "Delete Current Brush" }),
+      screen.getByRole("button", { name: "Delete Current Brush Project" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Failed to delete brush",
+      "Failed to delete brush project",
     );
     expect(props.onClose).not.toHaveBeenCalled();
   });
@@ -121,7 +123,9 @@ describe("BrushSelectModal — delete asks first", () => {
 describe("BrushSelectModal — create validates names", () => {
   it("rejects an invalid name and never calls onCreateBrush", async () => {
     const { props } = renderModal();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "bad/name");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
@@ -132,7 +136,9 @@ describe("BrushSelectModal — create validates names", () => {
 
   it("rejects a duplicate name", async () => {
     const { props } = renderModal();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "Grass Tuft");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/already exists/);
@@ -141,7 +147,9 @@ describe("BrushSelectModal — create validates names", () => {
 
   it("creates with name, width and height, then closes", async () => {
     const { props } = renderModal();
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "Leaf Scatter");
     const width = screen.getByLabelText("W");
     await userEvent.clear(width);
@@ -155,10 +163,12 @@ describe("BrushSelectModal — create validates names", () => {
     const { props } = renderModal({
       onCreateBrush: vi.fn(async () => false),
     });
-    await userEvent.click(screen.getByRole("button", { name: "New Brush" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New Brush Project" }),
+    );
     await userEvent.type(screen.getByLabelText("Name"), "Leaf{Enter}");
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Failed to create brush",
+      "Failed to create brush project",
     );
     expect(props.onClose).not.toHaveBeenCalled();
   });
@@ -185,7 +195,7 @@ describe("BrushSelectModal — switch and rename", () => {
     });
     await userEvent.click(screen.getByRole("button", { name: /Grass Tuft/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Failed to switch brush",
+      "Failed to switch brush project",
     );
     expect(props.onClose).not.toHaveBeenCalled();
   });
@@ -195,7 +205,7 @@ describe("BrushSelectModal — switch and rename", () => {
     const rename = screen.getByRole("button", { name: "Rename" });
     expect(rename).toBeDisabled();
 
-    const field = screen.getByLabelText("Current brush");
+    const field = screen.getByLabelText("Current brush project");
     await userEvent.clear(field);
     await userEvent.type(field, "Softer Round");
     expect(rename).toBeEnabled();
@@ -206,7 +216,7 @@ describe("BrushSelectModal — switch and rename", () => {
 
   it("Rename rejects a name that collides with another brush", async () => {
     const { props } = renderModal();
-    const field = screen.getByLabelText("Current brush");
+    const field = screen.getByLabelText("Current brush project");
     await userEvent.clear(field);
     await userEvent.type(field, "Grass Tuft");
     await userEvent.click(screen.getByRole("button", { name: "Rename" }));

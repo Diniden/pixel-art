@@ -100,7 +100,7 @@ export function BrushLibrary({
       )}
     >
       <div className="panel__header">
-        Brushes
+        Brush Projects
         <div className="brush-library__header-actions">
           {isLoading && (
             <span className="brush-library__status" aria-live="polite">
@@ -114,8 +114,8 @@ export function BrushLibrary({
               showNewForm && "brush-library__header-btn--active",
             )}
             onClick={() => (showNewForm ? closeForm() : setShowNewForm(true))}
-            title="New Brush"
-            aria-label="New Brush"
+            title="New Brush Project"
+            aria-label="New Brush Project"
             aria-expanded={showNewForm}
           >
             +
@@ -133,7 +133,7 @@ export function BrushLibrary({
               id={nameId}
               type="text"
               className="brush-library__name-input"
-              placeholder="Brush name..."
+              placeholder="Brush project name..."
               value={newName}
               onChange={(e) => {
                 setNewName(e.target.value);
@@ -208,7 +208,7 @@ export function BrushLibrary({
 
         {brushes.length === 0 ? (
           <EmptyState className="brush-library__empty">
-            No brushes yet. Create one to start.
+            No brush projects yet. Create one to start.
           </EmptyState>
         ) : (
           <div className="brush-library__list">
