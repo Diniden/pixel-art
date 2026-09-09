@@ -130,9 +130,11 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
 - **Store members** on `ApplicationStore`: `app.brushes` (`BrushStore` — owns the
   document and its list/load/create/rename/delete lifecycle), `app.brushStructure`
   (frame and layer ops), `app.brushPixels` (cell writes, move, flips), `app.brushUI`
-  (selected frame/layer, delta sliders, zoom/pan, playback — in-memory, never persisted)
-  and `app.brushAutoSave`. The structure and pixel stores are behaviour modules over
-  `brushes.document`, the same way the domain sub-stores are over `DomainStore`.
+  (selected frame/layer, the two delta slots, zoom/pan, playback — in-memory, never
+  persisted), `app.brushViews` (a second `CanvasViewsUIStore`: which panes are open, the
+  Layer pane's camera, the keyboard owner) and `app.brushAutoSave`. The structure and
+  pixel stores are behaviour modules over `brushes.document`, the same way the domain
+  sub-stores are over `DomainStore`.
 - **Document shape** (`client/src/types/brush.ts`):
   `BrushDocument { version: "brush-1"; width; height; frames; appliedGroups }`.
   Every `BrushLayer` carries a
@@ -170,12 +172,45 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
   `saveStatus` dot and one `saveSuspended` flag serve both. A brush undo/redo bumps the
   counters during replay, so it schedules a save of the restored document (accepted and
   pinned by a test; the pixel project does not do this).
+- **Camera and panes** (plan `docs/11-brush-studio-followups/`): the brush canvas runs on
+  the same `ui/hooks/useCanvasViewport` engine as the pixel and lighting canvases —
+  `containers/brush/useBrushCamera.ts` is a thin adapter over it, and
+  `canvasTouchFilter` arbitrates Pencil against resting fingers exactly as in
+  `CanvasContainer`. `brushUI` **`implements CanvasCamera`** (`viewZoom`,
+  `setViewZoom(z, floor)`, `resetView`) and is the **Full** pane's camera;
+  `app.brushViews.layerCamera` is the **Layer** pane's. `brushUI.zoom` (integer px/cell)
+  is shared by both panes and no gesture changes it any more — pinch and wheel move only
+  `viewZoom`, so `combinedScale = zoom * viewZoom` is computed once in the adapter and
+  the backing store stays 1:1 with the cells (the fix for the measured blur: fractional
+  px/cell after a pinch). `BrushStudioContainer` renders `CanvasSplit` over
+  `brushViews.openModes`, one `<BrushCanvasContainer renderMode>` per pane; Layer mode
+  renders only the selected layer (`brushPaneScene`), keys are handled by the pane that
+  is `brushViews.keyboardOwner`, and the pane compositor and view-control builder live in
+  `containers/brush/brushPanes.ts` (`useBrushPaneRender`, `brushPaneControls`).
+- **Edge/fill deltas:** `brushUI` holds two slots — `selectedDelta` (edge, the original
+  name) and `fillDelta` — with `deltaTarget: "edge" | "fill"`, the computed
+  `activeDelta`, `setActiveDelta` / `setActiveDeltaChannel` / `resetActiveDelta`, and
+  `swapDeltas` (bound to `X` in brush mode by `GlobalHotkeys`; `BrushDeltaPicker` shows
+  the colour picker's Edge/Fill tabs and swap button). Neither slot is persisted or
+  undoable. The tool handlers never see a delta: `containers/brush/brushToolContext.ts`
+  hands them two sentinel colours, `DUMMY_TOOL_COLOR` (edge, `a: 255`) and
+  `DUMMY_FILL_COLOR` (fill, `a: 254`). Pencil, eraser, line and shape outlines emit the
+  edge sentinel; flood and gaussian fills emit the fill sentinel; and
+  `mapWritesToBrushCells(writes, edge, fill)` routes each write to a delta by sentinel
+  identity or its `a` byte (`0` erases). A `"both"` shape is split per pixel with
+  `getShapeOutlineKeys` (`shapeCommitCells`), and the preview is colourised by the same
+  routine, so it cannot disagree with the commit.
+- **Timeline floor:** `TimelineView` takes an opt-in `minRows` (root modifier
+  `timeline-view--min-rows` + CSS var `--timeline-min-rows`); `BrushTimelineContainer`
+  passes 5 so the brush rail is five rows tall even with one layer. The pixel studio
+  does not pass it.
 - **Files:** pure UI in `ui/components/Brush{Library,LayerPanel,DeltaPicker,SelectModal}/`
   and `ui/layouts/BrushStudioLayout/`; containers are `containers/Brush*Container.tsx`;
   the canvas container's store-free helpers live in `containers/brush/`
-  (`brushToolContext` maps each `ToolPixelWrite` colour to the selected delta,
-  `brushFill`, `brushSelection`, and the `useBrush{PointerHandlers,Selection,Hover,Camera}`
-  hooks lifted out to keep the container under `max-lines`).
+  (`brushToolContext` maps each `ToolPixelWrite` sentinel colour to the edge or fill
+  delta, `brushFill`, `brushSelection`, `brushPanes`, and the
+  `useBrush{PointerHandlers,Selection,Hover,Camera}` hooks lifted out to keep the
+  container under `max-lines`).
 
 ---
 
