@@ -120,6 +120,63 @@ history live on `SessionStore` specifically so they **survive a project switch**
 cross-document lifetime is load-bearing and easy to destroy by "tidying" them into
 `UIStore`, which is project-scoped.
 
+### Brush documents
+
+The brush studio (`studioMode === "brush"`, plan `docs/01-brush-studio/`) edits a
+**brush document** — a separate file type, entirely independent of the pixel project's
+wire format and its migrations. It reuses the pixel studio's toolbar, tool handlers,
+`CanvasSurface` and `TimelineView`, but nothing about its data touches the project.
+
+- **Store members** on `ApplicationStore`: `app.brushes` (`BrushStore` — owns the
+  document and its list/load/create/rename/delete lifecycle), `app.brushStructure`
+  (frame and layer ops), `app.brushPixels` (cell writes, move, flips), `app.brushUI`
+  (selected frame/layer, delta sliders, zoom/pan, playback — in-memory, never persisted)
+  and `app.brushAutoSave`. The structure and pixel stores are behaviour modules over
+  `brushes.document`, the same way the domain sub-stores are over `DomainStore`.
+- **Document shape** (`client/src/types/brush.ts`):
+  `BrushDocument { version: "brush-1"; width; height; frames; appliedGroups }`.
+  Every `BrushLayer` carries a
+  `channelType` (`hsl | rgb | normal | heightmap`) and a `pixels: BrushCell[][]` grid
+  indexed `[y][x]`, where a cell is `0` (unpainted) or a 4-tuple of signed deltas in
+  −255..255, rendered colourised with 127 = zero delta (`brushCellToRgba`). The
+  in-memory shape **is** the wire shape (plain `JSON.stringify`) — no compact codec, no
+  migration chain. The file carries no name: the filename stem is the identity, as for
+  projects.
+- **Where files live:** `server/src/data/brushes/<name>.json`, written atomically with
+  `safeWriteFile`; the previous version is copied to
+  `server/src/data/brushes/.prev/<name>.json` before each overwrite (one deep, no
+  rotation, not part of the project backup snapshots). Routes: `GET /api/brushes`,
+  `GET | POST | DELETE /api/brush?name=`, `POST /api/brush/create | rename`
+  (`server/src/routes/brush.ts`), called only through
+  `client/src/api/resources/brushApi.ts`. Names go through `isValidProjectName`.
+- **The uniform-layer invariant:** every frame has the same layer ids in the same order.
+  `BrushStructureStore` runs `assertUniformLayers` on every changed document before it
+  is recorded — layers can be swapped, never ordered per frame. A file that violates it
+  fails `normalizeBrushDocument` and does not load.
+- **`document` is `observable.ref`, always.** Every mutation replaces the document
+  immutably (spine copy, touched rows only) and bumps `domainVersion` and/or
+  `pixelVersion`; the canvas and thumbnails redraw from those counters, exactly as the
+  pixel grids do in §5. Never `observable`, never `observer` over grid contents.
+- **Separate history:** `BrushStore` owns its own `HistoryStore`. `app.activeHistory` is
+  `brushes.history` in brush mode and the project `history` otherwise; `app.undo()`,
+  `app.redo()` and the toolbar route through it, so ⌘Z in the brush studio never touches
+  the project's undo stack. Commands live in `stores/history/brushCommands.ts`:
+  whole-document snapshots for structural ops, `{x, y, before, after}` inverse patches
+  for pixel writes, strokes wrapped in one transaction.
+- **Separate autosave:** `app.brushAutoSave` is a second `AutoSaveController<BrushDocument>`
+  (the controller is generic over a structural `AutoSaveDocument<TDoc>`), triggered by
+  `[loadGeneration, domainVersion, pixelVersion]` of `BrushStore` and saving through
+  `brushApi.save`. It shares `SessionStore` with the project controller — one
+  `saveStatus` dot and one `saveSuspended` flag serve both. A brush undo/redo bumps the
+  counters during replay, so it schedules a save of the restored document (accepted and
+  pinned by a test; the pixel project does not do this).
+- **Files:** pure UI in `ui/components/Brush{Library,LayerPanel,DeltaPicker,SelectModal}/`
+  and `ui/layouts/BrushStudioLayout/`; containers are `containers/Brush*Container.tsx`;
+  the canvas container's store-free helpers live in `containers/brush/`
+  (`brushToolContext` maps each `ToolPixelWrite` colour to the selected delta,
+  `brushFill`, `brushSelection`, and the `useBrush{PointerHandlers,Selection,Hover,Camera}`
+  hooks lifted out to keep the container under `max-lines`).
+
 ---
 
 ## 4. Server structure
@@ -254,3 +311,4 @@ done.
 | What exactly does task N do?                | `REFRESH/NN-*.md`                   |
 | Why was X decided that way?                 | `REFRESH/OPEN-QUESTIONS.md`         |
 | What was measured, and how?                 | `REFRESH-PREP/findings/` (8 audits) |
+| How does the brush studio work, and why?    | `docs/01-brush-studio/MASTER.md`    |
