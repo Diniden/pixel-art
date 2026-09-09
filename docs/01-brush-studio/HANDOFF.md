@@ -1,6 +1,6 @@
 # HANDOFF — Brush Studio
 
-**Current position:** W10 gate DONE — manual QA owed (see checklist)
+**Current position:** PLAN COMPLETE (PARTIAL) — all 22 tasks code-complete, final gate exit 0 (coordinator re-run on `55e03a7`); 0 of 29 manual QA checks performed (see checklist)
 **Branch:** `feat/01-brush-studio` (cut 2026-09-08 from `feat/09-ipad-pencil-fixes` @ `3845480`)
 **Last commit:** `67661db` (W10 — `ARCHITECTURE.md`; the docs close-out commit follows it)
 
@@ -24,6 +24,20 @@ uncommitted files of unrelated in-flight work — see MASTER §4). Executors sta
 | W10 | 22 | PARTIAL (gate DONE; manual QA sweep owed) | 2026-09-08 | `67661db` (`a62ef85` formatting sweep · `67661db` ARCHITECTURE.md) | Full gate at `67661db`: `bun run verify` exit 0 — client+server tsc clean · eslint `✖ 66 problems (0 errors, 66 warnings)` · format:check `All matched files use Prettier code style!` · vitest `Test Files 183 passed (183)` / `Tests 3825 passed (3825)` (W9: 183/3825; no snapshot diff, no `-u`) · `bun run build` `✓ built in 2.16s` · `check-boundaries: OK — all 5 boundary rules hold.` · stylelint `✖ 71 problems (2 errors, 69 warnings)` = `OtherHand.css:338,359` baseline, 0 new · storybook `✓ built in 6.07s` · server tsc clean · server eslint clean · server vitest `Test Files 4 passed (4)` / `Tests 102 passed (102)` · no lockfile · `git status --short` empty. Corpus safety: `git diff --stat 3845480..HEAD -- client/src/types/codecs client/src/services server/src/export` is EMPTY (compared against the plan's base commit `3845480`, not `main`, which is older). First run of `verify` was RED at `format:check` (`types/__tests__/brush.test.ts` unformatted) — fixed by the formatting-only sweep `a62ef85` (3 files, line-wrapping only), then green. |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
+
+## Coordinator's final gate (re-run on `55e03a7`, 2026-09-08)
+
+```
+bun run verify   → eslint ✖ 66 problems (0 errors, 66 warnings) · prettier: All matched files use
+                   Prettier code style! · vitest Test Files 183 passed (183) / Tests 3825 passed
+                   (3825) · vite ✓ built in 2.20s
+lint:boundaries  → check-boundaries: OK — all 5 boundary rules hold.
+stylelint        → ✖ 71 problems (2 errors, 69 warnings); both errors OtherHand.css:338,359 (baseline)
+storybook build  → ✓ built in 6.00s
+server           → tsc clean · eslint clean · vitest Test Files 4 passed / Tests 102 passed
+corpus-sensitive → git diff --stat 3845480..HEAD -- types/codecs services server/src/export: empty
+lockfile / tree  → none / clean
+```
 
 ## Deviations
 - **W1/03 — one file outside `Touches` edited:** `ui/components/Toolbar/__tests__/Toolbar.dom.test.tsx`
