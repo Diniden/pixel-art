@@ -269,14 +269,16 @@ describe("BrushDeltaPicker edge/fill target row", () => {
     expect(screen.getByText("Select a layer")).toBeInTheDocument();
     expect(screen.getAllByRole("tab")).toHaveLength(2);
     expect(
-      screen.getByTestId("brush-delta-target-swatch-edge").style.backgroundColor,
+      screen.getByTestId("brush-delta-target-swatch-edge").style
+        .backgroundColor,
     ).toMatch(/^rgba?\(127, 127, 127/);
   });
 
   it("edgeValue/fillValue default to value", () => {
     renderPicker("rgb", EDGE, { target: "edge", onTargetChange: () => {} });
     expect(
-      screen.getByTestId("brush-delta-target-swatch-fill").style.backgroundColor,
+      screen.getByTestId("brush-delta-target-swatch-fill").style
+        .backgroundColor,
     ).toMatch(/^rgba?\(255, 0, 127/);
   });
 

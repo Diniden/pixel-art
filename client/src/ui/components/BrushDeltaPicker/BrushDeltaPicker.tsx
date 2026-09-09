@@ -237,7 +237,9 @@ function TargetRow({
                 className="brush-delta-picker__target-swatch"
                 aria-hidden="true"
                 data-testid={`brush-delta-target-swatch-${id}`}
-                style={{ backgroundColor: rgbaCss(swatchRgba(slot, channelType)) }}
+                style={{
+                  backgroundColor: rgbaCss(swatchRgba(slot, channelType)),
+                }}
               />
               {label}
             </button>
