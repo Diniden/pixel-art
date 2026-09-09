@@ -1,8 +1,8 @@
 # HANDOFF — Brush Studio
 
-**Current position:** W10 IN PROGRESS (W1–W9 code-complete; W1/W2/W6/W7/W8/W9 manual checks owed, see Notes)
+**Current position:** W10 gate DONE — manual QA owed (see checklist)
 **Branch:** `feat/01-brush-studio` (cut 2026-09-08 from `feat/09-ipad-pencil-fixes` @ `3845480`)
-**Last commit:** `f85d78a` (W9)
+**Last commit:** `67661db` (W10 — `ARCHITECTURE.md`; the docs close-out commit follows it)
 
 Planned 2026-08-29 from `feat/rail-layout-controls` @ `37a4bce` with a dirty worktree (103
 uncommitted files of unrelated in-flight work — see MASTER §4). Executors stage only their
@@ -21,7 +21,7 @@ uncommitted files of unrelated in-flight work — see MASTER §4). Executors sta
 | W7 | 19 | PARTIAL (code DONE, gate green; all 8 manual checks owed) | 2026-09-08 | `04335d7` | tsc clean · eslint 0 err/66 warn · vitest 179 files, 3709 tests pass (W6: 177/3703), no snapshot diff · boundaries OK · stylelint 2 errors = `OtherHand.css` baseline, 0 new · storybook ✓ built in 6.12s · `bun run build` ✓ 2.16s · no lockfile |
 | W8 | 20 | PARTIAL (code DONE, gate green; 5 manual checks owed) | 2026-09-08 | `576675c` | tsc clean · eslint 0 err/66 warn (`max-lines` does NOT fire on the container: 379 counted / 400) · vitest 181 files, 3776 tests pass (W7: 179/3709), no snapshot diff · boundaries OK · no lockfile |
 | W9 | 21 | PARTIAL (code DONE, gate green; 7 manual checks owed) | 2026-09-08 | `f85d78a` | tsc clean · eslint 0 err/66 warn (`max-lines` off on the container: 498 raw / 379 counted) · vitest 183 files, 3825 tests pass (W8: 181/3776), no snapshot diff · boundaries OK · no lockfile |
-| W10 | 22 | IN PROGRESS | 2026-09-08 | | |
+| W10 | 22 | PARTIAL (gate DONE; manual QA sweep owed) | 2026-09-08 | `67661db` (`a62ef85` formatting sweep · `67661db` ARCHITECTURE.md) | Full gate at `67661db`: `bun run verify` exit 0 — client+server tsc clean · eslint `✖ 66 problems (0 errors, 66 warnings)` · format:check `All matched files use Prettier code style!` · vitest `Test Files 183 passed (183)` / `Tests 3825 passed (3825)` (W9: 183/3825; no snapshot diff, no `-u`) · `bun run build` `✓ built in 2.16s` · `check-boundaries: OK — all 5 boundary rules hold.` · stylelint `✖ 71 problems (2 errors, 69 warnings)` = `OtherHand.css:338,359` baseline, 0 new · storybook `✓ built in 6.07s` · server tsc clean · server eslint clean · server vitest `Test Files 4 passed (4)` / `Tests 102 passed (102)` · no lockfile · `git status --short` empty. Corpus safety: `git diff --stat 3845480..HEAD -- client/src/types/codecs client/src/services server/src/export` is EMPTY (compared against the plan's base commit `3845480`, not `main`, which is older). First run of `verify` was RED at `format:check` (`types/__tests__/brush.test.ts` unformatted) — fixed by the formatting-only sweep `a62ef85` (3 files, line-wrapping only), then green. |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
@@ -162,50 +162,80 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   `brush-studio(11)`); (C) owner says "stash it" — the coordinator runs `git stash -u`, executes W5,
   then `git stash pop` (conflict risk in the ctor region of `ApplicationStore.ts`, where both edit).
   Recommended: A.
-- **Task 11 must also decide** (see W3/07(g), W4/09): undo/redo bumps brush versions, so a replay
-  schedules a brush autosave. Either accept (simplest; the saved doc is correct) or gate the
-  brush controller's trigger on `!history.isReplaying`.
-- **Manual checks owed for W1/03 (no browser available to executors):** (1) three studio buttons
-  render, stacked when the toolbar is vertical, active state on current; (2) Brush → placeholder
-  with working "Back to Pixel Studio", project intact; (3) hotkey from pixel↔lighting, from brush →
-  pixel; (4) reload while in brush mode boots into the placeholder and Back works; (5) iPad: the
-  new button is tappable.
-- **Manual checks owed for W9/21** (brush mode, selection tool): rect selection → ants at the
-  right zoom; pencil outside does nothing, inside paints; Delete clears; drag inside moves cells
-  with preview, one undo entry; Escape clears; switching brush clears the selection; StrictMode
-  does not double-apply the move; first-selection overlay canvas mount paints the fill on the
-  first frame; iPad touch/pinch abort path.
-- **Manual checks owed for W8/20** (brush mode): paint a ring, flood-fill inside → interior only,
-  one undo entry; gaussian-fill same; eyedropper on a painted cell sets the sliders; move drag
-  shifts the layer, out-of-bounds cells dropped, one undo per drag; iPad touch drag. Also:
-  StrictMode double-mount of the window `mouseup` listener (jsdom covers bind-only-while-open).
-- **Manual checks owed for W7/19 — all eight** (`bun run dev`): (1) Pixel → Brush: header
-  "Brushes", empty library, create "Test Brush" 16×16 → loads, layer panel "Layer 1 · RGB",
-  timeline 1×1; (2) pencil at delta 0 → grey, R=+255 → red-ish, eraser clears; (3) add HSL
-  layer in every frame, add frame (copy) → 2 columns, move layer reorders both, play/stop;
-  (4) ⌘Z/⇧⌘Z on brush edits, then Pixel → ⌘Z undoes the project, not the brush; (5) save dot
-  pending→saved, `curl 'localhost:3001/api/brush?name=Test%20Brush'` shows cells, reload restores
-  brush mode; (6) modal rename updates header, delete → next/empty, project list never shows
-  brushes; (7) focus mode hides rails, Other-Hand rail toggles, no origin/trace tools;
-  (8) Network tab shows one `GET /api/brushes` (jsdom-proven under StrictMode already).
-- **Manual checks owed for W6 (need task 19's mount; fold into the W7 sweep):** 16 — pencil at
-  delta 0 paints 127-grey, L=+255 renders blue-ish; eraser clears; line/rect/ellipse preview then
-  commit; ⌘Z undoes one whole stroke; 100-cell drag at zoom 16 smooth (< 16 ms frames);
-  StrictMode does not double-record; hover marker, wheel/pinch zoom, cursor switching.
-  17 — rail thumbnail repaints on frame step and brush switch; delta sliders follow the selected
-  layer's channel type; primitives-based Max/Shape buttons look acceptable in the rail.
-  18 — playback cycles at 200 ms and stops; edit during playback keeps playing; frame
-  add/dup/delete/swap and layer swap/rename from the header; thumbnails repaint on edit.
-- **Manual checks owed for W2 (Storybook, `bun run storybook` → http://localhost:6006):**
-  12 — channel menu renders *above* the panel un-clipped (jsdom proves the portal, not layout);
-  keyboard nav and inline rename felt in a real browser. 13 — visual look only (name validation,
-  Escape/backdrop close, delete confirm are jsdom-covered). 14 — slider drag updates the swatch
-  live; **iPad numeric keyboard accepts a leading minus** (plain `type="number"`, no `inputMode`).
+- ~~**Task 11 must also decide** (see W3/07(g), W4/09)~~ — resolved by W5/11: replay-autosave
+  ACCEPTED (see Deviations).
 - **Start-state (2026-09-08):** the tree was dirty with the owner's in-flight thumbnail-cache
   work (18 modified files incl. `stores/ApplicationStore.ts` +73, `containers/CanvasContainer.tsx`,
   `LayerPanelContainer.tsx`, `ThumbnailCanvas`, plus untracked `ui/canvas/thumbnailCache.ts` and
   two `__tests__` dirs). None of it overlaps W1–W4 `Touches`. **Task 11 (W5) touches
   `ApplicationStore.ts`, which is dirty** — before dispatching W5, check whether the owner has
   committed that work; if not, stop and ask rather than let an executor stage a mixed file.
+  (Resolved by the owner's checkpoint `be92287`.)
 - MASTER §4 line numbers were measured at `37a4bce`; nine plans have landed since (e.g.
   `StudioMode` is now `types/domain.ts:480`, not `:279`). Executors must grep, not trust lines.
+
+### Manual QA checklist (owed — none performed by executors)
+
+No executor in W1–W10 had a browser or the iPad; **nothing below has been run.** This list
+consolidates every per-wave manual check that was owed (W1/03, W2, W6/16–18, W7/19, W8/20,
+W9/21, W10/22). Run it in one sitting with `bun run dev` (Storybook items via
+`bun run storybook` → http://localhost:6006) and record pass/fail per row. `—` = not applicable
+on that device.
+
+| # | Check (source) | Desktop | iPad |
+| --- | --- | --- | --- |
+| 1 | Three studio buttons (Pixel / Lighting / Brush) render, stacked when the toolbar is vertical, active state on the current mode (W1/03) | owed | owed — new button tappable |
+| 2 | Brush → brush studio; Pixel button returns; the pixel project is intact afterwards (W1/03) | owed | owed |
+| 3 | Studio hotkey toggles pixel↔lighting; from brush it goes to pixel (W1/03, D22) | owed | — |
+| 4 | Reload while in brush mode boots into the brush studio and Pixel still works (W1/03) | owed | owed |
+| 5 | Storybook `BrushLayerPanel`: channel menu renders *above* the panel un-clipped; keyboard nav and inline rename feel right (W2/12) | owed | — |
+| 6 | Storybook `BrushSelectModal`: visual look (validation / Escape / backdrop / delete-confirm are jsdom-covered) (W2/13) | owed | — |
+| 7 | Storybook `BrushDeltaPicker`: slider drag updates the swatch live (W2/14) | owed | owed — numeric keyboard accepts a leading minus (plain `type="number"`, no `inputMode`) |
+| 8 | Pixel → Brush: header reads "Brushes", empty library, create "Test Brush" 16×16 → loads, layer panel "Layer 1 · RGB", timeline 1×1 (W7/19 #1) | owed | owed |
+| 9 | Pencil at delta 0 paints 127-grey; R=+255 red-ish, L=+255 (HSL) blue-ish; eraser clears (W6/16, W7/19 #2) | owed | owed — Pencil paint |
+| 10 | Line / rect / ellipse preview then commit; ⌘Z undoes one whole stroke; StrictMode does not double-record (W6/16) | owed | owed |
+| 11 | 100-cell drag at zoom 16 stays smooth (< 16 ms frames); hover marker; wheel/pinch zoom; cursor switching (W6/16) | owed | owed — finger pan / pinch zoom |
+| 12 | Add HSL layer (appears in every frame); add frame (copy) → 2 columns; move layer reorders both frames; play / stop (W7/19 #3) | owed | owed — tap buttons |
+| 13 | Playback cycles at 200 ms and stops; editing during playback keeps playing; frame add/dup/delete/swap and layer swap/rename from the timeline header; thumbnails repaint on edit (W6/18) | owed | owed |
+| 14 | Rail thumbnail repaints on frame step and brush switch; delta sliders follow the selected layer's channel type; primitives-based Max/Shape buttons look acceptable in the rail (W6/17) | owed | owed |
+| 15 | ⌘Z / ⇧⌘Z undo brush edits; switch to Pixel → ⌘Z undoes the project, not the brush (W7/19 #4, D10) | owed | — |
+| 16 | Save dot pending → saved; `curl 'localhost:3001/api/brush?name=Test%20Brush'` shows cells; reload restores brush mode with the brush as left (W7/19 #5) | owed | owed |
+| 17 | Modal rename updates the header; delete → next brush / empty state; the project list never shows brushes (W7/19 #6) | owed | owed |
+| 18 | Focus mode hides rails; Other-Hand rail toggles; no origin / reference-trace tools in brush mode (W7/19 #7) | owed | owed |
+| 19 | Network tab shows exactly one `GET /api/brushes` on entering brush mode (jsdom-proven under StrictMode) (W7/19 #8) | owed | — |
+| 20 | Paint a ring, flood-fill inside → interior only, one undo entry; gaussian-fill behaves the same (W8/20) | owed | owed |
+| 21 | Eyedropper on a painted cell sets the delta sliders (W8/20) | owed | owed |
+| 22 | Move drag shifts the layer, out-of-bounds cells dropped, one undo entry per drag (W8/20) | owed | owed — touch drag |
+| 23 | StrictMode double-mount of the window `mouseup` listener does not double-fire (jsdom covers bind-only-while-open) (W8/20) | owed | — |
+| 24 | Selection tool: rect selection → marching ants at the right zoom; pencil outside does nothing, inside paints (W9/21) | owed | owed |
+| 25 | Delete clears selected cells; Escape clears the selection; switching brush clears it (W9/21) | owed | owed |
+| 26 | Drag inside the selection moves cells with a preview, one undo entry ("Move selection"); StrictMode does not double-apply (W9/21) | owed | owed |
+| 27 | First-ever selection: the overlay canvas mount paints the fill on the first frame (W9/21) | owed | owed |
+| 28 | iPad touch / pinch abort path during a selection drag (W9/21) | — | owed |
+| 29 | Owner's project untouched: open the pixel studio, the project loads, its undo stack behaves (W10/22 step 5 — the `git diff --stat` half is DONE and empty) | owed | — |
+
+### Open items
+
+Cosmetic and deferred work carried out of the plan; none blocks the gate.
+
+- `RAIL_LABELS` in `containers/hooks/useRailLayout.tsx` still says "Objects & Layers" over the
+  brush library (W7/19).
+- The five timeline frame buttons (add / duplicate / delete / left / right) render in
+  `TimelineView`'s `viewModeDropdown` slot beside a static "Timeline" label; could be lifted into
+  a pure `ui/` component (W6/18). Timeline drag callbacks are inert no-ops (a drag ghost still
+  appears), `onOpenPreview` is a no-op, the thumbnail cache is unused, and the container has no
+  unit test.
+- Lasso selection DEFERRED — rectangle only (W9/21).
+- `ui/layouts/__tests__/layouts.dom.test.tsx` has no `BrushStudioLayout` block (W2/15 follow-up;
+  not done by 19 or 22).
+- Residue on the owner's disk: `server/src/data/brushes/.prev/zz-plan-test.json` (~100 B,
+  W1/02); harmless, owner may delete by hand.
+- Both autosave controllers share `SessionStore`: one `saveStatus` dot and one `saveSuspended`
+  flag serve the project and the brush (W5/11). A brush undo/redo schedules a brush save
+  (accepted, pinned by a test).
+- `BrushPixelStore.resolveTarget` checks the selected frame only — it does not assert the layer
+  exists in every frame (W4/09; MASTER risk-register item not done).
+- Space / middle-drag pan omitted on the brush canvas (W6/16); ctrl/meta+wheel zoom, plain wheel
+  pan and pinch zoom exist.
+- `ARCHITECTURE.md` still carries the refresh-era "Today / Target" framing and §8 rows pointing
+  at the deleted `REFRESH/` tree; W10 only added the brush subsection and one §8 row.
