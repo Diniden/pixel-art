@@ -7,12 +7,15 @@
  * things live here:
  *
  *  1. **The delta picker** (`BrushDeltaPicker`, task 14) in place of the
- *     colour picker. It edits `brushUI.selectedDelta` — UI state, NOT
- *     undoable (D17) — so every slider move goes straight to
- *     `setDeltaChannel` with no debounce and no history entry. The sliders
- *     shown follow the SELECTED LAYER's channel type
- *     (`brushUI.channelTypeIn(brushes.document)`); with no layer selected the
- *     picker renders its own empty state.
+ *     colour picker. It edits whichever of the two delta slots
+ *     `brushUI.deltaTarget` names — `selectedDelta` (edge) or `fillDelta`
+ *     (follow-ups `docs/11-brush-studio-followups` task 07, MASTER D8) —
+ *     through the store's `*Active*` setters. UI state, NOT undoable (D17),
+ *     so every slider move goes straight to `setActiveDeltaChannel` with no
+ *     debounce and no history entry, and the Edge/Fill swap is a plain
+ *     exchange with no snapshot. The sliders shown follow the SELECTED
+ *     LAYER's channel type (`brushUI.channelTypeIn(brushes.document)`); with
+ *     no layer selected the picker renders its own empty state.
  *
  *  2. **The stroke-size controls** for the pencil and the eraser, read from
  *     and written to the SHARED `ToolUIStore` (`app.ui.tool`). The tool set
@@ -56,7 +59,7 @@ type StrokeShape = "circle" | "square";
 
 /**
  * `BrushDeltaPicker` emits a plain `number` index (it maps over the channel
- * table); `BrushUIStore.setDeltaChannel` takes the `0 | 1 | 2 | 3` union.
+ * table); `BrushUIStore.setActiveDeltaChannel` takes the `0 | 1 | 2 | 3` union.
  * Narrow at the seam rather than casting — the picker never emits anything
  * else, but a cast would hide it if it ever did.
  */
@@ -165,14 +168,33 @@ export const BrushStudioPanelContainer = observer(
         <Panel title="Delta" bodyVariant="dense">
           <BrushDeltaPicker
             channelType={channelType}
-            // `observable.ref`, replaced wholesale by every setter — passing
-            // the tuple through is safe and its identity changes exactly when
-            // a channel does.
-            value={brushUI.selectedDelta}
+            /* Edge / Fill (follow-ups task 07, MASTER D8 / D10): the same
+               shape as `ColorPickerContainer`'s wiring of `ColorPicker`. The
+               store resolves the active slot (`activeDelta` is a computed
+               over `deltaTarget`), so — unlike the colour container — no
+               ternary is needed here; the picker never chooses between the
+               two itself. */
+            target={brushUI.deltaTarget}
+            onTargetChange={(target) => brushUI.setDeltaTarget(target)}
+            // `selectedDelta` IS the edge slot (the name predates the split).
+            // Both are `observable.ref`, replaced wholesale by every setter —
+            // passing the tuples through is safe and each identity changes
+            // exactly when one of its channels does.
+            edgeValue={brushUI.selectedDelta}
+            fillValue={brushUI.fillDelta}
+            value={brushUI.activeDelta}
             onChange={(index, value) => {
-              if (isDeltaIndex(index)) brushUI.setDeltaChannel(index, value);
+              if (isDeltaIndex(index)) {
+                brushUI.setActiveDeltaChannel(index, value);
+              }
             }}
-            onReset={() => brushUI.resetDelta()}
+            onReset={() => brushUI.resetActiveDelta()}
+            /* ⚠️ NOT bracketed with a history save, and must never be: the
+               deltas are UI state (D17), `swapDeltas` is a plain exchange,
+               and the brush history stack holds document edits only. The
+               colour picker's swap snapshots once INSIDE its store action for
+               the same reason — never at the call site. */
+            onSwap={() => brushUI.swapDeltas()}
             // A lifecycle flow in flight (switch / create / delete) — the
             // document under the picker is about to change.
             disabled={brushes.isLoading}

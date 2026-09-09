@@ -28,7 +28,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
 import { runInAction } from "mobx";
 
-import type { Project } from "@/types";
+import type { BrushDelta, Project } from "@/types";
 import { ApplicationStore } from "@/stores/ApplicationStore";
 import { StoreProvider } from "@/stores/context";
 import { GlobalHotkeys } from "@/containers/GlobalHotkeys";
@@ -233,6 +233,79 @@ describe("GlobalHotkeys — X does not steal a modified keystroke", () => {
     const app = mount();
     press("x", window, { altKey: true });
     expect(app.ui.tool.selectedColor).toEqual(RED);
+  });
+});
+
+describe("GlobalHotkeys — X in brush mode swaps the DELTAS (follow-ups task 07, D11)", () => {
+  const EDGE: BrushDelta = [40, -30, 20, 0];
+  const FILL: BrushDelta = [-100, 50, 0, 10];
+
+  /** `mount()` plus brush mode and two distinct delta slots. */
+  function mountBrush(): ApplicationStore {
+    const app = mount();
+    act(() =>
+      runInAction(() => {
+        app.lightingUI.setStudioMode("brush");
+        app.brushUI.setDelta(EDGE);
+        app.brushUI.setFillDelta(FILL);
+      }),
+    );
+    return app;
+  }
+
+  it("⭐ X swaps brushUI's edge/fill deltas and leaves ui.tool's colours untouched", () => {
+    const app = mountBrush();
+    const swapColors = vi.spyOn(app, "swapEdgeAndFillColors");
+    const saveStateToHistory = vi.spyOn(app, "saveStateToHistory");
+
+    const e = press("x");
+
+    expect(app.brushUI.selectedDelta).toEqual(FILL);
+    expect(app.brushUI.fillDelta).toEqual(EDGE);
+    // The pixel studio's slots are not on screen in brush mode and must not
+    // move — and the colour swap would have cost an undo step.
+    expect(app.ui.tool.selectedColor).toEqual(RED);
+    expect(app.ui.tool.fillColor).toEqual(BLUE);
+    expect(swapColors).not.toHaveBeenCalled();
+    // Deltas are UI state, not undoable: no snapshot on either stack.
+    expect(saveStateToHistory).not.toHaveBeenCalled();
+    // Same guard, same preventDefault as the colour branch.
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it("the typing guard still applies in brush mode", () => {
+    const app = mountBrush();
+    press("x", field("input"));
+    expect(app.brushUI.selectedDelta).toEqual(EDGE);
+    expect(app.brushUI.fillDelta).toEqual(FILL);
+  });
+
+  it("⭐ X in pixel mode is unchanged: colours swap, deltas do not", () => {
+    const app = mount();
+    act(() =>
+      runInAction(() => {
+        app.lightingUI.setStudioMode("pixel");
+        app.brushUI.setDelta(EDGE);
+        app.brushUI.setFillDelta(FILL);
+      }),
+    );
+    const swapDeltas = vi.spyOn(app.brushUI, "swapDeltas");
+
+    press("x");
+
+    expect(app.ui.tool.selectedColor).toEqual(BLUE);
+    expect(app.ui.tool.fillColor).toEqual(RED);
+    expect(app.brushUI.selectedDelta).toEqual(EDGE);
+    expect(app.brushUI.fillDelta).toEqual(FILL);
+    expect(swapDeltas).not.toHaveBeenCalled();
+  });
+
+  it("leaving brush mode re-binds: X swaps colours again in pixel mode", () => {
+    const app = mountBrush();
+    act(() => runInAction(() => app.lightingUI.setStudioMode("pixel")));
+    press("x");
+    expect(app.ui.tool.selectedColor).toEqual(BLUE);
+    expect(app.brushUI.selectedDelta).toEqual(EDGE);
   });
 });
 

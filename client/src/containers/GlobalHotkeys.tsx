@@ -46,6 +46,8 @@
  * guard, for the same reason: typing an `x` into the colour picker's hex field
  * or a layer-rename box must insert a character, not swap the colours. It is
  * placed with the backquote branches, on the guarded side of that asymmetry.
+ * In brush mode the same branch swaps `brushUI`'s edge/fill DELTAS instead
+ * (brush follow-ups task 07, MASTER D11) — see the note on the branch.
  *
  * ── Why the stores, not the bridge ────────────────────────────────────────
  *
@@ -130,7 +132,17 @@ export const GlobalHotkeys = observer(function GlobalHotkeys() {
          the tool hotkeys list `g`/`G`, `r`/`R` in both cases.
 
          ⚠️ ONE undo step. `swapEdgeAndFillColors` snapshots once before it
-         mutates; do not bracket this with another `saveStateToHistory`. */
+         mutates; do not bracket this with another `saveStateToHistory`.
+
+         ── Brush mode swaps the DELTAS instead (follow-ups task 07, D11) ──
+         The brush studio's twin of the edge/fill pair is `brushUI`'s
+         `selectedDelta` / `fillDelta`, and the pixel studio's colours are not
+         on screen there, so `X` exchanges the deltas and leaves `ui.tool`
+         alone. `swapDeltas` takes NO history snapshot — the deltas are UI
+         state, not undoable (brush-studio D17) — and must not be given one
+         here. The guard and `preventDefault` are shared by both branches;
+         only the store action differs. Lighting mode keeps the colour swap:
+         the colour picker is still the panel there. */
       if (
         (e.key === "x" || e.key === "X") &&
         !e.metaKey &&
@@ -140,7 +152,8 @@ export const GlobalHotkeys = observer(function GlobalHotkeys() {
         if (isTypingTarget(e.target)) return;
 
         e.preventDefault();
-        app.swapEdgeAndFillColors();
+        if (studioMode === "brush") app.brushUI.swapDeltas();
+        else app.swapEdgeAndFillColors();
         return;
       }
 
