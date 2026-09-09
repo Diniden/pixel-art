@@ -7,6 +7,11 @@
  * task names — writes map, erase → 0, the delta is COPIED not aliased — and
  * then run the REAL `toolHandlers` through `buildBrushToolContext` so the
  * pencil, eraser and fill-square are proven end to end without React.
+ *
+ * Follow-ups task 08 (D9): the writes are routed to TWO slots — the edge
+ * sentinel / pencil / eraser / square / outline → `delta` (edge), the fill
+ * sentinel / flood / interior → `fillDelta` — and a `"both"` shape splits per
+ * pixel; the preview colours come from the same split as the commit.
  */
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -15,6 +20,8 @@ import {
   createBrushLayer,
 } from "../../../types";
 import type { BrushCell, BrushDelta, BrushDocument } from "../../../types";
+import { brushCellToRgba } from "../../../types";
+import { getShapeOutlineKeys } from "../../../components/Canvas/drawingUtils";
 import { getToolHandler } from "../../../ui/canvas/tools/toolHandlers";
 import type { ToolPixelWrite } from "../../../ui/canvas/tools/toolHandlers";
 import { BrushPixelStore } from "../../../stores/domain/BrushPixelStore";
@@ -26,6 +33,7 @@ import {
   BRUSH_INERT_TOOLS,
   BRUSH_MOVE_LABEL,
   BRUSH_STROKE_TOOLS,
+  DUMMY_FILL_COLOR,
   DUMMY_TOOL_COLOR,
   brushCoordGeometry,
   brushCursor,
@@ -37,17 +45,26 @@ import {
   isBrushInertTool,
   isBrushSelectionTool,
   isBrushShapeTool,
+  isFillSentinel,
   mapWritesToBrushCells,
+  paintShapePreview,
   pickBrushDelta,
   pointsToBrushCells,
+  shapeCommitCells,
+  shapePointSlot,
+  shapePreviewColors,
   touchDistance,
 } from "../brushToolContext";
 import type {
   BrushGestureHost,
+  BrushShapeSlots,
   BrushToolContextArgs,
 } from "../brushToolContext";
 
+/** The EDGE slot. */
 const DELTA: BrushDelta = [100, -50, 255, 0];
+/** The FILL slot — distinct in every channel so a mix-up cannot pass. */
+const FILL: BrushDelta = [-100, 50, -255, 10];
 
 const key = (cells: ReadonlyArray<{ x: number; y: number }>) =>
   cells.map((c) => `${c.x},${c.y}`).sort();
@@ -72,6 +89,7 @@ function makeArgs(
     shapeMode: "outline",
     borderRadius: 0,
     delta: DELTA,
+    fillDelta: FILL,
     readGrid: () => null,
     lastStrokePixel: null,
     setLastStrokePixel: vi.fn(),
@@ -83,23 +101,72 @@ function makeArgs(
   };
 }
 
-describe("mapWritesToBrushCells (D19)", () => {
-  it("maps a coloured write to the delta and an erase write to 0", () => {
+describe("the two sentinels (D9)", () => {
+  it("are distinct by identity AND by value; only the fill one has a = 254", () => {
+    expect(DUMMY_FILL_COLOR).not.toBe(DUMMY_TOOL_COLOR);
+    expect(DUMMY_FILL_COLOR).not.toEqual(DUMMY_TOOL_COLOR);
+    expect(DUMMY_FILL_COLOR.a).toBe(254);
+    expect(DUMMY_TOOL_COLOR.a).toBe(255);
+  });
+
+  it("isFillSentinel: by identity, or by the a byte of a copy; never erase or edge", () => {
+    expect(isFillSentinel(DUMMY_FILL_COLOR)).toBe(true);
+    expect(isFillSentinel({ ...DUMMY_FILL_COLOR })).toBe(true);
+    expect(isFillSentinel({ r: 9, g: 9, b: 9, a: 254 })).toBe(true);
+    expect(isFillSentinel(DUMMY_TOOL_COLOR)).toBe(false);
+    expect(isFillSentinel({ ...DUMMY_TOOL_COLOR })).toBe(false);
+    expect(isFillSentinel(0)).toBe(false);
+  });
+});
+
+describe("mapWritesToBrushCells (D19 + D9)", () => {
+  it("maps the edge sentinel to the edge delta and an erase write to 0", () => {
     const writes: ToolPixelWrite[] = [
       { x: 1, y: 2, color: DUMMY_TOOL_COLOR },
       { x: 3, y: 4, color: 0 },
     ];
-    expect(mapWritesToBrushCells(writes, DELTA)).toEqual([
+    expect(mapWritesToBrushCells(writes, DELTA, FILL)).toEqual([
       { x: 1, y: 2, value: [100, -50, 255, 0] },
       { x: 3, y: 4, value: 0 },
     ]);
   });
 
-  it("ignores the colour's VALUE — any non-zero colour is a paint", () => {
+  it("⭐ maps the fill sentinel to a COPY of the fill delta — never the same reference", () => {
+    const writes: ToolPixelWrite[] = [
+      { x: 1, y: 2, color: DUMMY_FILL_COLOR },
+      { x: 2, y: 2, color: { ...DUMMY_FILL_COLOR } },
+    ];
+    const cells = mapWritesToBrushCells(writes, DELTA, FILL);
+    expect(cells).toEqual([
+      { x: 1, y: 2, value: [-100, 50, -255, 10] },
+      { x: 2, y: 2, value: [-100, 50, -255, 10] },
+    ]);
+    expect(cells[0].value).not.toBe(FILL);
+    expect(cells[1].value).not.toBe(FILL);
+    expect(cells[0].value).not.toBe(cells[1].value);
+    expect(cells[0].value).not.toEqual(DELTA);
+  });
+
+  it("routes by the sentinel, not by value: an arbitrary opaque colour is edge, a = 254 is fill", () => {
     const writes: ToolPixelWrite[] = [
       { x: 0, y: 0, color: { r: 255, g: 255, b: 255, a: 0 } },
+      { x: 1, y: 0, color: { r: 7, g: 7, b: 7, a: 254 } },
     ];
-    expect(mapWritesToBrushCells(writes, DELTA)[0].value).toEqual(DELTA);
+    const cells = mapWritesToBrushCells(writes, DELTA, FILL);
+    expect(cells[0].value).toEqual(DELTA);
+    expect(cells[1].value).toEqual(FILL);
+  });
+
+  it("a mixed list keeps each write's slot in order", () => {
+    const writes: ToolPixelWrite[] = [
+      { x: 0, y: 0, color: DUMMY_TOOL_COLOR },
+      { x: 1, y: 0, color: DUMMY_FILL_COLOR },
+      { x: 2, y: 0, color: 0 },
+      { x: 3, y: 0, color: DUMMY_TOOL_COLOR },
+    ];
+    expect(
+      mapWritesToBrushCells(writes, DELTA, FILL).map((c) => c.value),
+    ).toEqual([DELTA, FILL, 0, DELTA]);
   });
 
   it("⭐ every painted cell gets its OWN copy — never the source tuple", () => {
@@ -107,7 +174,7 @@ describe("mapWritesToBrushCells (D19)", () => {
       { x: 0, y: 0, color: DUMMY_TOOL_COLOR },
       { x: 1, y: 0, color: DUMMY_TOOL_COLOR },
     ];
-    const cells = mapWritesToBrushCells(writes, DELTA);
+    const cells = mapWritesToBrushCells(writes, DELTA, FILL);
     const a = cells[0].value;
     const b = cells[1].value;
     expect(a).not.toBe(DELTA);
@@ -121,6 +188,18 @@ describe("mapWritesToBrushCells (D19)", () => {
     const cells = mapWritesToBrushCells(
       [{ x: 0, y: 0, color: DUMMY_TOOL_COLOR }],
       source,
+      FILL,
+    );
+    source[2] = 99;
+    expect(cells[0].value).toEqual([1, 2, 3, 4]);
+  });
+
+  it("a later edit of the source FILL delta does not reach filled cells", () => {
+    const source: BrushDelta = [1, 2, 3, 4];
+    const cells = mapWritesToBrushCells(
+      [{ x: 0, y: 0, color: DUMMY_FILL_COLOR }],
+      DELTA,
+      source,
     );
     source[2] = 99;
     expect(cells[0].value).toEqual([1, 2, 3, 4]);
@@ -130,13 +209,14 @@ describe("mapWritesToBrushCells (D19)", () => {
     const cells = mapWritesToBrushCells(
       [{ x: -1, y: 40, color: DUMMY_TOOL_COLOR }],
       DELTA,
+      FILL,
     );
     expect(cells).toHaveLength(1);
     expect(cells[0]).toMatchObject({ x: -1, y: 40 });
   });
 
   it("an empty write list is an empty cell list", () => {
-    expect(mapWritesToBrushCells([], DELTA)).toEqual([]);
+    expect(mapWritesToBrushCells([], DELTA, FILL)).toEqual([]);
   });
 });
 
@@ -155,6 +235,213 @@ describe("pointsToBrushCells (shape commit)", () => {
     ]);
     expect(cells[0].value).not.toBe(cells[1].value);
     expect(cells[0].value).not.toBe(DELTA);
+  });
+});
+
+/* ── task 08: the shape tools' two slots ────────────────────────────────── */
+
+const slots = (shapeMode: BrushShapeSlots["shapeMode"]): BrushShapeSlots => ({
+  shapeMode,
+  edgeDelta: DELTA,
+  fillDelta: FILL,
+  channelType: "rgb",
+});
+
+/** A 5×5 rectangle from (0,0) to (4,4): 16 outline cells, 9 interior. */
+const RECT_START = { x: 0, y: 0 };
+const RECT_END = { x: 4, y: 4 };
+const rectPoints = () => {
+  const out: { x: number; y: number }[] = [];
+  for (let y = 0; y <= 4; y++) {
+    for (let x = 0; x <= 4; x++) out.push({ x, y });
+  }
+  return out;
+};
+const isRectOutline = (p: { x: number; y: number }) =>
+  p.x === 0 || p.x === 4 || p.y === 0 || p.y === 4;
+
+describe("shapePointSlot", () => {
+  it("without an outline set: fill mode is all fill, anything else all edge", () => {
+    const p = { x: 2, y: 2 };
+    expect(shapePointSlot(p, "fill", null)).toBe("fill");
+    expect(shapePointSlot(p, "outline", null)).toBe("edge");
+    expect(shapePointSlot(p, "both", null)).toBe("edge");
+  });
+
+  it("with an outline set: members are edge, the rest fill", () => {
+    const keys = new Set(["1,1"]);
+    expect(shapePointSlot({ x: 1, y: 1 }, "both", keys)).toBe("edge");
+    expect(shapePointSlot({ x: 2, y: 2 }, "both", keys)).toBe("fill");
+  });
+});
+
+describe("shapeCommitCells", () => {
+  it('"outline": every cell takes the edge delta, each its own copy', () => {
+    const cells = shapeCommitCells(rectPoints(), null, slots("outline"));
+    expect(cells).toHaveLength(25);
+    expect(cells.every((c) => c.value !== 0)).toBe(true);
+    for (const c of cells) {
+      expect(c.value).toEqual(DELTA);
+      expect(c.value).not.toBe(DELTA);
+    }
+    expect(new Set(cells.map((c) => c.value)).size).toBe(25);
+  });
+
+  it('"fill": every cell takes the fill delta', () => {
+    const cells = shapeCommitCells(rectPoints(), null, slots("fill"));
+    expect(cells).toHaveLength(25);
+    for (const c of cells) {
+      expect(c.value).toEqual(FILL);
+      expect(c.value).not.toBe(FILL);
+    }
+  });
+
+  it('⭐ "both" on a 5×5 rectangle: outline cells edge, interior fill', () => {
+    const keys = getShapeOutlineKeys("rectangle", RECT_START, RECT_END);
+    expect(keys.size).toBe(16);
+    const cells = shapeCommitCells(rectPoints(), keys, slots("both"));
+    expect(cells).toHaveLength(25);
+    let edge = 0;
+    let fill = 0;
+    for (const c of cells) {
+      if (isRectOutline(c)) {
+        expect(c.value).toEqual(DELTA);
+        edge++;
+      } else {
+        expect(c.value).toEqual(FILL);
+        fill++;
+      }
+    }
+    expect(edge).toBe(16);
+    expect(fill).toBe(9);
+    expect(new Set(cells.map((c) => c.value)).size).toBe(25);
+  });
+
+  it('"both" on a line: all edge — a line has no interior', () => {
+    const start = { x: 0, y: 0 };
+    const end = { x: 4, y: 2 };
+    const keys = getShapeOutlineKeys("line", start, end);
+    const points = [...keys].map((k) => {
+      const [x, y] = k.split(",").map(Number);
+      return { x, y };
+    });
+    const cells = shapeCommitCells(points, keys, slots("both"));
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells.every((c) => c.value !== 0)).toBe(true);
+    for (const c of cells) expect(c.value).toEqual(DELTA);
+  });
+
+  it('"both" without a recorded outline set falls back to all edge', () => {
+    const cells = shapeCommitCells(rectPoints(), null, slots("both"));
+    for (const c of cells) expect(c.value).toEqual(DELTA);
+  });
+
+  it("an empty preview commits nothing", () => {
+    expect(shapeCommitCells([], null, slots("both"))).toEqual([]);
+  });
+});
+
+describe("shapePreviewColors", () => {
+  const edgeRgba = brushCellToRgba(DELTA, "rgb");
+  const fillRgba = brushCellToRgba(FILL, "rgb");
+
+  it("colourises through brushCellToRgba with the layer's channel type", () => {
+    expect(edgeRgba).not.toBeNull();
+    expect(fillRgba).not.toBeNull();
+    expect(edgeRgba).not.toEqual(fillRgba);
+    const colors = shapePreviewColors(rectPoints(), null, slots("outline"));
+    expect(colors).toHaveLength(25);
+    for (const c of colors) expect(c).toEqual(edgeRgba);
+    const heightmap = shapePreviewColors([{ x: 0, y: 0 }], null, {
+      ...slots("outline"),
+      channelType: "heightmap",
+    });
+    expect(heightmap[0]).toEqual(brushCellToRgba(DELTA, "heightmap"));
+  });
+
+  it('"fill" previews in the fill delta', () => {
+    const colors = shapePreviewColors(rectPoints(), null, slots("fill"));
+    for (const c of colors) expect(c).toEqual(fillRgba);
+  });
+
+  it('⭐ "both" previews per pixel exactly as shapeCommitCells will land it', () => {
+    const keys = getShapeOutlineKeys("rectangle", RECT_START, RECT_END);
+    const points = rectPoints();
+    const colors = shapePreviewColors(points, keys, slots("both"));
+    const cells = shapeCommitCells(points, keys, slots("both"));
+    points.forEach((p, i) => {
+      expect(colors[i]).toEqual(isRectOutline(p) ? edgeRgba : fillRgba);
+      expect(colors[i]).toEqual(
+        brushCellToRgba(cells[i].value as BrushDelta, "rgb"),
+      );
+    });
+  });
+});
+
+describe("paintShapePreview", () => {
+  /** A recording stub: each fillRect with the style in force at the time. */
+  function stub() {
+    const rects: {
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      style: unknown;
+    }[] = [];
+    const ctx = {
+      fillStyle: "" as string | CanvasGradient | CanvasPattern,
+      fillRect(x: number, y: number, w: number, h: number) {
+        rects.push({ x, y, w, h, style: this.fillStyle });
+      },
+    };
+    return { ctx, rects };
+  }
+  const css = (c: { r: number; g: number; b: number; a: number }) =>
+    `rgba(${c.r},${c.g},${c.b},${c.a / 255})`;
+
+  it("paints one 1×1 rect per in-grid point in its slot's colour", () => {
+    const { ctx, rects } = stub();
+    const keys = getShapeOutlineKeys("rectangle", RECT_START, RECT_END);
+    paintShapePreview(ctx, {
+      points: rectPoints(),
+      outlineKeys: keys,
+      slots: slots("both"),
+      width: 5,
+      height: 5,
+    });
+    expect(rects).toHaveLength(25);
+    const edge = css(brushCellToRgba(DELTA, "rgb")!);
+    const fill = css(brushCellToRgba(FILL, "rgb")!);
+    for (const r of rects) {
+      expect([r.w, r.h]).toEqual([1, 1]);
+      expect(r.style).toBe(isRectOutline(r) ? edge : fill);
+    }
+  });
+
+  it("skips off-grid points and paints nothing for an empty preview", () => {
+    const { ctx, rects } = stub();
+    paintShapePreview(ctx, {
+      points: [
+        { x: -1, y: 0 },
+        { x: 0, y: 0 },
+        { x: 3, y: 1 },
+        { x: 1, y: 3 },
+      ],
+      outlineKeys: null,
+      slots: slots("outline"),
+      width: 3,
+      height: 3,
+    });
+    expect(rects.map((r) => [r.x, r.y])).toEqual([[0, 0]]);
+    const empty = stub();
+    paintShapePreview(empty.ctx, {
+      points: [],
+      outlineKeys: null,
+      slots: slots("outline"),
+      width: 3,
+      height: 3,
+    });
+    expect(empty.rects).toEqual([]);
   });
 });
 
@@ -324,7 +611,7 @@ describe("buildBrushToolContext", () => {
     expect(setCells.mock.calls[0][1]).toBe(writeOptions);
   });
 
-  it("flood and gaussian fills are ONE fill over readGrid (details: brushFill.test)", () => {
+  it("flood and gaussian fills are ONE fill over readGrid, carrying the FILL sentinel (D9)", () => {
     const grid: BrushCell[][] = [
       [0, 0],
       [0, DELTA],
@@ -333,9 +620,11 @@ describe("buildBrushToolContext", () => {
       makeArgs({ gridWidth: 2, gridHeight: 2, readGrid: () => grid }),
     );
     expect(ctx.floodFillAt).toBe(ctx.gaussianFillAt);
-    expect(ctx.floodFillAt({ x: 0, y: 0 })).toHaveLength(3);
+    const region = ctx.floodFillAt({ x: 0, y: 0 });
+    expect(region).toHaveLength(3);
+    expect(region.every((w) => w.color === DUMMY_FILL_COLOR)).toBe(true);
     expect(ctx.floodFillAt({ x: 1, y: 1 })).toEqual([
-      { x: 1, y: 1, color: DUMMY_TOOL_COLOR },
+      { x: 1, y: 1, color: DUMMY_FILL_COLOR },
     ]);
     expect(
       buildBrushToolContext(makeArgs({ readGrid: () => null })).floodFillAt({
@@ -345,13 +634,13 @@ describe("buildBrushToolContext", () => {
     ).toEqual([]);
   });
 
-  it("squarePixelsAt uses the PENCIL size and a paint colour, never 0", () => {
+  it("squarePixelsAt uses the PENCIL size and the EDGE sentinel, never 0", () => {
     const ctx = buildBrushToolContext(
       makeArgs({ brushSize: 9, pencilBrushSize: 3 }),
     );
     const cells = ctx.squarePixelsAt({ x: 5, y: 5 });
     expect(cells).toHaveLength(9);
-    expect(cells.every((c) => c.color !== 0)).toBe(true);
+    expect(cells.every((c) => c.color === DUMMY_TOOL_COLOR)).toBe(true);
     expect(key(cells)).toEqual(
       key([
         { x: 4, y: 4 },
@@ -386,6 +675,66 @@ describe("buildBrushToolContext", () => {
     ).rectanglePreview({ x: 0, y: 0 }, { x: 2, y: 2 });
     expect(outline).toHaveLength(8);
     expect(fill).toHaveLength(9);
+  });
+
+  it('⭐ every shape preview reports its outline set — the keys in "both", null otherwise', () => {
+    const setShapeOutlineKeys = vi.fn();
+    const both = buildBrushToolContext(
+      makeArgs({ shapeMode: "both", setShapeOutlineKeys }),
+    );
+    const preview = both.rectanglePreview(RECT_START, RECT_END);
+    expect(preview).toHaveLength(25);
+    expect(setShapeOutlineKeys).toHaveBeenCalledTimes(1);
+    const keys = setShapeOutlineKeys.mock.calls[0][0] as Set<string>;
+    expect(keys).toEqual(
+      getShapeOutlineKeys("rectangle", RECT_START, RECT_END, 0),
+    );
+    // The keys are exactly the "outline"-mode pixels of the same generator.
+    expect([...keys].sort()).toEqual(
+      key(
+        buildBrushToolContext(
+          makeArgs({ shapeMode: "outline" }),
+        ).rectanglePreview(RECT_START, RECT_END),
+      ),
+    );
+
+    both.ellipsePreview({ x: 4, y: 4 }, { x: 7, y: 6 });
+    both.linePreview({ x: 0, y: 0 }, { x: 3, y: 1 });
+    expect(setShapeOutlineKeys).toHaveBeenCalledTimes(3);
+    expect(setShapeOutlineKeys.mock.calls[1][0]).toEqual(
+      getShapeOutlineKeys("ellipse", { x: 4, y: 4 }, { x: 7, y: 6 }),
+    );
+    expect(setShapeOutlineKeys.mock.calls[2][0]).toEqual(
+      getShapeOutlineKeys("line", { x: 0, y: 0 }, { x: 3, y: 1 }),
+    );
+
+    // Outside "both" the report is null — one slot covers the whole shape.
+    const single = vi.fn();
+    const outline = buildBrushToolContext(
+      makeArgs({ shapeMode: "outline", setShapeOutlineKeys: single }),
+    );
+    outline.rectanglePreview(RECT_START, RECT_END);
+    outline.linePreview(RECT_START, RECT_END);
+    expect(single.mock.calls).toEqual([[null], [null]]);
+
+    // Without the hook the previews still draw (the rigs in sibling tests).
+    expect(
+      buildBrushToolContext(makeArgs({ shapeMode: "both" })).rectanglePreview(
+        RECT_START,
+        RECT_END,
+      ),
+    ).toHaveLength(25);
+  });
+
+  it("the border radius reaches the outline set the same way it reaches the preview", () => {
+    const setShapeOutlineKeys = vi.fn();
+    const ctx = buildBrushToolContext(
+      makeArgs({ shapeMode: "both", borderRadius: 2, setShapeOutlineKeys }),
+    );
+    ctx.rectanglePreview({ x: 0, y: 0 }, { x: 9, y: 9 });
+    expect(setShapeOutlineKeys.mock.calls[0][0]).toEqual(
+      getShapeOutlineKeys("rectangle", { x: 0, y: 0 }, { x: 9, y: 9 }, 2),
+    );
   });
 
   it("the shape generators follow the pencil / eraser shape settings", () => {
@@ -459,7 +808,7 @@ describe("end to end through the real toolHandlers", () => {
     expect(refs.has(DELTA)).toBe(false);
   });
 
-  it("fill-square down opens a transaction and paints the pencil-sized square", () => {
+  it("fill-square down opens a transaction and paints the pencil-sized square with the EDGE delta", () => {
     const args = makeArgs({ pencilBrushSize: 3 });
     const ctx = buildBrushToolContext(args);
     getToolHandler("fill-square")!.onDown!(event(4, 4), ctx);
@@ -469,6 +818,57 @@ describe("end to end through the real toolHandlers", () => {
       .calls[0][0] as { value: BrushDelta | 0 }[];
     expect(cells).toHaveLength(9);
     expect(cells.every((c) => c.value !== 0)).toBe(true);
+    for (const c of cells) expect(c.value).toEqual(DELTA);
+  });
+
+  it("⭐ a flood click writes the FILL delta; a pencil stroke writes the EDGE delta (D9)", () => {
+    const grid: BrushCell[][] = [
+      [0, 0, 0],
+      [0, DELTA, 0],
+      [0, 0, 0],
+    ];
+    const args = makeArgs({
+      gridWidth: 3,
+      gridHeight: 3,
+      readGrid: () => grid,
+    });
+    const ctx = buildBrushToolContext(args);
+    const setCells = args.setCells as ReturnType<typeof vi.fn>;
+
+    getToolHandler("flood-fill")!.onDown!(event(0, 0), ctx);
+    expect(setCells).toHaveBeenCalledTimes(1);
+    const flooded = setCells.mock.calls[0][0] as {
+      x: number;
+      y: number;
+      value: BrushDelta | 0;
+    }[];
+    expect(flooded).toHaveLength(8);
+    for (const c of flooded) {
+      expect(c.value).toEqual(FILL);
+      expect(c.value).not.toBe(FILL);
+    }
+    expect(new Set(flooded.map((c) => c.value)).size).toBe(8);
+
+    getToolHandler("gaussian-fill")!.onDown!(event(2, 2), ctx);
+    const gaussian = setCells.mock.calls[1][0] as { value: BrushDelta | 0 }[];
+    expect(gaussian.every((c) => c.value !== 0)).toBe(true);
+    for (const c of gaussian) expect(c.value).toEqual(FILL);
+
+    getToolHandler("pixel")!.onDown!(event(1, 0), ctx);
+    getToolHandler("pixel")!.onMove!(
+      { ...event(2, 0), drawStartPoint: { x: 1, y: 0 } },
+      { ...ctx, lastStrokePixel: { x: 1, y: 0 } },
+    );
+    const pencilDown = setCells.mock.calls[2][0] as { value: BrushDelta | 0 }[];
+    const pencilMove = setCells.mock.calls[3][0] as { value: BrushDelta | 0 }[];
+    expect(pencilDown).toEqual([{ x: 1, y: 0, value: DELTA }]);
+    expect(pencilMove.length).toBeGreaterThan(0);
+    for (const c of pencilMove) expect(c.value).toEqual(DELTA);
+
+    // The line bridge and the eraser stay on the edge / erase paths.
+    getToolHandler("eraser")!.onDown!(event(1, 1), ctx);
+    const erased = setCells.mock.calls[4][0] as { value: BrushDelta | 0 }[];
+    expect(erased.every((c) => c.value === 0)).toBe(true);
   });
 
   it("a shape tool previews on move and paints nothing", () => {
@@ -541,7 +941,7 @@ describe("createBrushGestureController", () => {
     expect(host.setDelta).not.toHaveBeenCalled();
   });
 
-  it("⭐ eyedropper on a painted cell sets the delta to a copy of the cell", () => {
+  it("⭐ eyedropper on a painted cell hands the host (the ACTIVE slot) a copy of the cell", () => {
     const cell: BrushCell = [10, -20, 30, 40];
     const host = makeHost({ cellAt: vi.fn(() => cell) });
     const g = createBrushGestureController(host);
@@ -702,8 +1102,10 @@ describe("flood-fill against the real stores", () => {
 
     expect(rig.history.entries).toHaveLength(2);
     expect(rig.painted()).toHaveLength(16);
-    expect(rig.grid()[1][1]).toEqual(DELTA);
-    expect(rig.grid()[2][2]).toEqual(DELTA);
+    // The interior lands as the FILL delta (D9), not the edge.
+    expect(rig.grid()[1][1]).toEqual(FILL);
+    expect(rig.grid()[2][2]).toEqual(FILL);
+    expect(rig.grid()[1][1]).not.toEqual(DELTA);
     expect(rig.grid()[0][0]).toEqual(ring);
 
     rig.history.undo();
@@ -712,7 +1114,7 @@ describe("flood-fill against the real stores", () => {
     expect(rig.grid()[0][0]).toEqual(ring);
   });
 
-  it("filling a region that already holds the delta records nothing", () => {
+  it("filling a region that already holds the FILL delta records nothing", () => {
     const rig = makeRig(2, 2);
     const ctx = buildBrushToolContext(
       makeArgs({

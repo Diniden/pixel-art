@@ -7,15 +7,19 @@
  * `renderBrushFrame` — into `CanvasSurface`, shows the hover marker, zooms
  * through `brushUI`, and drives the SHARED `toolHandlers` for pencil, eraser,
  * line, rectangle, ellipse, fill-square and the two fills on the selected
- * layer. Each stroke is ONE entry on the brush's own history. The eyedropper
- * and move are GESTURE tools (task 20): `beginPointer` hands them to
- * `createBrushGestureController` ahead of the handler table — a pick sets the
- * delta sliders, a move drag shifts the layer live inside one transaction that
- * the ordinary release path closes. The selection (task 21) is arbitrated
- * the same way: `useBrushSelection` keeps the mask in React state (it resets
- * on a brush switch — see its header), the paint tools receive it as
- * `BrushWriteOptions`, Delete erases the masked cells, a drag inside it
- * moves them as ONE transaction, and the ants are SVG chrome.
+ * layer. Each stroke is ONE entry on the brush's own history. Writes take the
+ * EDGE or the FILL delta per pixel (follow-ups task 08, D9): the routing and
+ * the `"both"`-shape split live in `brushToolContext`; this file only keeps
+ * the outline set the context reports (`shapeKeysRef`, the brush's
+ * `lastShapeAimRef`) and hands it to the commit and the preview. The
+ * eyedropper and move are GESTURE tools (task 20): `beginPointer` hands them
+ * to `createBrushGestureController` ahead of the handler table — a pick loads
+ * the ACTIVE delta slot, a move drag shifts the layer live inside one
+ * transaction that the ordinary release path closes. The selection (task 21)
+ * is arbitrated the same way: `useBrushSelection` keeps the mask in React
+ * state (it resets on a brush switch — see its header), the paint tools
+ * receive it as `BrushWriteOptions`, Delete erases the masked cells, a drag
+ * inside it moves them as ONE transaction, and the ants are SVG chrome.
  *
  * ── ⚠️ `observer()` HERE, rAF-SCHEDULED REDRAW FOR THE CELLS (D8) ────────
  * This component reads only scalars, ids and `observableRef` objects: the
@@ -54,7 +58,6 @@ import type { MutableRefObject } from "react";
 import { observer } from "mobx-react-lite";
 import { useStores } from "../stores/context";
 import type { Point } from "../types";
-import { brushCellToRgba } from "../types";
 import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
 import { CanvasViewControls } from "../ui/components/CanvasViewControls/CanvasViewControls";
 import { EmptyState } from "../ui/primitives/EmptyState/EmptyState";
@@ -77,8 +80,10 @@ import {
   isBrushInertTool,
   isBrushSelectionTool,
   isBrushShapeTool,
-  pointsToBrushCells,
+  paintShapePreview,
+  shapeCommitCells,
 } from "./brush/brushToolContext";
+import type { ShapeOutlineKeys } from "./brush/brushToolContext";
 import { BRUSH_MOVE_SELECTION_LABEL } from "./brush/brushSelection";
 import { useBrushCamera } from "./brush/useBrushCamera";
 import { useBrushHover } from "./brush/useBrushHover";
@@ -88,8 +93,6 @@ import { useBrushSelection } from "./brush/useBrushSelection";
 /** One layer canvas holds the whole composited frame. Ids only cross the boundary. */
 const FRAME_LAYER_ID = "brush-frame";
 const LAYER_IDS: readonly string[] = [FRAME_LAYER_ID];
-/** Every painter here is 1:1 with the cells — see the header. */
-const CELL_SCALE = 1;
 /** Grid lines only once a cell is at least this many screen px. */
 const GRID_MIN_ZOOM = 8;
 const NO_PARITY = { x: 0, y: 0 };
@@ -123,6 +126,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   const channelType = layer?.channelType ?? "rgb";
   const zoom = brushUI.zoom;
   const selectedDelta = brushUI.selectedDelta;
+  const fillDelta = brushUI.fillDelta;
   const pixelVersion = brushes.pixelVersion;
   const domainVersion = brushes.domainVersion;
   const loadGeneration = brushes.loadGeneration;
@@ -146,6 +150,16 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
 
   const inert = isBrushInertTool(currentTool);
   const hasDoc = doc !== null && width > 0 && height > 0;
+
+  /* ── the two delta slots a shape writes (task 08) ──────────────────────── */
+  // The outline set of the current shape preview, reported by the context
+  // on every preview; read by the commit and the preview render, never by
+  // React. `null` outside a `"both"` shape.
+  const shapeKeysRef = useRef<ShapeOutlineKeys | null>(null);
+  const shapeSlots = useMemo(
+    () => ({ shapeMode, edgeDelta: selectedDelta, fillDelta, channelType }),
+    [shapeMode, selectedDelta, fillDelta, channelType],
+  );
 
   /* ── hover marker and camera: store-free hooks in `./brush/` ───────────── */
   const { hoverCanvasRef, setHoverPixel, hoverOutline } = useBrushHover({
@@ -242,6 +256,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
         shapeMode,
         borderRadius,
         delta: selectedDelta,
+        fillDelta,
         readGrid,
         lastStrokePixel: strokeCursor.current.ref?.current ?? null,
         setLastStrokePixel: (p) => {
@@ -257,6 +272,9 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
         setCells: (cells, options) => brushPixels.setCells(cells, options),
         setPreviewPixels: (points) => interaction.setPreviewPixels(points),
         writeOptions: selectionWriteOptions,
+        setShapeOutlineKeys: (keys) => {
+          shapeKeysRef.current = keys;
+        },
       }),
     [
       width,
@@ -268,6 +286,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
       shapeMode,
       borderRadius,
       selectedDelta,
+      fillDelta,
       readGrid,
       currentTool,
       brushes,
@@ -296,7 +315,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     () =>
       createBrushGestureController({
         cellAt: (x, y) => brushPixels.cellAt(x, y),
-        setDelta: (delta) => brushUI.setDelta(delta),
+        setDelta: (delta) => brushUI.setActiveDelta(delta),
         beginMove: (coords) => {
           brushes.history.beginTransaction(BRUSH_MOVE_LABEL);
           interaction.startDrawing(coords);
@@ -340,8 +359,9 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
 
   /**
    * The release, for both devices. A shape tool commits its preview as ONE
-   * `setCells` (one history entry); a paint tool's — or a move drag's — open
-   * transaction closes. `endTransaction` is a no-op when nothing is open.
+   * `setCells` (one history entry) — edge and fill decided per pixel by the
+   * outline set the context reported; a paint tool's — or a move drag's —
+   * open transaction closes. `endTransaction` is a no-op when nothing is open.
    */
   const finishStroke = useCallback(() => {
     pointer.lastStrokePixelRef.current = null;
@@ -352,7 +372,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     if (isBrushShapeTool(currentTool) && previewPixels.length > 0) {
       brushes.history.beginTransaction(brushStrokeLabel(currentTool));
       brushPixels.setCells(
-        pointsToBrushCells(previewPixels, selectedDelta),
+        shapeCommitCells(previewPixels, shapeKeysRef.current, shapeSlots),
         selectionWriteOptions,
       );
     }
@@ -364,7 +384,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     selectionController,
     currentTool,
     previewPixels,
-    selectedDelta,
+    shapeSlots,
     selectionWriteOptions,
     brushes,
     brushPixels,
@@ -415,27 +435,16 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     });
     ctx.putImageData(buffer, 0, 0);
 
-    // The shape preview, colourised as the selected layer would show it.
-    if (previewPixels.length > 0) {
-      const rgba = brushCellToRgba(selectedDelta, channelType);
-      if (rgba) {
-        ctx.fillStyle = `rgba(${rgba.r},${rgba.g},${rgba.b},${rgba.a / 255})`;
-        for (const p of previewPixels) {
-          if (p.x >= 0 && p.x < width && p.y >= 0 && p.y < height) {
-            ctx.fillRect(p.x, p.y, CELL_SCALE, CELL_SCALE);
-          }
-        }
-      }
-    }
-  }, [
-    brushes,
-    selectedFrameId,
-    width,
-    height,
-    previewPixels,
-    selectedDelta,
-    channelType,
-  ]);
+    // The shape preview, colourised per pixel as the selected layer would
+    // show the commit — edge and fill from the same split as `finishStroke`.
+    paintShapePreview(ctx, {
+      points: previewPixels,
+      outlineKeys: shapeKeysRef.current,
+      slots: shapeSlots,
+      width,
+      height,
+    });
+  }, [brushes, selectedFrameId, width, height, previewPixels, shapeSlots]);
   useCanvasRender(renderFrame, [renderFrame, pixelVersion, domainVersion]);
 
   const grid = useMemo(
