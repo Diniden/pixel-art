@@ -853,6 +853,15 @@
   min-height: 0;
 }
 
+/* Floors the grid at N row pitches so a 1-layer document does not collapse the rail
+   (docs/11-brush-studio-followups task 01). 32px row + 2px gap, minus the trailing gap. */
+.timeline-view--min-rows .timeline-view__scroll {
+  min-height: calc(
+    var(--timeline-min-rows) * 32px + (var(--timeline-min-rows) - 1) *
+      var(--space-0-5)
+  );
+}
+
 .timeline-view__grid {
   position: relative;
   display: flex;

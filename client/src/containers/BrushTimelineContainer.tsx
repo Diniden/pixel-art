@@ -454,6 +454,8 @@ export const BrushTimelineContainer = observer(
           onCancelLayerRename={handleCancelLayerRename}
           renderCell={renderCell}
           renderEmptyCell={renderEmptyCell}
+          // Owner's request: "fit 5 layers by default even if not present".
+          minRows={5}
         />
       </div>
     );

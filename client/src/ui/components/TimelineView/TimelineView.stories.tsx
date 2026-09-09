@@ -191,3 +191,50 @@ export const WithPreviewSlot: Story = {
     ),
   },
 };
+
+/** One layer, one frame — the smallest grid the brush studio can show. */
+const ONE_LAYER = {
+  grid: [
+    [
+      {
+        frameId: "frame-1",
+        frameIndex: 0,
+        layerId: "layer-1",
+        layerName: "Base",
+        rowIndex: 0,
+        isVariant: false,
+        color: "hsl(200, 70%, 55%)",
+      },
+    ],
+  ] as (TimelineCellData | null)[][],
+  frameIds: ["frame-1"],
+  maxLayers: 1,
+  layerHeaders: [
+    {
+      name: "Base",
+      firstDisplayRow: 0,
+      typicalRow: 0,
+      color: "hsl(200, 70%, 55%)",
+    },
+  ],
+};
+
+/**
+ * `minRows: 5` on a one-layer document — what the brush studio's bottom rail
+ * passes (docs/11-brush-studio-followups task 01). The scroll area is floored
+ * at five row pitches (5 × 32px + 4 × 2px), so the single row sits at the top
+ * of four row-heights of blank space rather than collapsing the rail. Compare
+ * with `Typical`, which has no floor and is content-sized.
+ */
+export const MinRowsOneLayer: Story = {
+  args: {
+    grid: ONE_LAYER.grid,
+    frameIds: ONE_LAYER.frameIds,
+    maxLayers: ONE_LAYER.maxLayers,
+    layerHeaders: ONE_LAYER.layerHeaders,
+    selectedFrameIndex: 0,
+    canMoveUp: false,
+    canMoveDown: false,
+    minRows: 5,
+  },
+};
