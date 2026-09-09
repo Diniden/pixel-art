@@ -6,6 +6,11 @@
  * lives in `NumberInput`; this pins that the picker passes the delta range
  * through), and the swatch colour follows `brushCellToRgba` (127 = zero
  * delta). The iPad numeric-keyboard check cannot be, and is not, covered.
+ *
+ * Edge/Fill (follow-ups task 05): the tab row is opt-in — absent unless BOTH
+ * `target` and `onTargetChange` are supplied — so the first describe block
+ * (no slots) is unchanged and doubles as the compatibility pin for the W1
+ * caller.
  */
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -166,5 +171,149 @@ describe("BrushDeltaPicker", () => {
       expect(el).toBeDisabled();
     }
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+  });
+
+  it("renders no tab row and no swap button without target/onTargetChange", () => {
+    renderPicker("rgb", [0, 0, 0, 0], { onSwap: () => {} });
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(
+      screen.queryByRole("button", { name: "Swap edge and fill deltas" }),
+    ).toBeNull();
+  });
+});
+
+describe("BrushDeltaPicker edge/fill target row", () => {
+  const EDGE: BrushDelta = [255, -255, 0, 255];
+  const FILL: BrushDelta = [0, 0, 0, 0];
+
+  function renderWithTargets(
+    overrides: Partial<Parameters<typeof BrushDeltaPicker>[0]> = {},
+  ) {
+    const onTargetChange = vi.fn();
+    const rest = renderPicker("rgb", EDGE, {
+      target: "edge",
+      onTargetChange,
+      edgeValue: EDGE,
+      fillValue: FILL,
+      ...overrides,
+    });
+    return { ...rest, onTargetChange };
+  }
+
+  it("renders a tablist with Edge and Fill tabs; the active one is selected", () => {
+    renderWithTargets();
+    expect(screen.getByRole("tablist")).toBeInTheDocument();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(2);
+    const edge = screen.getByRole("tab", { name: "Edge" });
+    const fill = screen.getByRole("tab", { name: "Fill" });
+    expect(edge).toHaveAttribute("aria-selected", "true");
+    expect(fill).toHaveAttribute("aria-selected", "false");
+    expect(edge).toHaveClass("brush-delta-picker__target--active");
+    expect(fill).not.toHaveClass("brush-delta-picker__target--active");
+  });
+
+  it("target='fill' selects the Fill tab", () => {
+    renderWithTargets({ target: "fill", value: FILL });
+    expect(screen.getByRole("tab", { name: "Fill" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tab", { name: "Edge" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+  });
+
+  it("clicking Fill calls onTargetChange('fill')", () => {
+    const { onTargetChange } = renderWithTargets();
+    fireEvent.click(screen.getByRole("tab", { name: "Fill" }));
+    expect(onTargetChange).toHaveBeenCalledTimes(1);
+    expect(onTargetChange).toHaveBeenCalledWith("fill");
+  });
+
+  it("Left/Right arrows on the tablist move to the other tab", () => {
+    const { onTargetChange } = renderWithTargets();
+    const edge = screen.getByRole("tab", { name: "Edge" });
+    const fill = screen.getByRole("tab", { name: "Fill" });
+    // Roving tabindex: only the active tab is in the tab order.
+    expect(edge).toHaveAttribute("tabindex", "0");
+    expect(fill).toHaveAttribute("tabindex", "-1");
+    edge.focus();
+    fireEvent.keyDown(edge, { key: "ArrowRight" });
+    expect(onTargetChange).toHaveBeenCalledWith("fill");
+    expect(fill).toHaveFocus();
+    // An unrelated key does nothing.
+    fireEvent.keyDown(edge, { key: "Enter" });
+    expect(onTargetChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("the two tab swatches carry each slot's colourised delta (grey at zero)", () => {
+    renderWithTargets();
+    const edgeSwatch = screen.getByTestId("brush-delta-target-swatch-edge");
+    const fillSwatch = screen.getByTestId("brush-delta-target-swatch-fill");
+    // jsdom serialises an opaque rgba() as rgb().
+    expect(edgeSwatch.style.backgroundColor).toMatch(/^rgba?\(255, 0, 127/);
+    // Zero delta → #7f7f7f, alpha 127/255.
+    expect(fillSwatch.style.backgroundColor).toContain("rgba(127, 127, 127");
+  });
+
+  it("swatches are grey with no layer selected, and the row still renders", () => {
+    renderPicker(null, EDGE, {
+      target: "edge",
+      onTargetChange: () => {},
+      edgeValue: EDGE,
+      fillValue: FILL,
+    });
+    expect(screen.getByText("Select a layer")).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(
+      screen.getByTestId("brush-delta-target-swatch-edge").style.backgroundColor,
+    ).toMatch(/^rgba?\(127, 127, 127/);
+  });
+
+  it("edgeValue/fillValue default to value", () => {
+    renderPicker("rgb", EDGE, { target: "edge", onTargetChange: () => {} });
+    expect(
+      screen.getByTestId("brush-delta-target-swatch-fill").style.backgroundColor,
+    ).toMatch(/^rgba?\(255, 0, 127/);
+  });
+
+  it("swap button is absent without onSwap", () => {
+    renderWithTargets();
+    expect(
+      screen.queryByRole("button", { name: "Swap edge and fill deltas" }),
+    ).toBeNull();
+  });
+
+  it("swap button is present with onSwap, sits outside the tablist, and fires once", () => {
+    const onSwap = vi.fn();
+    renderWithTargets({ onSwap });
+    const swap = screen.getByRole("button", {
+      name: "Swap edge and fill deltas",
+    });
+    expect(screen.getByRole("tablist")).not.toContainElement(swap);
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    fireEvent.click(swap);
+    expect(onSwap).toHaveBeenCalledTimes(1);
+  });
+
+  it("sliders still edit `value` via onChange, whichever slot is active", () => {
+    const { onChange } = renderWithTargets({ target: "fill", value: FILL });
+    expect(screen.getByRole("spinbutton", { name: "R delta" })).toHaveValue(0);
+    fireEvent.change(screen.getByRole("slider", { name: "R delta" }), {
+      target: { value: "77" },
+    });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(0, 77);
+  });
+
+  it("disabled disables the tabs and the swap button too", () => {
+    renderWithTargets({ onSwap: () => {}, disabled: true });
+    for (const tab of screen.getAllByRole("tab")) expect(tab).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Swap edge and fill deltas" }),
+    ).toBeDisabled();
   });
 });

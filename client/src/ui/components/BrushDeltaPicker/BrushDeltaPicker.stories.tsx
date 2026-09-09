@@ -6,6 +6,11 @@
  * the swatch — that is manual check 1 ("dragging a slider updates the
  * swatch"); check 2 is typing −300 into a number box and blurring: it clamps
  * to −255.
+ *
+ * Edge/Fill (follow-ups task 05): `EdgeActive`, `FillActive` and `WithSwap`
+ * show the tab row; `Interactive` keeps BOTH slots and the target in local
+ * state, so the owner's manual checks — tabs switch, the tab swatches follow
+ * the sliders, swap exchanges them — are all on one story.
  */
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
@@ -13,6 +18,7 @@ import { fn } from "storybook/test";
 import {
   BrushDeltaPicker,
   type BrushDeltaPickerProps,
+  type BrushDeltaTarget,
 } from "./BrushDeltaPicker";
 import type { BrushDelta } from "../../../types";
 
@@ -81,15 +87,76 @@ export const NoLayer: Story = {
   args: { channelType: null },
 };
 
+const EDGE_DELTA: BrushDelta = [120, -60, 0, 255];
+const FILL_DELTA: BrushDelta = [-90, 40, 200, 128];
+
+export const EdgeActive: Story = {
+  name: "Edge active (tab row, no swap)",
+  args: {
+    channelType: "rgb",
+    value: EDGE_DELTA,
+    target: "edge",
+    onTargetChange: fn(),
+    edgeValue: EDGE_DELTA,
+    fillValue: FILL_DELTA,
+  },
+};
+
+export const FillActive: Story = {
+  name: "Fill active (tab row, no swap)",
+  args: {
+    channelType: "rgb",
+    value: FILL_DELTA,
+    target: "fill",
+    onTargetChange: fn(),
+    edgeValue: EDGE_DELTA,
+    fillValue: FILL_DELTA,
+  },
+};
+
+export const WithSwap: Story = {
+  name: "With swap button",
+  args: {
+    channelType: "rgb",
+    value: EDGE_DELTA,
+    target: "edge",
+    onTargetChange: fn(),
+    edgeValue: EDGE_DELTA,
+    fillValue: FILL_DELTA,
+    onSwap: fn(),
+  },
+};
+
+/**
+ * Holds both slots and the target locally. `value` is always the slot named
+ * by `target` — the same resolution the container performs.
+ */
 function InteractivePicker(props: BrushDeltaPickerProps) {
-  const [value, setValue] = useState<BrushDelta>(props.value);
+  const [edge, setEdge] = useState<BrushDelta>(props.edgeValue ?? props.value);
+  const [fill, setFill] = useState<BrushDelta>(props.fillValue ?? props.value);
+  const [target, setTarget] = useState<BrushDeltaTarget>(
+    props.target ?? "edge",
+  );
+  const setActive = target === "edge" ? setEdge : setFill;
   return (
     <BrushDeltaPicker
       {...props}
-      value={value}
+      value={target === "edge" ? edge : fill}
+      target={target}
+      edgeValue={edge}
+      fillValue={fill}
+      onTargetChange={(next) => {
+        props.onTargetChange?.(next);
+        setTarget(next);
+      }}
+      onSwap={() => {
+        props.onSwap?.();
+        setEdge(fill);
+        setFill(edge);
+      }}
       onChange={(index, next) => {
         props.onChange(index, next);
-        setValue((prev) => {
+        setActive((prev) => {
           const copy: BrushDelta = [...prev];
           copy[index] = next;
           return copy;
@@ -97,14 +164,22 @@ function InteractivePicker(props: BrushDeltaPickerProps) {
       }}
       onReset={() => {
         props.onReset();
-        setValue([0, 0, 0, 0]);
+        setActive([0, 0, 0, 0]);
       }}
     />
   );
 }
 
 export const Interactive: Story = {
-  name: "Interactive (drag to update the swatch)",
-  args: { channelType: "hsl", value: [40, -80, 120, 255] },
+  name: "Interactive (tabs, sliders, swap)",
+  args: {
+    channelType: "hsl",
+    value: EDGE_DELTA,
+    target: "edge",
+    onTargetChange: fn(),
+    edgeValue: EDGE_DELTA,
+    fillValue: FILL_DELTA,
+    onSwap: fn(),
+  },
   render: (args) => <InteractivePicker {...args} />,
 };
