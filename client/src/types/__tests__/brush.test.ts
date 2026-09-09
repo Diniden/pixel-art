@@ -371,11 +371,7 @@ describe("normalizeBrushDocument", () => {
             {
               id: "long",
               name: "L",
-              pixels: [
-                [0, 0, 0, [9, 9, 9, 9]],
-                [0, 0, 0],
-                [[5, 5, 5, 5]],
-              ],
+              pixels: [[0, 0, 0, [9, 9, 9, 9]], [0, 0, 0], [[5, 5, 5, 5]]],
             },
             { id: "none", name: "N" },
           ],

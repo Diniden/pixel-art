@@ -29,12 +29,7 @@
  */
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { BrushStudioLayout } from "./BrushStudioLayout";
-import {
-  StubCanvas,
-  StubList,
-  StubRegion,
-  type Density,
-} from "../regionStubs";
+import { StubCanvas, StubList, StubRegion, type Density } from "../regionStubs";
 
 const meta = {
   title: "Layouts/BrushStudioLayout",

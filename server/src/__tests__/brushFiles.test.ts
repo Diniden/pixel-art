@@ -96,7 +96,9 @@ describe("readBrush / writeBrush", () => {
       version: "brush-1",
       width: 2,
       height: 1,
-      frames: [{ id: "f1", layers: [{ id: "l1", cells: [[0, [1, -2, 3, 4]]] }] }],
+      frames: [
+        { id: "f1", layers: [{ id: "l1", cells: [[0, [1, -2, 3, 4]]] }] },
+      ],
       appliedGroups: [],
     };
     await writeBrush("a", doc, opts());
@@ -231,9 +233,7 @@ describe("name validation", () => {
       });
 
       it("from brushExists", async () => {
-        await expect(brushExists(name, opts())).rejects.toThrow(
-          BrushNameError,
-        );
+        await expect(brushExists(name, opts())).rejects.toThrow(BrushNameError);
       });
 
       it("from renameBrush (either side)", async () => {
@@ -247,9 +247,7 @@ describe("name validation", () => {
       });
 
       it("from deleteBrush", async () => {
-        await expect(deleteBrush(name, opts())).rejects.toThrow(
-          BrushNameError,
-        );
+        await expect(deleteBrush(name, opts())).rejects.toThrow(BrushNameError);
       });
     });
   }
