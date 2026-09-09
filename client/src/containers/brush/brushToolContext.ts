@@ -43,12 +43,23 @@
  * their state machine is {@link createBrushGestureController}, kept here so
  * the container stays under `max-lines` and the maths is testable.
  *
+ * ── Task 21: the selection ────────────────────────────────────────────────
+ * `selection` left {@link BRUSH_INERT_TOOLS}. Like the gesture tools it has
+ * an EMPTY handler-table entry and is arbitrated by the container ahead of
+ * the table ({@link isBrushSelectionTool} → `useBrushSelection`'s
+ * controller). The mask reaches the paint tools through `writeOptions`:
+ * `setPixels` hands it to `setCells` with every write, so the pencil,
+ * eraser, fills and shape commits all respect it inside the store.
+ *
  * Pure: no React, no MobX, no store instance, no API. The only imports are
  * TYPES from the stores (erased at build time) and the shape generators from
  * `components/Canvas/drawingUtils`, which containers may import.
  */
 import type { BrushCell, BrushDelta, Point, ShapeMode } from "../../types";
-import type { BrushCellWrite } from "../../stores/domain/BrushPixelStore";
+import type {
+  BrushCellWrite,
+  BrushWriteOptions,
+} from "../../stores/domain/BrushPixelStore";
 import { brushFloodFill } from "./brushFill";
 import type {
   ToolColor,
@@ -77,8 +88,9 @@ export const DUMMY_TOOL_COLOR: ToolColor = { r: 0, g: 0, b: 0, a: 255 };
  * The tools that go through the handler table: task 16's six stroke tools
  * and task 20's two fills (which commit on the down event and open no
  * drag). Everything else the toolbar can select is either a
- * {@link BRUSH_GESTURE_TOOLS gesture tool} or {@link isBrushInertTool} until
- * task 21 (selection) takes its entry out of {@link BRUSH_INERT_TOOLS}.
+ * {@link BRUSH_GESTURE_TOOLS gesture tool}, the
+ * {@link isBrushSelectionTool selection} (task 21), or
+ * {@link isBrushInertTool inert}.
  */
 export const BRUSH_STROKE_TOOLS: ReadonlySet<string> = new Set([
   "pixel",
@@ -112,6 +124,15 @@ export function isBrushGestureTool(tool: string): boolean {
 }
 
 /**
+ * The selection tool (task 21): arbitrated by the container ahead of the
+ * handler table, like the gesture tools, but with its own controller
+ * (`createBrushSelectionController` in `./brushSelection`).
+ */
+export function isBrushSelectionTool(tool: string): boolean {
+  return tool === "selection";
+}
+
+/**
  * Tools that must be VISIBLY INERT on the brush canvas — no stroke, no
  * transaction, no exception — until a later task wires them.
  *
@@ -124,12 +145,11 @@ export function isBrushGestureTool(tool: string): boolean {
  * a predicate plus an accident of the handler table.
  *
  * Task 20 removed `flood-fill`, `gaussian-fill`, `eyedropper` and `move`;
- * task 21 removes `selection`. Nothing is ever added.
+ * task 21 removed `selection`. Nothing is ever added.
  */
 export const BRUSH_INERT_TOOLS: ReadonlySet<string> = new Set([
   "origin",
   "reference-trace",
-  "selection",
   "reflection",
   "pose",
   "normal-pencil",
@@ -362,8 +382,16 @@ export interface BrushToolContextArgs {
   beginStroke: () => void;
   /** Closes the transaction AND the gesture (`canvasInteraction.endDrawing`). */
   endDrawing: () => void;
-  /** `app.brushPixels.setCells`, already translated to deltas. */
-  setCells: (cells: BrushCellWrite[]) => void;
+  /**
+   * `app.brushPixels.setCells`, already translated to deltas, with
+   * {@link writeOptions} as the second argument on EVERY call.
+   */
+  setCells: (cells: BrushCellWrite[], options?: BrushWriteOptions) => void;
+  /**
+   * The selection mask as `BrushWriteOptions` (task 21) — `{}` with no
+   * selection. Passed through untouched; the store decides what it means.
+   */
+  writeOptions?: BrushWriteOptions;
   /** `app.canvasInteraction.setPreviewPixels`. */
   setPreviewPixels: (points: Point[]) => void;
 }
@@ -395,6 +423,7 @@ export function buildBrushToolContext(args: BrushToolContextArgs): ToolContext {
     endDrawing,
     setCells,
     setPreviewPixels,
+    writeOptions,
   } = args;
 
   const fillAt = (p: StampPoint): ToolPixelWrite[] => {
@@ -419,7 +448,8 @@ export function buildBrushToolContext(args: BrushToolContextArgs): ToolContext {
     setLastStrokePixel,
     beginStroke,
     endDrawing,
-    setPixels: (writes) => setCells(mapWritesToBrushCells(writes, delta)),
+    setPixels: (writes) =>
+      setCells(mapWritesToBrushCells(writes, delta), writeOptions),
     setPreviewPixels: (points) =>
       setPreviewPixels(points.map((p) => ({ x: p.x, y: p.y }))),
     floodFillAt: fillAt,

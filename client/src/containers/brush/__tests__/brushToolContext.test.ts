@@ -35,6 +35,7 @@ import {
   createBrushGestureController,
   isBrushGestureTool,
   isBrushInertTool,
+  isBrushSelectionTool,
   isBrushShapeTool,
   mapWritesToBrushCells,
   pickBrushDelta,
@@ -197,7 +198,6 @@ describe("the tool tables", () => {
   it.each([
     "origin",
     "reference-trace",
-    "selection",
     "reflection",
     "pose",
     "normal-pencil",
@@ -233,20 +233,37 @@ describe("the tool tables", () => {
     },
   );
 
-  it("the three sets are pairwise disjoint and unknown tools are in none", () => {
+  it("⭐ selection is its own kind (task 21): not inert, not gesture, not stroke", () => {
+    expect(isBrushSelectionTool("selection")).toBe(true);
+    expect(isBrushInertTool("selection")).toBe(false);
+    expect(isBrushGestureTool("selection")).toBe(false);
+    expect(BRUSH_STROKE_TOOLS.has("selection")).toBe(false);
+    // The shared table has an EMPTY entry — the container must arbitrate.
+    expect(getToolHandler("selection")).toEqual({});
+    expect(isBrushSelectionTool("move")).toBe(false);
+  });
+
+  it("the four sets are pairwise disjoint and unknown tools are in none", () => {
     for (const tool of BRUSH_STROKE_TOOLS) {
       expect(BRUSH_INERT_TOOLS.has(tool)).toBe(false);
       expect(BRUSH_GESTURE_TOOLS.has(tool)).toBe(false);
+      expect(isBrushSelectionTool(tool)).toBe(false);
     }
     for (const tool of BRUSH_GESTURE_TOOLS) {
       expect(BRUSH_INERT_TOOLS.has(tool)).toBe(false);
+      expect(isBrushSelectionTool(tool)).toBe(false);
+    }
+    for (const tool of BRUSH_INERT_TOOLS) {
+      expect(isBrushSelectionTool(tool)).toBe(false);
     }
     expect(isBrushInertTool("not-a-tool")).toBe(false);
     expect(isBrushGestureTool("not-a-tool")).toBe(false);
+    expect(isBrushSelectionTool("not-a-tool")).toBe(false);
   });
 
   it("brushCursor: default when inert, move for move, crosshair otherwise", () => {
-    expect(brushCursor("selection")).toBe("default");
+    expect(brushCursor("origin")).toBe("default");
+    expect(brushCursor("selection")).toBe("crosshair");
     expect(brushCursor("move")).toBe("move");
     expect(brushCursor("pixel")).toBe("crosshair");
     expect(brushCursor("eyedropper")).toBe("crosshair");
@@ -291,6 +308,20 @@ describe("buildBrushToolContext", () => {
       { x: 1, y: 1, value: DELTA },
       { x: 2, y: 2, value: 0 },
     ]);
+    // No selection: the options slot is simply absent.
+    expect(setCells.mock.calls[0][1]).toBeUndefined();
+  });
+
+  it("⭐ setPixels passes writeOptions (the selection mask) through untouched (task 21)", () => {
+    const setCells = vi.fn();
+    const writeOptions = {
+      mask: new Set([0, 1]),
+      maskSize: { width: 16, height: 16 },
+    };
+    const ctx = buildBrushToolContext(makeArgs({ setCells, writeOptions }));
+    ctx.setPixels([{ x: 1, y: 1, color: DUMMY_TOOL_COLOR }]);
+    expect(setCells).toHaveBeenCalledTimes(1);
+    expect(setCells.mock.calls[0][1]).toBe(writeOptions);
   });
 
   it("flood and gaussian fills are ONE fill over readGrid (details: brushFill.test)", () => {

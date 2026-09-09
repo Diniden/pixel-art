@@ -11,8 +11,11 @@
  * and move are GESTURE tools (task 20): `beginPointer` hands them to
  * `createBrushGestureController` ahead of the handler table — a pick sets the
  * delta sliders, a move drag shifts the layer live inside one transaction that
- * the ordinary release path closes. Selection is visibly inert until task 21
- * (`isBrushInertTool`).
+ * the ordinary release path closes. The selection (task 21) is arbitrated
+ * the same way: `useBrushSelection` keeps the mask in React state (it resets
+ * on a brush switch — see its header), the paint tools receive it as
+ * `BrushWriteOptions`, Delete erases the masked cells, a drag inside it
+ * moves them as ONE transaction, and the ants are SVG chrome.
  *
  * ── ⚠️ `observer()` HERE, rAF-SCHEDULED REDRAW FOR THE CELLS (D8) ────────
  * This component reads only scalars, ids and `observableRef` objects: the
@@ -34,28 +37,28 @@
  * The pixel canvas's viewport hook commits into `ViewportUIStore`, which is
  * persisted per project; the brush studio has its own session-only zoom/pan
  * (task 10). Wheel and pinch therefore go straight to `brushUI.zoomBy` /
- * `setPanOffset` from small handlers here. Pan is plain-wheel scroll only —
+ * `setPanOffset` through `useBrushCamera`. Pan is plain-wheel scroll only —
  * there is no space/middle-drag pan (reported as omitted).
+ *
+ * ── What lives in `./brush/` ──────────────────────────────────────────────
+ * Everything store-free: the tool context and gesture maths
+ * (`brushToolContext`), the device layer (`useBrushPointerHandlers`), the
+ * hover marker (`useBrushHover`), the camera (`useBrushCamera`) and the
+ * selection (`brushSelection` + `useBrushSelection`). This file keeps only
+ * what touches a store.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { MutableRefObject } from "react";
 import { observer } from "mobx-react-lite";
 import { useStores } from "../stores/context";
 import type { Point } from "../types";
 import { brushCellToRgba } from "../types";
-import {
-  getCirclePixels,
-  getSquarePixels,
-} from "../components/Canvas/drawingUtils";
 import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
 import { EmptyState } from "../ui/primitives/EmptyState/EmptyState";
 import { renderBrushFrame } from "../ui/canvas/render/renderBrushFrame";
-import { paintHoverCells } from "../ui/canvas/render/renderHoverMarker";
-import { toolFootprint } from "../ui/canvas/tools/toolFootprint";
 import type { StampPoint } from "../ui/canvas/tools/brushStamp";
 import type { PointerDevice } from "../ui/canvas/tools/toolHandlers";
 import { gridOverlayPath } from "../ui/canvas/svg/gridOverlay";
-import { hoverOutlineOverlay } from "../ui/canvas/svg/chromeOverlay";
 import { screenToPixel } from "../ui/canvas/model/coords";
 import { useCanvasPointer } from "../ui/hooks/useCanvasPointer";
 import { useCanvasRender } from "../ui/hooks/useCanvasRender";
@@ -68,10 +71,15 @@ import {
   createBrushGestureController,
   isBrushGestureTool,
   isBrushInertTool,
+  isBrushSelectionTool,
   isBrushShapeTool,
   pointsToBrushCells,
 } from "./brush/brushToolContext";
+import { BRUSH_MOVE_SELECTION_LABEL } from "./brush/brushSelection";
+import { useBrushCamera } from "./brush/useBrushCamera";
+import { useBrushHover } from "./brush/useBrushHover";
 import { useBrushPointerHandlers } from "./brush/useBrushPointerHandlers";
+import { useBrushSelection } from "./brush/useBrushSelection";
 
 /** One layer canvas holds the whole composited frame. Ids only cross the boundary. */
 const FRAME_LAYER_ID = "brush-frame";
@@ -80,8 +88,6 @@ const LAYER_IDS: readonly string[] = [FRAME_LAYER_ID];
 const CELL_SCALE = 1;
 /** Grid lines only once a cell is at least this many screen px. */
 const GRID_MIN_ZOOM = 8;
-/** Same feel as `useCanvasViewport`'s ctrl+wheel. */
-const WHEEL_ZOOM_RATE = 0.012;
 const NO_PARITY = { x: 0, y: 0 };
 
 export interface BrushCanvasContainerProps {
@@ -97,11 +103,9 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
 
   /* ── refs ──────────────────────────────────────────────────────────────── */
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const frameCanvasRef = useRef<HTMLCanvasElement | null>(null);
   /** The `width × height` RGBA buffer, reused across frames of the same size. */
   const bufferRef = useRef<ImageData | null>(null);
@@ -118,6 +122,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   const selectedDelta = brushUI.selectedDelta;
   const pixelVersion = brushes.pixelVersion;
   const domainVersion = brushes.domainVersion;
+  const loadGeneration = brushes.loadGeneration;
   const lightGridMode = app.ui.viewport.lightGridMode ?? false;
 
   const currentTool = tool.selectedTool;
@@ -135,35 +140,21 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   const inert = isBrushInertTool(currentTool);
   const hasDoc = doc !== null && width > 0 && height > 0;
 
-  /* ── hover ─────────────────────────────────────────────────────────────── */
-  const [hoverPixel, setHoverPixelState] = useState<Point | null>(null);
-  const setHoverPixel = useCallback((p: Point | null) => {
-    setHoverPixelState((prev) =>
-      prev === p || (prev && p && prev.x === p.x && prev.y === p.y) ? prev : p,
-    );
-  }, []);
-
-  const resolveHoverCells = useCallback(
-    (center: Point): StampPoint[] =>
-      toolFootprint(center, {
-        tool: currentTool,
-        brushSize: activeToolBrushSize,
-        pencilShape: pencilBrushShape,
-        eraserShape,
-        circle: getCirclePixels,
-        square: getSquarePixels,
-        gridWidth: width,
-        gridHeight: height,
-      }),
-    [
-      currentTool,
-      activeToolBrushSize,
-      pencilBrushShape,
-      eraserShape,
-      width,
-      height,
-    ],
-  );
+  /* ── hover marker and camera: store-free hooks in `./brush/` ───────────── */
+  const { hoverCanvasRef, setHoverPixel, hoverOutline } = useBrushHover({
+    width,
+    height,
+    tool: currentTool,
+    brushSize: activeToolBrushSize,
+    pencilShape: pencilBrushShape,
+    eraserShape,
+  });
+  const camera = useBrushCamera({
+    enabled: hasDoc,
+    zoomBy: (ratio) => brushUI.zoomBy(ratio),
+    panOffset: () => brushUI.panOffset,
+    setPanOffset: (offset) => brushUI.setPanOffset(offset),
+  });
 
   /* ── coordinate mapping ────────────────────────────────────────────────── */
   const coordGeom = useMemo(
@@ -180,16 +171,49 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
         clientY,
         canvas.getBoundingClientRect(),
         coordGeom,
-        // A shape or move drag keeps tracking the pointer off-grid; the
-        // store drops off-grid cells (`setCells` bounds-filters, and
-        // `moveLayerCells` discards what leaves the grid on every step).
-        isDrawing && (isBrushShapeTool(currentTool) || currentTool === "move")
+        // A shape, move or selection drag keeps tracking the pointer
+        // off-grid; the store drops off-grid cells (`setCells`
+        // bounds-filters, `moveLayerCells` discards what leaves the grid on
+        // every step) and the selection clamps its rectangle.
+        isDrawing &&
+          (isBrushShapeTool(currentTool) ||
+            currentTool === "move" ||
+            isBrushSelectionTool(currentTool))
           ? "pixel-unbounded"
           : "pixel",
       );
     },
     [coordGeom, isDrawing, currentTool],
   );
+
+  /* ── the selection (task 21): mask, keys, raster chrome ────────────────── */
+  // The LIVE grid at paint / commit time — the container itself never reads it.
+  const readGrid = useCallback(
+    () => brushPixels.resolveTarget()?.layer.pixels ?? null,
+    [brushPixels],
+  );
+  const selection = useBrushSelection({
+    resetKey: loadGeneration,
+    width,
+    height,
+    channelType,
+    pixelVersion,
+    enabled: hasDoc,
+    overlayCanvasRef,
+    readGrid,
+    beginGesture: (coords) => interaction.startDrawing(coords),
+    // ONE transaction: clear the old cells, then write the new (two
+    // commands → one composite entry carrying the label; see `moveMaskWrites`).
+    writeMove: ({ clears, writes }) => {
+      brushes.history.beginTransaction(BRUSH_MOVE_SELECTION_LABEL);
+      brushPixels.setCells(clears);
+      brushPixels.setCells(writes);
+      brushes.history.endTransaction();
+    },
+    clearCells: (cells) => brushPixels.clearCells(cells),
+  });
+  const selectionWriteOptions = selection.writeOptions;
+  const selectionController = selection.controller;
 
   /* ── the tool context and the pointer engine ───────────────────────────── */
   // Exactly one stroke cursor: the hook's ref, bound after the hook call.
@@ -209,8 +233,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
         shapeMode,
         borderRadius,
         delta: selectedDelta,
-        // The LIVE grid at click time — the container itself never reads it.
-        readGrid: () => brushPixels.resolveTarget()?.layer.pixels ?? null,
+        readGrid,
         lastStrokePixel: strokeCursor.current.ref?.current ?? null,
         setLastStrokePixel: (p) => {
           const ref = strokeCursor.current.ref;
@@ -222,8 +245,9 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
           brushes.history.endTransaction();
           interaction.endDrawing();
         },
-        setCells: (cells) => brushPixels.setCells(cells),
+        setCells: (cells, options) => brushPixels.setCells(cells, options),
         setPreviewPixels: (points) => interaction.setPreviewPixels(points),
+        writeOptions: selectionWriteOptions,
       }),
     [
       width,
@@ -235,10 +259,12 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
       shapeMode,
       borderRadius,
       selectedDelta,
+      readGrid,
       currentTool,
       brushes,
       brushPixels,
       interaction,
+      selectionWriteOptions,
     ],
   );
 
@@ -271,9 +297,14 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     [brushPixels, brushUI, brushes, interaction],
   );
 
-  /** Pointer-down for either device: a gesture tool first, else the table. */
+  /** Pointer-down for either device: selection, then a gesture tool, else the table. */
   const beginPointer = useCallback(
     (clientX: number, clientY: number, device: PointerDevice) => {
+      if (isBrushSelectionTool(currentTool)) {
+        const coords = getCoords(clientX, clientY);
+        if (coords) selectionController.down(coords);
+        return;
+      }
       if (!isBrushGestureTool(currentTool)) {
         pointer.beginStroke(clientX, clientY, device);
         return;
@@ -281,16 +312,21 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
       const coords = getCoords(clientX, clientY);
       if (coords) gesture.down(currentTool, coords);
     },
-    [currentTool, pointer, getCoords, gesture],
+    [currentTool, pointer, getCoords, gesture, selectionController],
   );
 
-  /** Pointer-move while a gesture is open: a move drag steps, else the table. */
+  /** Pointer-move while a gesture is open: selection or move drag, else the table. */
   const continuePointer = useCallback(
     (clientX: number, clientY: number, device: PointerDevice) => {
-      if (gesture.isMoving) gesture.move(getCoords(clientX, clientY));
-      else pointer.continueStroke(clientX, clientY, device);
+      if (selectionController.isActive) {
+        selectionController.move(getCoords(clientX, clientY));
+      } else if (gesture.isMoving) {
+        gesture.move(getCoords(clientX, clientY));
+      } else {
+        pointer.continueStroke(clientX, clientY, device);
+      }
     },
-    [gesture, getCoords, pointer],
+    [selectionController, gesture, getCoords, pointer],
   );
 
   /**
@@ -301,18 +337,26 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   const finishStroke = useCallback(() => {
     pointer.lastStrokePixelRef.current = null;
     gesture.end();
+    // A selection release commits its rect or its move (one transaction of
+    // its own) BEFORE the shared close below.
+    selectionController.end(true);
     if (isBrushShapeTool(currentTool) && previewPixels.length > 0) {
       brushes.history.beginTransaction(brushStrokeLabel(currentTool));
-      brushPixels.setCells(pointsToBrushCells(previewPixels, selectedDelta));
+      brushPixels.setCells(
+        pointsToBrushCells(previewPixels, selectedDelta),
+        selectionWriteOptions,
+      );
     }
     brushes.history.endTransaction();
     interaction.endDrawing();
   }, [
     pointer.lastStrokePixelRef,
     gesture,
+    selectionController,
     currentTool,
     previewPixels,
     selectedDelta,
+    selectionWriteOptions,
     brushes,
     brushPixels,
     interaction,
@@ -326,10 +370,17 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   const abortStroke = useCallback(() => {
     pointer.lastStrokePixelRef.current = null;
     gesture.end();
+    selectionController.end(false);
     interaction.clearPreviewPixels();
     brushes.history.endTransaction();
     interaction.endDrawing();
-  }, [pointer.lastStrokePixelRef, gesture, interaction, brushes]);
+  }, [
+    pointer.lastStrokePixelRef,
+    gesture,
+    selectionController,
+    interaction,
+    brushes,
+  ]);
 
   /* ── render: the frame (THE ONLY place cells are read) ─────────────────── */
   const renderFrame = useCallback(() => {
@@ -378,27 +429,6 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   ]);
   useCanvasRender(renderFrame, [renderFrame, pixelVersion, domainVersion]);
 
-  /* ── render: the hover marker ──────────────────────────────────────────── */
-  const renderHover = useCallback(() => {
-    const canvas = hoverCanvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    ctx.clearRect(0, 0, width, height);
-    if (!hoverPixel || width === 0 || height === 0) return;
-    const cells = resolveHoverCells(hoverPixel);
-    if (cells.length === 0) return;
-    const buffer = ctx.createImageData(width, height);
-    paintHoverCells(buffer, cells, CELL_SCALE);
-    ctx.putImageData(buffer, 0, 0);
-  }, [width, height, hoverPixel, resolveHoverCells]);
-  useCanvasRender(renderHover, [renderHover]);
-
-  const hoverOutline = useMemo(() => {
-    if (!hoverPixel) return null;
-    const cells = resolveHoverCells(hoverPixel);
-    return cells.length > 0 ? hoverOutlineOverlay(cells) : null;
-  }, [hoverPixel, resolveHoverCells]);
-
   const grid = useMemo(
     () =>
       hasDoc && zoom >= GRID_MIN_ZOOM
@@ -408,27 +438,6 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
           )
         : null,
     [hasDoc, zoom, width, height, lightGridMode],
-  );
-
-  /* ── camera: wheel zoom (ctrl/meta) and wheel pan, native + non-passive ── */
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !hasDoc) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (e.ctrlKey || e.metaKey) {
-        brushUI.zoomBy(Math.exp(-e.deltaY * WHEEL_ZOOM_RATE));
-      } else {
-        const pan = brushUI.panOffset;
-        brushUI.setPanOffset({ x: pan.x - e.deltaX, y: pan.y - e.deltaY });
-      }
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [brushUI, hasDoc]);
-  const zoomBy = useCallback(
-    (ratio: number) => brushUI.zoomBy(ratio),
-    [brushUI],
   );
 
   /* ── pointer handlers: the device layer lives in `useBrushPointerHandlers` ── */
@@ -442,7 +451,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     continuePointer,
     finishStroke,
     abortStroke,
-    zoomBy,
+    zoomBy: camera.zoomBy,
   });
 
   const registerLayerCanvas = useCallback(
@@ -465,7 +474,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
       frameOverlayCanvasRef={frameOverlayCanvasRef}
       frameTraceOverlayCanvasRef={frameTraceOverlayCanvasRef}
       hoverCanvasRef={hoverCanvasRef}
-      containerRef={containerRef}
+      containerRef={camera.containerRef}
       layerIds={LAYER_IDS}
       registerLayerCanvas={registerLayerCanvas}
       cellWidth={width}
@@ -475,11 +484,14 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
       lightGridMode={lightGridMode}
       checkerParity={NO_PARITY}
       cursor={brushCursor(currentTool)}
-      showReferenceOverlay={false}
+      // The selection's raster chrome paints into the reference overlay
+      // canvas, mounted only while there is something to show.
+      showReferenceOverlay={selection.hasChrome}
       showFrameOverlay={false}
       showFrameTraceOverlay={false}
       grid={grid}
       hoverOutline={hoverOutline}
+      marchingAnts={selection.marchingAnts}
       {...pointerHandlers}
     />
   );
