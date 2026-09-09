@@ -79,7 +79,13 @@ export interface BrushSelectionArgs {
   channelType: BrushChannelType;
   /** Redraw signal for the move preview (the cells under it may change). */
   pixelVersion: number;
-  /** A document is open. Without one the keys do nothing. */
+  /**
+   * Bind the Escape / Delete / Backspace keys. `false` binds NO listener —
+   * the gestures still work, so a click in the non-owning pane still selects
+   * there. The container passes "a document is open AND this pane is
+   * `brushViews.keyboardOwner`" (follow-ups task 09): with two panes each
+   * holding its own mask, exactly one may answer a key press.
+   */
   enabled: boolean;
   /** `CanvasSurface`'s reference-overlay canvas; mounted only while needed. */
   overlayCanvasRef: RefObject<HTMLCanvasElement | null>;

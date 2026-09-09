@@ -25,8 +25,9 @@
  * This component reads only scalars, ids and `observableRef` objects: the
  * document's IDENTITY and size, the selected frame/layer ids, zoom, pan, the
  * delta tuple, the tool settings. It never reads a grid. Cells are consumed
- * only inside `renderFrame` below, which runs from a scheduled animation
- * frame; the redraw signal is `brushes.pixelVersion` / `domainVersion`.
+ * only inside `useBrushPaneRender`'s paint (`./brush/brushPanes`), which runs
+ * from a scheduled animation frame; the redraw signal is
+ * `brushes.pixelVersion` / `domainVersion`.
  *
  * ── 1:1 backing store, CSS magnification ──────────────────────────────────
  * The task file predates plan 05: `CanvasSurface` now keeps every canvas at
@@ -46,28 +47,40 @@
  * pans; a lone finger under `pencilOnly` does nothing. `combinedScale` is
  * `zoom * viewZoom`, computed once in the adapter; `zoom` stays integer.
  *
+ * ── One of two panes: `renderMode` (follow-ups task 09, MASTER D5) ────────
+ * `BrushStudioContainer` mounts one of these per open mode of
+ * `app.brushViews`, keyed by the mode so a swap reorders without remounting.
+ * The Full pane composites the frame's visible layers and takes its camera
+ * from `brushUI`; the Layer pane renders ONLY the selected layer (others
+ * hidden, not dimmed — `brushPaneLayers`) and takes `brushViews.layerCamera`.
+ * `zoom` (px/cell) is shared; only pan/viewZoom differ, and `renderMode` is
+ * part of the camera's `resyncKey`. Exactly ONE pane binds Escape/Delete
+ * (`brushViews.keyboardOwner`), else every key fires twice. Each pane keeps
+ * its own selection mask (container-local `useState`, v1 — the pixel studio
+ * shares one through its store; recorded as an open item).
+ *
  * ── What lives in `./brush/` ──────────────────────────────────────────────
  * Everything store-free: the tool context and gesture maths
  * (`brushToolContext`), the device layer (`useBrushPointerHandlers`), the
- * hover marker (`useBrushHover`), the camera (`useBrushCamera`) and the
- * selection (`brushSelection` + `useBrushSelection`). This file keeps only
- * what touches a store.
+ * hover marker (`useBrushHover`), the camera (`useBrushCamera`), the
+ * selection (`brushSelection` + `useBrushSelection`) and the per-pane
+ * controls and layer choice (`brushPanes`). This file keeps only what
+ * touches a store.
  */
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { MutableRefObject } from "react";
 import { observer } from "mobx-react-lite";
 import { useStores } from "../stores/context";
+import type { CanvasRenderMode } from "../stores/ui/CanvasViewsUIStore";
 import type { Point } from "../types";
 import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
 import { CanvasViewControls } from "../ui/components/CanvasViewControls/CanvasViewControls";
 import { EmptyState } from "../ui/primitives/EmptyState/EmptyState";
-import { renderBrushFrame } from "../ui/canvas/render/renderBrushFrame";
 import type { StampPoint } from "../ui/canvas/tools/brushStamp";
 import type { PointerDevice } from "../ui/canvas/tools/toolHandlers";
 import { gridOverlayPath } from "../ui/canvas/svg/gridOverlay";
 import { screenToPixel } from "../ui/canvas/model/coords";
 import { useCanvasPointer } from "../ui/hooks/useCanvasPointer";
-import { useCanvasRender } from "../ui/hooks/useCanvasRender";
 import { isTouchDevice } from "../ui/utils/pointerDevice";
 import {
   BRUSH_MOVE_LABEL,
@@ -80,11 +93,11 @@ import {
   isBrushInertTool,
   isBrushSelectionTool,
   isBrushShapeTool,
-  paintShapePreview,
   shapeCommitCells,
 } from "./brush/brushToolContext";
 import type { ShapeOutlineKeys } from "./brush/brushToolContext";
 import { BRUSH_MOVE_SELECTION_LABEL } from "./brush/brushSelection";
+import { brushPaneControls, useBrushPaneRender } from "./brush/brushPanes";
 import { useBrushCamera } from "./brush/useBrushCamera";
 import { useBrushHover } from "./brush/useBrushHover";
 import { useBrushPointerHandlers } from "./brush/useBrushPointerHandlers";
@@ -99,23 +112,27 @@ const NO_PARITY = { x: 0, y: 0 };
 
 export interface BrushCanvasContainerProps {
   className?: string;
+  /** Which pane this is (see the header). Default `"full"`. */
+  renderMode?: CanvasRenderMode;
 }
 
 export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   className,
+  renderMode = "full",
 }: BrushCanvasContainerProps) {
   const app = useStores();
   const { brushUI, brushes, brushPixels, canvasInteraction: interaction } = app;
   const tool = app.ui.tool;
+  // The `CanvasCamera` for THIS pane: `brushUI` for Full, the session-only
+  // `layerCamera` for Layer. `zoom` is not part of the camera — shared.
+  const views = app.brushViews;
+  const paneCamera = renderMode === "layer" ? views.layerCamera : brushUI;
 
   /* ── refs ──────────────────────────────────────────────────────────────── */
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameTraceOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
-  const frameCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  /** The `width × height` RGBA buffer, reused across frames of the same size. */
-  const bufferRef = useRef<ImageData | null>(null);
 
   /* ── observable reads (scalars, ids, refs — never a grid) ──────────────── */
   const doc = brushes.document;
@@ -124,6 +141,8 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   const selectedFrameId = brushUI.selectedFrameId;
   const layer = brushUI.selectedLayerIn(doc);
   const channelType = layer?.channelType ?? "rgb";
+  // The Layer pane composites this one layer alone; `null` = the whole frame.
+  const paneLayerId = renderMode === "layer" ? (layer?.id ?? null) : null;
   const zoom = brushUI.zoom;
   const selectedDelta = brushUI.selectedDelta;
   const fillDelta = brushUI.fillDelta;
@@ -175,8 +194,8 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     width,
     height,
     zoom,
-    camera: brushUI,
-    resyncKey: `${brushName}:${selectedFrameId ?? ""}`,
+    camera: paneCamera,
+    resyncKey: `${renderMode}:${brushName}:${selectedFrameId ?? ""}`,
   });
 
   /* ── coordinate mapping ────────────────────────────────────────────────── */
@@ -221,7 +240,8 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     height,
     channelType,
     pixelVersion,
-    enabled: hasDoc,
+    // Only the keyboard-owning pane binds Escape/Delete (see the header).
+    enabled: hasDoc && views.keyboardOwner === renderMode,
     overlayCanvasRef,
     readGrid,
     beginGesture: (coords) => interaction.startDrawing(coords),
@@ -411,41 +431,21 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     brushes,
   ]);
 
-  /* ── render: the frame (THE ONLY place cells are read) ─────────────────── */
-  const renderFrame = useCallback(() => {
-    const canvas = frameCanvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    ctx.clearRect(0, 0, width, height);
-
-    const liveDoc = brushes.document;
-    const frame = liveDoc?.frames.find((f) => f.id === selectedFrameId);
-    if (!liveDoc || !frame || width === 0 || height === 0) return;
-
-    let buffer = bufferRef.current;
-    if (!buffer || buffer.width !== width || buffer.height !== height) {
-      buffer = ctx.createImageData(width, height);
-      bufferRef.current = buffer;
-    }
-    // `ImageData` IS a `PixelBuffer`, structurally; the compositor clears it.
-    renderBrushFrame(buffer, {
-      layers: frame.layers,
-      width,
-      height,
-    });
-    ctx.putImageData(buffer, 0, 0);
-
-    // The shape preview, colourised per pixel as the selected layer would
-    // show the commit — edge and fill from the same split as `finishStroke`.
-    paintShapePreview(ctx, {
-      points: previewPixels,
-      outlineKeys: shapeKeysRef.current,
-      slots: shapeSlots,
-      width,
-      height,
-    });
-  }, [brushes, selectedFrameId, width, height, previewPixels, shapeSlots]);
-  useCanvasRender(renderFrame, [renderFrame, pixelVersion, domainVersion]);
+  /* ── render: the pane's compositor (THE ONLY place cells are read) ─────── */
+  // Lives in `brushPanes` (task 09): the frame — or, in the Layer pane, the
+  // selected layer alone — plus the shape preview, painted 1:1 from a rAF.
+  const { registerLayerCanvas } = useBrushPaneRender({
+    source: brushes,
+    selectedFrameId,
+    layerId: paneLayerId,
+    width,
+    height,
+    previewPixels,
+    outlineKeysRef: shapeKeysRef,
+    shapeSlots,
+    pixelVersion,
+    domainVersion,
+  });
 
   const grid = useMemo(
     () =>
@@ -477,12 +477,8 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     abortStroke,
   });
 
-  const registerLayerCanvas = useCallback(
-    (_id: string, el: HTMLCanvasElement | null) => {
-      frameCanvasRef.current = el;
-    },
-    [],
-  );
+  // Reset View plus this pane's open / swap / close buttons (`brushPanes`).
+  const controls = brushPaneControls(views, renderMode, camera.handleResetView);
 
   if (!hasDoc) {
     return (
@@ -517,7 +513,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
       grid={grid}
       hoverOutline={hoverOutline}
       marchingAnts={selection.marchingAnts}
-      viewControls={<CanvasViewControls onResetView={camera.handleResetView} />}
+      viewControls={<CanvasViewControls {...controls} />}
       {...pointerHandlers}
     />
   );

@@ -256,6 +256,36 @@ describe("keys", () => {
     expect(args.clearCells).not.toHaveBeenCalled();
   });
 
+  it("⭐ enabled: false registers NO keydown listener at all (the non-owning pane, task 09); flipping it binds one", () => {
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    const keydownBinds = () =>
+      addSpy.mock.calls.filter(([type]) => type === "keydown").length;
+    try {
+      const { rerender, args, selectRect } = mount({ enabled: false });
+      expect(keydownBinds()).toBe(0);
+      // Gestures are untouched: a click in the non-owning pane still selects.
+      selectRect([0, 0], [1, 1]);
+      expect(keydownBinds()).toBe(0);
+
+      rerender({ ...args, enabled: true });
+      expect(keydownBinds()).toBe(1);
+      keydown("Delete");
+      expect(args.clearCells).toHaveBeenCalledTimes(1);
+
+      // Losing ownership unbinds again.
+      rerender({ ...args, enabled: false });
+      expect(
+        removeSpy.mock.calls.filter(([type]) => type === "keydown"),
+      ).toHaveLength(1);
+      keydown("Delete");
+      expect(args.clearCells).toHaveBeenCalledTimes(1);
+    } finally {
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+    }
+  });
+
   it("the listener is removed on unmount", () => {
     const { args, selectRect, unmount } = mount();
     selectRect([0, 0], [1, 1]);

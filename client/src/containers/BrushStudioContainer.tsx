@@ -36,10 +36,19 @@
  * ⚠️ `useRailLayout`'s rail labels ("Objects & Layers") are hard-coded in
  * `hooks/useRailLayout.tsx` and read slightly wrong over the brush library —
  * cosmetic, out of this task's `Touches`, noted for the final sweep.
+ *
+ * ── The canvas region: one or two panes (follow-ups task 09, D5) ──────────
+ * Exactly as `PixelStudioContainer` does it: one `BrushCanvasContainer` per
+ * open mode of `app.brushViews`, in left→right order, inside `CanvasSplit`.
+ * The pane `key` IS the mode string, so a swap is a reorder — React moves the
+ * existing subtrees, nothing remounts, no flash — and a close unmounts only
+ * the pane that went. Nothing here is persisted; a reload comes back to one
+ * Full pane.
  */
 import { useEffect } from "react";
 import { observer } from "mobx-react-lite";
 import { BrushStudioLayout } from "../ui/layouts/BrushStudioLayout/BrushStudioLayout";
+import { CanvasSplit } from "../ui/components/CanvasSplit/CanvasSplit";
 import { HeaderContainer } from "./HeaderContainer";
 import { ToolbarContainer } from "./ToolbarContainer";
 import { BrushLibraryContainer } from "./BrushLibraryContainer";
@@ -66,6 +75,12 @@ export const BrushStudioContainer = observer(function BrushStudioContainer() {
   // layout prop: it is fixed over the window and belongs to no arrangement.
   const { toast, ...layoutProps } = railLayout;
 
+  // One pane per open render mode; key = mode (see the header block).
+  const panes = app.brushViews.openModes.map((mode) => ({
+    key: mode,
+    node: <BrushCanvasContainer renderMode={mode} />,
+  }));
+
   return (
     <>
       <BrushStudioLayout
@@ -89,7 +104,7 @@ export const BrushStudioContainer = observer(function BrushStudioContainer() {
           )
         }
         timeline={<BrushTimelineContainer />}
-        canvas={<BrushCanvasContainer />}
+        canvas={<CanvasSplit panes={panes} />}
       />
       {toast}
     </>
