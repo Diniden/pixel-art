@@ -1,8 +1,8 @@
 # HANDOFF — Brush Studio
 
-**Current position:** W8 IN PROGRESS (W1–W7 code-complete; W1/W2/W6/W7 manual checks owed, see Notes)
+**Current position:** W9 IN PROGRESS (W1–W8 code-complete; W1/W2/W6/W7/W8 manual checks owed, see Notes)
 **Branch:** `feat/01-brush-studio` (cut 2026-09-08 from `feat/09-ipad-pencil-fixes` @ `3845480`)
-**Last commit:** `04335d7` (W7)
+**Last commit:** `576675c` (W8)
 
 Planned 2026-08-29 from `feat/rail-layout-controls` @ `37a4bce` with a dirty worktree (103
 uncommitted files of unrelated in-flight work — see MASTER §4). Executors stage only their
@@ -19,8 +19,8 @@ uncommitted files of unrelated in-flight work — see MASTER §4). Executors sta
 | W5 | 11 | DONE | 2026-09-08 | `6de0317` | tsc clean · eslint 0 err/66 warn · vitest 176 files, 3658 tests pass (W4: 175/3647), no snapshot diff · boundaries OK · no lockfile. (Was BLOCKED on the dirty `ApplicationStore.ts`; owner committed it as `be92287`; W4 gate re-run green on that HEAD before dispatch.) |
 | W6 | 16, 17, 18 | PARTIAL (code DONE, gate green; manual checks deferred to W7/19 by design — nothing mounted yet) | 2026-09-08 | `f2474d3` | tsc clean · eslint 0 err/66 warn · vitest 177 files, 3703 tests pass (W5: 176/3658), no snapshot diff · boundaries OK · stylelint 2 errors = `OtherHand.css` baseline, 0 new · no lockfile |
 | W7 | 19 | PARTIAL (code DONE, gate green; all 8 manual checks owed) | 2026-09-08 | `04335d7` | tsc clean · eslint 0 err/66 warn · vitest 179 files, 3709 tests pass (W6: 177/3703), no snapshot diff · boundaries OK · stylelint 2 errors = `OtherHand.css` baseline, 0 new · storybook ✓ built in 6.12s · `bun run build` ✓ 2.16s · no lockfile |
-| W8 | 20 | IN PROGRESS | 2026-09-08 | | |
-| W9 | 21 | TODO | | | |
+| W8 | 20 | PARTIAL (code DONE, gate green; 5 manual checks owed) | 2026-09-08 | `576675c` | tsc clean · eslint 0 err/66 warn (`max-lines` does NOT fire on the container: 379 counted / 400) · vitest 181 files, 3776 tests pass (W7: 179/3709), no snapshot diff · boundaries OK · no lockfile |
+| W9 | 21 | IN PROGRESS | 2026-09-08 | | |
 | W10 | 22 | TODO | | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
@@ -132,6 +132,14 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   rename copy is now name-agnostic. `HeaderContainer` passes `brushList` as `projectList` in brush
   mode so duplicate-rename checks the right list. **Cosmetic debt:** `RAIL_LABELS` in
   `hooks/useRailLayout.tsx` still says "Objects & Layers" over the brush library.
+- **W8/20 — executor died mid-task (API rate limit) and was resumed by a second executor**, which
+  audited the uncommitted work, kept all of it, and fixed three defects in it (a test helper
+  scoped inside one `describe` → 6 tsc errors; a wrong expectation in the round-trip move test;
+  Prettier). Extra files under `containers/brush/` (allowed): `useBrushPointerHandlers.ts` (the
+  mouse/touch device layer lifted out of the container, store-free) + a 22-test dom suite.
+  Eyedropper uses `copyDelta(cell)`; move applies steps live so a round-trip records one net-zero
+  entry (matches the pixel canvas). Extra exports `brushCursor`, `pickBrushDelta`,
+  `BRUSH_MOVE_LABEL`, `BrushGestureHost/Controller`, `BRUSH_GESTURE_TOOLS`.
 - **Coordinator —** cut `feat/01-brush-studio` from `feat/09-ipad-pencil-fixes` instead of staying
   on the 09 branch: every prior plan in this repo has its own `feat/NN-*` branch.
 
@@ -150,6 +158,10 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
   with working "Back to Pixel Studio", project intact; (3) hotkey from pixel↔lighting, from brush →
   pixel; (4) reload while in brush mode boots into the placeholder and Back works; (5) iPad: the
   new button is tappable.
+- **Manual checks owed for W8/20** (brush mode): paint a ring, flood-fill inside → interior only,
+  one undo entry; gaussian-fill same; eyedropper on a painted cell sets the sliders; move drag
+  shifts the layer, out-of-bounds cells dropped, one undo per drag; iPad touch drag. Also:
+  StrictMode double-mount of the window `mouseup` listener (jsdom covers bind-only-while-open).
 - **Manual checks owed for W7/19 — all eight** (`bun run dev`): (1) Pixel → Brush: header
   "Brushes", empty library, create "Test Brush" 16×16 → loads, layer panel "Layer 1 · RGB",
   timeline 1×1; (2) pencil at delta 0 → grey, R=+255 → red-ish, eraser clears; (3) add HSL
