@@ -30,15 +30,17 @@
  * the checkerboard is a CSS div and the grid is SVG chrome. So this
  * container paints the composited RGBA buffer straight onto a 1:1 layer
  * canvas (transparent cells let the checkerboard show through) and passes
- * `brushUI.zoom` as `combinedScale`. `renderNormalEdit`'s upscale and
+ * `zoom * viewZoom` as `combinedScale`. `renderNormalEdit`'s upscale and
  * `strokeGrid` would both be silent regressions here — see their headers.
  *
- * ── The camera is `brushUI`'s, not `useCanvasViewport`'s ─────────────────
- * The pixel canvas's viewport hook commits into `ViewportUIStore`, which is
- * persisted per project; the brush studio has its own session-only zoom/pan
- * (task 10). Wheel and pinch therefore go straight to `brushUI.zoomBy` /
- * `setPanOffset` through `useBrushCamera`. Pan is plain-wheel scroll only —
- * there is no space/middle-drag pan (reported as omitted).
+ * ── The camera: `useCanvasViewport`, committing into `brushUI` ────────────
+ * (Follow-ups task 06, MASTER D1–D4.) The same engine as the pixel and
+ * lighting canvases drives this one — anchored pinch, two-finger pan,
+ * ctrl/⌘-wheel zoom, plain-wheel pan, zoom-out floor, debounced commit,
+ * re-sync on brush/frame — through the `useBrushCamera` adapter; the brush
+ * store is its `CanvasCamera` (session-only, task 10). Middle / alt drag
+ * pans; a lone finger under `pencilOnly` does nothing. `combinedScale` is
+ * `zoom * viewZoom`, computed once in the adapter; `zoom` stays integer.
  *
  * ── What lives in `./brush/` ──────────────────────────────────────────────
  * Everything store-free: the tool context and gesture maths
@@ -54,6 +56,7 @@ import { useStores } from "../stores/context";
 import type { Point } from "../types";
 import { brushCellToRgba } from "../types";
 import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
+import { CanvasViewControls } from "../ui/components/CanvasViewControls/CanvasViewControls";
 import { EmptyState } from "../ui/primitives/EmptyState/EmptyState";
 import { renderBrushFrame } from "../ui/canvas/render/renderBrushFrame";
 import type { StampPoint } from "../ui/canvas/tools/brushStamp";
@@ -62,6 +65,7 @@ import { gridOverlayPath } from "../ui/canvas/svg/gridOverlay";
 import { screenToPixel } from "../ui/canvas/model/coords";
 import { useCanvasPointer } from "../ui/hooks/useCanvasPointer";
 import { useCanvasRender } from "../ui/hooks/useCanvasRender";
+import { isTouchDevice } from "../ui/utils/pointerDevice";
 import {
   BRUSH_MOVE_LABEL,
   brushCoordGeometry,
@@ -118,12 +122,15 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   const layer = brushUI.selectedLayerIn(doc);
   const channelType = layer?.channelType ?? "rgb";
   const zoom = brushUI.zoom;
-  const panOffset = brushUI.panOffset;
   const selectedDelta = brushUI.selectedDelta;
   const pixelVersion = brushes.pixelVersion;
   const domainVersion = brushes.domainVersion;
   const loadGeneration = brushes.loadGeneration;
+  const brushName = brushes.brushName;
   const lightGridMode = app.ui.viewport.lightGridMode ?? false;
+  // Pencil-only input: tri-state in the file, device-dependent default — the
+  // same resolution as the pixel canvas (`CanvasContainer.tsx:648`).
+  const pencilOnly = app.ui.viewport.pencilOnly ?? isTouchDevice();
 
   const currentTool = tool.selectedTool;
   const brushSize = tool.brushSize;
@@ -151,9 +158,11 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   });
   const camera = useBrushCamera({
     enabled: hasDoc,
-    zoomBy: (ratio) => brushUI.zoomBy(ratio),
-    panOffset: () => brushUI.panOffset,
-    setPanOffset: (offset) => brushUI.setPanOffset(offset),
+    width,
+    height,
+    zoom,
+    camera: brushUI,
+    resyncKey: `${brushName}:${selectedFrameId ?? ""}`,
   });
 
   /* ── coordinate mapping ────────────────────────────────────────────────── */
@@ -441,17 +450,22 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   );
 
   /* ── pointer handlers: the device layer lives in `useBrushPointerHandlers` ── */
-  const pointerHandlers = useBrushPointerHandlers({
+  const { handlers: pointerHandlers, isPanning } = useBrushPointerHandlers({
     inert,
     hasLayer: layer !== null && layer !== undefined,
     isDrawing,
+    containerRef: camera.containerRef,
+    pencilOnly,
+    isPinching: camera.isPinching,
+    viewPanRef: camera.viewPanRef,
+    setViewPanOffset: camera.setViewPanOffset,
+    scheduleCommitPan: camera.scheduleCommitPan,
     getCoords,
     setHoverPixel,
     beginPointer,
     continuePointer,
     finishStroke,
     abortStroke,
-    zoomBy: camera.zoomBy,
   });
 
   const registerLayerCanvas = useCallback(
@@ -479,11 +493,13 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
       registerLayerCanvas={registerLayerCanvas}
       cellWidth={width}
       cellHeight={height}
-      viewPanOffset={panOffset}
-      combinedScale={zoom}
+      // The engine's LIVE pan (the store's is the debounced commit) and the
+      // one scale, `zoom * viewZoom`, multiplied in the adapter and nowhere else.
+      viewPanOffset={camera.viewPanOffset}
+      combinedScale={camera.combinedScale}
       lightGridMode={lightGridMode}
       checkerParity={NO_PARITY}
-      cursor={brushCursor(currentTool)}
+      cursor={isPanning ? "grabbing" : brushCursor(currentTool)}
       // The selection's raster chrome paints into the reference overlay
       // canvas, mounted only while there is something to show.
       showReferenceOverlay={selection.hasChrome}
@@ -492,6 +508,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
       grid={grid}
       hoverOutline={hoverOutline}
       marchingAnts={selection.marchingAnts}
+      viewControls={<CanvasViewControls onResetView={camera.handleResetView} />}
       {...pointerHandlers}
     />
   );
