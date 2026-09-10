@@ -258,6 +258,7 @@ import {
   viewZoomFloor,
 } from "../ui/hooks/useCanvasViewport";
 import { usePencilHover } from "../ui/hooks/usePencilHover";
+import { usePixelBrush } from "./pixelBrush/usePixelBrush";
 import { CanvasSurface } from "../ui/components/CanvasSurface/CanvasSurface";
 
 /* ── the pose tool (pose-tool task 08, concern #14) ────────────────────────
@@ -636,6 +637,9 @@ export const CanvasContainer = observer(function CanvasContainer({
   const borderRadius = tool.borderRadiusOrZero;
   const selectionMode = tool.selectionMode;
   const selectionBehavior = tool.selectionBehavior;
+  // The Brush tool's footprint + stamp (docs/12-pixel-brush-tool task 05).
+  // Memoised on document / frame / base colour only — never pointer-rate.
+  const pixelBrush = usePixelBrush(app, currentTool === "brush", currentColor);
 
   const zoom = viewport.zoom;
   const panOffset = camera.panOffset;
@@ -2281,6 +2285,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       square: getSquarePixels,
       gridWidth,
       gridHeight,
+      // Class 4 (the brush tool): the injected stamp footprint, or none.
+      pixelBrushOffsets: pixelBrush.footprint?.offsets ?? null,
     });
   }, [
     layer,
@@ -2290,6 +2296,7 @@ export const CanvasContainer = observer(function CanvasContainer({
     eraserShape,
     gridWidth,
     gridHeight,
+    pixelBrush.footprint,
   ]);
 
   /**
@@ -4393,6 +4400,7 @@ export const CanvasContainer = observer(function CanvasContainer({
       eraserShapeFn:
         eraserShape === "circle" ? getCirclePixels : getSquarePixels,
       line: getLinePixels,
+      pixelBrushStamp: pixelBrush.stamp,
       shapeMode,
       borderRadius,
       lastStrokePixel: strokeCursor.current.ref?.current ?? null,
@@ -4453,6 +4461,9 @@ export const CanvasContainer = observer(function CanvasContainer({
       editableGrid,
       tool.gaussianFill,
       actions,
+      // Changes only with the brush document / frame / base colour — a memo
+      // in `usePixelBrush`, never a pointer-rate value.
+      pixelBrush.stamp,
     ],
   );
 

@@ -896,6 +896,12 @@ describe("end to end through the real toolHandlers", () => {
     const args = makeArgs();
     const ctx = buildBrushToolContext(args);
     for (const tool of [...BRUSH_INERT_TOOLS, ...BRUSH_GESTURE_TOOLS]) {
+      // The pixel studio's `brush` tool is inert HERE by the gate, not by an
+      // empty table entry: `BrushCanvasContainer` / `useBrushPointerHandlers`
+      // check `isBrushInertTool` before the table is consulted, and its entry
+      // has a real body for the pixel canvas (docs/12-pixel-brush-tool task
+      // 05). It stays in `BRUSH_INERT_TOOLS`; only this "no body" claim skips it.
+      if (tool === "brush") continue;
       const handler = getToolHandler(tool);
       handler?.onDown?.(event(1, 1), ctx);
       handler?.onMove?.(event(1, 1), ctx);

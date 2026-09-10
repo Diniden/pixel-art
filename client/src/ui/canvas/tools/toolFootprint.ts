@@ -15,7 +15,7 @@
  * is a different question with the same arithmetic, so it lives here rather
  * than growing a second mode inside the drawing path.
  *
- * ## The three footprint classes, and why the third is not "nothing"
+ * ## The four footprint classes, and why the third is not "nothing"
  *
  * 1. **Brush tools** — `pixel` and `eraser`. Footprint is `stampAt` with the
  *    tool's OWN shape: `pencilBrushShape` for the pencil, `eraserShape` for the
@@ -40,13 +40,24 @@
  *    down. One cell answers that honestly for every tool; it just does not
  *    promise a fill's extent, which no marker could.
  *
+ * 4. **`brush`** — the pixel-studio Brush tool (docs/12-pixel-brush-tool,
+ *    task 05). Its footprint is INJECTED: `pixelBrushOffsets` is the brush
+ *    document's painted cells relative to the brush origin (computed once by
+ *    `pixelBrushFootprint` in the container, never here), translated to the
+ *    cursor cell and bounds-filtered. `null` / `undefined` means no brush is
+ *    loaded, and the answer is an EMPTY footprint — not the class-3 single
+ *    cell — because with no document a stroke writes nothing, and the marker
+ *    must promise exactly what the stroke does. The brush is NOT a member of
+ *    `isBrushTool`: that predicate means "scales with `brushSize`", which the
+ *    stamp does not.
+ *
  * Pure: no store, no MobX, no DOM. The shape generators live in
  * `components/Canvas/drawingUtils.ts`, OUTSIDE the `ui/` boundary, so they are
  * INJECTED exactly as `brushStamp` injects them.
  */
 
 import type { BrushShapeFn, StampBounds, StampPoint } from "./brushStamp";
-import { stampAt } from "./brushStamp";
+import { inBounds, stampAt } from "./brushStamp";
 
 /** The `Tool` union, structurally — `ui/` does not import `types/domain`. */
 export type FootprintTool = string;
@@ -68,6 +79,12 @@ export interface FootprintOptions extends StampBounds {
   circle: BrushShapeFn;
   /** `getSquarePixels`, injected. */
   square: BrushShapeFn;
+  /**
+   * Class 4 — injected cells for the `brush` tool, relative to the brush
+   * origin. `null` / `undefined` = no brush loaded → empty footprint. Ignored
+   * by every other tool.
+   */
+  pixelBrushOffsets?: ReadonlyArray<{ dx: number; dy: number }> | null;
 }
 
 /**
@@ -109,6 +126,16 @@ export function toolFootprint(
 
   const bounds = { gridWidth, gridHeight };
 
+  if (tool === "brush") {
+    // Class 4: the injected stamp footprint, translated and clipped. Empty —
+    // deliberately not one cell — when no brush document is loaded.
+    const offs = options.pixelBrushOffsets;
+    if (!offs) return [];
+    return offs
+      .map((o) => ({ x: center.x + o.dx, y: center.y + o.dy }))
+      .filter((p) => inBounds(p, bounds));
+  }
+
   if (!isBrushTool(tool)) {
     // Class 3: one cell, still bounds-filtered. `stampAt` at size 1 is exactly
     // that, and routing through it keeps ONE bounds rule in the codebase.
@@ -122,7 +149,11 @@ export function toolFootprint(
 
   // `fill-square` ignores `pencilBrushShape` because the drawing path does.
   const shapeName: BrushShape =
-    tool === "eraser" ? eraserShape : tool === "fill-square" ? "square" : pencilShape;
+    tool === "eraser"
+      ? eraserShape
+      : tool === "fill-square"
+        ? "square"
+        : pencilShape;
 
   return stampAt(center, {
     ...bounds,
