@@ -48,9 +48,22 @@
  * dimensions, and `app.editableGrid` is a store read that `ui/` may not make.
  * The component therefore emits only the preset NAME and this container turns
  * it into lines.
+ *
+ * ⚠️ The BRUSH section (pixel-brush task 06) is fed from `app.brushes` /
+ * `app.brushUI` HERE, and only while the brush tool is selected — so no
+ * brush observable is read (or subscribed to) for any other tool. The brush
+ * document is `observable.ref`: this container reads `width`, `height`,
+ * `frames.length`, the selected frame's `name` and `layers.length` and never
+ * a pixel grid. **It does NOT call `brushes.init()`** — `usePixelBrush` in
+ * `CanvasContainer` (task 05) does that whenever the tool is the brush, and a
+ * second caller would only race it. "Open Brush Studio" goes through the same
+ * `lightingUI.setStudioMode` the toolbar's mode buttons use.
  */
 import { observer } from "mobx-react-lite";
-import { PixelStudioPanel } from "../ui/components/PixelStudioPanel/PixelStudioPanel";
+import {
+  PixelStudioPanel,
+  type PixelStudioBrushInfo,
+} from "../ui/components/PixelStudioPanel/PixelStudioPanel";
 import {
   describeLine,
   presetLines,
@@ -136,6 +149,36 @@ export const PixelStudioPanelContainer = observer(
     const poseFrustum = hasCameraOverrides(pose.cameraOverrides)
       ? applyCameraOverrides(poseFittedFrustum, pose.cameraOverrides)
       : poseFittedFrustum;
+
+    // ── the Brush section (pixel-brush task 06) ─────────────────────────────
+    //
+    // Built ONLY for the brush tool, so this observer subscribes to no brush
+    // store field while the pencil (or anything else) is selected. The
+    // document is `observable.ref` — only its identity is tracked — and the
+    // reads below stay at the frame/layer-count level: no grid is touched.
+    // `brushes.init()` is deliberately NOT called here (see the header).
+    let pixelBrush: PixelStudioBrushInfo | undefined;
+    if (tool.selectedTool === "brush") {
+      const brushes = app.brushes;
+      const doc = brushes.document;
+      // The same frame rule the brush studio and the stamp use (MASTER D4):
+      // `selectedFrameId`, falling back to `frames[0]`.
+      const frame = app.brushUI.selectedFrameIn(doc);
+      pixelBrush = {
+        loadState: brushes.loadState,
+        brushName: brushes.hasBrush ? brushes.brushName : null,
+        width: doc?.width ?? null,
+        height: doc?.height ?? null,
+        frameName: frame?.name ?? null,
+        frameIndex: frame && doc ? doc.frames.indexOf(frame) : null,
+        frameCount: doc?.frames.length ?? 0,
+        layerCount: frame?.layers.length ?? 0,
+        // The toolbar's own studio-mode switch (`ToolbarContainer`'s
+        // `onSetStudioMode`). It also resets the tool to `"pixel"` — unchanged
+        // behaviour, MASTER D11.
+        onOpenBrushStudio: () => app.lightingUI.setStudioMode("brush"),
+      };
+    }
 
     return (
       <PixelStudioPanel
@@ -337,6 +380,9 @@ export const PixelStudioPanelContainer = observer(
           onDeletePreset: (id) => pose.deletePosePreset(id),
           onClear: () => pose.clear(),
         }}
+        // `undefined` for every tool but the brush; the component gates the
+        // section on both the tool AND the prop, so nothing is drawn.
+        pixelBrush={pixelBrush}
       />
     );
   },
