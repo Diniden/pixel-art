@@ -13,9 +13,9 @@
  * ── Why the document is passed IN rather than held ─────────────────────────
  *
  * `stores/ui/**` never imports `stores/domain/**`. The brush document lives on
- * `BrushStore` (domain); this store holds only IDS into it, and the two
- * methods that need the document (`adoptDocument`, `channelTypeIn`) take it
- * as an argument. Containers own the wiring — typically a `reaction` on
+ * `BrushStore` (domain); this store holds only IDS into it, and the methods
+ * that need the document (`adoptDocument`, `selectedFrameIn`, `selectedLayerIn`,
+ * `channelTypeIn`) take it as an argument. Containers own the wiring — typically a `reaction` on
  * `brushes.document` that calls `adoptDocument`.
  *
  * ── Observable kinds ───────────────────────────────────────────────────────
@@ -60,6 +60,7 @@ import type {
   BrushChannelType,
   BrushDelta,
   BrushDocument,
+  BrushFrame,
   BrushLayer,
 } from "../../types";
 import { clampDelta } from "../../types";
@@ -211,6 +212,17 @@ export class BrushUIStore implements CanvasCamera {
       const top = frame.layers[frame.layers.length - 1];
       this.selectedLayerId = top ? top.id : null;
     }
+  }
+
+  /**
+   * The frame the studio treats as "current" in `doc`: the one `selectedFrameId`
+   * names, else `doc.frames[0]`, else `null` — the same fallback `adoptDocument`
+   * and `selectedLayerIn` apply, exported so callers outside the brush studio
+   * (the pixel studio's brush tool — docs/12-pixel-brush-tool task 05/06) do
+   * not re-implement it. Returns the frame object from `doc` itself, not a copy.
+   */
+  selectedFrameIn(doc: BrushDocument | null): BrushFrame | null {
+    return doc === null ? null : frameIn(doc, this.selectedFrameId);
   }
 
   /** The selected layer as it appears in `doc`, or `null`. */

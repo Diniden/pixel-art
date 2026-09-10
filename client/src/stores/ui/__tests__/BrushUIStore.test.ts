@@ -193,6 +193,52 @@ describe("BrushUIStore — selection", () => {
     expect(s.channelTypeIn(twoByTwo())).toBe("rgb");
   });
 
+  it("selectedFrameIn(null) is null", () => {
+    const s = new BrushUIStore();
+    expect(s.selectedFrameIn(null)).toBeNull();
+    s.selectFrame("f1");
+    expect(s.selectedFrameIn(null)).toBeNull();
+  });
+
+  it("selectedFrameIn returns the frame selectedFrameId names, by reference", () => {
+    const s = new BrushUIStore();
+    const doc = twoByTwo();
+    s.selectFrame("f2");
+    const frame = s.selectedFrameIn(doc);
+    expect(frame).toBe(doc.frames[1]);
+    expect(frame?.id).toBe("f2");
+  });
+
+  it("selectedFrameIn falls back to frames[0] for an unknown id", () => {
+    const s = new BrushUIStore();
+    const doc = twoByTwo();
+    s.selectFrame("gone");
+    expect(s.selectedFrameIn(doc)).toBe(doc.frames[0]);
+  });
+
+  it("selectedFrameIn falls back to frames[0] when nothing is selected", () => {
+    const s = new BrushUIStore();
+    const doc = twoByTwo();
+    expect(s.selectedFrameId).toBeNull();
+    expect(s.selectedFrameIn(doc)).toBe(doc.frames[0]);
+  });
+
+  it("selectedFrameIn falls back to frames[0] once the selected frame is removed, and to null with no frames", () => {
+    const s = new BrushUIStore();
+    s.adoptDocument(twoByTwo());
+    s.selectFrame("f2");
+    const withoutF2: BrushDocument = {
+      ...createBrushDocument(4, 4),
+      frames: [createBrushFrame("f1", "Frame 1", [])],
+    };
+    expect(s.selectedFrameIn(withoutF2)).toBe(withoutF2.frames[0]);
+    // The selection itself is left alone — this is a read, not an adoption.
+    expect(s.selectedFrameId).toBe("f2");
+    expect(
+      s.selectedFrameIn({ ...createBrushDocument(2, 2), frames: [] }),
+    ).toBeNull();
+  });
+
   it("adoptDocument touches only the ids — deltas, target and camera survive a swap", () => {
     const s = new BrushUIStore();
     s.setDelta([1, 2, 3, 4]);
