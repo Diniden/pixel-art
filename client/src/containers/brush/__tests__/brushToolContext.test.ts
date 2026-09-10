@@ -490,6 +490,7 @@ describe("the tool tables", () => {
     "normal-pencil",
     "auto-normal",
     "height-map",
+    "brush",
   ])("%s is inert", (tool) => {
     expect(isBrushInertTool(tool)).toBe(true);
   });

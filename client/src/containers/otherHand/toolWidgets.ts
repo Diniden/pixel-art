@@ -38,6 +38,7 @@ const TOOL_TITLES: Partial<Record<Tool, string>> = {
   "normal-pencil": "Normal Brush",
   "auto-normal": "Auto Normal",
   "height-map": "Height Map",
+  brush: "Brush",
 };
 
 /** Which tool section is showing, what to call it, and what to put on it. */

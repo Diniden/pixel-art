@@ -273,6 +273,9 @@ export const toolHandlers = {
   "normal-pencil": {},
   "auto-normal": {},
   "height-map": {},
+
+  // placeholder — docs/12-pixel-brush-tool task 05 fills it
+  brush: {},
 } satisfies Record<string, ToolHandler>;
 
 /** The tool names this table serves. */

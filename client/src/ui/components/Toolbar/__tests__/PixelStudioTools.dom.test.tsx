@@ -41,6 +41,8 @@ const origin = (c: HTMLElement) =>
   c.querySelector('button[aria-label^="Origin"]');
 const addReference = (c: HTMLElement) =>
   c.querySelector('button[aria-label="Add Reference Image"]');
+const brush = (c: HTMLElement) =>
+  c.querySelector('button[aria-label^="Brush"]');
 
 describe("PixelStudioTools hiddenTools", () => {
   it("with the prop absent, shows Origin and the reference-image group", () => {
@@ -50,7 +52,17 @@ describe("PixelStudioTools hiddenTools", () => {
     expect(
       container.querySelector(".toolbar__group--reference"),
     ).not.toBeNull();
-    expect(toolButtons(container)).toHaveLength(13);
+    // 14 rows: 13 + the pixel-studio brush tool (docs/12-pixel-brush-tool
+    // task 01), which sits directly after the eraser.
+    expect(toolButtons(container)).toHaveLength(14);
+    expect(brush(container)).not.toBeNull();
+    // aria-labels carry the hotkey suffix ("Eraser (2)"), so match by prefix.
+    const labels = toolButtons(container).map(
+      (b) => b.getAttribute("aria-label") ?? "",
+    );
+    const at = (prefix: string) =>
+      labels.findIndex((l) => l.startsWith(prefix));
+    expect(at("Brush (stamps the open brush project)")).toBe(at("Eraser") + 1);
   });
 
   it("the brush studio's set hides Origin and the whole reference group", () => {
@@ -63,7 +75,7 @@ describe("PixelStudioTools hiddenTools", () => {
     expect(origin(container)).toBeNull();
     expect(addReference(container)).toBeNull();
     expect(container.querySelector(".toolbar__group--reference")).toBeNull();
-    expect(toolButtons(container)).toHaveLength(12);
+    expect(toolButtons(container)).toHaveLength(13);
 
     // Undo/redo/flip survive — they are not tools, they are the bar's own
     // buttons and the brush studio routes them by mode in the container.
@@ -79,6 +91,17 @@ describe("PixelStudioTools hiddenTools", () => {
     );
     expect(origin(container)).toBeNull();
     expect(addReference(container)).not.toBeNull();
+    expect(toolButtons(container)).toHaveLength(13);
+  });
+
+  it("hiding brush removes the Brush button (the brush studio's real set)", () => {
+    const { container } = render(
+      <PixelStudioTools
+        {...base}
+        hiddenTools={new Set<Tool>(["origin", "reference-trace", "brush"])}
+      />,
+    );
+    expect(brush(container)).toBeNull();
     expect(toolButtons(container)).toHaveLength(12);
   });
 });

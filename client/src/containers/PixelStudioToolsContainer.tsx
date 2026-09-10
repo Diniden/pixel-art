@@ -30,6 +30,8 @@ import type { ReferenceImageData } from "../types/referenceImage";
 const BRUSH_HIDDEN_TOOLS: ReadonlySet<Tool> = new Set<Tool>([
   "origin",
   "reference-trace",
+  // a brush cannot stamp itself (docs/12-pixel-brush-tool task 01)
+  "brush",
 ]);
 
 interface PixelStudioToolsContainerProps {

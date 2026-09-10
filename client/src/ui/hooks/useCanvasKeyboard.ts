@@ -42,7 +42,7 @@
 
 import { useEffect, useRef } from "react";
 
-/** Tools reachable from the keyboard. A subset of the 18-member `Tool` union. */
+/** Tools reachable from the keyboard. A subset of the 19-member `Tool` union. */
 export type HotkeyTool =
   | "pixel"
   | "eraser"
@@ -56,10 +56,11 @@ export type HotkeyTool =
   | "selection"
   | "origin"
   | "reflection"
-  | "pose";
+  | "pose"
+  | "brush";
 
 /**
- * The 13 tool hotkeys, exported so a test can assert the map rather than
+ * The 14 tool hotkeys, exported so a test can assert the map rather than
  * re-typing it.
  *
  * ⚠️ "4" IS DELIBERATELY ABSENT. It bound `fill-square` ("Square Brush"),
@@ -67,8 +68,8 @@ export type HotkeyTool =
  * (`pencilBrushShape`) already covers a square brush, so the tool was a
  * duplicate. The remaining digits were NOT renumbered — a user's muscle memory
  * for 5-9 is worth more than a contiguous run, and the hotkeys are printed on
- * the buttons. `g`/`G`, `o`/`O`, `r`/`R` and `p`/`P` are listed in both cases
- * because the lookup is by raw `e.key`, which is case-sensitive.
+ * the buttons. `g`/`G`, `o`/`O`, `r`/`R`, `p`/`P` and `b`/`B` are listed in
+ * both cases because the lookup is by raw `e.key`, which is case-sensitive.
  */
 export const TOOL_HOTKEYS: Readonly<Record<string, HotkeyTool>> = {
   "1": "pixel",
@@ -88,6 +89,8 @@ export const TOOL_HOTKEYS: Readonly<Record<string, HotkeyTool>> = {
   R: "reflection",
   p: "pose",
   P: "pose",
+  b: "brush",
+  B: "brush",
 };
 
 const WASD_KEYS = ["w", "a", "s", "d", "W", "A", "S", "D"];

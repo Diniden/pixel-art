@@ -475,7 +475,10 @@ export type Tool =
   | "pose"
   | "normal-pencil"
   | "auto-normal"
-  | "height-map";
+  | "height-map"
+  // Stamps the brush document open in the Brush Studio onto the pixel canvas.
+  // See docs/12-pixel-brush-tool/.
+  | "brush";
 
 export type StudioMode = "pixel" | "lighting" | "brush";
 

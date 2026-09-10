@@ -195,7 +195,9 @@ export function isBrushSelectionTool(tool: string): boolean {
  * a predicate plus an accident of the handler table.
  *
  * Task 20 removed `flood-fill`, `gaussian-fill`, `eyedropper` and `move`;
- * task 21 removed `selection`. Nothing is ever added.
+ * task 21 removed `selection`. The only addition since is the pixel studio's
+ * `brush` tool (docs/12-pixel-brush-tool task 01), which stamps the brush
+ * document itself and so has no meaning on this canvas.
  */
 export const BRUSH_INERT_TOOLS: ReadonlySet<string> = new Set([
   "origin",
@@ -205,6 +207,8 @@ export const BRUSH_INERT_TOOLS: ReadonlySet<string> = new Set([
   "normal-pencil",
   "auto-normal",
   "height-map",
+  // a brush cannot stamp itself (docs/12-pixel-brush-tool task 01)
+  "brush",
 ]);
 
 export function isBrushInertTool(tool: string): boolean {

@@ -350,13 +350,27 @@ describe("arrows — under each selectionBehavior", () => {
 });
 
 describe("tool hotkeys", () => {
-  it("maps all 13 tools", () => {
-    // 13, not 14: `fill-square` ("Square Brush", key "4") was removed on
+  it("maps all 14 tools", () => {
+    // 14, not 15: `fill-square` ("Square Brush", key "4") was removed on
     // 2026-09-01 as a duplicate of the pencil's square shape setting. The
     // other digits were deliberately NOT renumbered, so "4" is simply absent.
-    // `pose` joined 2026-09-02 on `p`/`P`.
+    // `pose` joined 2026-09-02 on `p`/`P`; `brush` joined 2026-09-09 on
+    // `b`/`B` (docs/12-pixel-brush-tool task 01).
     const tools = new Set(Object.values(TOOL_HOTKEYS));
-    expect(tools.size).toBe(13);
+    expect(tools.size).toBe(14);
+  });
+
+  it('"b" selects the brush tool, and "B" does too', () => {
+    expect(TOOL_HOTKEYS.b).toBe("brush");
+    expect(TOOL_HOTKEYS.B).toBe("brush");
+
+    const lower = makeOptions();
+    handleCanvasKeyDown(keyOn(canvasEl, "b"), lower);
+    expect(lower.setTool).toHaveBeenCalledWith("brush");
+
+    const upper = makeOptions();
+    handleCanvasKeyDown(keyOn(canvasEl, "B"), upper);
+    expect(upper.setTool).toHaveBeenCalledWith("brush");
   });
 
   it('"p" selects the pose tool, and "P" does too', () => {

@@ -21,6 +21,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Pencil,
   Eraser,
+  Paintbrush,
   Pipette,
   PaintBucket,
   CloudFog,
@@ -99,6 +100,12 @@ interface PixelStudioToolsProps {
 const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
   { id: "pixel", icon: Pencil, label: "Pencil", hotkey: "1" },
   { id: "eraser", icon: Eraser, label: "Eraser", hotkey: "2" },
+  {
+    id: "brush",
+    icon: Paintbrush,
+    label: "Brush (stamps the open brush project)",
+    hotkey: "B",
+  },
   { id: "eyedropper", icon: Pipette, label: "Eyedropper", hotkey: "3" },
   { id: "flood-fill", icon: PaintBucket, label: "Fill", hotkey: "5" },
   { id: "gaussian-fill", icon: CloudFog, label: "Gaussian Fill", hotkey: "G" },
@@ -137,7 +144,7 @@ const tools: { id: Tool; icon: LucideIcon; label: string; hotkey: string }[] = [
  *
  * ⚠️ It is a COMPONENT rather than inline JSX because it calls hooks —
  * `useState` for the menu anchor, and `Tooltip` runs its own long-press timer
- * per trigger. Thirteen tools need thirteen independent ones, and hooks cannot
+ * per trigger. Fourteen tools need fourteen independent ones, and hooks cannot
  * be called inside a `.map()`. Inlining would either share one timer across
  * every button or break the rules of hooks outright.
  *
