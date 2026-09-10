@@ -22,7 +22,15 @@
  * A project is required twice over: `PixelStudioPanelContainer` itself returns
  * `null` without one, and so does `ColorPickerContainer`.
  */
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { runInAction } from "mobx";
 
@@ -95,7 +103,9 @@ describe("PixelStudioPanelContainer — the Brush section", () => {
     expect(
       container.querySelector(".pixel-studio-panel__brush-status")?.textContent,
     ).toBe("No brush project loaded. Create one in the Brush Studio.");
-    expect(container.querySelector(".pixel-studio-panel__brush-rows")).toBeNull();
+    expect(
+      container.querySelector(".pixel-studio-panel__brush-rows"),
+    ).toBeNull();
     expect(openButton()).toBeInTheDocument();
   });
 
@@ -180,7 +190,9 @@ describe("PixelStudioPanelContainer — the Brush section", () => {
     const { container } = mount();
 
     expect(brushSection(container)).toBeNull();
-    expect(screen.queryByRole("button", { name: "Open Brush Studio" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Open Brush Studio" }),
+    ).toBeNull();
     expect(colorPicker(container)).not.toBeNull();
     // The pencil's own section is what shows instead.
     expect(

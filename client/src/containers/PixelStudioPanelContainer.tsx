@@ -64,10 +64,7 @@ import {
   PixelStudioPanel,
   type PixelStudioBrushInfo,
 } from "../ui/components/PixelStudioPanel/PixelStudioPanel";
-import {
-  describeLine,
-  presetLines,
-} from "../ui/canvas/model/reflection";
+import { describeLine, presetLines } from "../ui/canvas/model/reflection";
 import { ColorPickerContainer } from "./ColorPickerContainer";
 import { PaletteManagerContainer } from "./PaletteManagerContainer";
 import { useStores } from "../stores/context";
@@ -97,12 +94,12 @@ const DEFAULT_ORIGIN_COLOR = { r: 255, g: 50, b: 50, a: 255 };
  * passing the store's object through: the first breaks the boundary lint, the
  * second hands `ui/` a live reference to an `observableRef` value.
  */
-function toPoseColor(color: {
+function toPoseColor(color: { r: number; g: number; b: number; a: number }): {
   r: number;
   g: number;
   b: number;
   a: number;
-}): { r: number; g: number; b: number; a: number } {
+} {
   return { r: color.r, g: color.g, b: color.b, a: color.a };
 }
 
