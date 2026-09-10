@@ -1,11 +1,36 @@
 # HANDOFF — Pixel-studio Brush tool
 
-**Current position:** W3 IN PROGRESS
+**Current position:** COMPLETE (PARTIAL — every automated gate green; 0 of 20 manual QA rows performed)
 **Branch:** `feat/01-brush-studio` (already on it at start; plan-go stays on the feature branch)
 **Last commit:** `110b084` (W3 code-adjacent commits complete, 2026-09-09; the `docs(12)` ledger commit recording W3 follows it)
 
 Planned 2026-09-09 from `feat/01-brush-studio` @ `8ed9c1d` with a clean tree, directly after plan 11
 (`docs/11-brush-studio-followups/`) closed with 30 owed manual QA rows. Plan 01's ledger still lists 29.
+
+## Coordinator final gate (run by /plan-go after W3, 2026-09-10, tree clean at `38518ad`)
+
+```
+bun run verify                        exit 0
+  client tsc                          clean
+  server tsc                          clean
+  client eslint                       ✖ 66 problems (0 errors, 66 warnings)   = baseline
+  server eslint                       clean
+  prettier --check                    All matched files use Prettier code style!
+  client vitest                       Test Files 193 passed (193) · Tests 4027 passed (4027)
+  vite build                          ✓ built in 2.32s
+client: bun run lint:boundaries       check-boundaries: OK — all 5 boundary rules hold.
+client: stylelint "src/**/*.css"      ✖ 71 problems (2 errors, 69 warnings) — errors = pre-existing OtherHand.css:338,359 (= baseline)
+client: storybook build               exit 0
+server: tsc --noEmit                  exit 0
+server: eslint .                      exit 0
+server: vitest run                    Test Files 4 passed (4) · Tests 102 passed (102)
+lockfile check (repo root)            nothing found
+corpus diff 8ed9c1d..HEAD (codecs / services / server export)   empty
+__snapshots__ files in 8ed9c1d..HEAD  0
+git status --short                    clean
+```
+
+Baseline at `8ed9c1d` was 187 files / 3919 tests; the plan added 6 test files and 108 tests.
 
 ## Wave ledger
 
