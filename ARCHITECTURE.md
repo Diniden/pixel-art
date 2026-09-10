@@ -204,6 +204,41 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
   `timeline-view--min-rows` + CSS var `--timeline-min-rows`); `BrushTimelineContainer`
   passes 5 so the brush rail is five rows tall even with one layer. The pixel studio
   does not pass it.
+- **Brush tool (pixel studio)** (plan `docs/12-pixel-brush-tool/`): the pixel studio's
+  `"brush"` `Tool` member (hotkey `B`, toolbar row after the Eraser, `Paintbrush` icon)
+  stamps the brush document open in the Brush Studio onto the pixel canvas. The pure
+  core is `ui/canvas/tools/pixelBrushStamp.ts`. The **footprint** is every painted cell
+  of every visible layer of the brush's current frame (`brushUI.selectedFrameIn(doc)`:
+  the selected frame, else `frames[0]`), as offsets from the origin
+  `(floor(w/2), floor(h/2))` — it is both the hover marker and the set of cells a press
+  writes, so the two cannot disagree. **Settling** starts from the selected edge colour
+  and applies every visible layer's signed delta bottom → top: `rgb` layers add in RGB
+  space, `hsl` layers shift hue / saturation / lightness in HSL space through
+  `ui/utils/colorMath` (±255 ↔ ±360° / ±100 %; the constants
+  `PIXEL_BRUSH_HUE_PER_DELTA` and `PIXEL_BRUSH_PERCENT_PER_DELTA` live only there),
+  both shift alpha, and `normal` / `heightmap` layers count for the footprint but not
+  the colour. Deltas are read raw (`cell[i]`), never through the display-only
+  `brushCellToRgba`, which halves them. A drag rasterises each segment with the
+  injected `LineFn` and stamps at every step, last write wins per cell, through the
+  same `actions.setPixels` funnel as every other tool (so the selection mask and
+  reflection mirroring apply for free), one undo entry per drag.
+  `containers/pixelBrush/usePixelBrush.ts` is the container-tier hook: it calls
+  `app.brushes.init()` from an effect while the tool is selected (a fresh pixel-mode
+  load never visits the Brush Studio), memoises the footprint on
+  `[document, selectedFrameId, pixelVersion, domainVersion]` and the stamp on the
+  footprint plus the four base-colour scalars, and reads the grids inside the memos —
+  never observed, and never at pointer rate, because `getToolContext` lists the stamp
+  as a dependency. The two seams are optional so `containers/brush/brushToolContext.ts`
+  compiles untouched: `ToolContext.pixelBrushStamp` (`toolHandlers.ts`) and
+  `FootprintOptions.pixelBrushOffsets` (`toolFootprint.ts`, a fourth footprint class —
+  injected cells; `isBrushTool` is unchanged). The rail's "Brush" section
+  (`PixelStudioPanel`'s grouped `pixelBrush?: PixelStudioBrushInfo` prop, fed by
+  `PixelStudioPanelContainer`) names the loaded brush, its size, frame and layer count,
+  or offers "Open Brush Studio"; the colour picker below it stays unconditional. In the
+  Brush Studio the tool is hidden (`BRUSH_HIDDEN_TOOLS`) and inert
+  (`BRUSH_INERT_TOOLS`) — a brush cannot stamp itself — and `setStudioMode` still
+  resets the tool to `"pixel"`. Nothing new is persisted: `selectedTool` already
+  round-trips as a string, and no codec, migration or export path was touched.
 - **Files:** pure UI in `ui/components/Brush{Library,LayerPanel,DeltaPicker,SelectModal}/`
   and `ui/layouts/BrushStudioLayout/`; containers are `containers/Brush*Container.tsx`;
   the canvas container's store-free helpers live in `containers/brush/`
