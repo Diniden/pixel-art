@@ -167,6 +167,67 @@
   line-height: var(--leading-snug);
 }
 
+/* Brush section (pixel-brush task 04). Sits after the tool sections and
+   before the colour picker in DOM order. The label/value rows follow the
+   Origin block's label treatment (secondary uppercase-free label, primary
+   value) so the rail reads as one family. */
+.pixel-studio-panel__brush {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  width: 100%;
+  padding: 0 var(--space-1);
+}
+
+.pixel-studio-panel__brush-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  margin: 0;
+}
+
+.pixel-studio-panel__brush-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.pixel-studio-panel__brush-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  min-width: 40px;
+  flex-shrink: 0;
+}
+
+.pixel-studio-panel__brush-value {
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pixel-studio-panel__brush-status {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: var(--leading-snug);
+}
+
+.pixel-studio-panel__brush-open {
+  align-self: flex-start;
+}
+
+.pixel-studio-panel__brush-hint {
+  font-size: var(--text-65);
+  color: var(--text-tertiary);
+  margin: 0;
+  line-height: var(--leading-snug);
+}
+
 /* modifiers */
 
 /* base.base--modifier compound: matches the old `.eraser-controls
