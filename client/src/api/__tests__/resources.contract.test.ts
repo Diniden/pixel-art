@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { HttpResponse, http } from "msw";
 
 import { server } from "@test/mswServer";
+import type { BrushDocument } from "@/types";
 import {
   aiApi,
   backupApi,
@@ -116,7 +117,8 @@ describe("brushApi", () => {
   });
 
   it("get() returns the whole brush PROJECT — a brush-2 body holding two brushes", async () => {
-    const doc = await brushApi.get(FIXTURE_BRUSH_NAME);
+    // `get()` hands back the RAW payload as `unknown`; the test knows the shape.
+    const doc = (await brushApi.get(FIXTURE_BRUSH_NAME)) as BrushDocument;
     expect(doc.brushes.length).toBe(2);
     expect(doc.brushes.map((b) => b.id)).toEqual([...FIXTURE_BRUSH_IDS]);
   });
