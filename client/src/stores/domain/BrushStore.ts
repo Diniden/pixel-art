@@ -1,7 +1,18 @@
 /**
  * BrushStore — the loaded brush PROJECT (one brush file) plus its load/save
  * lifecycle (Brush Studio plan, `docs/01-brush-studio`, task 07; MASTER
- * D7/D8/D9).
+ * D7/D8/D9. Multi-brush projects, `docs/14-multi-brush-projects`, task 11;
+ * MASTER D1/D3).
+ *
+ * ── One file, many brushes ─────────────────────────────────────────────────
+ * The document is brush-2: `{ version: "brush-2", brushes: Brush[] }` — a
+ * SET of brushes, each with its own `width × height`, frames, layers and
+ * applied groups. This store never looks inside `brushes`: it knows nothing
+ * of which brush is selected (that id lives on `BrushUIStore`, wired through
+ * `ApplicationStore`), and the behaviour stores built over this one resolve
+ * the selected brush themselves. Legacy brush-1 files (one brush's body at
+ * the top level) are wrapped by `normalizeBrushDocument` on load as a single
+ * brush named "Brush 1"; the first auto-save writes them back as brush-2.
  *
  * The brush-file analogue of `./DomainStore.ts`, and deliberately shaped like
  * it: the same four-state load machine, the same three version counters the
@@ -87,8 +98,9 @@ export interface BrushStoreDeps {
   /**
    * Fired from `adoptDocument` — i.e. after EVERY install or replace,
    * including undo/redo restores — with the newly adopted document (or
-   * `null` when the last brush was deleted). Injected so a UI store can
-   * clamp its selection without this store importing it.
+   * `null` when the last brush project was deleted). Injected so a UI store
+   * can clamp its selection (brush → frame → layer) without this store
+   * importing it.
    */
   onDocumentInstalled?: (doc: BrushDocument | null) => void;
 }
@@ -112,10 +124,11 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
   /**
    * The loaded brush document.
    *
-   * ⚠️ `observable.ref` — NEVER `observable`. See the module header. A 64×64
-   * brush with 8 layers × 8 frames is 262,144 cells; deep observation would
-   * proxy every one of them and present as "MobX is slow" rather than as the
-   * modelling error it is (`CLAUDE.md`, "Never deep-observe a pixel grid").
+   * ⚠️ `observable.ref` — NEVER `observable`. See the module header. ONE
+   * 64×64 brush with 8 layers × 8 frames is 262,144 cells, and a project
+   * holds many brushes; deep observation would proxy every one of them and
+   * present as "MobX is slow" rather than as the modelling error it is
+   * (`CLAUDE.md`, "Never deep-observe a pixel grid").
    */
   document: BrushDocument | null = null;
 
@@ -311,6 +324,13 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
    * (if any) is left exactly as it was. A payload `normalizeBrushDocument`
    * rejects is a failure of kind `"unknown"`: a corrupt brush file is an
    * ERROR, never a blank default.
+   *
+   * `normalizeBrushDocument` accepts both file shapes (MASTER-14 D2): a
+   * brush-2 payload installs as-is, and a legacy brush-1 payload (no
+   * `brushes` key) is wrapped losslessly as ONE brush, id `"brush-1"`, named
+   * "Brush 1", with its frames intact. A brush-2 payload with zero brushes,
+   * any invalid brush, or duplicate brush ids is rejected like any other
+   * corrupt file.
    */
   *loadProject(
     name: string,
@@ -343,9 +363,12 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
   /* `console.error`-on-failure contract.                                     */
 
   /**
-   * Create a new brush project file from a fresh `width × height` document,
-   * refresh the list, then load it back — so the in-memory document is
-   * exactly what the server stored.
+   * Create a new brush project file from a fresh brush-2 document holding
+   * ONE `width × height` brush (id `"brush-1"`, named "Brush 1" — the
+   * `createBrushDocument` default), refresh the list, then load it back — so
+   * the in-memory document is exactly what the server stored. Further
+   * brushes are added to the loaded project by `BrushStructureStore.addBrush`,
+   * never here.
    */
   *createProject(
     name: string,

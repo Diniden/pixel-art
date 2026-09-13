@@ -12,6 +12,12 @@
  *       mode reverses the cell write on the brush's own stack and leaves the
  *       project stack's cursor where it was.
  *   (c) `dispose()` disposes BOTH controllers.
+ *   (d) multi-brush projects (docs/14-multi-brush-projects task 11, MASTER
+ *       D4 / D5 / §8 mistake 3): the structure store's selection sink is an
+ *       ADAPTER that passes `brushes.document` to `brushUI.selectBrush`, so a
+ *       brush added or deleted by the store re-seats the frame and layer ids
+ *       inside the newly selected brush — and a pixel write then lands in
+ *       THAT brush.
  *
  * Fake timers own the debounce. Both transports are spies passed through
  * options — MSW is active in this lane with `onUnhandledRequest: "error"`,
@@ -32,7 +38,7 @@ let app: ApplicationStore;
 let projectSave: ReturnType<typeof vi.fn>;
 let brushSave: ReturnType<typeof vi.fn>;
 
-/** Install a 4×4 brush as if `loadProject` had just succeeded. */
+/** Install a one-brush 4×4 project as if `loadProject` had just succeeded. */
 function installLoadedBrush(): BrushDocument {
   const doc = createBrushDocument(4, 4);
   runInAction(() => {
@@ -43,8 +49,15 @@ function installLoadedBrush(): BrushDocument {
   return doc;
 }
 
+/** Frame 0 / layer 0 of brush `brushIndex` — every brush's ids repeat. */
+function cellIn(brushIndex: number, x: number, y: number) {
+  return app.brushes.document?.brushes[brushIndex].frames[0].layers[0].pixels[
+    y
+  ][x];
+}
+
 function cellAt(x: number, y: number) {
-  return app.brushes.document?.frames[0].layers[0].pixels[y][x];
+  return cellIn(0, x, y);
 }
 
 beforeEach(() => {
@@ -91,16 +104,19 @@ describe("construction", () => {
   });
 
   it("wires brushUI.adoptDocument through BrushStore's onDocumentInstalled", () => {
+    expect(app.brushUI.selectedBrushId).toBeNull();
     expect(app.brushUI.selectedFrameId).toBeNull();
     expect(app.brushUI.selectedLayerId).toBeNull();
 
     installLoadedBrush();
 
+    expect(app.brushUI.selectedBrushId).toBe("brush-1");
     expect(app.brushUI.selectedFrameId).toBe("frame-1");
     expect(app.brushUI.selectedLayerId).toBe("layer-1");
 
     // The callback fires on EVERY adopt, including the null install.
     runInAction(() => app.brushes.installDocument(null));
+    expect(app.brushUI.selectedBrushId).toBeNull();
     expect(app.brushUI.selectedFrameId).toBeNull();
     expect(app.brushUI.selectedLayerId).toBeNull();
   });
@@ -236,6 +252,76 @@ describe("(b) activeHistory routes undo/redo by studio mode", () => {
       BRUSH_NAME,
     );
     expect(projectSave).not.toHaveBeenCalled();
+  });
+});
+
+describe("(d) the structure store's selection sink passes the POST-commit document", () => {
+  it("addBrush selects the new brush AND seats the frame/layer inside it", () => {
+    installLoadedBrush();
+    const before = app.brushes.document!;
+
+    const id = app.brushStructure.addBrush("Second");
+
+    const doc = app.brushes.document!;
+    expect(doc).not.toBe(before);
+    expect(doc.brushes).toHaveLength(2);
+    expect(doc.brushes[1].id).toBe(id);
+    expect(doc.brushes[1].name).toBe("Second");
+    expect(id).not.toBe("brush-1");
+
+    expect(app.brushUI.selectedBrushId).toBe(id);
+    // Every brush reuses "frame-1" / "layer-1", so the ids alone prove
+    // nothing — the RESOLVED objects must belong to the new brush. That is
+    // only possible if the adapter handed `selectBrush` the document.
+    expect(app.brushUI.selectedFrameId).toBe("frame-1");
+    expect(app.brushUI.selectedLayerId).toBe("layer-1");
+    expect(app.brushUI.selectedBrushIn(doc)).toBe(doc.brushes[1]);
+    expect(app.brushUI.selectedFrameIn(doc)).toBe(doc.brushes[1].frames[0]);
+    expect(app.brushUI.selectedLayerIn(doc)).toBe(
+      doc.brushes[1].frames[0].layers[0],
+    );
+    expect(app.brushUI.selectedLayerIn(doc)).not.toBe(
+      doc.brushes[0].frames[0].layers[0],
+    );
+  });
+
+  it("deleteBrush of the selected brush re-seats to the survivor", () => {
+    installLoadedBrush();
+    const second = app.brushStructure.addBrush("Second");
+    expect(app.brushUI.selectedBrushId).toBe(second);
+
+    app.brushStructure.deleteBrush(second);
+
+    const doc = app.brushes.document!;
+    expect(doc.brushes).toHaveLength(1);
+    expect(doc.brushes[0].id).toBe("brush-1");
+    expect(app.brushUI.selectedBrushId).toBe("brush-1");
+    expect(app.brushUI.selectedFrameId).toBe("frame-1");
+    expect(app.brushUI.selectedLayerId).toBe("layer-1");
+    expect(app.brushUI.selectedBrushIn(doc)).toBe(doc.brushes[0]);
+    expect(app.brushUI.selectedLayerIn(doc)).toBe(
+      doc.brushes[0].frames[0].layers[0],
+    );
+  });
+
+  it("a pixel write through brushPixels.setCells lands in the SELECTED brush", () => {
+    installLoadedBrush();
+    const second = app.brushStructure.addBrush("Second", 4, 4);
+    expect(app.brushUI.selectedBrushId).toBe(second);
+
+    app.brushPixels.setCells([{ x: 1, y: 2, value: [10, -20, 30, 40] }]);
+
+    expect(cellIn(1, 1, 2)).toEqual([10, -20, 30, 40]);
+    expect(cellIn(0, 1, 2)).toBe(0);
+
+    // Switching back through the UI store (with the document) moves the
+    // write target with it.
+    runInAction(() => app.brushUI.selectBrush("brush-1", app.brushes.document));
+    app.brushPixels.setCells([{ x: 0, y: 0, value: [1, 2, 3, 4] }]);
+
+    expect(cellIn(0, 0, 0)).toEqual([1, 2, 3, 4]);
+    expect(cellIn(1, 0, 0)).toBe(0);
+    expect(cellIn(1, 1, 2)).toEqual([10, -20, 30, 40]);
   });
 });
 

@@ -955,6 +955,15 @@ export class ApplicationStore {
     // writer of `document` (install, replace, commit, undo/redo restore all
     // funnel through it), so the UI selection is re-seated on every document
     // change without a separate `reaction` here.
+    //
+    // Multi-brush projects (docs/14-multi-brush-projects task 11, MASTER D4 /
+    // D5): `brushUI` is still the structure store's selection SOURCE as-is
+    // (`selectedBrushId` / `selectedFrameId` / `selectedLayerId` are plain
+    // fields), but it is no longer its SINK: `BrushUIStore.selectBrush(id,
+    // doc)` takes the document so it can re-seat the frame and layer inside
+    // the newly selected brush, while `BrushSelectionSink.selectBrush(id)`
+    // is id-only (`stores/domain/**` never sees the UI store). The adapter
+    // below bridges the two and is the ONLY place the document is supplied.
     const brushUI = new BrushUIStore();
     this.brushUI = brushUI;
     this.brushes = new BrushStore({
@@ -964,7 +973,18 @@ export class ApplicationStore {
     this.brushStructure = new BrushStructureStore({
       brush: this.brushes,
       source: brushUI,
-      select: brushUI,
+      select: {
+        // The document read here is the POST-commit document: the structure
+        // store commits (→ `adoptDocument` → `brushUI.adoptDocument`) BEFORE
+        // it calls the sink, so `this.brushes.document` already holds the
+        // brush being selected and `brushUI.selectBrush`'s clamp seats the
+        // frame/layer ids inside it. Calling `selectBrush(id)` without the
+        // document would leave both ids `null` until the next document
+        // change (MASTER §8, mistake 3).
+        selectBrush: (id) => brushUI.selectBrush(id, this.brushes.document),
+        selectFrame: (id) => brushUI.selectFrame(id),
+        selectLayer: (id) => brushUI.selectLayer(id),
+      },
     });
     this.brushPixels = new BrushPixelStore({
       brush: this.brushes,

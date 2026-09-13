@@ -1,10 +1,17 @@
 /**
- * BrushStore unit suite (Brush Studio task 07).
+ * BrushStore unit suite (Brush Studio task 07; multi-brush projects task 11).
  *
  * Drives the store against a fake in-memory `BrushApiLike` and a bare
  * `SessionStore` — no ApplicationStore, no MSW handlers, no network. The
  * `AutoSaveController` wiring test at the end runs under fake timers with an
  * injected save spy, the same rig shape as `autoSaveController.test.ts`.
+ *
+ * The document is brush-2 (`{ version, brushes: Brush[] }`), so every
+ * structural assertion reads `document.brushes[0]`. The store itself never
+ * looks inside `brushes`; what this suite pins about the shape is only that
+ * `createProject` stores ONE brush of the requested size, that a legacy
+ * brush-1 file loads as one brush named "Brush 1", and that a brush-2 file
+ * with no brushes is a corrupt file (R5: never a blank default).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -98,14 +105,23 @@ function makeStore(
   return { store, session };
 }
 
-/** A structural edit: rename layer 1 in every frame, spine-copied. */
+/** A structural edit: rename layer 1 in every frame of brush 0, spine-copied. */
 function renameFirstLayer(doc: BrushDocument): BrushDocument {
+  const [first, ...rest] = doc.brushes;
   return {
     ...doc,
-    frames: doc.frames.map((f) => ({
-      ...f,
-      layers: f.layers.map((l, i) => (i === 0 ? { ...l, name: "Renamed" } : l)),
-    })),
+    brushes: [
+      {
+        ...first,
+        frames: first.frames.map((f) => ({
+          ...f,
+          layers: f.layers.map((l, i) =>
+            i === 0 ? { ...l, name: "Renamed" } : l,
+          ),
+        })),
+      },
+      ...rest,
+    ],
   };
 }
 
@@ -173,7 +189,7 @@ describe("init", () => {
     expect(store.saveName).toBe("b");
     expect(store.loadState).toBe("loaded");
     expect(store.hasProject).toBe(true);
-    expect(store.document?.width).toBe(4);
+    expect(store.document?.brushes[0].width).toBe(4);
     expect(store.loadGeneration).toBe(1);
     expect(fake.get).toHaveBeenCalledWith("b");
   });
@@ -248,15 +264,78 @@ describe("loadProject", () => {
     const doc = await flowResult(store.loadProject("sparse"));
 
     expect(store.document).toBe(doc);
-    expect(doc.version).toBe("brush-1");
-    expect(doc.appliedGroups).toEqual([]);
-    expect(doc.frames[0].layers[0].channelType).toBe("rgb");
-    expect(doc.frames[0].layers[0].pixels).toEqual([
+    expect(doc.version).toBe("brush-2");
+    expect(doc.brushes).toHaveLength(1);
+    const [brush] = doc.brushes;
+    expect(brush.appliedGroups).toEqual([]);
+    expect(brush.frames[0].layers[0].channelType).toBe("rgb");
+    expect(brush.frames[0].layers[0].pixels).toEqual([
       [[255, 0, 0, 0], 0],
       [0, 0],
     ]);
     expect(store.loadState).toBe("loaded");
     expect(store.projectName).toBe("sparse");
+  });
+
+  it("a LEGACY brush-1 file installs as ONE brush named 'Brush 1' with its frames intact", async () => {
+    // A clean pre-multi-brush file: the whole body at the top level, no
+    // `brushes` key. Two frames, a hidden layer, a painted cell in each, and
+    // an applied group — everything that must survive the wrap.
+    const legacy = {
+      version: "brush-1",
+      width: 3,
+      height: 2,
+      frames: [
+        {
+          id: "f-a",
+          name: "A",
+          layers: [
+            {
+              id: "l",
+              name: "L",
+              channelType: "hsl",
+              visible: true,
+              pixels: [
+                [[1, 2, 3, 4], 0, 0],
+                [0, 0, [5, 6, 7, 8]],
+              ],
+            },
+          ],
+        },
+        {
+          id: "f-b",
+          name: "B",
+          layers: [
+            {
+              id: "l",
+              name: "L",
+              channelType: "hsl",
+              visible: false,
+              pixels: [
+                [0, 0, 0],
+                [0, [9, 9, 9, 9], 0],
+              ],
+            },
+          ],
+        },
+      ],
+      appliedGroups: [{ id: "g", name: "Group" }],
+    };
+    const { store } = makeStore(makeFakeApi({ old: legacy }));
+    const doc = await flowResult(store.loadProject("old"));
+
+    expect(store.document).toBe(doc);
+    expect(doc.version).toBe("brush-2");
+    expect(doc.brushes).toHaveLength(1);
+    const [brush] = doc.brushes;
+    expect(brush.id).toBe("brush-1");
+    expect(brush.name).toBe("Brush 1");
+    expect(brush.width).toBe(3);
+    expect(brush.height).toBe(2);
+    expect(brush.frames).toEqual(legacy.frames);
+    expect(brush.appliedGroups).toEqual(legacy.appliedGroups);
+    expect(store.loadState).toBe("loaded");
+    expect(store.projectName).toBe("old");
   });
 
   it("of a malformed payload → failed, 'unknown' ApiError, document UNCHANGED", async () => {
@@ -278,6 +357,31 @@ describe("loadProject", () => {
     expect(store.loadGeneration).toBe(generation);
     // R5: the store never fabricates a blank brush on failure.
     expect(store.document).not.toBeNull();
+  });
+
+  it("of a brush-2 payload with ZERO brushes → failed, 'unknown' ApiError, document UNCHANGED", async () => {
+    const fake = makeFakeApi({
+      good: createBrushDocument(),
+      empty: { version: "brush-2", brushes: [] },
+    });
+    const { store } = makeStore(fake);
+    await flowResult(store.loadProject("good"));
+    const installed = store.document;
+    const generation = store.loadGeneration;
+
+    const error = await flowResult(store.loadProject("empty")).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    expect(isKind(error, "unknown")).toBe(true);
+    expect(store.loadState).toBe("failed");
+    expect(store.loadError).toBe(error);
+    expect(store.document).toBe(installed);
+    expect(store.document?.brushes).toHaveLength(1);
+    expect(store.loadGeneration).toBe(generation);
+    // The name is untouched too: nothing about the failed file was adopted.
+    expect(store.projectName).toBe("good");
   });
 
   it("of a missing brush → failed with the API's notFound error, document unchanged", async () => {
@@ -310,7 +414,7 @@ describe("loadProject", () => {
 /* ── createProject ─────────────────────────────────────────────────────────── */
 
 describe("createProject", () => {
-  it("calls api.create with a normalised 16×16 document, then installs it", async () => {
+  it("calls api.create with a ONE-brush 16×16 document, then installs it", async () => {
     const fake = makeFakeApi();
     const { store } = makeStore(fake);
     await flowResult(store.init());
@@ -323,9 +427,13 @@ describe("createProject", () => {
     const [name, sent] = fake.create.mock.calls[0] as [string, BrushDocument];
     expect(name).toBe("fresh");
     expect(sent).toEqual(createBrushDocument(16, 16));
-    expect(sent.width).toBe(16);
-    expect(sent.height).toBe(16);
-    expect(sent.frames[0].layers[0].pixels).toHaveLength(16);
+    expect(sent.version).toBe("brush-2");
+    expect(sent.brushes).toHaveLength(1);
+    expect(sent.brushes[0].id).toBe("brush-1");
+    expect(sent.brushes[0].name).toBe("Brush 1");
+    expect(sent.brushes[0].width).toBe(16);
+    expect(sent.brushes[0].height).toBe(16);
+    expect(sent.brushes[0].frames[0].layers[0].pixels).toHaveLength(16);
 
     expect(store.document).toEqual(sent);
     expect(store.projectName).toBe("fresh");
@@ -334,12 +442,23 @@ describe("createProject", () => {
     expect(store.loadGeneration).toBe(1);
   });
 
-  it("honours a custom size", async () => {
+  it("createProject('x', 3, 5) stores ONE 3×5 brush and installs it", async () => {
     const fake = makeFakeApi();
     const { store } = makeStore(fake);
-    await flowResult(store.createProject("wide", 32, 8));
-    expect(store.document?.width).toBe(32);
-    expect(store.document?.height).toBe(8);
+    await flowResult(store.createProject("x", 3, 5));
+
+    const stored = fake.files.get("x") as BrushDocument;
+    expect(stored.brushes).toHaveLength(1);
+    expect(stored.brushes[0].width).toBe(3);
+    expect(stored.brushes[0].height).toBe(5);
+    // The grid is `[y][x]`: 5 rows of 3 cells.
+    expect(stored.brushes[0].frames[0].layers[0].pixels).toHaveLength(5);
+    expect(stored.brushes[0].frames[0].layers[0].pixels[0]).toHaveLength(3);
+
+    expect(store.document).toEqual(stored);
+    expect(store.document?.brushes).toHaveLength(1);
+    expect(store.document?.brushes[0].width).toBe(3);
+    expect(store.document?.brushes[0].height).toBe(5);
   });
 
   it("returns false on a conflict and leaves the loaded brush intact", async () => {
@@ -383,7 +502,7 @@ describe("switchProject", () => {
     expect(await pending).toBe(true);
     expect(session.saveSuspended).toBe(false);
     expect(store.projectName).toBe("b");
-    expect(store.document?.width).toBe(2);
+    expect(store.document?.brushes[0].width).toBe(2);
     expect(store.loadState).toBe("loaded");
   });
 
@@ -453,7 +572,7 @@ describe("deleteProject", () => {
     expect(fake.remove).toHaveBeenCalledWith("a");
     expect(store.projectList).toEqual(["b"]);
     expect(store.projectName).toBe("b");
-    expect(store.document?.width).toBe(8);
+    expect(store.document?.brushes[0].width).toBe(8);
     expect(store.loadState).toBe("loaded");
     expect(store.loadGeneration).toBe(2);
     expect(session.saveSuspended).toBe(false);
@@ -522,9 +641,9 @@ describe("commit", () => {
     expect(store.domainVersion).toBe(domainV + 1);
     expect(store.pixelVersion).toBe(pixelV); // structural op, pixels untouched
     expect(store.document).not.toBe(before);
-    expect(store.document?.frames[0].layers[0].name).toBe("Renamed");
+    expect(store.document?.brushes[0].frames[0].layers[0].name).toBe("Renamed");
     // The pre-mutation document is untouched — mutate() was a spine copy.
-    expect(before.frames[0].layers[0].name).toBe("Layer 1");
+    expect(before.brushes[0].frames[0].layers[0].name).toBe("Layer 1");
   });
 
   it("undo restores the OLD reference and bumps pixelVersion; redo restores the new one", async () => {
@@ -586,9 +705,15 @@ describe("commit", () => {
     const { store } = makeStore(makeFakeApi({ a: createBrushDocument() }));
     await flowResult(store.init());
     const v0 = store.document!;
-    store.commit("1", (d) => ({ ...d, width: 17 }));
+    store.commit("1", (d) => ({
+      ...d,
+      brushes: [{ ...d.brushes[0], name: "one" }],
+    }));
     const v1 = store.document!;
-    store.commit("2", (d) => ({ ...d, width: 18 }));
+    store.commit("2", (d) => ({
+      ...d,
+      brushes: [{ ...d.brushes[0], name: "two" }],
+    }));
     const v2 = store.document!;
 
     store.history.undo();
@@ -624,12 +749,15 @@ describe("document is observable.ref — never a proxy", () => {
     expect(isObservableProp(store, "document")).toBe(true);
     expect(isObservableObject(doc)).toBe(false);
     expect(isObservable(doc)).toBe(false);
-    expect(isObservableArray(doc.frames)).toBe(false);
-    expect(isObservableObject(doc.frames[0])).toBe(false);
-    expect(isObservableArray(doc.frames[0].layers)).toBe(false);
-    expect(isObservableObject(doc.frames[0].layers[0])).toBe(false);
+    expect(isObservableArray(doc.brushes)).toBe(false);
+    const brush = doc.brushes[0];
+    expect(isObservableObject(brush)).toBe(false);
+    expect(isObservableArray(brush.frames)).toBe(false);
+    expect(isObservableObject(brush.frames[0])).toBe(false);
+    expect(isObservableArray(brush.frames[0].layers)).toBe(false);
+    expect(isObservableObject(brush.frames[0].layers[0])).toBe(false);
 
-    const grid = doc.frames[0].layers[0].pixels;
+    const grid = brush.frames[0].layers[0].pixels;
     expect(Array.isArray(grid)).toBe(true);
     expect(isObservableArray(grid)).toBe(false);
     expect(Array.isArray(grid[0])).toBe(true);
@@ -642,16 +770,16 @@ describe("document is observable.ref — never a proxy", () => {
   it("holds after a commit and after an undo restore", async () => {
     const { store } = makeStore(makeFakeApi({ a: createBrushDocument(4, 4) }));
     await flowResult(store.init());
+    const gridOf = (d: BrushDocument) =>
+      d.brushes[0].frames[0].layers[0].pixels;
     store.commit("edit", renameFirstLayer);
     expect(isObservableObject(store.document!)).toBe(false);
-    expect(isObservableArray(store.document!.frames[0].layers[0].pixels)).toBe(
-      false,
-    );
+    expect(isObservableArray(store.document!.brushes)).toBe(false);
+    expect(isObservableArray(gridOf(store.document!))).toBe(false);
     store.history.undo();
     expect(isObservableObject(store.document!)).toBe(false);
-    expect(isObservableArray(store.document!.frames[0].layers[0].pixels)).toBe(
-      false,
-    );
+    expect(isObservableArray(store.document!.brushes)).toBe(false);
+    expect(isObservableArray(gridOf(store.document!))).toBe(false);
   });
 
   it("projectList is shallow: the array is tracked, its strings are strings", async () => {
