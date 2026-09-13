@@ -138,7 +138,9 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
 - **Document shape** (`client/src/types/brush.ts`):
   `BrushDocument { version: "brush-1"; width; height; frames; appliedGroups }`.
   Every `BrushLayer` carries a
-  `channelType` (`hsl | rgb | normal | heightmap`) and a `pixels: BrushCell[][]` grid
+  `channelType` (`hsl | rgb | normal | heightmap`), an optional
+  `colorSource` (`"selected" | "target"`, the key present only when `"target"` — see
+  "Colour source" below) and a `pixels: BrushCell[][]` grid
   indexed `[y][x]`, where a cell is `0` (unpainted) or a 4-tuple of signed deltas in
   −255..255, rendered colourised with 127 = zero delta (`brushCellToRgba`). The
   in-memory shape **is** the wire shape (plain `JSON.stringify`) — no compact codec, no
@@ -239,6 +241,118 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
   (`BRUSH_INERT_TOOLS`) — a brush cannot stamp itself — and `setStudioMode` still
   resets the tool to `"pixel"`. Nothing new is persisted: `selectedTool` already
   round-trips as a string, and no codec, migration or export path was touched.
+- **Colour source** (plan `docs/13-brush-source-and-resize/`): every `BrushLayer` has
+  an optional `colorSource: "selected" | "target"` (`client/src/types/brush.ts`).
+  `"selected"` seeds the layer's deltas from the picked colour — the original
+  behaviour; `"target"` seeds them from the pixel already on the canvas, which is what
+  makes burn / dodge / fade / tint brushes. The key is present **only** when
+  `"target"`: `createBrushLayer`, `normalizeBrushDocument` and the structure store all
+  drop it for `"selected"`, so a pre-plan-13 file round-trips byte-identically, an
+  absent key means `"selected"` (`brushLayerColorSource(layer)`), and the server never
+  reads it. `BrushStructureStore.addLayer(name, channelType, colorSource)` creates with
+  one; `setLayerColorSource(id, source)` changes it as a snapshot commit
+  (`"Change colour source"`, no pixel bump — undoable exactly like
+  `setLayerChannelType`); `duplicateLayer` carries it by spread. In the Brush Studio
+  the "+" menu (`ui/components/BrushLayerPanel/BrushChannelMenu.tsx`) shows a
+  **Colour source** section above **Channels** — picking a source ticks and keeps the
+  menu open, picking a channel creates and closes — and every row shows a second badge
+  (`SEL` / `TGT`, `BRUSH_COLOR_SOURCE_BADGE`, `brush-layer-panel__source-badge`)
+  beside its channel badge that opens the same menu to change it.
+  `BrushTimelineContainer`'s add-layer inherits the selected layer's source as it
+  inherits its channel.
+- **Target seeding at write time:** a `"target"` cell cannot be settled ahead of time —
+  its base is the canvas pixel under it — so `resolvePixelBrushStamp`
+  (`ui/canvas/tools/pixelBrushStamp.ts`) decides each cell's seed from its
+  **bottom-most visible painted layer**, keeps the selected-seed settle as `color`
+  (the fallback) and, for a target seed, also carries the raw visible-layer deltas as
+  `targetDeltas`; every layer's delta still applies in order, one fold.
+  `stampPixelBrushSegment(prev, next, line, stamp, bounds, target?)` settles those at
+  write time through an injected `PixelBrushTarget { sample(x, y), touched }`.
+  `sample` returns the pixel or `null` — a packed-empty `0` or a missing cell; a
+  present pixel with `a === 0` is a pixel — and `null` writes nothing, because a burn
+  on nothing is nothing. `touched` (keyed `y * gridWidth + x`) is the set of cells this
+  stroke has already settled: a cell is settled **at most once per stroke, from its
+  pre-stroke pixel**, so a back-and-forth drag burns once and a second stroke
+  compounds. The `brush` handler in `ui/canvas/tools/toolHandlers.ts` clears `touched`
+  in `onDown` before its first stamp. `CanvasContainer` binds the sampler over
+  `editableGrid()` — the grid `setPixels` writes, exactly as the fills read it, never
+  a composited image (the `floodFillAt` / `TraceSamplerFn` pattern, so no grid crosses
+  into `ui/`) — and keeps `touched` in a ref, neither a dep nor observed, so
+  pointer-rate writes to it never rebuild `getToolContext`.
+  `ToolContext.pixelBrushTarget` is optional like `pixelBrushStamp`: without one every
+  cell writes its pre-settled `color`, which is why the Brush Studio's
+  `buildBrushToolContext` compiles untouched and any caller without a sampler sees the
+  old output.
+- **Resizable stamps** (`ui/canvas/tools/pixelBrushScale/`): the Brush tool can
+  stretch the brush frame to any `width × height` (1..`PIXEL_BRUSH_MAX_SIZE = 256`)
+  before stamping, with a scaling strategy per axis. No other resampler exists in the
+  repo (`resizeGrid` is a crop/pad; the server's `sharp` is a PNG encoder), so this
+  folder is the one model, split by family because `max-lines` is an **error** under
+  `src/ui/**`: `kernels.ts` holds the seven separable convolution kernels (`nearest`,
+  `bilinear`, `bicubic` Catmull-Rom, `mitchell`, `lanczos2`, `lanczos3`, `box`);
+  `pixelArt.ts` the four integer-factor pixel-art scalers (EPX / Scale2x, Scale3x,
+  Eagle, xBR); `hqx.ts` + `hqxTable.ts` hq2x — the 256-case table as data, decoded
+  once at module load, its rows transcribed from the reference hq2x implementation,
+  which is LGPL; that provenance question is recorded for the owner in the plan-13
+  ledger (`docs/13-brush-source-and-resize/HANDOFF.md`); and `index.ts` the registry
+  (`PIXEL_BRUSH_SCALE_OPTIONS`, kernels first, then the 2-D scalers;
+  `DEFAULT_PIXEL_BRUSH_SCALE = "nearest"`) and the pipeline. Two rules make scaling a
+  signed-delta grid safe. The **coverage model**: every cell is resampled as five
+  channels `(c·d0, c·d1, c·d2, c·d3, c)` with `c` = 1 painted / 0 unpainted, a
+  destination cell is painted iff `c ≥ 0.5` and carries `clampDelta(Σ / c)`, so a hole
+  neither bleeds into its neighbours nor fills in. And **pixel-art scalers choose,
+  never average**: cells compare by exact tuple equality including painted-ness, the
+  xBR / hq2x distance is L1 over the four deltas plus a penalty when painted-ness
+  differs, and hq2x blends only among painted cells. Kernels resample separably
+  (`x` across rows, then `y` down columns; centre convention
+  `u = (i + 0.5) · src / dst − 0.5`, clamp-to-edge, minification stretches the
+  kernel). A 2-D id on either axis takes the pixel-art path:
+  `need = max(dstW / srcW, dstH / srcH)`; `need ≤ 1` → nearest only, else one or two
+  passes of the scaler, then nearest to the exact size. **Identical size is a deep copy
+  for every kernel** (Mitchell blurs even at 1:1) and `scalePixelBrushLayers` returns
+  the **same layer array** for an identity request — that reference equality is what
+  keeps the stamp stable at native size. Deltas are read raw, never through
+  `brushCellToRgba`; every output row and tuple is freshly allocated. All of it is pure
+  and tested in the node lane (`pixelBrushScale/__tests__/`), including 8-transform
+  dihedral-symmetry suites for each pixel-art scaler and for hq2x's table — a single
+  wrong row fails it.
+- **`app.ui.pixelBrush`** (`stores/ui/PixelBrushUIStore.ts`) holds the stamp size and
+  strategies: `width` / `height` (`null` = native), `lockRatio` (on by default),
+  `lockedRatio` (`height / width` captured when the lock engages; `null` = the brush's
+  native ratio) and `scaleX` / `scaleY`. Native is never read from a store — every
+  setter takes it as an argument. Locked, `setWidth` derives
+  `height = clamp(round(w × ratio))` and `setHeight` the inverse; engaging the lock
+  captures the ratio in force, releasing clears it, and a repeated `true` is a no-op.
+  `setScale(axis, id)`: a 2-D id sets both axes (it cannot be paired with a per-axis
+  kernel); locked sets both; unlocked sets that axis and demotes a 2-D partner to
+  `"nearest"`. `resetSize()` nulls the size and the captured ratio and keeps the
+  strategies. **Session-only, deliberately** — nothing here reaches
+  `UIStore.toPersistedUIState()` (the same justification as `ToolUIStore.colorTarget`;
+  persisting it would add a key to all 151 corpus digests), and
+  `persistedUIState.test.ts` is the gate that proves no key was added.
+  `containers/pixelBrush/usePixelBrush.ts` scales the frame's layers with
+  `scalePixelBrushLayers` inside its `scaled` memo, keyed on the four store scalars
+  (slider rate, never pointer rate), feeds the unchanged footprint / stamp routines at
+  the scaled size, exposes `size` for the rail's readout, and resets the size from an
+  effect when the document's native `width` / `height` change (idempotent, so
+  StrictMode's double run changes nothing). `CanvasContainer` never reads
+  `ui.pixelBrush`.
+- **Size controls in the rail and Other Hand Mode:**
+  `ui/components/PixelStudioPanel/PixelStudioBrushSection.tsx` (extracted verbatim
+  from the panel so it stays under the `src/ui/**` line limit) renders the grouped
+  `size?: PixelStudioBrushSizeControls` prop, every value already resolved by
+  `PixelStudioPanelContainer`: W and H `SliderWithNumber`s
+  (1..`pixelBrushSliderMax(native)` = `min(256, max(64, 4 × the larger native side))`)
+  with the ratio-lock `IconButton` (lucide `Link` / `Unlink`, `aria-pressed`) between
+  them in DOM order, one "Scaling" `Dropdown` while locked or "Scale X" / "Scale Y"
+  unlocked (a disabled separator before the 2-D group), and "Native size" (disabled
+  when already native). `containers/otherHand/pixelBrushWidgets.ts` builds the same
+  set as thumb widgets — Width, Ratio (`Locked` / `Free`), Height, Scale (one stack
+  locked, X and Y unlocked), Size (`Native`) — bound to the same store and spread into
+  `planToolSection`'s `case "brush"` (`containers/otherHand/toolWidgets.ts`). It is
+  its own file because `toolWidgets.ts` is already at the containers `max-lines`
+  warning, and it reads the brush document at the scalar level only (`width` /
+  `height`), never a frame, layer or grid.
 - **Files:** pure UI in `ui/components/Brush{Library,LayerPanel,DeltaPicker,SelectModal}/`
   and `ui/layouts/BrushStudioLayout/`; containers are `containers/Brush*Container.tsx`;
   the canvas container's store-free helpers live in `containers/brush/`
