@@ -14,6 +14,12 @@
  * | PixelArtScaler | 32×32 on 16×16, locked, EPX on both axes                        |
  * | Empty          | no brush document: the idle message, no size block              |
  * | Loading        | the loading message, no size block                              |
+ * | WithBrushPicker | three brushes in the project, the second selected — the "Brush" |
+ * |                | dropdown is the first `<dl>` row (multi-brush task 04)          |
+ *
+ * `Loaded` & co. deliberately pass NO `brushes` / `onSelectBrush`: they are
+ * the without-picker state, exactly what the container ships until plan 14
+ * task 14 wires the selected brush through.
  *
  * The loaded stories wrap the section in a `useState` holder so the sliders
  * MOVE in the canvas: it mirrors `PixelBrushUIStore`'s lock rule (locked →
@@ -31,6 +37,7 @@ import { fn } from "storybook/test";
 import { PixelStudioBrushSection } from "./PixelStudioBrushSection";
 import type {
   PixelStudioBrushInfo,
+  PixelStudioBrushOption,
   PixelStudioBrushSectionProps,
   PixelStudioBrushSizeControls,
 } from "./PixelStudioBrushSection";
@@ -93,6 +100,13 @@ function emptyInfo(
   };
 }
 
+/** Three brushes of one project; `WithBrushPicker` selects the second. */
+const BRUSH_OPTIONS: ReadonlyArray<PixelStudioBrushOption> = [
+  { id: "brush-1", name: "Soft Round", width: 16, height: 16 },
+  { id: "brush-2", name: "Hard Square", width: 8, height: 8 },
+  { id: "brush-3", name: "Splatter", width: 32, height: 24 },
+];
+
 const clamp = (n: number) => Math.min(256, Math.max(1, Math.round(n)));
 
 /**
@@ -103,6 +117,31 @@ function StatefulSection(props: PixelStudioBrushSectionProps) {
   const initial = props.pixelBrush.size;
   if (!initial) return <PixelStudioBrushSection {...props} />;
   return <StatefulSize {...props} initial={initial} />;
+}
+
+/**
+ * The picker holder: keeps `selectedBrushId` so the dropdown follows a pick
+ * in the canvas, forwarding to the story's `onSelectBrush` spy first. Wraps
+ * `StatefulSection` so the size block stays live too.
+ */
+function StatefulPickSection(props: PixelStudioBrushSectionProps) {
+  const initial = props.pixelBrush;
+  const [selectedBrushId, setSelectedBrushId] = useState<string | null>(
+    initial.selectedBrushId ?? null,
+  );
+  return (
+    <StatefulSection
+      {...props}
+      pixelBrush={{
+        ...initial,
+        selectedBrushId,
+        onSelectBrush: (id) => {
+          initial.onSelectBrush?.(id);
+          setSelectedBrushId(id);
+        },
+      }}
+    />
+  );
 }
 
 function StatefulSize({
@@ -182,9 +221,10 @@ const meta = {
           "lock between them, one **Scaling** dropdown while locked or " +
           "**Scale X** / **Scale Y** when free (a disabled separator " +
           "precedes the 2-D pixel-art scalers), **Native size**, and a " +
-          "readout — then Open Brush Studio and the hint. Every value is " +
-          "resolved by the container; every story mounts with **no store " +
-          "provider**.",
+          "readout — then Open Brush Studio and the hint. With `brushes` and " +
+          "`onSelectBrush` supplied (multi-brush task 04) a **Brush** " +
+          "dropdown leads the rows. Every value is resolved by the " +
+          "container; every story mounts with **no store provider**.",
       },
     },
   },
@@ -241,5 +281,23 @@ export const Empty: Story = {
 export const Loading: Story = {
   args: {
     pixelBrush: emptyInfo("loading"),
+  },
+};
+
+export const WithBrushPicker: Story = {
+  render: (args) => <StatefulPickSection {...args} />,
+  args: {
+    pixelBrush: {
+      ...loadedInfo(
+        sizeControls({ width: 8, height: 8, nativeWidth: 8, nativeHeight: 8 }),
+      ),
+      brushName: "creature-set",
+      width: 8,
+      height: 8,
+      brushes: BRUSH_OPTIONS,
+      selectedBrushId: "brush-2",
+      onSelectBrush: fn(),
+    },
+    onOtherHand: fn(),
   },
 };

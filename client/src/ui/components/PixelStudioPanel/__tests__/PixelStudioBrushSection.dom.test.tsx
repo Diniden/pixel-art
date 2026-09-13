@@ -16,12 +16,19 @@
  *    `onResetSize` otherwise.
  *  - Keyboard: Tab order is W → lock → H (through both W inputs first).
  *  - `Empty` / `Loading` draw no size block at all.
+ *  - The "Brush" picker row (multi-brush task 04): absent without `brushes`,
+ *    with `brushes: []`, without `onSelectBrush`, and when not loaded; with
+ *    three brushes it is the FIRST `<dl>` row, lists `name (W×H)`, shows
+ *    the selected one (falling back to the first), and a pick reports the id.
+ *  - The hint reads "Stamps the selected brush's current frame …" in every
+ *    state.
  */
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { composeStories } from "@storybook/react-vite";
 import * as stories from "../PixelStudioBrushSection.stories";
+import { PixelStudioBrushSection } from "../PixelStudioBrushSection";
 import type {
   PixelStudioBrushInfo,
   PixelStudioBrushSizeControls,
@@ -43,6 +50,22 @@ const lockButton = () =>
 const nativeButton = () =>
   screen.getByRole("button", { name: "Native size" }) as HTMLButtonElement;
 const trigger = (name: string) => screen.getByRole("button", { name });
+const pickerCell = (container: HTMLElement) =>
+  container.querySelector<HTMLElement>(".pixel-studio-panel__brush-picker");
+const rowLabels = (container: HTMLElement) =>
+  Array.from(
+    container.querySelectorAll("dt.pixel-studio-panel__brush-label"),
+  ).map((el) => el.textContent);
+const hint = (container: HTMLElement) =>
+  container.querySelector(".pixel-studio-panel__brush-hint")?.textContent;
+
+const HINT =
+  "Stamps the selected brush's current frame with the selected colour.";
+
+/** The `Loaded` story's info (no picker props), for direct renders. */
+const loadedInfo = (): PixelStudioBrushInfo => composed.Loaded.args.pixelBrush!;
+/** The three brushes `WithBrushPicker` lists (ids brush-1..3, second selected). */
+const BRUSH_OPTIONS = composed.WithBrushPicker.args.pixelBrush!.brushes!;
 
 /** The spies live on the story args; the stateful wrapper forwards to them. */
 function spies(story: {
@@ -52,9 +75,16 @@ function spies(story: {
 }
 
 describe("PixelStudioBrushSection — stories", () => {
-  it("exposes exactly the five stories the task requires", () => {
+  it("exposes exactly the six stories the tasks require", () => {
     expect(Object.keys(composed).sort()).toEqual(
-      ["Loaded", "LoadedUnlocked", "PixelArtScaler", "Empty", "Loading"].sort(),
+      [
+        "Loaded",
+        "LoadedUnlocked",
+        "PixelArtScaler",
+        "Empty",
+        "Loading",
+        "WithBrushPicker",
+      ].sort(),
     );
   });
 
@@ -93,6 +123,168 @@ describe("PixelStudioBrushSection — stories", () => {
     expect(
       block.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+});
+
+describe("PixelStudioBrushSection — the Brush picker row", () => {
+  it("is absent when `brushes` is not supplied (every pre-existing loaded story)", () => {
+    for (const Story of [
+      composed.Loaded,
+      composed.LoadedUnlocked,
+      composed.PixelArtScaler,
+    ]) {
+      const { container, unmount } = render(<Story />);
+      expect(pickerCell(container)).toBeNull();
+      expect(screen.queryByRole("button", { name: "Brush" })).toBeNull();
+      expect(rowLabels(container)).toEqual([
+        "Project",
+        "Size",
+        "Frame",
+        "Layers",
+      ]);
+      unmount();
+    }
+  });
+
+  it("is absent with `brushes: []`, and absent without `onSelectBrush`", () => {
+    const empty = render(
+      <PixelStudioBrushSection
+        pixelBrush={{ ...loadedInfo(), brushes: [], onSelectBrush: vi.fn() }}
+      />,
+    );
+    expect(pickerCell(empty.container)).toBeNull();
+    expect(rowLabels(empty.container)).toEqual([
+      "Project",
+      "Size",
+      "Frame",
+      "Layers",
+    ]);
+    empty.unmount();
+
+    const noHandler = render(
+      <PixelStudioBrushSection
+        pixelBrush={{ ...loadedInfo(), brushes: BRUSH_OPTIONS }}
+      />,
+    );
+    expect(pickerCell(noHandler.container)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Brush" })).toBeNull();
+  });
+
+  it("is absent while nothing is loaded, even with brushes and a handler", () => {
+    const { container } = render(
+      <PixelStudioBrushSection
+        pixelBrush={{
+          ...composed.Empty.args.pixelBrush!,
+          brushes: BRUSH_OPTIONS,
+          selectedBrushId: "brush-2",
+          onSelectBrush: vi.fn(),
+        }}
+      />,
+    );
+    expect(pickerCell(container)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Brush" })).toBeNull();
+  });
+
+  it("WithBrushPicker leads the rows with Brush, in the dd with the BEM classes", () => {
+    const { container } = render(<composed.WithBrushPicker />);
+    expect(rowLabels(container)).toEqual([
+      "Brush",
+      "Project",
+      "Size",
+      "Frame",
+      "Layers",
+    ]);
+    const cell = pickerCell(container)!;
+    expect(cell.tagName).toBe("DD");
+    expect(cell.closest(".pixel-studio-panel__brush-rows")).not.toBeNull();
+    expect(cell.contains(trigger("Brush"))).toBe(true);
+    expect(trigger("Brush").className).toContain(
+      "pixel-studio-panel__brush-picker-trigger",
+    );
+  });
+
+  it("shows the selected brush as `name (W×H)` and lists all three in order", () => {
+    render(<composed.WithBrushPicker />);
+    expect(trigger("Brush").textContent).toContain("Hard Square (8×8)");
+
+    fireEvent.click(trigger("Brush"));
+    const items = screen.getAllByRole("option") as HTMLButtonElement[];
+    expect(items.map((el) => el.textContent)).toEqual([
+      "Soft Round (16×16)",
+      "Hard Square (8×8)",
+      "Splatter (32×24)",
+    ]);
+    expect(items.map((el) => el.getAttribute("aria-selected"))).toEqual([
+      "false",
+      "true",
+      "false",
+    ]);
+    expect(items.some((el) => el.disabled)).toBe(false);
+  });
+
+  it("a pick calls onSelectBrush(id) and the trigger follows", () => {
+    render(<composed.WithBrushPicker />);
+    const onSelectBrush = vi.mocked(
+      composed.WithBrushPicker.args.pixelBrush!.onSelectBrush!,
+    );
+    onSelectBrush.mockClear();
+
+    fireEvent.click(trigger("Brush"));
+    fireEvent.click(screen.getByRole("option", { name: "Splatter (32×24)" }));
+    expect(onSelectBrush).toHaveBeenCalledTimes(1);
+    expect(onSelectBrush).toHaveBeenCalledWith("brush-3");
+    expect(trigger("Brush").textContent).toContain("Splatter (32×24)");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("falls back to the first brush when selectedBrushId is null or absent", () => {
+    const onSelectBrush = vi.fn();
+    const nulled = render(
+      <PixelStudioBrushSection
+        pixelBrush={{
+          ...loadedInfo(),
+          brushes: BRUSH_OPTIONS,
+          selectedBrushId: null,
+          onSelectBrush,
+        }}
+      />,
+    );
+    expect(trigger("Brush").textContent).toContain("Soft Round (16×16)");
+    nulled.unmount();
+
+    render(
+      <PixelStudioBrushSection
+        pixelBrush={{ ...loadedInfo(), brushes: BRUSH_OPTIONS, onSelectBrush }}
+      />,
+    );
+    expect(trigger("Brush").textContent).toContain("Soft Round (16×16)");
+    fireEvent.click(trigger("Brush"));
+    fireEvent.click(screen.getByRole("option", { name: "Hard Square (8×8)" }));
+    expect(onSelectBrush).toHaveBeenCalledWith("brush-2");
+  });
+
+  it("keeps the size block and the Open button below the rows", () => {
+    const { container } = render(<composed.WithBrushPicker />);
+    const rows = container.querySelector(".pixel-studio-panel__brush-rows")!;
+    const block = sizeBlock(container)!;
+    const open = container.querySelector(".pixel-studio-panel__brush-open")!;
+    expect(
+      rows.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      block.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(readout(container)).toBe("8 × 8 (native 8 × 8)");
+  });
+});
+
+describe("PixelStudioBrushSection — the hint", () => {
+  it("reads the multi-brush sentence in every story", () => {
+    for (const Story of Object.values(composed)) {
+      const { container, unmount } = render(<Story />);
+      expect(hint(container)).toBe(HINT);
+      unmount();
+    }
   });
 });
 

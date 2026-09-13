@@ -217,6 +217,25 @@
   line-height: var(--leading-snug);
 }
 
+/* The "Brush" picker row (multi-brush task 04): the first `<dl>` row, its
+   `dd` holding a Dropdown. Mirrors `__brush-scale-picker` / `__brush-scale-
+   trigger` below, but the row's dd is the flex child here, so the dd fills
+   the row and lays out as a one-column grid: a grid item stretches to the
+   track, which is what turns the `inline-block` dropdown root into a
+   full-width one without reaching across into the `dropdown` block. */
+.pixel-studio-panel__brush-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.pixel-studio-panel__brush-picker-trigger {
+  width: 100%;
+  font-size: var(--text-xs);
+}
+
 /* The stamp-size block (brush-scale task 13): W / H sliders with the ratio
    lock between them, the strategy picker(s), then "Native size" + a readout.
    Sits between the `<dl>` and the Open button. */
