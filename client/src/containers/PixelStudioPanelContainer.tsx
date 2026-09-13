@@ -52,12 +52,24 @@
  * ⚠️ The BRUSH section (pixel-brush task 06) is fed from `app.brushes` /
  * `app.brushUI` HERE, and only while the brush tool is selected — so no
  * brush observable is read (or subscribed to) for any other tool. The brush
- * document is `observable.ref`: this container reads `width`, `height`,
- * `frames.length`, the selected frame's `name` and `layers.length` and never
- * a pixel grid. **It does NOT call `brushes.init()`** — `usePixelBrush` in
- * `CanvasContainer` (task 05) does that whenever the tool is the brush, and a
- * second caller would only race it. "Open Brush Studio" goes through the same
- * `lightingUI.setStudioMode` the toolbar's mode buttons use.
+ * document is `observable.ref`: this container reads the SELECTED BRUSH's
+ * `width`, `height`, `frames.length`, the selected frame's `name` and
+ * `layers.length`, plus each brush's `id` / `name` / size for the picker, and
+ * never a pixel grid. **It does NOT call `brushes.init()`** — `usePixelBrush`
+ * in `CanvasContainer` (task 05) does that whenever the tool is the brush,
+ * and a second caller would only race it. "Open Brush Studio" goes through
+ * the same `lightingUI.setStudioMode` the toolbar's mode buttons use.
+ *
+ * ⚠️ MULTI-BRUSH (plan 14, task 14; MASTER D11 / D12). A brush PROJECT holds
+ * many brushes; everything the section shows is the SELECTED brush's,
+ * resolved through `brushUI.selectedBrushIn(doc)` — the same rule the stamp
+ * (`usePixelBrush`) and the other-hand widgets use, never `brushes[0]`. The
+ * picker's three optional members (`brushes`, `selectedBrushId`,
+ * `onSelectBrush`) are supplied only when a document is loaded, spread like
+ * `size`; a pick goes through `brushUI.selectBrush(id, document)` WITH the
+ * document (§8 mistake 3 — without it the frame / layer ids stay `null`).
+ * `PixelStudioBrushOption` is imported from the section file directly:
+ * `PixelStudioPanel.tsx` does not re-export it and belongs to task 04.
  */
 import { observer } from "mobx-react-lite";
 import {
@@ -65,6 +77,7 @@ import {
   type PixelStudioBrushInfo,
   type PixelStudioBrushSizeControls,
 } from "../ui/components/PixelStudioPanel/PixelStudioPanel";
+import type { PixelStudioBrushOption } from "../ui/components/PixelStudioPanel/PixelStudioBrushSection";
 import { describeLine, presetLines } from "../ui/canvas/model/reflection";
 import { pixelBrushSliderMax } from "../stores/ui/PixelBrushUIStore";
 import { ColorPickerContainer } from "./ColorPickerContainer";
@@ -160,22 +173,24 @@ export const PixelStudioPanelContainer = observer(
     if (tool.selectedTool === "brush") {
       const brushes = app.brushes;
       const doc = brushes.document;
-      // The same frame rule the brush studio and the stamp use (MASTER D4):
-      // `selectedFrameId`, falling back to `frames[0]`.
+      // The same brush and frame rules the brush studio and the stamp use
+      // (MASTER D4): `selectedBrushId` falling back to `brushes[0]`, then
+      // `selectedFrameId` within THAT brush, falling back to its `frames[0]`.
+      const brush = app.brushUI.selectedBrushIn(doc);
       const frame = app.brushUI.selectedFrameIn(doc);
       // ── the stamp-size controls (brush-scale task 13, MASTER D13) ─────────
       //
       // Every value the section shows is RESOLVED HERE: the store's `null`
       // (= native) collapses through `effectiveSize(native)`, and the native
-      // size is the document's own `width` / `height` — read off the
-      // `observable.ref` document, never a grid. The setters take `native`
-      // as an argument by design (the store holds no `BrushStore`), so the
-      // same object is threaded through each callback. Absent without a
-      // document: there is no native size to resolve against.
+      // size is the SELECTED BRUSH's own `width` / `height` — scalars read
+      // off the `observable.ref` document, never a grid. The setters take
+      // `native` as an argument by design (the store holds no `BrushStore`),
+      // so the same object is threaded through each callback. Absent without
+      // a document: there is no native size to resolve against.
       let size: PixelStudioBrushSizeControls | undefined;
-      if (doc) {
+      if (doc && brush) {
         const pixelBrushUI = ui.pixelBrush;
-        const native = { width: doc.width, height: doc.height };
+        const native = { width: brush.width, height: brush.height };
         const effective = pixelBrushUI.effectiveSize(native);
         size = {
           width: effective.width,
@@ -196,14 +211,39 @@ export const PixelStudioPanelContainer = observer(
           onResetSize: () => pixelBrushUI.resetSize(),
         };
       }
+      // ── the Brush picker (multi-brush task 14, MASTER D11) ────────────────
+      //
+      // One row per brush in the project, at the `{ id, name, width, height }`
+      // level the section's `PixelStudioBrushOption` names — `brush.frames`
+      // is never touched. Absent without a document, like `size`.
+      let picker:
+        | Pick<
+            PixelStudioBrushInfo,
+            "brushes" | "selectedBrushId" | "onSelectBrush"
+          >
+        | undefined;
+      if (doc) {
+        picker = {
+          brushes: doc.brushes.map((b): PixelStudioBrushOption => ({
+            id: b.id,
+            name: b.name,
+            width: b.width,
+            height: b.height,
+          })),
+          selectedBrushId: brush?.id ?? null,
+          // WITH the document (§8 mistake 3): the store re-seats the frame
+          // and layer ids inside the newly selected brush.
+          onSelectBrush: (id) => app.brushUI.selectBrush(id, brushes.document),
+        };
+      }
       pixelBrush = {
         loadState: brushes.loadState,
         brushName: brushes.hasProject ? brushes.projectName : null,
-        width: doc?.width ?? null,
-        height: doc?.height ?? null,
+        width: brush?.width ?? null,
+        height: brush?.height ?? null,
         frameName: frame?.name ?? null,
-        frameIndex: frame && doc ? doc.frames.indexOf(frame) : null,
-        frameCount: doc?.frames.length ?? 0,
+        frameIndex: frame && brush ? brush.frames.indexOf(frame) : null,
+        frameCount: brush?.frames.length ?? 0,
         layerCount: frame?.layers.length ?? 0,
         // The toolbar's own studio-mode switch (`ToolbarContainer`'s
         // `onSetStudioMode`). It also resets the tool to `"pixel"` — unchanged
@@ -213,6 +253,7 @@ export const PixelStudioPanelContainer = observer(
         // Spread-as-optional rather than `size: undefined` so the info object
         // carries the key only when there is something to show.
         ...(size ? { size } : {}),
+        ...(picker ?? {}),
       };
     }
 

@@ -9,8 +9,9 @@
  *
  *   (a) brush tool + no brush document → the empty-state message and the
  *       "Open Brush Studio" button;
- *   (b) brush tool + an installed 4×4 document → project name, "4 × 4",
- *       "Frame 1 (1/1)", one layer;
+ *   (b) brush tool + an installed 4×4 document → the Brush picker row first
+ *       (plan 14: supplied whenever a document is loaded), then project name,
+ *       "4 × 4", "Frame 1 (1/1)", one layer;
  *   (c) ⭐ the colour picker (`.color-picker`) is present with the brush tool
  *       selected — MASTER §1's "the color picker available in the side rail".
  *       The component-side pin (`PixelStudioPanel.dom.test.tsx`) uses a stub
@@ -38,7 +39,7 @@ import { tinyProject } from "@/store/__tests__/storeContract";
 import { ApplicationStore } from "@/stores/ApplicationStore";
 import { StoreProvider } from "@/stores/context";
 import { PixelStudioPanelContainer } from "@/containers/PixelStudioPanelContainer";
-import { createBrushDocument } from "@/types";
+import { createBrush, createBrushDocument } from "@/types";
 
 /** jsdom has no 2D context; the picker bails on `null` but this keeps it quiet. */
 beforeAll(() => {
@@ -74,6 +75,20 @@ function installBrush(): void {
   runInAction(() => {
     app.brushes.projectName = "panel-brush";
     app.brushes.installDocument(createBrushDocument(4, 4));
+    app.brushes.loadState = "loaded";
+  });
+}
+
+/**
+ * A TWO-brush project (plan 14): "Brush 1" 4×4 (`brush-1`) and "Dot" 8×8
+ * (`brush-2`) — different sizes, so a pick is visible in the Size row.
+ */
+function installBrushes(): void {
+  runInAction(() => {
+    const doc = createBrushDocument(4, 4);
+    doc.brushes.push(createBrush("brush-2", "Dot", 8, 8));
+    app.brushes.projectName = "panel-brush";
+    app.brushes.installDocument(doc);
     app.brushes.loadState = "loaded";
   });
 }
@@ -120,7 +135,9 @@ describe("PixelStudioPanelContainer — the Brush section", () => {
       container.querySelectorAll(".pixel-studio-panel__brush-value"),
     ).map((el) => el.textContent);
 
-    expect(labels).toEqual(["Project", "Size", "Frame", "Layers"]);
+    // "Brush" leads (plan 14 D11): the picker's `dt` shares the label class,
+    // but its `dd` is the picker, not a `__brush-value`.
+    expect(labels).toEqual(["Brush", "Project", "Size", "Frame", "Layers"]);
     expect(values).toEqual(["panel-brush", "4 × 4", "Frame 1 (1/1)", "1"]);
     expect(
       container.querySelector(".pixel-studio-panel__brush-status"),
@@ -309,5 +326,80 @@ describe("PixelStudioPanelContainer — the stamp-size controls", () => {
     expect(
       screen.getByRole("button", { name: "Scale X" }).textContent,
     ).toContain("EPX / Scale2x");
+  });
+});
+
+/**
+ * The Brush picker (multi-brush plan 14, task 14; MASTER D11 / D12) over the
+ * REAL `BrushUIStore`: the container lists every brush of the project with
+ * its size, marks the selected one, and a pick lands on
+ * `brushUI.selectBrush(id, document)` — WITH the document, so the frame and
+ * layer ids are re-seated inside the new brush — after which every
+ * brush-scoped row (Size, the size controls) follows the selection.
+ */
+describe("PixelStudioPanelContainer — the Brush picker", () => {
+  const trigger = () => screen.getByRole("button", { name: "Brush" });
+  const labels = (container: HTMLElement) =>
+    Array.from(
+      container.querySelectorAll(".pixel-studio-panel__brush-label"),
+    ).map((el) => el.textContent);
+  /** The Size row's value — the second `__brush-value` (after Project). */
+  const sizeValue = (container: HTMLElement) =>
+    container.querySelectorAll(".pixel-studio-panel__brush-value")[1]
+      ?.textContent;
+  const readout = (container: HTMLElement) =>
+    container.querySelector(".pixel-studio-panel__brush-size-readout")
+      ?.textContent;
+  const widthSlider = () => screen.getByRole("slider", { name: "Width" });
+
+  it("⭐ leads the rows with Brush, listing both brushes with sizes and marking the selected one", () => {
+    installBrushes();
+    const { container } = mount();
+
+    expect(labels(container)[0]).toBe("Brush");
+    expect(
+      container.querySelector(".pixel-studio-panel__brush-picker"),
+    ).not.toBeNull();
+    expect(trigger().textContent).toContain("Brush 1 (4×4)");
+
+    fireEvent.click(trigger());
+    const items = screen.getAllByRole("option");
+    expect(items.map((el) => el.textContent)).toEqual([
+      "Brush 1 (4×4)",
+      "Dot (8×8)",
+    ]);
+    expect(items[0]).toHaveAttribute("aria-selected", "true");
+    expect(items[1]).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("⭐ a pick selects the brush in brushUI (with the document) and the Size row and controls follow", () => {
+    installBrushes();
+    const { container } = mount();
+    expect(app.brushUI.selectedBrushId).toBe("brush-1");
+    expect(sizeValue(container)).toBe("4 × 4");
+    expect(readout(container)).toBe("4 × 4 (native 4 × 4)");
+
+    fireEvent.click(trigger());
+    fireEvent.click(screen.getByRole("option", { name: "Dot (8×8)" }));
+
+    expect(app.brushUI.selectedBrushId).toBe("brush-2");
+    // WITH the document (§8 mistake 3): brush 2's own frame and layer are
+    // seated, not `null`.
+    expect(app.brushUI.selectedFrameId).toBe("frame-1");
+    expect(app.brushUI.selectedLayerId).toBe("layer-1");
+    expect(trigger().textContent).toContain("Dot (8×8)");
+    expect(sizeValue(container)).toBe("8 × 8");
+    expect(readout(container)).toBe("8 × 8 (native 8 × 8)");
+    expect(widthSlider()).toHaveValue("8");
+    expect(app.ui.pixelBrush.isNative).toBe(true);
+  });
+
+  it("with the pencil selected nothing brush-scoped is rendered (no picker, no store read)", () => {
+    installBrushes();
+    runInAction(() => {
+      app.ui.tool.setTool("pixel");
+    });
+    mount();
+    expect(screen.queryByRole("button", { name: "Brush" })).toBeNull();
   });
 });

@@ -40,7 +40,7 @@ import { StoreProvider } from "@/stores/context";
 import { CanvasContainer } from "@/containers/CanvasContainer";
 import { createStubContext } from "@test/canvasStub";
 import type { StubContext } from "@test/canvasStub";
-import { createBrushDocument, createBrushLayer } from "@/types";
+import { createBrush, createBrushDocument, createBrushLayer } from "@/types";
 import type { BrushDocument, Layer, PixelData, Pixel, Project } from "@/types";
 import { settlePixelBrushColor } from "@/ui/canvas/tools/pixelBrushStamp";
 
@@ -64,7 +64,9 @@ function brushDocument(): BrushDocument {
   rgb.pixels[1]![2] = RGB_AT_21;
   const hsl = createBrushLayer("hsl-1", "hsl", 3, 3, "hsl");
   hsl.pixels[1]![2] = HSL_AT_21;
-  doc.frames = [{ id: "frame-1", name: "Frame 1", layers: [rgb, hsl] }];
+  doc.brushes[0]!.frames = [
+    { id: "frame-1", name: "Frame 1", layers: [rgb, hsl] },
+  ];
   return doc;
 }
 
@@ -485,7 +487,7 @@ function burnBrush(): BrushDocument {
   const doc = createBrushDocument(1, 1);
   const burn = createBrushLayer("burn", "burn", 1, 1, "rgb", "target");
   burn.pixels[0]![0] = BURN;
-  doc.frames = [{ id: "frame-1", name: "Frame 1", layers: [burn] }];
+  doc.brushes[0]!.frames = [{ id: "frame-1", name: "Frame 1", layers: [burn] }];
   return doc;
 }
 
@@ -499,7 +501,9 @@ function mixedBrush(): BrushDocument {
   burn.pixels[0]![0] = BURN;
   const tint = createBrushLayer("tint", "tint", 3, 1, "rgb");
   tint.pixels[0]![2] = TINT;
-  doc.frames = [{ id: "frame-1", name: "Frame 1", layers: [burn, tint] }];
+  doc.brushes[0]!.frames = [
+    { id: "frame-1", name: "Frame 1", layers: [burn, tint] },
+  ];
   return doc;
 }
 
@@ -596,5 +600,63 @@ describe("⭐⭐ a target-sourced brush burns the pixel under it", () => {
     tap(surface, 1, 5);
     expect(rawColorAt(0, 5)).toBe(0);
     expect(rawColorAt(2, 5)).toEqual(TINTED_BASE);
+  });
+});
+
+/* ══ 6. the selected brush of the project (plan 14, task 14; MASTER D12) ════ */
+//
+// A brush PROJECT holds many brushes. What is pinned end to end: after
+// `brushUI.selectBrush("brush-2", doc)` a real press on the real canvas writes
+// BRUSH 2's footprint and colours — the hook resolved the selected brush, not
+// `brushes[0]` (§8 mistake 1).
+
+const DOT: [number, number, number, number] = [0, 100, 0, 0];
+const EXPECTED_DOT = settlePixelBrushColor(BASE, [
+  { channelType: "rgb", delta: DOT },
+]);
+
+/**
+ * `brushDocument()` plus a second brush, "Dot": 4×4, origin (2,2), one rgb
+ * cell at (1,1) — a different size AND a different footprint from brush 1.
+ */
+function twoBrushDocument(): BrushDocument {
+  const doc = brushDocument();
+  const dot = createBrush("brush-2", "Dot", 4, 4);
+  const rgb = createBrushLayer("rgb-1", "rgb", 4, 4, "rgb");
+  rgb.pixels[1]![1] = DOT;
+  dot.frames = [{ id: "frame-1", name: "Frame 1", layers: [rgb] }];
+  doc.brushes.push(dot);
+  return doc;
+}
+
+describe("⭐ a press stamps the SELECTED brush of the project", () => {
+  it("after picking brush 2, a press writes brush 2's footprint — not brush 1's", () => {
+    load(mkProject());
+    installBrush(twoBrushDocument());
+    selectBrushTool();
+    const { surface } = mountCanvas();
+
+    // Brush 1 is the default selection — the control press.
+    expect(app.brushUI.selectedBrushId).toBe("brush-1");
+    tap(surface, 4, 4);
+    expect(paintedCells()).toEqual(["3,3", "5,4"]);
+    act(() => {
+      app.undo();
+    });
+    expect(paintedCells()).toEqual([]);
+
+    act(() => {
+      app.brushUI.selectBrush("brush-2", app.brushes.document);
+    });
+    expect(app.brushUI.selectedBrushId).toBe("brush-2");
+
+    tap(surface, 4, 4);
+
+    // Origin (2,2) sits on (4,4): (1,1) → (3,3), and nothing else.
+    expect(paintedCells()).toEqual(["3,3"]);
+    expect(colorAt(3, 3)).toEqual(EXPECTED_DOT);
+    // Genuinely brush 2's colour, not brush 1's cell at the same spot.
+    expect(EXPECTED_DOT).not.toEqual(EXPECTED_00);
+    expect(EXPECTED_DOT).not.toEqual(BASE);
   });
 });

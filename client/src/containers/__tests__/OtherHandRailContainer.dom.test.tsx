@@ -41,7 +41,7 @@ import { StoreProvider } from "@/stores/context";
 import { OtherHandRailContainer } from "@/containers/OtherHandRailContainer";
 import { OTHER_HAND_SECTIONS } from "@/containers/otherHand/otherHandSections";
 import { tinyProject } from "@/store/__tests__/storeContract";
-import { createBrushDocument } from "@/types";
+import { createBrush, createBrushDocument } from "@/types";
 import type { Color } from "@/types";
 
 const RED: Color = { r: 255, g: 0, b: 0, a: 255 };
@@ -245,6 +245,26 @@ describe("OtherHandRailContainer — the Brush tool's section", () => {
     });
   }
 
+  /**
+   * A TWO-brush project (plan 14): `brush-1` 4×4 and "Dot" 32×32 (`brush-2`).
+   * 32 is chosen so the Width widget's `max` visibly follows the native size:
+   * `pixelBrushSliderMax` is `max(64, 4 × side)` → 64 for 4×4, 128 for 32×32.
+   */
+  function installBrushes(): void {
+    runInAction(() => {
+      const doc = createBrushDocument(4, 4);
+      doc.brushes.push(createBrush("brush-2", "Dot", 32, 32));
+      app.brushes.projectName = "test-brush";
+      app.brushes.installDocument(doc);
+      app.brushes.loadState = "loaded";
+    });
+  }
+
+  const gripLabels = () =>
+    Array.from(document.querySelectorAll(".other-hand__widget")).map((card) =>
+      card.querySelector(".other-hand__grip")?.getAttribute("aria-label"),
+    );
+
   function mountBrushSection() {
     runInAction(() => {
       app.ui.tool.setTool("brush");
@@ -394,6 +414,56 @@ describe("OtherHandRailContainer — the Brush tool's section", () => {
         "Brush has no thumb controls. Pick another tool, or leave Other Hand Mode.",
       ),
     ).toBeInTheDocument();
+  });
+
+  /* ── the Brush stack (multi-brush plan 14, task 14; MASTER D13) ─────────── */
+
+  it("with ONE brush in the project there is no Brush stack", () => {
+    mountBrushSection();
+
+    expect(screen.queryByRole("group", { name: "Brush" })).toBeNull();
+    expect(gripLabels()[0]).toBe("Move Width");
+  });
+
+  it("⭐ with TWO brushes a Brush stack leads: B1 active, B2 not, each titled by the brush's name", () => {
+    installBrushes();
+    mountBrushSection();
+
+    expect(stackButton("Brush", "B1")).toHaveAttribute("aria-pressed", "true");
+    expect(stackButton("Brush", "B2")).toHaveAttribute("aria-pressed", "false");
+    expect(stackButton("Brush", "B1")).toHaveAttribute("title", "Brush 1");
+    expect(stackButton("Brush", "B2")).toHaveAttribute("title", "Dot");
+    // PREPENDED: the thumb learns Brush first, then the size widgets as before.
+    expect(gripLabels()).toEqual([
+      "Move Brush",
+      "Move Width",
+      "Move Ratio",
+      "Move Height",
+      "Move Scale",
+      "Move Size",
+    ]);
+  });
+
+  it("⭐ tapping B2 selects brush-2 (with the document) and the Width widget's range follows the new native", () => {
+    installBrushes();
+    mountBrushSection();
+    const width = () => screen.getByRole("slider", { name: "Width" });
+    expect(width()).toHaveAttribute("aria-valuemax", "64");
+    expect(channelValue("Width")).toBe("4");
+
+    tap("Brush", "B2");
+
+    expect(app.brushUI.selectedBrushId).toBe("brush-2");
+    // WITH the document (§8 mistake 3): brush 2's frame / layer are seated.
+    expect(app.brushUI.selectedFrameId).toBe("frame-1");
+    expect(app.brushUI.selectedLayerId).toBe("layer-1");
+    expect(stackButton("Brush", "B2")).toHaveAttribute("aria-pressed", "true");
+    expect(stackButton("Brush", "B1")).toHaveAttribute("aria-pressed", "false");
+    // The other widgets' native is now brush 2's: 32×32, max 128.
+    expect(width()).toHaveAttribute("aria-valuemax", "128");
+    expect(channelValue("Width")).toBe("32");
+    expect(channelValue("Height")).toBe("32");
+    expect(app.ui.pixelBrush.isNative).toBe(true);
   });
 
   /**
