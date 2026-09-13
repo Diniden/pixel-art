@@ -112,6 +112,7 @@ import { LightingUIStore } from "./LightingUIStore";
 import { ToolUIStore } from "./ToolUIStore";
 import { ViewportUIStore } from "./ViewportUIStore";
 import { LayoutUIStore } from "./LayoutUIStore";
+import { PixelBrushUIStore } from "./PixelBrushUIStore";
 import {
   needsHiddenRailsKey,
   serializeHiddenRails,
@@ -254,6 +255,13 @@ export class UIStore {
    * CONDITIONALLY persisted, so an untouched project's key set is unchanged.
    */
   readonly layout: LayoutUIStore;
+  /**
+   * Plan 13: the pixel studio Brush tool's stamp size, ratio lock and
+   * per-axis scaling strategy. Session-only — NOT read by the builder or
+   * `hydrate`, so it adds no wire key (see the `assign` rule below). Holds no
+   * reaction, so nothing to dispose.
+   */
+  readonly pixelBrush: PixelBrushUIStore;
   private readonly session: SessionStore;
   private readonly selection: UISelectionSource;
 
@@ -347,6 +355,7 @@ export class UIStore {
     this.referenceUI = deps.reference ?? null;
     this.layout = deps.layout ?? new LayoutUIStore();
     this.poseUI = deps.pose ?? null;
+    this.pixelBrush = new PixelBrushUIStore();
 
     makeObservable(this, {
       lighting: observableRef,
