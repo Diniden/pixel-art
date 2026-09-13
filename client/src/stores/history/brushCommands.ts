@@ -21,10 +21,12 @@
  * brush behaviour store must never do.
  *
  * ── The grid is never walked, never proxied ────────────────────────────────
- * `estimateBrushBytes` is O(frames × layers) from `width × height`. A pixel
- * command holds copied `BrushCell` VALUES addressed by `(frameId, layerId)`,
- * never a grid reference — so history can neither pin a grid alive nor see
- * inside one.
+ * `estimateBrushBytes` is O(brushes × frames × layers) from each brush's
+ * `width × height` (multi-brush plan, `docs/14-multi-brush-projects`, D7: a
+ * document is a project holding many brushes, each with its own size). A
+ * pixel command holds copied `BrushCell` VALUES addressed by
+ * `(brushId, frameId, layerId)`, never a grid reference — so history can
+ * neither pin a grid alive nor see inside one.
  */
 import type { BrushCell, BrushDocument } from "../../types";
 import type { Command } from "./commands";
@@ -52,14 +54,21 @@ const BYTES_PER_BRUSH_CELL = 10;
 const BYTES_SNAPSHOT_BASE = 256;
 
 /**
- * Cheap structural size estimate for the byte budget. O(frames × layers)
- * from the document's `width × height` — NEVER walks cells.
+ * Cheap structural size estimate for the byte budget. O(brushes × frames ×
+ * layers) from each brush's own `width × height` — NEVER walks cells.
+ *
+ * `Σ_brush (width × height × Σ_frames layers.length) × BYTES_PER_BRUSH_CELL
+ *  + BYTES_SNAPSHOT_BASE` (multi-brush D7).
  */
 export function estimateBrushBytes(doc: BrushDocument): number {
-  const cellsPerLayer = doc.width * doc.height;
-  let layers = 0;
-  for (const frame of doc.frames) layers += frame.layers.length;
-  return layers * cellsPerLayer * BYTES_PER_BRUSH_CELL + BYTES_SNAPSHOT_BASE;
+  let cells = 0;
+  for (const brush of doc.brushes) {
+    const cellsPerLayer = brush.width * brush.height;
+    let layers = 0;
+    for (const frame of brush.frames) layers += frame.layers.length;
+    cells += layers * cellsPerLayer;
+  }
+  return cells * BYTES_PER_BRUSH_CELL + BYTES_SNAPSHOT_BASE;
 }
 
 export interface BrushSnapshotCommandOptions {
@@ -119,10 +128,13 @@ export interface BrushPatch {
 }
 
 /**
- * Where a patch applies. Addressed by id (MASTER D6: layer ids are stable
- * across frames), never by grid reference.
+ * Where a patch applies. Addressed by id — brush → frame → layer (multi-brush
+ * D7; brush-studio D6: layer ids are stable across frames, and frame/layer ids
+ * are unique only WITHIN a brush, so the brush id comes first), never by grid
+ * reference.
  */
 export interface BrushPixelTarget {
+  brushId: string;
   frameId: string;
   layerId: string;
 }
@@ -131,7 +143,9 @@ export interface BrushPixelTarget {
 export interface BrushPatchHost {
   /**
    * Write `cells` to the addressed grid, taking each cell's `before` for
-   * `"undo"` and `after` for `"redo"`.
+   * `"undo"` and `after` for `"redo"`. The host resolves the target by
+   * `brushId` first, then `frameId`, then `layerId` within that brush, and
+   * no-ops when any of the three is gone (multi-brush D6).
    *
    * ⚠️ THE CELLS ARRIVE ALREADY ORDERED FOR THE DIRECTION. The command
    * reverses them for `"undo"` (see {@link createBrushPixelCommand}), so the

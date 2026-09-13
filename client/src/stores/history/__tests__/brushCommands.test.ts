@@ -1,9 +1,13 @@
 /**
- * brushCommands unit suite (Brush Studio task 07).
+ * brushCommands unit suite (Brush Studio task 07; multi-brush task 07).
  *
  * Pure command objects against fake hosts — no store, no MobX, no network.
  * The store-side round trip (record → undo → redo through `BrushStore`) is
  * covered by `stores/domain/__tests__/BrushStore.test.ts`.
+ *
+ * Documents are brush-2 projects (`{ version, brushes: Brush[] }`); a
+ * structural edit to "the" brush is `{ ...doc, brushes: [{ ...doc.brushes[0],
+ * … }] }` — the spine copy every store write path performs.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -18,8 +22,10 @@ import {
 } from "@/stores/history/brushCommands";
 import { HistoryStore } from "@/stores/history/HistoryStore";
 import {
+  createBrush,
   createBrushDocument,
   createBrushLayer,
+  type Brush,
   type BrushDocument,
 } from "@/types";
 
@@ -41,14 +47,29 @@ function makeSnapshotHost(initial: BrushDocument | null) {
   };
 }
 
-const TARGET = { frameId: "frame-1", layerId: "layer-1" } as const;
+/** Spine-copy `doc` with its first brush replaced by `patch(brushes[0])`. */
+function withFirstBrush(
+  doc: BrushDocument,
+  patch: (brush: Brush) => Brush,
+): BrushDocument {
+  return {
+    ...doc,
+    brushes: [patch(doc.brushes[0]), ...doc.brushes.slice(1)],
+  };
+}
+
+const TARGET = {
+  brushId: "brush-1",
+  frameId: "frame-1",
+  layerId: "layer-1",
+} as const;
 
 /* ── the snapshot family ─────────────────────────────────────────────────── */
 
 describe("createBrushSnapshotCommand", () => {
   it("undo restores `before` and redo restores the document live at undo time", () => {
     const before = createBrushDocument(4, 4);
-    const after: BrushDocument = { ...before, width: 8 };
+    const after = withFirstBrush(before, (b) => ({ ...b, width: 8 }));
     const rig = makeSnapshotHost(after);
     const command = createBrushSnapshotCommand({
       label: "Resize",
@@ -114,8 +135,8 @@ describe("createBrushSnapshotCommand", () => {
   it("round-trips through a real HistoryStore", () => {
     const history = new HistoryStore();
     const v0 = createBrushDocument(2, 2);
-    const v1: BrushDocument = { ...v0, width: 3 };
-    const v2: BrushDocument = { ...v1, width: 4 };
+    const v1 = withFirstBrush(v0, (b) => ({ ...b, width: 3 }));
+    const v2 = withFirstBrush(v1, (b) => ({ ...b, width: 4 }));
     const rig = makeSnapshotHost(v0);
 
     // Two edits, each recorded BEFORE its mutation is applied.
@@ -145,26 +166,27 @@ describe("estimateBrushBytes", () => {
   });
 
   it("scales with frames × layers × width × height and never walks cells", () => {
-    const one = createBrushDocument(4, 4); // 1 frame, 1 layer, 16 cells
+    const one = createBrushDocument(4, 4); // 1 brush, 1 frame, 1 layer, 16 cells
     const base = estimateBrushBytes(one);
+    const frame0 = one.brushes[0].frames[0];
 
-    const twoLayers: BrushDocument = {
-      ...one,
+    const twoLayers = withFirstBrush(one, (b) => ({
+      ...b,
       frames: [
         {
-          ...one.frames[0],
+          ...frame0,
           layers: [
-            ...one.frames[0].layers,
+            ...frame0.layers,
             createBrushLayer("layer-2", "Layer 2", 4, 4),
           ],
         },
       ],
-    };
-    const twoFrames: BrushDocument = {
-      ...one,
-      frames: [one.frames[0], { ...one.frames[0], id: "frame-2" }],
-    };
-    const bigger: BrushDocument = { ...one, width: 8, height: 8 };
+    }));
+    const twoFrames = withFirstBrush(one, (b) => ({
+      ...b,
+      frames: [frame0, { ...frame0, id: "frame-2" }],
+    }));
+    const bigger = withFirstBrush(one, (b) => ({ ...b, width: 8, height: 8 }));
 
     const perLayer = base - 256;
     expect(estimateBrushBytes(twoLayers)).toBe(256 + 2 * perLayer);
@@ -172,23 +194,69 @@ describe("estimateBrushBytes", () => {
     expect(estimateBrushBytes(bigger)).toBe(256 + 4 * perLayer);
 
     // Cell CONTENT is irrelevant — the estimate reads width/height, not grids.
-    const painted: BrushDocument = {
-      ...one,
+    const painted = withFirstBrush(one, (b) => ({
+      ...b,
       frames: [
         {
-          ...one.frames[0],
+          ...frame0,
           layers: [
             {
-              ...one.frames[0].layers[0],
-              pixels: one.frames[0].layers[0].pixels.map((row) =>
+              ...frame0.layers[0],
+              pixels: frame0.layers[0].pixels.map((row) =>
                 row.map((): [number, number, number, number] => [1, 2, 3, 4]),
               ),
             },
           ],
         },
       ],
-    };
+    }));
     expect(estimateBrushBytes(painted)).toBe(base);
+  });
+
+  it("sums every brush by its OWN width × height × layers (multi-brush D7)", () => {
+    // Brush A: 4×4, 1 frame × 2 layers → 16 × 2 = 32 cells.
+    const a = createBrush("brush-a", "A", 4, 4);
+    const aFrame = a.frames[0];
+    const brushA: Brush = {
+      ...a,
+      frames: [
+        {
+          ...aFrame,
+          layers: [
+            ...aFrame.layers,
+            createBrushLayer("layer-2", "Layer 2", 4, 4),
+          ],
+        },
+      ],
+    };
+    // Brush B: 2×2, 3 frames × 1 layer → 4 × 3 = 12 cells.
+    const b = createBrush("brush-b", "B", 2, 2);
+    const bFrame = b.frames[0];
+    const brushB: Brush = {
+      ...b,
+      frames: [
+        bFrame,
+        { ...bFrame, id: "frame-2" },
+        { ...bFrame, id: "frame-3" },
+      ],
+    };
+    const doc: BrushDocument = {
+      ...createBrushDocument(1, 1),
+      brushes: [brushA, brushB],
+    };
+
+    // (32 + 12) cells × BYTES_PER_BRUSH_CELL (10) + BYTES_SNAPSHOT_BASE (256).
+    expect(estimateBrushBytes(doc)).toBe((32 + 12) * 10 + 256);
+    expect(estimateBrushBytes(doc)).toBe(696);
+
+    // The sum is order-independent and equals the per-brush parts minus the
+    // base counted once.
+    const onlyA: BrushDocument = { ...doc, brushes: [brushA] };
+    const onlyB: BrushDocument = { ...doc, brushes: [brushB] };
+    expect(estimateBrushBytes({ ...doc, brushes: [brushB, brushA] })).toBe(696);
+    expect(estimateBrushBytes(onlyA) + estimateBrushBytes(onlyB) - 256).toBe(
+      696,
+    );
   });
 });
 
@@ -234,6 +302,7 @@ describe("createBrushPixelCommand", () => {
     expect(applyPatch).toHaveBeenCalledTimes(1);
     const [target, applied, direction] = applyPatch.mock.calls[0];
     expect(target).toEqual(TARGET);
+    expect(target.brushId).toBe("brush-1");
     expect(direction).toBe("undo");
     expect(applied.map((c) => [c.x, c.y])).toEqual([
       [0, 0],
@@ -255,9 +324,41 @@ describe("createBrushPixelCommand", () => {
       host,
     }).redo();
 
-    const [, applied, direction] = applyPatch.mock.calls[0];
+    const [target, applied, direction] = applyPatch.mock.calls[0];
+    expect(target).toEqual(TARGET);
+    expect(target.brushId).toBe("brush-1");
     expect(direction).toBe("redo");
     expect(applied).toEqual(cells);
+  });
+
+  it("passes the brush id through to the host unchanged in BOTH directions", () => {
+    const { host, applyPatch } = makePatchHost();
+    const target = {
+      brushId: "brush-second",
+      frameId: "frame-1",
+      layerId: "layer-1",
+    };
+    const command = createBrushPixelCommand({
+      label: "Draw",
+      target,
+      cells,
+      host,
+    });
+    expect(command.target.brushId).toBe("brush-second");
+
+    command.undo();
+    command.redo();
+    expect(applyPatch).toHaveBeenCalledTimes(2);
+    const [undoTarget, , undoDirection] = applyPatch.mock.calls[0];
+    const [redoTarget, , redoDirection] = applyPatch.mock.calls[1];
+    expect(undoDirection).toBe("undo");
+    expect(redoDirection).toBe("redo");
+    expect(undoTarget.brushId).toBe("brush-second");
+    expect(redoTarget.brushId).toBe("brush-second");
+    // The same target object each time — frame and layer ids ride along, and
+    // two brushes sharing "frame-1"/"layer-1" are told apart by brushId alone.
+    expect(undoTarget).toBe(target);
+    expect(redoTarget).toBe(target);
   });
 
   it("copies the cells so the caller's working buffer cannot alter it later", () => {
