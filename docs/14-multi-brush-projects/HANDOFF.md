@@ -1,17 +1,17 @@
 # HANDOFF — Multi-brush projects (plan 14)
 
-**Current position:** W1 IN PROGRESS (2026-09-13)
+**Current position:** W2 IN PROGRESS (2026-09-13)
 **Branch:** `feat/14-multi-brush-projects`
 **Worktree:** `/Users/diniden/Desktop/self/pixel-art/.claude/worktrees/feat+14-multi-brush-projects`
 **Base:** `origin/main @ 6f1bc44` (planned against `9007990`; the only commit between is the plan itself)
-**Last commit:** (set by /plan-go)
+**Last commit:** `c815d30` (W1 complete)
 
 ## Wave ledger
 
 | Wave | Tasks | Status | Date | Commit | Gate output |
 | --- | --- | --- | --- | --- | --- |
-| W1 | 01, 02, 03, 04 | IN PROGRESS | 2026-09-13 | | |
-| W2 | 05, 06, 07 | TODO | | | |
+| W1 | 01, 02, 03, 04 | DONE (Storybook manual checks owed: 03, 04) | 2026-09-13 | `d24bf17` 02 · `51f781f` 01 · `84d42bf` 04 · `c815d30` 03 | tsc clean · eslint 0e/66w · vitest 201 files / 4393 tests · boundaries 5/5 OK · stylelint 2 pre-existing errors / 69 warnings (unchanged) · storybook build OK · server tsc/eslint clean, vitest 5 files / 109 tests · no lockfile · no snapshot change |
+| W2 | 05, 06, 07 | IN PROGRESS | 2026-09-13 | | |
 | W3 | 08, 09, 10, 11 | TODO | | | |
 | W4 | 12, 13, 14 | TODO | | | |
 | W5 | 15 | TODO | | | |
@@ -27,7 +27,10 @@ For W2 and W3 the gate column must carry the actual `tsc` file list and the actu
 | (filled by task 15 from tasks 03, 04, 12, 13, 14) | | | | |
 
 ## Deviations
-(none yet)
+- **01** — Four files beyond the named `Touches`, all revealed by the step-1 grep and inside the allowed `stores/**`/`containers/**` scope: `stores/ApplicationStore.ts` (two comment lines), `stores/domain/__tests__/BrushStructureStore.test.ts:124`, `containers/__tests__/BrushStudioPanelContainer.dom.test.tsx:50`, `containers/__tests__/BrushLayerPanelContainer.dom.test.tsx:70`. Local variables and `describe` labels renamed alongside the members; no assertion changed.
+- **04** — `Touches` addition (coordinator-authorised): `ui/components/PixelStudioPanel/__tests__/PixelStudioPanel.dom.test.tsx`, one assertion updated from the old hint sentence to the D11 one; no other W1 task owned the file. The commit was amended to include it while it was still HEAD. `PixelStudioBrushOption` is exported from the section file only (the panel re-export is task 14's if needed). Manual Storybook checks not performed (no browser).
+- **03** — `validateBrushListName` is module-private (exporting it trips `react-refresh/only-export-components`, an error); its rules are pinned through the form's DOM tests. Rename input ref is a stable `useCallback` (an inline ref re-ran `select()` per keystroke and clobbered the draft) — **note for the owner:** `BrushLayerRow.tsx` uses the inline form and may carry the same latent bug in a real browser; out of scope, untouched. Header uses the stacked panel skeleton to match the layer panel below it. Extra `Empty` story. Manual Storybook checks not performed (no browser).
+- **02** — None. Tests pin the full shape with `toStrictEqual` and a JSON round trip beyond the listed assertions.
 
 ## Notes for the next session
 - Worktree setup done 2026-09-13: `bun run install:all`, corpus JSONs (11) copied read-only from the launch checkout, gitignored `client/bun.lock`/`server/bun.lock` deleted (they reappear after every `bunx` in those dirs — delete before every commit).
