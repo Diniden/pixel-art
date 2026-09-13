@@ -1,48 +1,62 @@
 /**
- * BrushStructureStore — every STRUCTURAL edit of a brush document (Brush
- * Studio plan, `docs/01-brush-studio`, task 08; MASTER D6 / D7 / D8 / D9).
+ * BrushStructureStore — every STRUCTURAL edit of a brush project (Brush
+ * Studio plan, `docs/01-brush-studio`, task 08; multi-brush projects,
+ * `docs/14-multi-brush-projects`, task 09; MASTER D5 / D6 / D7 / D8 / D9).
  *
  * A behaviour module over `BrushStore.document`, the brush analogue of
- * `./FrameStore.ts` + `./LayerStore.ts` folded into one: frames (add /
- * duplicate / delete / rename / move / reorder), layers (add / delete / rename
- * / visibility / move / duplicate / channel type / colour source / applied
- * group), applied groups (add / rename / delete) and the document resize.
- * Each public method is exactly ONE undoable `brush.commit(...)` — one
- * whole-document snapshot entry in `BrushStore`'s own history — or a silent
- * no-op when there is no document or the target does not exist.
+ * `./FrameStore.ts` + `./LayerStore.ts` folded into one. A document is a
+ * PROJECT holding many brushes (`doc.brushes`); every frame / layer / applied
+ * group / resize op here acts on the SELECTED brush — resolved by
+ * `source.selectedBrushId`, else `brushes[0]` (`brushIn`, MASTER D4) — and
+ * the "Brushes" section manages the brushes themselves (add / duplicate /
+ * delete / rename / move). Each public method is exactly ONE undoable
+ * `brush.commit(...)` — one whole-document snapshot entry in `BrushStore`'s
+ * own history — or a silent no-op when there is no document or the target
+ * does not exist.
  *
  * ── Layers are UNIFORM across frames (D6) ──────────────────────────────────
- * A brush layer's id is stable across every frame: the same ids in the same
- * order in every `frame.layers`. So every layer op here is applied to EVERY
- * frame — "add" appends the same `{id, name, channelType}` with a fresh grid
- * to each frame, "move" swaps the same adjacent pair in each frame, "delete"
- * drops the id from each frame. There is deliberately NO per-frame reorder
- * API (MASTER §1: only layer swapping, uniform). `assertUniformLayers` runs on
- * the result of every mutate before it is committed, so a broken invariant
- * throws out of the op and the live document is left untouched.
+ * A brush layer's id is stable across every frame of ITS brush: the same ids
+ * in the same order in every `frame.layers`. So every layer op here is
+ * applied to EVERY frame of the selected brush — "add" appends the same
+ * `{id, name, channelType}` with a fresh grid to each frame, "move" swaps the
+ * same adjacent pair in each frame, "delete" drops the id from each frame.
+ * There is deliberately NO per-frame reorder API (MASTER §1: only layer
+ * swapping, uniform). `assertUniformLayers` runs on the result of every
+ * brush mutate before it is committed, so a broken invariant throws out of
+ * the op and the live document is left untouched. Frame and layer ids are
+ * unique WITHIN a brush only — `duplicateBrush` keeps them.
  *
  * ── Immutable spine writes (D8) ────────────────────────────────────────────
  * `mutate` never edits its argument. Every op returns a NEW document built by
- * spine copies — the frames array, each touched frame, its layers array, each
- * touched layer — and grids are copied only when their CONTENTS change
- * (`addFrame(copy)`, `duplicate*`, `resizeBrush`). Untouched grids are shared
- * by reference with the previous document, which is what keeps the retained
- * snapshot in history valid (`brushCommands.ts`, "held by reference").
+ * spine copies — the brushes array, the touched brush, its frames array, each
+ * touched frame, its layers array, each touched layer — and grids are copied
+ * only when their CONTENTS change (`addFrame(copy)`, `duplicate*`,
+ * `resizeBrush`). Every OTHER brush, and every untouched frame, layer and
+ * grid, is shared by reference with the previous document, which is what
+ * keeps the retained snapshot in history valid (`brushCommands.ts`, "held by
+ * reference"). `commitBrush` is the one place `doc.brushes` is replaced
+ * element-wise; the brush-list ops rebuild the array themselves.
  *
  * ── Boundaries ─────────────────────────────────────────────────────────────
  * Imports nothing from `stores/ui/**` (ESLint-enforced). The selection is
  * READ through an injected `BrushSelectionSource` and WRITTEN through an
  * injected `BrushSelectionSink` — `ApplicationStore` (task 11) passes
- * `BrushUIStore` for both, exactly the `FrameStore` / `LayerStore` pattern.
- * No `makeObservable` here: every observable write happens inside
- * `BrushStore.commit` (an action) or the sink's own actions.
+ * `BrushUIStore` for both, exactly the `FrameStore` / `LayerStore` pattern;
+ * its `selectBrush(id)` adapter supplies the document to
+ * `brushUI.selectBrush(id, doc)`. No `makeObservable` here: every observable
+ * write happens inside `BrushStore.commit` (an action) or the sink's own
+ * actions.
  */
 import {
+  assertBrushDocument,
   assertUniformLayers,
+  brushIn,
   brushLayerColorSource,
+  createBrush,
   createBrushLayer,
   createEmptyBrushGrid,
   generateId,
+  type Brush,
   type BrushAppliedGroup,
   type BrushCell,
   type BrushChannelType,
@@ -55,12 +69,15 @@ import type { BrushStore } from "./BrushStore";
 
 /** The selection ids a structural op reads. Injected, never imported. */
 export interface BrushSelectionSource {
+  readonly selectedBrushId: string | null;
   readonly selectedFrameId: string | null;
   readonly selectedLayerId: string | null;
 }
 
 /** Where a structural op writes the selection after adding or deleting. */
 export interface BrushSelectionSink {
+  /** `ApplicationStore` adapts this to `brushUI.selectBrush(id, document)`. */
+  selectBrush(id: string): void;
   selectFrame(id: string | null): void;
   selectLayer(id: string | null): void;
 }
@@ -73,6 +90,11 @@ export interface BrushStructureStoreDeps {
 
 export type BrushFrameDirection = "left" | "right";
 export type BrushLayerDirection = "up" | "down";
+/**
+ * `"up"` = toward index 0. Brushes display in ARRAY order (index 0 on top),
+ * unlike layers, whose list is reversed.
+ */
+export type BrushMoveDirection = "up" | "down";
 
 /* ── pure grid helpers ───────────────────────────────────────────────────── */
 
@@ -103,22 +125,22 @@ function resizeGrid(
   });
 }
 
-/* ── pure document helpers ───────────────────────────────────────────────── */
+/* ── pure brush helpers ──────────────────────────────────────────────────── */
 
-/** Spine-copy every frame through `fn`. */
+/** Spine-copy every frame of a brush through `fn`. */
 function mapFrames(
-  doc: BrushDocument,
+  brush: Brush,
   fn: (frame: BrushFrame, index: number) => BrushFrame,
-): BrushDocument {
-  return { ...doc, frames: doc.frames.map(fn) };
+): Brush {
+  return { ...brush, frames: brush.frames.map(fn) };
 }
 
 /** Spine-copy every layer of every frame through `fn`. */
 function mapLayers(
-  doc: BrushDocument,
+  brush: Brush,
   fn: (layer: BrushLayer, index: number, frame: BrushFrame) => BrushLayer,
-): BrushDocument {
-  return mapFrames(doc, (frame) => ({
+): Brush {
+  return mapFrames(brush, (frame) => ({
     ...frame,
     layers: frame.layers.map((layer, i) => fn(layer, i, frame)),
   }));
@@ -126,11 +148,11 @@ function mapLayers(
 
 /** Spine-copy every layer with id `id` in every frame through `fn`. */
 function mapLayer(
-  doc: BrushDocument,
+  brush: Brush,
   id: string,
   fn: (layer: BrushLayer) => BrushLayer,
-): BrushDocument {
-  return mapLayers(doc, (layer) => (layer.id === id ? fn(layer) : layer));
+): Brush {
+  return mapLayers(brush, (layer) => (layer.id === id ? fn(layer) : layer));
 }
 
 /** A layer without its `appliedGroupId` key (omitted, not `undefined`). */
@@ -164,6 +186,13 @@ function inserted<T>(items: readonly T[], index: number, item: T): T[] {
   return next;
 }
 
+/** Replace the element at `index` with `item` in a NEW array. */
+function replacedAt<T>(items: readonly T[], index: number, item: T): T[] {
+  const next = [...items];
+  next[index] = item;
+  return next;
+}
+
 /** Is `n` a usable brush dimension? Integers ≥ 1 only. */
 function isDimension(n: number): boolean {
   return Number.isInteger(n) && n >= 1;
@@ -183,11 +212,13 @@ export class BrushStructureStore {
   /* ── plumbing ─────────────────────────────────────────────────────────── */
 
   /**
-   * ONE snapshot commit. The invariant is asserted on every changed result
-   * BEFORE it reaches history or the live document; `mutate` returning its
-   * argument means "nothing to do" and `BrushStore.commit` records nothing.
-   * `bumpPixels` is passed for every op that changes what the canvas or the
-   * timeline renders; pure relabels (rename, applied group) omit it.
+   * ONE whole-document snapshot commit, used by the brush-list ops. The
+   * document invariant (≥ 1 brush, unique ids, every brush uniform) is
+   * asserted on every changed result BEFORE it reaches history or the live
+   * document; `mutate` returning its argument means "nothing to do" and
+   * `BrushStore.commit` records nothing. `bumpPixels` is passed for every op
+   * that changes what the canvas or the timeline renders; pure relabels and
+   * reorders of the brush list omit it.
    */
   private commit(
     label: string,
@@ -198,16 +229,62 @@ export class BrushStructureStore {
       label,
       (doc) => {
         const next = mutate(doc);
-        if (next !== doc) assertUniformLayers(next);
+        if (next !== doc) assertBrushDocument(next);
         return next;
       },
       { bumpPixels },
     );
   }
 
+  /**
+   * The selected brush's index in `doc.brushes`: `source.selectedBrushId` if
+   * present, else `0`, else `-1` for an empty array — the `brushIn` rule.
+   */
+  private selectedBrushIndex(doc: BrushDocument): number {
+    const id = this.source.selectedBrushId;
+    if (id !== null) {
+      const index = doc.brushes.findIndex((b) => b.id === id);
+      if (index !== -1) return index;
+    }
+    return doc.brushes.length > 0 ? 0 : -1;
+  }
+
+  /**
+   * ONE snapshot commit scoped to the SELECTED brush. The index is resolved
+   * from the LIVE document inside the commit callback; the brush goes
+   * through `mutate`, `assertUniformLayers` runs on a changed result, and
+   * the document is spine-copied — `{ ...doc, brushes: replacedAt(...) }` —
+   * so every other brush keeps its identity (MASTER R3). `mutate` returning
+   * its argument means "nothing to do" and records nothing.
+   */
+  private commitBrush(
+    label: string,
+    mutate: (brush: Brush) => Brush,
+    bumpPixels: boolean,
+  ): void {
+    this.brush.commit(
+      label,
+      (doc) => {
+        const index = this.selectedBrushIndex(doc);
+        if (index === -1) return doc;
+        const before = doc.brushes[index];
+        const next = mutate(before);
+        if (next === before) return doc;
+        assertUniformLayers(next);
+        return { ...doc, brushes: replacedAt(doc.brushes, index, next) };
+      },
+      { bumpPixels },
+    );
+  }
+
+  /** The selected brush of the live document, or `null` (the pre-check read). */
+  private selectedBrush(): Brush | null {
+    return brushIn(this.brush.document, this.source.selectedBrushId);
+  }
+
   /** The layer ids are uniform (D6), so frame 0 is THE layer list. */
-  private static layerIndexOf(doc: BrushDocument, id: string): number {
-    const first = doc.frames[0];
+  private static layerIndexOf(brush: Brush, id: string): number {
+    const first = brush.frames[0];
     return first ? first.layers.findIndex((l) => l.id === id) : -1;
   }
 
@@ -221,19 +298,19 @@ export class BrushStructureStore {
    * Selects the new frame. Returns its id, or `""` with no document.
    */
   addFrame(name?: string, copyPrevious = false): string {
-    const doc = this.brush.document;
-    if (!doc || doc.frames.length === 0) return "";
+    const brush = this.selectedBrush();
+    if (!brush || brush.frames.length === 0) return "";
 
-    const selectedIndex = doc.frames.findIndex(
+    const selectedIndex = brush.frames.findIndex(
       (f) => f.id === this.source.selectedFrameId,
     );
     const templateIndex =
-      selectedIndex >= 0 ? selectedIndex : doc.frames.length - 1;
-    const template = doc.frames[templateIndex];
+      selectedIndex >= 0 ? selectedIndex : brush.frames.length - 1;
+    const template = brush.frames[templateIndex];
     const frameId = generateId();
-    const frameName = name ?? `Frame ${doc.frames.length + 1}`;
+    const frameName = name ?? `Frame ${brush.frames.length + 1}`;
 
-    this.commit(
+    this.commitBrush(
       "Add frame",
       (current) => {
         const newFrame: BrushFrame = {
@@ -259,14 +336,14 @@ export class BrushStructureStore {
 
   /** A deep copy of frame `id` named `"<name> Copy"`, inserted after it and selected. */
   duplicateFrame(id: string): void {
-    const doc = this.brush.document;
-    if (!doc) return;
-    const sourceIndex = doc.frames.findIndex((f) => f.id === id);
+    const brush = this.selectedBrush();
+    if (!brush) return;
+    const sourceIndex = brush.frames.findIndex((f) => f.id === id);
     if (sourceIndex === -1) return;
-    const source = doc.frames[sourceIndex];
+    const source = brush.frames[sourceIndex];
     const frameId = generateId();
 
-    this.commit(
+    this.commitBrush(
       "Duplicate frame",
       (current) => {
         const newFrame: BrushFrame = {
@@ -293,15 +370,15 @@ export class BrushStructureStore {
    * selected; deleting an unselected frame leaves the selection alone.
    */
   deleteFrame(id: string): void {
-    const doc = this.brush.document;
-    if (!doc || doc.frames.length <= 1) return;
-    const index = doc.frames.findIndex((f) => f.id === id);
+    const brush = this.selectedBrush();
+    if (!brush || brush.frames.length <= 1) return;
+    const index = brush.frames.findIndex((f) => f.id === id);
     if (index === -1) return;
 
-    const remaining = doc.frames.filter((f) => f.id !== id);
+    const remaining = brush.frames.filter((f) => f.id !== id);
     const survivor = remaining[Math.max(0, index - 1)] ?? remaining[0];
 
-    this.commit(
+    this.commitBrush(
       "Delete frame",
       (current) => ({
         ...current,
@@ -315,9 +392,9 @@ export class BrushStructureStore {
   }
 
   renameFrame(id: string, name: string): void {
-    const doc = this.brush.document;
-    if (!doc || !doc.frames.some((f) => f.id === id)) return;
-    this.commit(
+    const brush = this.selectedBrush();
+    if (!brush || !brush.frames.some((f) => f.id === id)) return;
+    this.commitBrush(
       "Rename frame",
       (current) =>
         mapFrames(current, (f) => (f.id === id ? { ...f, name } : f)),
@@ -327,14 +404,14 @@ export class BrushStructureStore {
 
   /** Swap with the neighbour on that side; a no-op at either end. */
   moveFrame(id: string, direction: BrushFrameDirection): void {
-    const doc = this.brush.document;
-    if (!doc) return;
-    const index = doc.frames.findIndex((f) => f.id === id);
+    const brush = this.selectedBrush();
+    if (!brush) return;
+    const index = brush.frames.findIndex((f) => f.id === id);
     if (index === -1) return;
     const target = direction === "left" ? index - 1 : index + 1;
-    if (target < 0 || target >= doc.frames.length) return;
+    if (target < 0 || target >= brush.frames.length) return;
 
-    this.commit(
+    this.commitBrush(
       "Move frame",
       (current) => ({
         ...current,
@@ -351,15 +428,15 @@ export class BrushStructureStore {
    * the drop indicator pointed.
    */
   reorderFrame(id: string, toIndex: number): void {
-    const doc = this.brush.document;
-    if (!doc) return;
-    const fromIndex = doc.frames.findIndex((f) => f.id === id);
+    const brush = this.selectedBrush();
+    if (!brush) return;
+    const fromIndex = brush.frames.findIndex((f) => f.id === id);
     if (fromIndex === -1) return;
     if (!Number.isInteger(toIndex)) return;
-    if (toIndex < 0 || toIndex > doc.frames.length) return;
+    if (toIndex < 0 || toIndex > brush.frames.length) return;
     if (toIndex === fromIndex || toIndex === fromIndex + 1) return;
 
-    this.commit(
+    this.commitBrush(
       "Reorder frame",
       (current) => {
         const frames = [...current.frames];
@@ -384,11 +461,11 @@ export class BrushStructureStore {
     channelType: BrushChannelType,
     colorSource: BrushColorSource = "selected",
   ): string {
-    const doc = this.brush.document;
-    if (!doc) return "";
+    const brush = this.selectedBrush();
+    if (!brush) return "";
     const layerId = generateId();
 
-    this.commit(
+    this.commitBrush(
       "Add layer",
       (current) =>
         mapFrames(current, (frame) => ({
@@ -418,9 +495,9 @@ export class BrushStructureStore {
    * left alone.
    */
   deleteLayer(id: string): void {
-    const doc = this.brush.document;
-    if (!doc || doc.frames.length === 0) return;
-    const layers = doc.frames[0].layers;
+    const brush = this.selectedBrush();
+    if (!brush || brush.frames.length === 0) return;
+    const layers = brush.frames[0].layers;
     if (layers.length <= 1) return;
     const index = layers.findIndex((l) => l.id === id);
     if (index === -1) return;
@@ -428,7 +505,7 @@ export class BrushStructureStore {
     const remaining = layers.filter((l) => l.id !== id);
     const survivor = remaining[Math.max(0, index - 1)] ?? remaining[0];
 
-    this.commit(
+    this.commitBrush(
       "Delete layer",
       (current) =>
         mapFrames(current, (frame) => ({
@@ -443,9 +520,9 @@ export class BrushStructureStore {
   }
 
   renameLayer(id: string, name: string): void {
-    const doc = this.brush.document;
-    if (!doc || BrushStructureStore.layerIndexOf(doc, id) === -1) return;
-    this.commit(
+    const brush = this.selectedBrush();
+    if (!brush || BrushStructureStore.layerIndexOf(brush, id) === -1) return;
+    this.commitBrush(
       "Rename layer",
       (current) => mapLayer(current, id, (l) => ({ ...l, name })),
       false,
@@ -458,13 +535,13 @@ export class BrushStructureStore {
    * disagreed is brought back into agreement rather than flipped per frame.
    */
   toggleLayerVisibility(id: string): void {
-    const doc = this.brush.document;
-    if (!doc) return;
-    const index = BrushStructureStore.layerIndexOf(doc, id);
+    const brush = this.selectedBrush();
+    if (!brush) return;
+    const index = BrushStructureStore.layerIndexOf(brush, id);
     if (index === -1) return;
-    const visible = !doc.frames[0].layers[index].visible;
+    const visible = !brush.frames[0].layers[index].visible;
 
-    this.commit(
+    this.commitBrush(
       visible ? "Show layer" : "Hide layer",
       (current) => mapLayer(current, id, (l) => ({ ...l, visible })),
       true,
@@ -476,14 +553,14 @@ export class BrushStructureStore {
    * of the stack (the array end); a no-op at either end.
    */
   moveLayer(id: string, direction: BrushLayerDirection): void {
-    const doc = this.brush.document;
-    if (!doc || doc.frames.length === 0) return;
-    const index = BrushStructureStore.layerIndexOf(doc, id);
+    const brush = this.selectedBrush();
+    if (!brush || brush.frames.length === 0) return;
+    const index = BrushStructureStore.layerIndexOf(brush, id);
     if (index === -1) return;
     const target = direction === "up" ? index + 1 : index - 1;
-    if (target < 0 || target >= doc.frames[0].layers.length) return;
+    if (target < 0 || target >= brush.frames[0].layers.length) return;
 
-    this.commit(
+    this.commitBrush(
       "Move layer",
       (current) =>
         mapFrames(current, (frame) => ({
@@ -501,13 +578,13 @@ export class BrushStructureStore {
    * no document or no such layer.
    */
   duplicateLayer(id: string): string {
-    const doc = this.brush.document;
-    if (!doc) return "";
-    const index = BrushStructureStore.layerIndexOf(doc, id);
+    const brush = this.selectedBrush();
+    if (!brush) return "";
+    const index = BrushStructureStore.layerIndexOf(brush, id);
     if (index === -1) return "";
     const layerId = generateId();
 
-    this.commit(
+    this.commitBrush(
       "Duplicate layer",
       (current) =>
         mapFrames(current, (frame) => {
@@ -532,13 +609,13 @@ export class BrushStructureStore {
    * simply colourises differently.
    */
   setLayerChannelType(id: string, channelType: BrushChannelType): void {
-    const doc = this.brush.document;
-    if (!doc) return;
-    const index = BrushStructureStore.layerIndexOf(doc, id);
+    const brush = this.selectedBrush();
+    if (!brush) return;
+    const index = BrushStructureStore.layerIndexOf(brush, id);
     if (index === -1) return;
-    if (doc.frames[0].layers[index].channelType === channelType) return;
+    if (brush.frames[0].layers[index].channelType === channelType) return;
 
-    this.commit(
+    this.commitBrush(
       "Change channel type",
       (current) => mapLayer(current, id, (l) => ({ ...l, channelType })),
       true,
@@ -553,16 +630,18 @@ export class BrushStructureStore {
    * `domainVersion`, which is what the pixel-studio brush memo keys on.
    */
   setLayerColorSource(id: string, source: BrushColorSource): void {
-    const doc = this.brush.document;
-    if (!doc) return;
-    const index = BrushStructureStore.layerIndexOf(doc, id);
+    const brush = this.selectedBrush();
+    if (!brush) return;
+    const index = BrushStructureStore.layerIndexOf(brush, id);
     if (index === -1) return;
-    if (brushLayerColorSource(doc.frames[0].layers[index]) === source) return;
+    if (brushLayerColorSource(brush.frames[0].layers[index]) === source) {
+      return;
+    }
 
-    this.commit(
+    this.commitBrush(
       "Change colour source",
-      (d) =>
-        mapLayer(d, id, (l) =>
+      (b) =>
+        mapLayer(b, id, (l) =>
           source === "target"
             ? { ...l, colorSource: "target" }
             : withoutColorSource(l),
@@ -576,20 +655,23 @@ export class BrushStructureStore {
    * `null`. A `groupId` that is not in `appliedGroups` is ignored.
    */
   setLayerAppliedGroup(id: string, groupId: string | null): void {
-    const doc = this.brush.document;
-    if (!doc) return;
-    const index = BrushStructureStore.layerIndexOf(doc, id);
+    const brush = this.selectedBrush();
+    if (!brush) return;
+    const index = BrushStructureStore.layerIndexOf(brush, id);
     if (index === -1) return;
-    if (groupId !== null && !doc.appliedGroups.some((g) => g.id === groupId)) {
+    if (
+      groupId !== null &&
+      !brush.appliedGroups.some((g) => g.id === groupId)
+    ) {
       return;
     }
-    const current = doc.frames[0].layers[index].appliedGroupId ?? null;
+    const current = brush.frames[0].layers[index].appliedGroupId ?? null;
     if (current === groupId) return;
 
-    this.commit(
+    this.commitBrush(
       "Set applied group",
-      (d) =>
-        mapLayer(d, id, (l) =>
+      (b) =>
+        mapLayer(b, id, (l) =>
           groupId === null
             ? withoutAppliedGroup(l)
             : { ...l, appliedGroupId: groupId },
@@ -602,12 +684,12 @@ export class BrushStructureStore {
 
   /** Append a group. Returns its id, or `""` with no document. */
   addAppliedGroup(name: string): string {
-    const doc = this.brush.document;
-    if (!doc) return "";
+    const brush = this.selectedBrush();
+    if (!brush) return "";
     const groupId = generateId();
     const group: BrushAppliedGroup = { id: groupId, name };
 
-    this.commit(
+    this.commitBrush(
       "Add applied group",
       (current) => ({
         ...current,
@@ -619,9 +701,9 @@ export class BrushStructureStore {
   }
 
   renameAppliedGroup(id: string, name: string): void {
-    const doc = this.brush.document;
-    if (!doc || !doc.appliedGroups.some((g) => g.id === id)) return;
-    this.commit(
+    const brush = this.selectedBrush();
+    if (!brush || !brush.appliedGroups.some((g) => g.id === id)) return;
+    this.commitBrush(
       "Rename applied group",
       (current) => ({
         ...current,
@@ -635,9 +717,9 @@ export class BrushStructureStore {
 
   /** Remove the group and clear `appliedGroupId` on every layer that used it. */
   deleteAppliedGroup(id: string): void {
-    const doc = this.brush.document;
-    if (!doc || !doc.appliedGroups.some((g) => g.id === id)) return;
-    this.commit(
+    const brush = this.selectedBrush();
+    if (!brush || !brush.appliedGroups.some((g) => g.id === id)) return;
+    this.commitBrush(
       "Delete applied group",
       (current) => {
         const cleared = mapLayers(current, (l) =>
@@ -655,17 +737,17 @@ export class BrushStructureStore {
   /* ══ Document ═══════════════════════════════════════════════════════════ */
 
   /**
-   * Top-left anchored crop/pad of EVERY grid in every frame to
-   * `width × height`. Non-integer or sub-1 dimensions are ignored, as is a
-   * resize to the current size.
+   * Top-left anchored crop/pad of EVERY grid in every frame of the selected
+   * brush to `width × height`. Non-integer or sub-1 dimensions are ignored,
+   * as is a resize to that brush's current size.
    */
   resizeBrush(width: number, height: number): void {
-    const doc = this.brush.document;
-    if (!doc) return;
+    const brush = this.selectedBrush();
+    if (!brush) return;
     if (!isDimension(width) || !isDimension(height)) return;
-    if (doc.width === width && doc.height === height) return;
+    if (brush.width === width && brush.height === height) return;
 
-    this.commit(
+    this.commitBrush(
       "Resize brush",
       (current) => ({
         ...mapLayers(current, (l) => ({
@@ -676,6 +758,140 @@ export class BrushStructureStore {
         height,
       }),
       true,
+    );
+  }
+
+  /* ══ Brushes — the project's brush list (MASTER D5) ═════════════════════ */
+
+  /**
+   * Append a fresh `width × height` brush (one frame, one empty rgb layer)
+   * and select it. Non-integer or sub-1 dimensions are ignored. Returns the
+   * new id, or `""` with no document.
+   */
+  addBrush(name: string, width = 16, height = 16): string {
+    const doc = this.brush.document;
+    if (!doc) return "";
+    if (!isDimension(width) || !isDimension(height)) return "";
+    const brushId = generateId();
+
+    this.commit(
+      "Add brush",
+      (current) => ({
+        ...current,
+        brushes: [
+          ...current.brushes,
+          createBrush(brushId, name, width, height),
+        ],
+      }),
+      true,
+    );
+    this.select.selectBrush(brushId);
+    return brushId;
+  }
+
+  /**
+   * A deep copy of brush `id` — every grid copied, applied groups copied,
+   * frame and layer ids KEPT (they are unique within a brush only) — named
+   * `"<name> Copy"`, inserted directly after the source and selected.
+   * Returns the new id, or `""` when there is no document or no such brush.
+   */
+  duplicateBrush(id: string): string {
+    const doc = this.brush.document;
+    if (!doc) return "";
+    const sourceIndex = doc.brushes.findIndex((b) => b.id === id);
+    if (sourceIndex === -1) return "";
+    const source = doc.brushes[sourceIndex];
+    const brushId = generateId();
+
+    this.commit(
+      "Duplicate brush",
+      (current) => {
+        const copy: Brush = {
+          ...source,
+          id: brushId,
+          name: `${source.name} Copy`,
+          frames: source.frames.map((frame) => ({
+            ...frame,
+            layers: frame.layers.map((l) => ({
+              ...l,
+              pixels: copyGrid(l.pixels),
+            })),
+          })),
+          appliedGroups: source.appliedGroups.map((g) => ({ ...g })),
+        };
+        return {
+          ...current,
+          brushes: inserted(current.brushes, sourceIndex + 1, copy),
+        };
+      },
+      true,
+    );
+    this.select.selectBrush(brushId);
+    return brushId;
+  }
+
+  /**
+   * REFUSES to delete the last remaining brush (no-op). When the deleted
+   * brush was the selected one (or nothing was selected), the PREVIOUS brush
+   * (or the new first) is selected — the `deleteFrame` rule; deleting an
+   * unselected brush leaves the selection alone.
+   */
+  deleteBrush(id: string): void {
+    const doc = this.brush.document;
+    if (!doc || doc.brushes.length <= 1) return;
+    const index = doc.brushes.findIndex((b) => b.id === id);
+    if (index === -1) return;
+
+    const remaining = doc.brushes.filter((b) => b.id !== id);
+    const survivor = remaining[Math.max(0, index - 1)] ?? remaining[0];
+
+    this.commit(
+      "Delete brush",
+      (current) => ({
+        ...current,
+        brushes: current.brushes.filter((b) => b.id !== id),
+      }),
+      true,
+    );
+    if (this.source.selectedBrushId === id || !this.source.selectedBrushId) {
+      this.select.selectBrush(survivor.id);
+    }
+  }
+
+  /** Relabel one brush; every other brush is shared. No pixel bump. */
+  renameBrush(id: string, name: string): void {
+    const doc = this.brush.document;
+    if (!doc || !doc.brushes.some((b) => b.id === id)) return;
+    this.commit(
+      "Rename brush",
+      (current) => ({
+        ...current,
+        brushes: current.brushes.map((b) => (b.id === id ? { ...b, name } : b)),
+      }),
+      false,
+    );
+  }
+
+  /**
+   * Swap with the neighbour: `"up"` = index − 1 (toward the top of the
+   * displayed list), `"down"` = index + 1; a no-op at either end. The list
+   * reorders and nothing painted changes, so no pixel bump.
+   */
+  moveBrush(id: string, direction: BrushMoveDirection): void {
+    const doc = this.brush.document;
+    if (!doc) return;
+    const index = doc.brushes.findIndex((b) => b.id === id);
+    if (index === -1) return;
+    const target = direction === "up" ? index - 1 : index + 1;
+    if (target < 0 || target >= doc.brushes.length) return;
+
+    this.commit(
+      "Move brush",
+      (current) => ({
+        ...current,
+        brushes: swapped(current.brushes, index, target),
+      }),
+      false,
     );
   }
 }
