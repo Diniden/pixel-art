@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import type { BrushCell, BrushDelta } from "@/types/brush";
 import {
   DEFAULT_PIXEL_BRUSH_SCALE,
+  PIXEL_BRUSH_2D_STRATEGY_IDS,
   PIXEL_BRUSH_SCALE_OPTIONS,
   isPixelBrush2DStrategy,
   isPixelBrushScaleStrategy,
@@ -22,6 +23,7 @@ import {
   scalePixelBrushLayers,
 } from "../index";
 import type { PixelBrushScaleRequest, PixelBrushScaleStrategy } from "../index";
+import { PIXEL_BRUSH_HQ2X } from "../hqx";
 import {
   PIXEL_BRUSH_KERNEL_IDS,
   PIXEL_BRUSH_KERNELS,
@@ -92,23 +94,28 @@ function expectFresh(out: BrushCell[][], src: BrushCell[][]): void {
 /* ── Registry ──────────────────────────────────────────────────────────────── */
 
 describe("PIXEL_BRUSH_SCALE_OPTIONS", () => {
-  it("lists the 7 kernels then the 4 pixel-art scalers — 11 options", () => {
-    expect(PIXEL_BRUSH_SCALE_OPTIONS).toHaveLength(11);
+  it("lists the 7 kernels, the 4 pixel-art scalers, then hq2x — 12 options", () => {
+    expect(PIXEL_BRUSH_SCALE_OPTIONS).toHaveLength(12);
+    expect(PIXEL_BRUSH_2D_STRATEGY_IDS).toEqual([
+      ...PIXEL_BRUSH_SCALER_IDS,
+      "hq2x",
+    ]);
     expect(PIXEL_BRUSH_SCALE_OPTIONS.map((o) => o.id)).toEqual([
       ...PIXEL_BRUSH_KERNEL_IDS,
       ...PIXEL_BRUSH_SCALER_IDS,
+      "hq2x",
     ]);
     expect(PIXEL_BRUSH_SCALE_OPTIONS.map((o) => o.group)).toEqual([
       ...PIXEL_BRUSH_KERNEL_IDS.map(() => "kernel"),
-      ...PIXEL_BRUSH_SCALER_IDS.map(() => "pixel-art"),
+      ...PIXEL_BRUSH_2D_STRATEGY_IDS.map(() => "pixel-art"),
     ]);
   });
 
   it("has unique ids and unique shorts", () => {
     const ids = PIXEL_BRUSH_SCALE_OPTIONS.map((o) => o.id);
     const shorts = PIXEL_BRUSH_SCALE_OPTIONS.map((o) => o.short);
-    expect(new Set(ids).size).toBe(11);
-    expect(new Set(shorts).size).toBe(11);
+    expect(new Set(ids).size).toBe(12);
+    expect(new Set(shorts).size).toBe(12);
   });
 
   it("carries each family's label and short verbatim", () => {
@@ -116,9 +123,11 @@ describe("PIXEL_BRUSH_SCALE_OPTIONS", () => {
       const src =
         o.group === "kernel"
           ? PIXEL_BRUSH_KERNELS[o.id as (typeof PIXEL_BRUSH_KERNEL_IDS)[number]]
-          : PIXEL_BRUSH_SCALERS[
-              o.id as (typeof PIXEL_BRUSH_SCALER_IDS)[number]
-            ];
+          : o.id === "hq2x"
+            ? PIXEL_BRUSH_HQ2X
+            : PIXEL_BRUSH_SCALERS[
+                o.id as (typeof PIXEL_BRUSH_SCALER_IDS)[number]
+              ];
       expect([o.label, o.short]).toEqual([src.label, src.short]);
     }
     expect(PIXEL_BRUSH_SCALE_OPTIONS[0]).toEqual({
@@ -131,6 +140,12 @@ describe("PIXEL_BRUSH_SCALE_OPTIONS", () => {
       id: "epx",
       label: "EPX / Scale2x",
       short: "EPX",
+      group: "pixel-art",
+    });
+    expect(PIXEL_BRUSH_SCALE_OPTIONS[11]).toEqual({
+      id: "hq2x",
+      label: "hq2x",
+      short: "HQ2",
       group: "pixel-art",
     });
   });
@@ -146,16 +161,17 @@ describe("guards", () => {
     for (const id of PIXEL_BRUSH_KERNEL_IDS) {
       expect(isPixelBrush2DStrategy(id)).toBe(false);
     }
-    for (const id of PIXEL_BRUSH_SCALER_IDS) {
+    for (const id of PIXEL_BRUSH_2D_STRATEGY_IDS) {
       expect(isPixelBrush2DStrategy(id)).toBe(true);
     }
+    expect(isPixelBrush2DStrategy("hq2x")).toBe(true);
   });
 
-  it("isPixelBrushScaleStrategy accepts the 11 ids and nothing else", () => {
+  it("isPixelBrushScaleStrategy accepts the 12 ids and nothing else", () => {
     for (const o of PIXEL_BRUSH_SCALE_OPTIONS) {
       expect(isPixelBrushScaleStrategy(o.id)).toBe(true);
     }
-    for (const bad of ["hq2x", "Nearest", "", 0, null, undefined, {}, []]) {
+    for (const bad of ["hq3x", "Nearest", "", 0, null, undefined, {}, []]) {
       expect(isPixelBrushScaleStrategy(bad)).toBe(false);
     }
   });
@@ -298,16 +314,24 @@ describe("scalePixelBrushGrid — 2-D path", () => {
     );
   });
 
-  it.each(PIXEL_BRUSH_SCALER_IDS)(
+  it.each(PIXEL_BRUSH_2D_STRATEGY_IDS)(
     "%s 3×3 → 4×4 is its own single pass then nearest 6/9 → 4",
     (id) => {
-      const scaler = PIXEL_BRUSH_SCALERS[id];
+      const scaler = id === "hq2x" ? PIXEL_BRUSH_HQ2X : PIXEL_BRUSH_SCALERS[id];
       const f = scaler.factor;
       expect(scalePixelBrushGrid(src, req(3, 3, 4, 4, id))).toEqual(
         nearest(scaler.scale(src, 3, 3), 3 * f, 3 * f, 4, 4),
       );
     },
   );
+
+  it("hq2x 3×3 → 6×6 is exactly one pass; → 12×12 is two", () => {
+    const one = PIXEL_BRUSH_HQ2X.scale(src, 3, 3);
+    expect(scalePixelBrushGrid(src, req(3, 3, 6, 6, "hq2x"))).toEqual(one);
+    expect(scalePixelBrushGrid(src, req(3, 3, 12, 12, "hq2x"))).toEqual(
+      PIXEL_BRUSH_HQ2X.scale(one, 6, 6),
+    );
+  });
 
   it("a 2-D id on either axis selects the 2-D path", () => {
     const both = scalePixelBrushGrid(src, req(3, 3, 5, 5, "epx"));

@@ -4,11 +4,11 @@
  *
  * Two families of scaler live in this folder: the separable convolution
  * kernels of `kernels.ts` (one per axis) and the integer-factor pixel-art
- * scalers of `pixelArt.ts` (inherently 2-D). This module is the one place the
- * UI reads them from — `PIXEL_BRUSH_SCALE_OPTIONS` is the dropdown / thumb
- * list, kernels first in task 07's order, then the pixel-art scalers in task
- * 08's order — and the one function that scales a brush frame's layers to a
- * target size with a strategy per axis.
+ * scalers of `pixelArt.ts` plus `hqx.ts` (inherently 2-D). This module is the
+ * one place the UI reads them from — `PIXEL_BRUSH_SCALE_OPTIONS` is the
+ * dropdown / thumb list, kernels first in task 07's order, then the pixel-art
+ * scalers in task 08's order, then hq2x (task 10) — and the one function that
+ * scales a brush frame's layers to a target size with a strategy per axis.
  *
  * ## The pipeline (D10)
  *
@@ -35,15 +35,39 @@ import {
   resamplePixelBrushGrid,
 } from "./kernels";
 import type { PixelBrushKernelId } from "./kernels";
+import { PIXEL_BRUSH_HQ2X } from "./hqx";
+import type { PixelBrushHqxId } from "./hqx";
 import { PIXEL_BRUSH_SCALER_IDS, PIXEL_BRUSH_SCALERS } from "./pixelArt";
-import type { PixelBrushGrid, PixelBrushScalerId } from "./pixelArt";
+import type {
+  PixelBrushGrid,
+  PixelBrushScaler,
+  PixelBrushScalerId,
+} from "./pixelArt";
 
 export type { PixelBrushKernelId } from "./kernels";
+export type { PixelBrushHqxId } from "./hqx";
 export type { PixelBrushScalerId } from "./pixelArt";
 
 /* ── Registry ──────────────────────────────────────────────────────────────── */
 
-export type PixelBrushScaleStrategy = PixelBrushKernelId | PixelBrushScalerId;
+/** Every 2-D (integer-factor) strategy: task 08's four and task 10's hq2x. */
+export type PixelBrush2DStrategy = PixelBrushScalerId | PixelBrushHqxId;
+
+export type PixelBrushScaleStrategy = PixelBrushKernelId | PixelBrush2DStrategy;
+
+/** Task 08's `PixelBrushScaler` minus its closed `id` union. */
+type TwoDScaler = Omit<PixelBrushScaler, "id">;
+
+const TWO_D_SCALERS: Readonly<Record<PixelBrush2DStrategy, TwoDScaler>> = {
+  ...PIXEL_BRUSH_SCALERS,
+  hq2x: PIXEL_BRUSH_HQ2X,
+};
+
+/** Task 08's order, then hq2x (D7). */
+export const PIXEL_BRUSH_2D_STRATEGY_IDS: readonly PixelBrush2DStrategy[] = [
+  ...PIXEL_BRUSH_SCALER_IDS,
+  PIXEL_BRUSH_HQ2X.id,
+];
 
 export interface PixelBrushScaleOption {
   id: PixelBrushScaleStrategy;
@@ -54,21 +78,21 @@ export interface PixelBrushScaleOption {
   group: "kernel" | "pixel-art";
 }
 
-/** Kernels first, in task 07's order, then the pixel-art scalers in task 08's order (D7). */
+/** Kernels first, in task 07's order, then the 2-D scalers (task 08's order, then hq2x) (D7). */
 export const PIXEL_BRUSH_SCALE_OPTIONS: ReadonlyArray<PixelBrushScaleOption> = [
   ...PIXEL_BRUSH_KERNEL_IDS.map((id): PixelBrushScaleOption => {
     const k = PIXEL_BRUSH_KERNELS[id];
     return { id, label: k.label, short: k.short, group: "kernel" };
   }),
-  ...PIXEL_BRUSH_SCALER_IDS.map((id): PixelBrushScaleOption => {
-    const s = PIXEL_BRUSH_SCALERS[id];
+  ...PIXEL_BRUSH_2D_STRATEGY_IDS.map((id): PixelBrushScaleOption => {
+    const s = TWO_D_SCALERS[id];
     return { id, label: s.label, short: s.short, group: "pixel-art" };
   }),
 ];
 
 export const DEFAULT_PIXEL_BRUSH_SCALE: PixelBrushScaleStrategy = "nearest";
 
-const SCALER_ID_SET: ReadonlySet<string> = new Set(PIXEL_BRUSH_SCALER_IDS);
+const SCALER_ID_SET: ReadonlySet<string> = new Set(PIXEL_BRUSH_2D_STRATEGY_IDS);
 const STRATEGY_ID_SET: ReadonlySet<string> = new Set(
   PIXEL_BRUSH_SCALE_OPTIONS.map((o) => o.id),
 );
@@ -76,7 +100,7 @@ const STRATEGY_ID_SET: ReadonlySet<string> = new Set(
 /** `true` for the pixel-art (2-D) scalers; `false` for the per-axis kernels. */
 export function isPixelBrush2DStrategy(
   id: PixelBrushScaleStrategy,
-): id is PixelBrushScalerId {
+): id is PixelBrush2DStrategy {
   return SCALER_ID_SET.has(id);
 }
 
@@ -136,11 +160,11 @@ function scalePixelArt(
   srcH: number,
   dstW: number,
   dstH: number,
-  id: PixelBrushScalerId,
+  id: PixelBrush2DStrategy,
 ): BrushCell[][] {
   const need = Math.max(dstW / srcW, dstH / srcH);
   if (need <= 1) return nearest(grid, srcW, srcH, dstW, dstH);
-  const scaler = PIXEL_BRUSH_SCALERS[id];
+  const scaler = TWO_D_SCALERS[id];
   const passes = need > scaler.factor ? 2 : 1;
   let cur: PixelBrushGrid = grid;
   let w = srcW;
