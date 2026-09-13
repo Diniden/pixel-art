@@ -438,3 +438,163 @@ describe("⭐ writes go through actions.setPixels — the selection mask clips t
     expect(colorAt(5, 4)).toEqual(EXPECTED_21);
   });
 });
+
+/* ══ 5. the target sampler — a burn brush (plan 13, task 06; MASTER D5) ═════ */
+//
+// A `"target"`-sourced layer settles against the pixel ALREADY on the canvas,
+// read through the container-bound sampler over `editableGrid()`. What is
+// pinned here is the wiring end to end: the container supplies a sampler
+// that reads the real layer, the handler clears the per-stroke `touched` set
+// on press, and a packed-empty cell (`color === 0`) is never written.
+
+const CANVAS_RED: Pixel = { r: 255, g: 0, b: 0, a: 255 };
+const BURN: [number, number, number, number] = [-100, 0, 0, 0];
+const TINT: [number, number, number, number] = [0, 0, 100, 0];
+
+/** Burned once and twice from the canvas red — the pure module's answer. */
+const BURNED_RED = settlePixelBrushColor(CANVAS_RED, [
+  { channelType: "rgb", delta: BURN },
+]);
+const BURNED_TWICE = settlePixelBrushColor(BURNED_RED, [
+  { channelType: "rgb", delta: BURN },
+]);
+/** The selected-seeded cell of the mixed brush, settled from BASE. */
+const TINTED_BASE = settlePixelBrushColor(BASE, [
+  { channelType: "rgb", delta: TINT },
+]);
+
+/** A grid of packed-empty cells (`color: 0`) with the given pixels painted. */
+function packedGrid(painted: Array<[number, number, Pixel]>): PixelData[][] {
+  const grid: PixelData[][] = Array.from({ length: H }, () =>
+    Array.from({ length: W }, () => ({ color: 0, normal: 0, height: 0 })),
+  );
+  for (const [x, y, c] of painted) {
+    grid[y]![x] = { color: { ...c }, normal: 0, height: 0 };
+  }
+  return grid;
+}
+
+function projectWith(painted: Array<[number, number, Pixel]>): Project {
+  return mkProject([
+    { id: "l-1", name: "l-1", visible: true, pixels: packedGrid(painted) },
+  ]);
+}
+
+/** A 1×1 brush with one `"target"` rgb layer: −100 red. */
+function burnBrush(): BrushDocument {
+  const doc = createBrushDocument(1, 1);
+  const burn = createBrushLayer("burn", "burn", 1, 1, "rgb", "target");
+  burn.pixels[0]![0] = BURN;
+  doc.frames = [{ id: "frame-1", name: "Frame 1", layers: [burn] }];
+  return doc;
+}
+
+/**
+ * A 3×1 brush, origin (1,0): a `"target"` burn at (0,0) and a `"selected"`
+ * tint at (2,0). One press exercises both semantics on two different cells.
+ */
+function mixedBrush(): BrushDocument {
+  const doc = createBrushDocument(3, 1);
+  const burn = createBrushLayer("burn", "burn", 3, 1, "rgb", "target");
+  burn.pixels[0]![0] = BURN;
+  const tint = createBrushLayer("tint", "tint", 3, 1, "rgb");
+  tint.pixels[0]![2] = TINT;
+  doc.frames = [{ id: "frame-1", name: "Frame 1", layers: [burn, tint] }];
+  return doc;
+}
+
+/** The raw cell colour — `0` is the packed-empty sentinel, kept distinct. */
+function rawColorAt(x: number, y: number): Pixel | 0 {
+  const layer = app.currentLayer;
+  if (!layer) throw new Error("no selected layer — the fixture is wrong");
+  return layer.pixels[y]![x]!.color;
+}
+
+describe("⭐⭐ a target-sourced brush burns the pixel under it", () => {
+  it("the expected values are genuinely darkened, not the base or the canvas colour", () => {
+    expect(BURNED_RED).not.toEqual(CANVAS_RED);
+    expect(BURNED_RED).not.toEqual(BASE);
+    expect(BURNED_TWICE).not.toEqual(BURNED_RED);
+    expect(TINTED_BASE).not.toEqual(BASE);
+  });
+
+  it("⭐ a press on a red cell darkens it from ITS colour; a press on an empty cell writes nothing", () => {
+    load(projectWith([[5, 5, CANVAS_RED]]));
+    installBrush(burnBrush());
+    selectBrushTool();
+    const { surface } = mountCanvas();
+    const entriesBefore = app.history.entries.length;
+
+    tap(surface, 5, 5);
+    expect(rawColorAt(5, 5)).toEqual(BURNED_RED);
+    expect(app.history.entries.length).toBe(entriesBefore + 1);
+
+    tap(surface, 6, 5);
+    expect(rawColorAt(6, 5)).toBe(0);
+    expect(paintedCells()).toEqual(["5,5"]);
+    // The empty stroke still records its (empty) entry — one per stroke.
+    expect(app.history.entries.length).toBe(entriesBefore + 2);
+  });
+
+  it("⭐ a back-and-forth drag in ONE stroke burns a cell once; a second stroke burns it again", () => {
+    load(projectWith([[5, 5, CANVAS_RED]]));
+    installBrush(burnBrush());
+    selectBrushTool();
+    const { surface } = mountCanvas();
+    const entriesBefore = app.history.entries.length;
+
+    // (5,5) → (7,5) → (5,5): the segment crosses (5,5) at the press and
+    // again on the way back. Without the per-stroke `touched` set the
+    // second crossing would read the already-burned pixel and burn it again.
+    drag(surface, [
+      [5, 5],
+      [7, 5],
+      [5, 5],
+    ]);
+    expect(rawColorAt(5, 5)).toEqual(BURNED_RED);
+    expect(rawColorAt(6, 5)).toBe(0);
+    expect(rawColorAt(7, 5)).toBe(0);
+    expect(app.history.entries.length).toBe(entriesBefore + 1);
+
+    // A new press clears `touched`, so the same cell compounds.
+    tap(surface, 5, 5);
+    expect(rawColorAt(5, 5)).toEqual(BURNED_TWICE);
+    expect(app.history.entries.length).toBe(entriesBefore + 2);
+  });
+
+  it("app.undo() restores the pre-burn pixel in one step", () => {
+    load(projectWith([[5, 5, CANVAS_RED]]));
+    installBrush(burnBrush());
+    selectBrushTool();
+    const { surface } = mountCanvas();
+
+    tap(surface, 5, 5);
+    expect(rawColorAt(5, 5)).toEqual(BURNED_RED);
+    act(() => {
+      app.undo();
+    });
+    expect(rawColorAt(5, 5)).toEqual(CANVAS_RED);
+  });
+
+  it("⭐ a mixed brush shows both semantics in one press: the target cell burns the canvas, the selected cell paints the base", () => {
+    // Red at (4,5) — under the target cell (dx −1) of a press at (5,5) —
+    // and nothing at (6,5), under the selected cell (dx +1).
+    load(projectWith([[4, 5, CANVAS_RED]]));
+    installBrush(mixedBrush());
+    selectBrushTool();
+    const { surface } = mountCanvas();
+
+    tap(surface, 5, 5);
+    expect(rawColorAt(4, 5)).toEqual(BURNED_RED);
+    expect(rawColorAt(6, 5)).toEqual(TINTED_BASE);
+    // The brush's unpainted centre writes nothing.
+    expect(rawColorAt(5, 5)).toBe(0);
+    expect(paintedCells()).toEqual(["4,5", "6,5"]);
+
+    // Over empty canvas the target cell is skipped while the selected cell
+    // still paints — the two seeds are independent within one stamp.
+    tap(surface, 1, 5);
+    expect(rawColorAt(0, 5)).toBe(0);
+    expect(rawColorAt(2, 5)).toEqual(TINTED_BASE);
+  });
+});

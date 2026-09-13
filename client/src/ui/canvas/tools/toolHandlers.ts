@@ -54,7 +54,7 @@ import type {
   StampPoint,
 } from "./brushStamp";
 import { stampPixelBrushSegment } from "./pixelBrushStamp";
-import type { PixelBrushStamp } from "./pixelBrushStamp";
+import type { PixelBrushStamp, PixelBrushTarget } from "./pixelBrushStamp";
 // Type-only: a string union, erased at build time. Used solely by the
 // exhaustiveness gate at the bottom of this file.
 import type { Tool as DomainTool } from "../../../types/domain";
@@ -103,6 +103,15 @@ export interface ToolContext {
    * studio's own `buildBrushToolContext` compiles untouched (MASTER D8).
    */
   pixelBrushStamp?: PixelBrushStamp | null;
+  /**
+   * What a `"target"`-seeded stamp cell needs at write time (plan 13, task
+   * 06; MASTER D5): a sampler bound by the container over the grid
+   * `setPixels` writes, and the per-stroke `touched` set the `brush` handler
+   * clears on press. `null` / absent = every cell writes its pre-settled
+   * `color` (the selected-seed fallback). OPTIONAL for the same reason as
+   * `pixelBrushStamp`: the Brush Studio's context never supplies one.
+   */
+  pixelBrushTarget?: PixelBrushTarget | null;
 
   /* — shape-tool settings — */
   shapeMode: string;
@@ -291,12 +300,27 @@ export const toolHandlers = {
   // the stroke still opens (one empty undo entry, exactly like a pencil that
   // paints nothing) and writes nothing. `ctx` satisfies `StampBounds` through
   // `gridWidth` / `gridHeight`.
+  //
+  // Target-seeded cells (plan 13, MASTER D5) settle against the canvas pixel
+  // at write time, at most once per cell per STROKE — so `onDown` clears the
+  // target's `touched` set BEFORE its first stamp. Clearing it anywhere later
+  // (or never) makes a second stroke skip the cells the first one burned,
+  // or a back-and-forth drag burn a cell twice.
   brush: {
     onDown: (e, ctx) => {
       ctx.beginStroke();
       const stamp = ctx.pixelBrushStamp ?? null;
+      const target = ctx.pixelBrushTarget ?? null;
+      target?.touched.clear();
       if (stamp) {
-        const w = stampPixelBrushSegment(null, e.coords, ctx.line, stamp, ctx);
+        const w = stampPixelBrushSegment(
+          null,
+          e.coords,
+          ctx.line,
+          stamp,
+          ctx,
+          target,
+        );
         if (w.length > 0) ctx.setPixels(w);
       }
       ctx.setLastStrokePixel(e.coords);
@@ -310,6 +334,7 @@ export const toolHandlers = {
           ctx.line,
           stamp,
           ctx,
+          ctx.pixelBrushTarget ?? null,
         );
         if (w.length > 0) ctx.setPixels(w);
       }

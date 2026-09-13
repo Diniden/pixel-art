@@ -10,7 +10,12 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import type { LineFn, StampPoint } from "../brushStamp";
-import type { PixelBrushStamp } from "../pixelBrushStamp";
+import { settlePixelBrushColor } from "../pixelBrushStamp";
+import type {
+  PixelBrushLayerDelta,
+  PixelBrushStamp,
+  PixelBrushTarget,
+} from "../pixelBrushStamp";
 import { getToolHandler, toolHandlers } from "../toolHandlers";
 import type { ToolContext, ToolEvent } from "../toolHandlers";
 
@@ -205,6 +210,137 @@ describe("toolHandlers.brush", () => {
         { x: 3, y: 3, color: { r: 1, g: 2, b: 3, a: 4 } },
       ]);
       expect(ctx.setLastStrokePixel).toHaveBeenCalledWith({ x: 3, y: 3 });
+    });
+  });
+
+  /* ── the target sampler (plan 13, task 06; MASTER D5) ─────────────────── */
+
+  describe("pixelBrushTarget — target-seeded cells settle through the injected sampler", () => {
+    const BURN: PixelBrushLayerDelta[] = [
+      { channelType: "rgb", delta: [-100, 0, 0, 0] },
+    ];
+    /** A 1×1 stamp whose only cell is target-seeded; `color` is its fallback. */
+    const TARGET_STAMP: PixelBrushStamp = {
+      width: 1,
+      height: 1,
+      originX: 0,
+      originY: 0,
+      cells: [
+        { dx: 0, dy: 0, color: { r: 7, g: 7, b: 7, a: 7 }, targetDeltas: BURN },
+      ],
+    };
+    const RED = { r: 250, g: 20, b: 30, a: 255 };
+    const BURNED = settlePixelBrushColor(RED, BURN);
+    /** Red at (5,7) only; every other cell is empty (`null`). */
+    const sampleRedAt57 = (x: number, y: number) =>
+      x === 5 && y === 7 ? { ...RED } : null;
+
+    function fakeTarget(touched: number[] = []): PixelBrushTarget {
+      return { sample: vi.fn(sampleRedAt57), touched: new Set(touched) };
+    }
+
+    it("⭐ onDown clears `touched` BEFORE the first stamp, then writes the settled target colour", () => {
+      // Pre-seed `touched` with the very cell the press lands on (key
+      // 7 * 16 + 5). If the handler stamped first and cleared afterwards
+      // (or never cleared), the stamp would skip the cell as "already
+      // settled this stroke" and nothing would be written.
+      const target = fakeTarget([7 * 16 + 5, 3]);
+      const ctx = fakeContext({
+        pixelBrushStamp: TARGET_STAMP,
+        pixelBrushTarget: target,
+      });
+      toolHandlers.brush.onDown(down({ x: 5, y: 7 }), ctx);
+
+      expect(target.sample).toHaveBeenCalledWith(5, 7);
+      expect(vi.mocked(ctx.setPixels).mock.calls[0]![0]).toEqual([
+        { x: 5, y: 7, color: BURNED },
+      ]);
+      // Not the fallback `color`, and genuinely darkened.
+      expect(BURNED).not.toEqual({ r: 7, g: 7, b: 7, a: 7 });
+      expect(BURNED).toEqual({ r: 150, g: 20, b: 30, a: 255 });
+      // The stale entries are gone; only this stroke's cell remains.
+      expect([...target.touched]).toEqual([7 * 16 + 5]);
+    });
+
+    it("onDown over an empty target pixel writes nothing (a burn on nothing is nothing)", () => {
+      const target = fakeTarget();
+      const ctx = fakeContext({
+        pixelBrushStamp: TARGET_STAMP,
+        pixelBrushTarget: target,
+      });
+      toolHandlers.brush.onDown(down({ x: 2, y: 2 }), ctx);
+      expect(target.sample).toHaveBeenCalledWith(2, 2);
+      expect(ctx.setPixels).not.toHaveBeenCalled();
+      expect(ctx.beginStroke).toHaveBeenCalledTimes(1);
+      expect(target.touched.size).toBe(0);
+    });
+
+    it("⭐ onMove passes the target: a cell already touched this stroke is NOT re-settled", () => {
+      // The fake line visits (3,7), (99,99), (5,7). (5,7) is red but was
+      // settled earlier in this stroke, so it must be skipped — and the
+      // handler must NOT clear `touched` on a move.
+      const target = fakeTarget([7 * 16 + 5]);
+      const ctx = fakeContext({
+        pixelBrushStamp: TARGET_STAMP,
+        pixelBrushTarget: target,
+        lastStrokePixel: { x: 3, y: 7 },
+      });
+      toolHandlers.brush.onMove(move({ x: 5, y: 7 }, { x: 3, y: 7 }), ctx);
+
+      expect(ctx.line).toHaveBeenCalledWith({ x: 3, y: 7 }, { x: 5, y: 7 });
+      expect(target.sample).toHaveBeenCalledWith(3, 7);
+      expect(target.sample).not.toHaveBeenCalledWith(5, 7);
+      expect(ctx.setPixels).not.toHaveBeenCalled();
+      expect([...target.touched]).toEqual([7 * 16 + 5]);
+      expect(ctx.setLastStrokePixel).toHaveBeenCalledWith({ x: 5, y: 7 });
+    });
+
+    it("onMove settles an untouched red cell and marks it", () => {
+      const target = fakeTarget();
+      const ctx = fakeContext({
+        pixelBrushStamp: TARGET_STAMP,
+        pixelBrushTarget: target,
+        lastStrokePixel: { x: 3, y: 7 },
+      });
+      toolHandlers.brush.onMove(move({ x: 5, y: 7 }, { x: 3, y: 7 }), ctx);
+      expect(vi.mocked(ctx.setPixels).mock.calls[0]![0]).toEqual([
+        { x: 5, y: 7, color: BURNED },
+      ]);
+      expect([...target.touched]).toEqual([7 * 16 + 5]);
+    });
+
+    it("⭐ with `pixelBrushTarget` absent or null, a target cell writes its fallback `color` — the pre-task-06 output", () => {
+      for (const overrides of [{}, { pixelBrushTarget: null }]) {
+        const ctx = fakeContext({
+          pixelBrushStamp: TARGET_STAMP,
+          ...overrides,
+        });
+        toolHandlers.brush.onDown(down({ x: 5, y: 7 }), ctx);
+        expect(vi.mocked(ctx.setPixels).mock.calls[0]![0]).toEqual([
+          { x: 5, y: 7, color: { r: 7, g: 7, b: 7, a: 7 } },
+        ]);
+        toolHandlers.brush.onMove(move({ x: 2, y: 2 }, { x: 5, y: 7 }), {
+          ...ctx,
+          lastStrokePixel: { x: 5, y: 7 },
+        });
+        // A press and a move, each with the fallback colour.
+        expect(vi.mocked(ctx.setPixels).mock.calls[1]![0]).toEqual([
+          { x: 5, y: 7, color: { r: 7, g: 7, b: 7, a: 7 } },
+          { x: 2, y: 2, color: { r: 7, g: 7, b: 7, a: 7 } },
+        ]);
+      }
+    });
+
+    it("a selected-seeded stamp never consults the sampler even when a target is supplied", () => {
+      const target = fakeTarget();
+      const ctx = fakeContext({
+        pixelBrushStamp: STAMP,
+        pixelBrushTarget: target,
+      });
+      toolHandlers.brush.onDown(down({ x: 5, y: 7 }), ctx);
+      expect(target.sample).not.toHaveBeenCalled();
+      expect(target.touched.size).toBe(0);
+      expect(vi.mocked(ctx.setPixels).mock.calls[0]![0]).toHaveLength(3);
     });
   });
 });
