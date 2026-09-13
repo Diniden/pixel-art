@@ -142,6 +142,8 @@ A checklist. Every item objectively checkable.
 
 **Current position:** W1 not started
 **Branch:** (set by /plan-go)
+**Worktree:** (set by /plan-go)
+**Base:** (set by /plan-go — origin/main SHA the branch was cut from)
 **Last commit:** (set by /plan-go)
 
 ## Wave ledger
