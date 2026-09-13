@@ -1,0 +1,227 @@
+/* brush-list — BEM block (multi-brush plan, task 03; MASTER D8).
+
+   The rail's list of the brushes INSIDE the open project. Panel chrome
+   (`panel`, `panel__header`, `panel__header--stacked`, `panel__title`,
+   `panel__body`) comes from styles/blocks/panel.css; the form buttons are
+   blocks/btn.css modifiers (btn--ghost / btn--primary). The header button
+   and the row's hover-revealed action strip follow BrushLayerPanel.css (the
+   panel that sits directly below this one), the form and the row geometry
+   follow BrushLibrary.css (the panel this replaces). Tokens only. */
+
+.brush-list {
+  flex-shrink: 0;
+}
+
+/* elements, DOM order */
+
+.brush-list__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.brush-list__header-btn {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  padding: 0;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-primary);
+  border: none;
+  color: var(--white);
+  cursor: pointer;
+}
+
+.brush-list__new-form {
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.brush-list__label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+}
+
+.brush-list__name-input {
+  width: 100%;
+}
+
+.brush-list__size-inputs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brush-list__size-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+}
+
+.brush-list__size-input {
+  width: 60px;
+  padding: var(--space-1-5) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.brush-list__size-separator {
+  color: var(--text-muted);
+}
+
+.brush-list__error {
+  padding: var(--space-1-5) var(--space-2);
+  background: var(--accent-danger-10);
+  border: 1px solid var(--accent-danger-30);
+  border-radius: var(--radius-sm);
+  color: var(--accent-danger);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.brush-list__form-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.brush-list__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.brush-list__row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.brush-list__row:hover {
+  background: var(--bg-hover);
+}
+
+.brush-list__thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.brush-list__thumb-canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.brush-list__name {
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.brush-list__rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-0-5) var(--space-1-5);
+  font-size: var(--text-sm);
+}
+
+.brush-list__size {
+  font-size: var(--text-70);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.brush-list__actions {
+  display: flex;
+  gap: var(--space-0-5);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.brush-list__row:hover .brush-list__actions {
+  opacity: 1;
+}
+
+/* iOS two-tap trap (see LayerPanel.css): on a device with no hover there is
+   nothing to reveal, so keep the strip visible. */
+@media (hover: none) {
+  .brush-list__actions {
+    opacity: 1;
+  }
+}
+
+.brush-list__action-btn {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: var(--text-px-9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.brush-list__action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.brush-list__action-btn:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.brush-list__empty {
+  padding: var(--space-4);
+}
+
+/* modifiers */
+
+.brush-list__header-btn--active {
+  background: var(--accent-hover);
+}
+
+.brush-list__row.brush-list__row--selected {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-10);
+}
+
+.brush-list__action-btn--danger:hover:not(:disabled) {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
