@@ -34,7 +34,7 @@
  * takes the whole right rail while the mode is on.
  *
  * ⚠️ `useRailLayout`'s rail labels ("Objects & Layers") are hard-coded in
- * `hooks/useRailLayout.tsx` and read slightly wrong over the brush library —
+ * `hooks/useRailLayout.tsx` and read slightly wrong over the brush list —
  * cosmetic, out of this task's `Touches`, noted for the final sweep.
  *
  * ── The canvas region: one or two panes (follow-ups task 09, D5) ──────────
@@ -51,7 +51,7 @@ import { BrushStudioLayout } from "../ui/layouts/BrushStudioLayout/BrushStudioLa
 import { CanvasSplit } from "../ui/components/CanvasSplit/CanvasSplit";
 import { HeaderContainer } from "./HeaderContainer";
 import { ToolbarContainer } from "./ToolbarContainer";
-import { BrushLibraryContainer } from "./BrushLibraryContainer";
+import { BrushListContainer } from "./BrushListContainer";
 import { BrushLayerPanelContainer } from "./BrushLayerPanelContainer";
 import { RightSidebarTopControlsContainer } from "./RightSidebarTopControlsContainer";
 import { BrushStudioPanelContainer } from "./BrushStudioPanelContainer";
@@ -87,7 +87,9 @@ export const BrushStudioContainer = observer(function BrushStudioContainer() {
         {...layoutProps}
         header={<HeaderContainer />}
         toolbar={<ToolbarContainer />}
-        brushLibrary={<BrushLibraryContainer />}
+        // The brushes INSIDE the open project (multi-brush plan, MASTER D9);
+        // the header's "Brush Projects" modal is where FILES are managed.
+        brushList={<BrushListContainer />}
         layerPanel={<BrushLayerPanelContainer />}
         // Other Hand Mode hands the whole rail to one section — see
         // `PixelStudioContainer` for the same swap.

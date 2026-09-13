@@ -1,12 +1,16 @@
 /**
- * Brush-name validation (Brush Studio plan, task 13).
+ * Brush PROJECT file-name validation (Brush Studio plan, task 13; moved
+ * beside its only remaining user by the multi-brush plan, task 13 / D9).
  *
- * The one rule both `BrushLibrary`'s inline create form and
- * `BrushSelectModal`'s create / rename forms apply before they call out.
- * The pattern is `ProjectSelectModal`'s, verbatim: brush files are stored
- * beside project files and are validated server-side by the same
- * `isValidProjectName` (MASTER D12), so the client-side gate must not be
- * looser than the project one.
+ * The rule `BrushSelectModal`'s create / rename forms apply before they call
+ * out. The pattern is `ProjectSelectModal`'s, verbatim: brush project files
+ * are stored beside pixel project files and are validated server-side by the
+ * same `isValidProjectName` (plan 01 MASTER D12), so the client-side gate
+ * must not be looser than the project one.
+ *
+ * ⚠️ This validates FILE names. A brush INSIDE a project has its own, looser
+ * rule (`BrushList`'s module-private validator, MASTER 14 D8) — do not reach
+ * for this one from the rail.
  *
  * Pure: no imports.
  */

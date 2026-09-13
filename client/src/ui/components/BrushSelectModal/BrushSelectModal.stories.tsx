@@ -20,8 +20,9 @@ const meta = {
     docs: {
       description: {
         component:
-          "The Header's brush-file chooser: switch, create (with width and " +
-          "height), rename the current brush, and delete it behind a " +
+          "The Header's brush PROJECT chooser — a project is one file holding " +
+          "a set of brushes: switch, create (with the first brush's width and " +
+          "height), rename the current project, and delete it behind a " +
           "`ConfirmDialog`. The brush counterpart of `ProjectSelectModal`, on " +
           "the `Modal` primitive.",
       },

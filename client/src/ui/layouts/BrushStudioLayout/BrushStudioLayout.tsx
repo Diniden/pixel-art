@@ -18,8 +18,10 @@
  * discriminant — the runtime branch the layouts exist to dissolve. The brush
  * studio has:
  *
- *   - a **`brushLibrary`** where the other two have `objectLibrary` — the left
- *     rail lists brush FILES, not the project's objects (MASTER D16);
+ *   - a **`brushList`** where the other two have `objectLibrary` — the left
+ *     rail lists the brushes INSIDE the open brush project (multi-brush plan,
+ *     MASTER D9), not the pixel project's objects and not brush FILES (those
+ *     are the header's "Brush Projects" modal);
  *   - **no `FrameReferencePanel`** and **no `ReferenceImagePanel`** — those are
  *     pixel-project affordances with no brush-document counterpart;
  *   - an OPTIONAL **`canvasInfo`** strip, unlike the pixel layout (required)
@@ -44,8 +46,11 @@ import type { AppShellProps } from "../../components/AppShell/AppShell";
 export interface BrushStudioLayoutProps {
   header: ReactNode;
   toolbar: ReactNode;
-  /** The brush FILE list — the left rail's top section (MASTER D16). */
-  brushLibrary: ReactNode;
+  /**
+   * The brushes INSIDE the open project — the left rail's top section
+   * (multi-brush plan, MASTER D9).
+   */
+  brushList: ReactNode;
   /** The brush layer panel — the left rail's bottom section (MASTER D16). */
   layerPanel: ReactNode;
   rightControls: ReactNode;
@@ -94,7 +99,7 @@ export interface BrushStudioLayoutProps {
 export function BrushStudioLayout({
   header,
   toolbar,
-  brushLibrary,
+  brushList,
   layerPanel,
   rightControls,
   studioPanel,
@@ -120,7 +125,7 @@ export function BrushStudioLayout({
       leftPanel={
         hiddenRails?.has("left") ? undefined : (
           <>
-            {brushLibrary}
+            {brushList}
             {layerPanel}
           </>
         )

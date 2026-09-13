@@ -32,7 +32,7 @@ import { NumberInput } from "../../primitives/NumberInput/NumberInput";
 import { EmptyState } from "../../primitives/EmptyState/EmptyState";
 import { Icon } from "../../primitives/Icon/Icon";
 import { classNames } from "../../classNames";
-import { validateBrushName } from "../BrushLibrary/brushName";
+import { validateBrushName } from "./brushName";
 import "./BrushSelectModal.css";
 
 const DEFAULT_BRUSH_SIZE = 16;
@@ -200,8 +200,9 @@ export function BrushSelectModal({
       }
     >
       <p className="brush-select-modal__intro">
-        Each brush project is one file holding a whole brush — its layers and
-        frames. Switch, create, rename or delete brush project files here.
+        Each brush project is one file holding a set of brushes — each with its
+        own size, layers and frames. Switch, create, rename or delete brush
+        project files here.
       </p>
 
       {error && (
