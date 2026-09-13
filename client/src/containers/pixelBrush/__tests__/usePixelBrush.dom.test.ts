@@ -16,6 +16,11 @@
  *     on to avoid rebuilding at pointer rate.
  *   - A new base colour, a frame switch and a document change each yield a
  *     new stamp; `document === null` yields `null` for both.
+ *   - Scaling (plan 13, task 12; MASTER D12): the frame's layers are scaled
+ *     per `ui.pixelBrush` before the footprint / stamp, at the scaled size;
+ *     a strategy change re-resolves; a brush with different native
+ *     dimensions resets the size to native; `size` reports the effective
+ *     size. At native size the stability case above holds unchanged.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
@@ -26,6 +31,7 @@ import { runInAction } from "mobx";
 import { ApplicationStore } from "@/stores/ApplicationStore";
 import { createBrushDocument, createBrushLayer } from "@/types";
 import type { BrushDocument } from "@/types";
+import { scalePixelBrushLayers } from "@/ui/canvas/tools/pixelBrushScale";
 import {
   pixelBrushFootprint,
   resolvePixelBrushStamp,
@@ -272,5 +278,180 @@ describe("usePixelBrush — footprint and stamp", () => {
     h.rerender({ enabled: true });
     expect(h.latest().footprint?.offsets).toHaveLength(2);
     expect(h.latest().stamp?.cells).toHaveLength(2);
+  });
+});
+
+/* ── scaling (plan 13, task 12) ────────────────────────────────────────────── */
+
+/** A 4×4 brush painted at (1,1) only — a different native size from `threeByThree`. */
+function fourByFour(): BrushDocument {
+  const doc = createBrushDocument(4, 4);
+  doc.frames[0]!.layers[0]!.pixels[1]![1] = [5, 0, 0, 0];
+  return doc;
+}
+
+const NATIVE_3 = { width: 3, height: 3 };
+
+describe("usePixelBrush — scaling from ui.pixelBrush", () => {
+  it("⭐ at native size `size` is the document's own and the layers pass through unscaled", () => {
+    const doc = threeByThree();
+    installLoaded(doc);
+    const h = mount(true, RED);
+    expect(app.ui.pixelBrush.isNative).toBe(true);
+    expect(h.latest().size).toEqual({ width: 3, height: 3 });
+    // The identity path: exactly the pure module's answer for the frame's
+    // own layers at the native size (the stability case above is the
+    // reference-equality half of this guarantee).
+    expect(h.latest().footprint).toEqual(
+      pixelBrushFootprint(doc.frames[0]!.layers, 3, 3),
+    );
+  });
+
+  it("⭐ setWidth(6) on a 3×3 brush (locked → 6×6) gives a nearest footprint of 4 × |painted| cells", () => {
+    const doc = threeByThree();
+    installLoaded(doc);
+    const h = mount(true, RED);
+    const nativeStamp = h.latest().stamp;
+
+    act(() => {
+      app.ui.pixelBrush.setWidth(6, NATIVE_3);
+    });
+    expect(app.ui.pixelBrush.width).toBe(6);
+    expect(app.ui.pixelBrush.height).toBe(6);
+
+    const { footprint, stamp, size } = h.latest();
+    expect(size).toEqual({ width: 6, height: 6 });
+
+    // Two painted source cells, each a 2×2 block at 2× nearest → 8 cells.
+    // Origin of a 6×6 is (3,3): (0,0) → x 0..1, y 0..1; (2,1) → x 4..5, y 2..3.
+    expect(footprint?.width).toBe(6);
+    expect(footprint?.height).toBe(6);
+    expect(footprint?.offsets).toHaveLength(8);
+    expect(footprint?.offsets).toEqual([
+      { dx: -3, dy: -3 },
+      { dx: -2, dy: -3 },
+      { dx: -3, dy: -2 },
+      { dx: -2, dy: -2 },
+      { dx: 1, dy: -1 },
+      { dx: 2, dy: -1 },
+      { dx: 1, dy: 0 },
+      { dx: 2, dy: 0 },
+    ]);
+
+    // And both equal the pure pipeline fed the same request.
+    const scaledLayers = scalePixelBrushLayers(doc.frames[0]!.layers, {
+      srcW: 3,
+      srcH: 3,
+      dstW: 6,
+      dstH: 6,
+      x: "nearest",
+      y: "nearest",
+    });
+    expect(footprint).toEqual(pixelBrushFootprint(scaledLayers, 6, 6));
+    expect(stamp).not.toBe(nativeStamp);
+    expect(stamp).toEqual(resolvePixelBrushStamp(scaledLayers, 6, 6, RED));
+    expect(stamp?.cells).toHaveLength(8);
+    // The (2,1)-derived block still carries the hsl lightness shift (g > 0),
+    // and the (0,0)-derived block is the clamped red — nearest clones tuples.
+    expect(stamp?.cells[0]!.color).toEqual({ r: 255, g: 0, b: 0, a: 255 });
+    expect(stamp?.cells[7]!.color.g).toBeGreaterThan(0);
+  });
+
+  it("at a scaled size the stamp reference is still stable across a re-render with an equal colour", () => {
+    installLoaded(threeByThree());
+    const h = mount(true, RED);
+    act(() => {
+      app.ui.pixelBrush.setWidth(6, NATIVE_3);
+    });
+    const first = h.latest().stamp;
+    const firstFootprint = h.latest().footprint;
+    const firstSize = h.latest().size;
+    h.rerender({ base: { ...RED } });
+    expect(h.latest().stamp).toBe(first);
+    expect(h.latest().footprint).toBe(firstFootprint);
+    expect(h.latest().size).toBe(firstSize);
+  });
+
+  it("⭐ switching the strategy to bilinear re-resolves the footprint and stamp", () => {
+    const doc = threeByThree();
+    installLoaded(doc);
+    const h = mount(true, RED);
+    act(() => {
+      app.ui.pixelBrush.setWidth(6, NATIVE_3);
+    });
+    const nearestFootprint = h.latest().footprint;
+    const nearestStamp = h.latest().stamp;
+
+    act(() => {
+      app.ui.pixelBrush.setScale("x", "bilinear");
+    });
+    // Locked → both axes (D11); the hook follows whatever the store holds.
+    expect(app.ui.pixelBrush.scaleX).toBe("bilinear");
+    expect(app.ui.pixelBrush.scaleY).toBe("bilinear");
+
+    const { footprint, stamp } = h.latest();
+    expect(footprint).not.toBe(nearestFootprint);
+    expect(stamp).not.toBe(nearestStamp);
+    const scaledLayers = scalePixelBrushLayers(doc.frames[0]!.layers, {
+      srcW: 3,
+      srcH: 3,
+      dstW: 6,
+      dstH: 6,
+      x: "bilinear",
+      y: "bilinear",
+    });
+    expect(footprint).toEqual(pixelBrushFootprint(scaledLayers, 6, 6));
+    expect(stamp).toEqual(resolvePixelBrushStamp(scaledLayers, 6, 6, RED));
+  });
+
+  it("⭐ installing a 4×4 document after a 3×3 resets width/height to null; strategies are kept", () => {
+    installLoaded(threeByThree());
+    const h = mount(true, RED);
+    act(() => {
+      app.ui.pixelBrush.setWidth(6, NATIVE_3);
+      app.ui.pixelBrush.setScale("x", "bilinear");
+    });
+    expect(app.ui.pixelBrush.width).toBe(6);
+    expect(h.latest().size).toEqual({ width: 6, height: 6 });
+
+    act(() => {
+      installLoaded(fourByFour());
+    });
+    expect(app.ui.pixelBrush.width).toBeNull();
+    expect(app.ui.pixelBrush.height).toBeNull();
+    expect(app.ui.pixelBrush.lockedRatio).toBeNull();
+    // `resetSize`, not `resetAll`: the strategy choice survives (D11).
+    expect(app.ui.pixelBrush.scaleX).toBe("bilinear");
+    expect(h.latest().size).toEqual({ width: 4, height: 4 });
+    // The new brush at ITS native size: origin (2,2), one cell at (1,1).
+    expect(h.latest().footprint?.offsets).toEqual([{ dx: -1, dy: -1 }]);
+  });
+
+  it("installing another document with the SAME native size keeps the chosen size", () => {
+    installLoaded(threeByThree());
+    const h = mount(true, RED);
+    act(() => {
+      app.ui.pixelBrush.setWidth(6, NATIVE_3);
+    });
+    act(() => {
+      installLoaded(threeByThree());
+    });
+    expect(app.ui.pixelBrush.width).toBe(6);
+    expect(app.ui.pixelBrush.height).toBe(6);
+    expect(h.latest().size).toEqual({ width: 6, height: 6 });
+  });
+
+  it("`size` is null with no document and while disabled", () => {
+    installLoaded(null);
+    const h = mount(true, RED);
+    expect(h.latest().size).toBeNull();
+
+    act(() => {
+      installLoaded(threeByThree());
+    });
+    h.rerender({ enabled: false });
+    expect(h.latest().size).toBeNull();
+    h.rerender({ enabled: true });
+    expect(h.latest().size).toEqual({ width: 3, height: 3 });
   });
 });
