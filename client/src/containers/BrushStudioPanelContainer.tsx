@@ -156,8 +156,9 @@ export const BrushStudioPanelContainer = observer(
     const tool = ui.tool;
 
     // `document` is `observable.ref` (D8): this read tracks its identity, and
-    // the lookup inside walks one frame's layer list for a channel type —
-    // never a grid.
+    // the lookup inside resolves the SELECTED BRUSH (multi-brush projects,
+    // plan 14 task 12 — `selectedBrushIn`, so a brush switch re-renders),
+    // then walks one frame's layer list for a channel type — never a grid.
     const channelType = brushUI.channelTypeIn(brushes.document);
 
     const showPencilControls = tool.selectedTool === "pixel";

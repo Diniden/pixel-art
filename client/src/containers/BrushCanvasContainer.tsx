@@ -23,11 +23,18 @@
  *
  * ── ⚠️ `observer()` HERE, rAF-SCHEDULED REDRAW FOR THE CELLS (D8) ────────
  * This component reads only scalars, ids and `observableRef` objects: the
- * document's IDENTITY and size, the selected frame/layer ids, zoom, pan, the
- * delta tuple, the tool settings. It never reads a grid. Cells are consumed
- * only inside `useBrushPaneRender`'s paint (`./brush/brushPanes`), which runs
- * from a scheduled animation frame; the redraw signal is
- * `brushes.pixelVersion` / `domainVersion`.
+ * document's IDENTITY, the SELECTED BRUSH's size, the selected brush/frame/
+ * layer ids, zoom, pan, the delta tuple, the tool settings. It never reads a
+ * grid. Cells are consumed only inside `useBrushPaneRender`'s paint
+ * (`./brush/brushPanes`), which runs from a scheduled animation frame; the
+ * redraw signal is `brushes.pixelVersion` / `domainVersion`.
+ *
+ * ── The selected brush (multi-brush projects, plan 14 task 12) ────────────
+ * A project holds many brushes, each with its own size, frames and layers.
+ * Everything here is scoped to `brushUI.selectedBrushIn(doc)` — never
+ * `brushes[0]` (MASTER §8 mistake 1) — and `selectedBrushId` is part of the
+ * camera's `resyncKey` (mistake 4): a switch to a brush of another size
+ * re-syncs the backing store rather than keeping a stale one.
  *
  * ── 1:1 backing store, CSS magnification ──────────────────────────────────
  * The task file predates plan 05: `CanvasSurface` now keeps every canvas at
@@ -136,8 +143,13 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
 
   /* ── observable reads (scalars, ids, refs — never a grid) ──────────────── */
   const doc = brushes.document;
-  const width = doc?.width ?? 0;
-  const height = doc?.height ?? 0;
+  // Reading `selectedBrushId` inside `selectedBrushIn` subscribes this
+  // observer to the selection; `document` is `observable.ref`, so nothing
+  // below the brush object is observed.
+  const brush = brushUI.selectedBrushIn(doc);
+  const selectedBrushId = brushUI.selectedBrushId;
+  const width = brush?.width ?? 0;
+  const height = brush?.height ?? 0;
   const selectedFrameId = brushUI.selectedFrameId;
   const layer = brushUI.selectedLayerIn(doc);
   const channelType = layer?.channelType ?? "rgb";
@@ -195,7 +207,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     height,
     zoom,
     camera: paneCamera,
-    resyncKey: `${renderMode}:${projectName}:${selectedFrameId ?? ""}`,
+    resyncKey: `${renderMode}:${projectName}:${selectedBrushId ?? ""}:${selectedFrameId ?? ""}`,
   });
 
   /* ── coordinate mapping ────────────────────────────────────────────────── */
@@ -436,6 +448,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   // selected layer alone — plus the shape preview, painted 1:1 from a rAF.
   const { registerLayerCanvas } = useBrushPaneRender({
     source: brushes,
+    selectedBrushId,
     selectedFrameId,
     layerId: paneLayerId,
     width,

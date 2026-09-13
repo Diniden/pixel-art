@@ -9,11 +9,7 @@
  * one-transaction move are proven without React.
  */
 import { describe, expect, it, vi } from "vitest";
-import {
-  createBrushDocument,
-  createBrushFrame,
-  createBrushLayer,
-} from "../../../types";
+import { createBrushDocument } from "../../../types";
 import type { BrushCell, BrushDelta, BrushDocument } from "../../../types";
 import { getToolHandler } from "../../../ui/canvas/tools/toolHandlers";
 import { BrushPixelStore } from "../../../stores/domain/BrushPixelStore";
@@ -349,14 +345,9 @@ const unreachableApi: BrushApiLike = {
 };
 
 function makeRig(width = 4, height = 4) {
-  const doc: BrushDocument = {
-    ...createBrushDocument(width, height),
-    frames: [
-      createBrushFrame("frame-1", "Frame 1", [
-        createBrushLayer("layer-1", "Layer 1", width, height),
-      ]),
-    ],
-  };
+  // brush-2 (plan 14): one brush, "brush-1", carrying frame-1 / layer-1 at
+  // `width × height` — the deterministic ids `createBrush` always uses.
+  const doc: BrushDocument = createBrushDocument(width, height);
   const brush = new BrushStore({
     session: new SessionStore(),
     api: unreachableApi,
@@ -364,9 +355,13 @@ function makeRig(width = 4, height = 4) {
   brush.installDocument(doc);
   const pixels = new BrushPixelStore({
     brush,
-    source: { selectedFrameId: "frame-1", selectedLayerId: "layer-1" },
+    source: {
+      selectedBrushId: "brush-1",
+      selectedFrameId: "frame-1",
+      selectedLayerId: "layer-1",
+    },
   });
-  const grid = () => brush.document!.frames[0].layers[0].pixels;
+  const grid = () => brush.document!.brushes[0].frames[0].layers[0].pixels;
   const painted = () => {
     const out: string[] = [];
     grid().forEach((row, y) =>

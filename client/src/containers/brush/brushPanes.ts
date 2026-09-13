@@ -23,6 +23,10 @@
  *   is read (`BrushCanvasContainer`'s header, "rAF-scheduled redraw"): the
  *   document is read through `source.document` at paint time, from inside the
  *   scheduled frame, never during a React render, so no grid is ever observed.
+ *   The SELECTED BRUSH is resolved there too — `brushIn(document,
+ *   selectedBrushId)`, the one rule of MASTER D4 (multi-brush projects,
+ *   `docs/14-multi-brush-projects`, task 12) — so a brush switch repaints from
+ *   the other brush's layers without the caller re-reading a grid.
  *
  * Store-free in the sense the sibling hooks are: the views arrive as the
  * narrow `BrushPaneViews` interface and the document as a `{ document }`
@@ -33,6 +37,7 @@
 import { useCallback, useRef } from "react";
 import type { MutableRefObject } from "react";
 import type { CanvasRenderMode } from "../../stores/ui/CanvasViewsUIStore";
+import { brushIn } from "../../types";
 import type { BrushDocument, Point } from "../../types";
 import type { CanvasViewControlsProps } from "../../ui/components/CanvasViewControls/CanvasViewControls";
 import { renderBrushFrame } from "../../ui/canvas/render/renderBrushFrame";
@@ -86,8 +91,8 @@ export interface BrushPaneLayer extends BrushSceneLayer {
   readonly id: string;
 }
 
-/** The slice of a document the scene needs — `BrushDocument` fits. */
-export interface BrushPaneDocument {
+/** The slice of ONE brush the scene needs — a `Brush` fits. */
+export interface BrushPaneBrush {
   readonly frames: ReadonlyArray<{
     readonly id: string;
     readonly layers: ReadonlyArray<BrushPaneLayer>;
@@ -96,17 +101,21 @@ export interface BrushPaneDocument {
 
 /**
  * The layers a pane composites, or `null` when there is nothing to draw (no
- * document, no such frame). `layerId === null` is the Full pane: the frame's
+ * brush, no such frame). `layerId === null` is the Full pane: the frame's
  * layers untouched (the compositor skips hidden ones). Otherwise the Layer
  * pane: the one layer with that id, visible regardless of its eye flag;
  * nothing at all if the id is not in this frame.
+ *
+ * STRICT on the frame id, deliberately: no frame-0 fallback. `BrushUIStore`
+ * re-seats a stale frame id on every switch, so a miss here means "nothing
+ * to draw yet", never "draw something else".
  */
 export function brushPaneScene(
-  doc: BrushPaneDocument | null,
+  brush: BrushPaneBrush | null,
   frameId: string | null,
   layerId: string | null,
 ): ReadonlyArray<BrushSceneLayer> | null {
-  const frame = doc?.frames.find((f) => f.id === frameId);
+  const frame = brush?.frames.find((f) => f.id === frameId);
   if (!frame) return null;
   if (layerId === null) return frame.layers;
   const layer = frame.layers.find((l) => l.id === layerId);
@@ -117,6 +126,8 @@ export function brushPaneScene(
 export interface BrushPaneRenderArgs {
   /** `brushes` — its `document` is read at paint time, never during render. */
   source: { readonly document: BrushDocument | null };
+  /** The brush to composite, resolved at paint time through `brushIn`. */
+  selectedBrushId: string | null;
   selectedFrameId: string | null;
   /** The Layer pane's selected layer; `null` = the Full pane. */
   layerId: string | null;
@@ -139,6 +150,7 @@ export interface BrushPaneRender {
 /** The pane's compositor — see the module header. */
 export function useBrushPaneRender({
   source,
+  selectedBrushId,
   selectedFrameId,
   layerId,
   width,
@@ -159,7 +171,11 @@ export function useBrushPaneRender({
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, width, height);
 
-    const layers = brushPaneScene(source.document, selectedFrameId, layerId);
+    const layers = brushPaneScene(
+      brushIn(source.document, selectedBrushId),
+      selectedFrameId,
+      layerId,
+    );
     if (!layers || width === 0 || height === 0) return;
 
     let buffer = bufferRef.current;
@@ -182,6 +198,7 @@ export function useBrushPaneRender({
     });
   }, [
     source,
+    selectedBrushId,
     selectedFrameId,
     layerId,
     width,
