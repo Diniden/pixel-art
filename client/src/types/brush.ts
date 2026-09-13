@@ -1,12 +1,21 @@
 /**
  * Brush document types & colourisation (Brush Studio plan,
- * `docs/01-brush-studio`, task 01).
+ * `docs/01-brush-studio`, task 01; multi-brush projects,
+ * `docs/14-multi-brush-projects`, task 05).
  *
  * A brush document is a SEPARATE type family from the pixel project. It never
  * extends `Project` / `Layer` / `Frame` from `./domain`; the only thing it
  * borrows is the `Pixel` RGBA shape for rendering. The in-memory shape here IS
  * the wire shape (MASTER D3) — brush files are plain `JSON.stringify` of a
  * `BrushDocument`; there is no compact codec.
+ *
+ * The document has two levels. A `BrushDocument` (one file, a brush
+ * **project**) is `{ version: "brush-2", brushes: Brush[] }` — never empty,
+ * ids unique. Each `Brush` has its own `width × height`, frames, layers and
+ * applied groups: exactly the shape a whole brush-1 file had. A legacy brush-1
+ * file (no `brushes` key; `width`/`height`/`frames` at the top level) is
+ * wrapped by `normalizeBrushDocument` as one brush, `id: "brush-1"`,
+ * `name: "Brush 1"`, losslessly; the first save writes it back as brush-2.
  *
  * Every cell is either `0` (unpainted, renders transparent) or a 4-tuple of
  * signed deltas in −255..255. Rendering maps each delta through a 127-centred
@@ -82,13 +91,26 @@ export interface BrushFrame {
   name: string;
   layers: BrushLayer[];
 }
-export const BRUSH_DOCUMENT_VERSION = "brush-1" as const;
-export interface BrushDocument {
-  version: typeof BRUSH_DOCUMENT_VERSION;
+/** One brush inside a project: today's whole-file body plus `id` / `name`. */
+export interface Brush {
+  id: string;
+  name: string;
   width: number;
   height: number;
   frames: BrushFrame[];
   appliedGroups: BrushAppliedGroup[];
+}
+export const BRUSH_DOCUMENT_VERSION = "brush-2" as const;
+/**
+ * The pre-multi-brush file shape: one brush's body at the top level, no
+ * `brushes` key. Exported for documentation and tests; the normaliser detects
+ * a legacy file by its structure, never by this string.
+ */
+export const LEGACY_BRUSH_DOCUMENT_VERSION = "brush-1" as const;
+export interface BrushDocument {
+  version: typeof BRUSH_DOCUMENT_VERSION;
+  /** Never empty; ids unique. */
+  brushes: Brush[];
 }
 
 /**
@@ -197,9 +219,20 @@ export function createBrushFrame(
   return { id, name, layers };
 }
 
-export function createBrushDocument(width = 16, height = 16): BrushDocument {
+/**
+ * One brush with one frame (`frame-1` / "Frame 1") holding one rgb layer
+ * (`layer-1` / "Layer 1"). Frame and layer ids are unique WITHIN a brush only;
+ * every brush reuses these deterministic ids.
+ */
+export function createBrush(
+  id: string,
+  name: string,
+  width = 16,
+  height = 16,
+): Brush {
   return {
-    version: BRUSH_DOCUMENT_VERSION,
+    id,
+    name,
     width,
     height,
     frames: [
@@ -211,6 +244,35 @@ export function createBrushDocument(width = 16, height = 16): BrushDocument {
   };
 }
 
+/** One brush, id `"brush-1"`, named `name` (default "Brush 1"). */
+export function createBrushDocument(
+  width = 16,
+  height = 16,
+  name = "Brush 1",
+): BrushDocument {
+  return {
+    version: BRUSH_DOCUMENT_VERSION,
+    brushes: [createBrush("brush-1", name, width, height)],
+  };
+}
+
+/**
+ * The one selected-brush rule (MASTER D4): find by id, else the first brush,
+ * else `null`. Returns the object held by `doc`, not a copy — the
+ * `selectedFrameIn` convention.
+ */
+export function brushIn(
+  doc: BrushDocument | null,
+  brushId: string | null,
+): Brush | null {
+  if (!doc) return null;
+  if (brushId !== null) {
+    const found = doc.brushes.find((b) => b.id === brushId);
+    if (found) return found;
+  }
+  return doc.brushes[0] ?? null;
+}
+
 // ============================================
 // Invariants (MASTER D6)
 // ============================================
@@ -219,8 +281,8 @@ export function createBrushDocument(width = 16, height = 16): BrushDocument {
  * Throws unless every frame carries the same layer ids in the same order as
  * frame 0, and every layer grid is exactly `height` rows × `width` cells.
  */
-export function assertUniformLayers(doc: BrushDocument): void {
-  const { width, height, frames } = doc;
+export function assertUniformLayers(brush: Brush): void {
+  const { width, height, frames } = brush;
   if (frames.length === 0) {
     throw new Error("Brush document has no frames");
   }
@@ -250,6 +312,24 @@ export function assertUniformLayers(doc: BrushDocument): void {
       });
     });
   });
+}
+
+/**
+ * Throws unless the document holds at least one brush, every brush id is
+ * unique, and every brush satisfies `assertUniformLayers`.
+ */
+export function assertBrushDocument(doc: BrushDocument): void {
+  if (doc.brushes.length === 0) {
+    throw new Error("Brush document has no brushes");
+  }
+  const seen = new Set<string>();
+  for (const brush of doc.brushes) {
+    if (seen.has(brush.id)) {
+      throw new Error(`Brush document has duplicate brush id ${brush.id}`);
+    }
+    seen.add(brush.id);
+  }
+  doc.brushes.forEach(assertUniformLayers);
 }
 
 // ============================================
@@ -346,15 +426,17 @@ function normalizeAppliedGroups(raw: unknown): BrushAppliedGroup[] {
 }
 
 /**
- * Coerce untrusted JSON into a `BrushDocument`, or return `null`.
+ * Coerce one raw brush body (a brush-2 `brushes[index]` entry, or a whole
+ * legacy brush-1 file) into a `Brush`, or return `null`.
  *
  * Rejects unless `raw` is an object with numeric `width`/`height` ≥ 1 and a
- * non-empty `frames` array. Otherwise fills `appliedGroups` (→ `[]`),
- * `visible` (→ `true`), unknown `channelType` (→ `"rgb"`), clamps every cell
- * via `clampDelta`, pads/truncates every grid to `height × width`, then runs
- * `assertUniformLayers` and returns `null` if it throws.
+ * non-empty `frames` array. Otherwise floors the dimensions, fills
+ * `id`/`name` (→ `brush-<index+1>` / `Brush <index+1>`), `appliedGroups`
+ * (→ `[]`), `visible` (→ `true`), unknown `channelType` (→ `"rgb"`), clamps
+ * every cell via `clampDelta` and pads/truncates every grid to
+ * `height × width`. Layer uniformity is checked by the caller.
  */
-export function normalizeBrushDocument(raw: unknown): BrushDocument | null {
+function normalizeBrush(raw: unknown, index: number): Brush | null {
   if (!isRecord(raw)) return null;
   const { width: rawW, height: rawH, frames: rawFrames } = raw;
   if (typeof rawW !== "number" || !Number.isFinite(rawW) || rawW < 1) {
@@ -367,16 +449,54 @@ export function normalizeBrushDocument(raw: unknown): BrushDocument | null {
 
   const width = Math.floor(rawW);
   const height = Math.floor(rawH);
-  const doc: BrushDocument = {
-    version: BRUSH_DOCUMENT_VERSION,
+  return {
+    id: stringOr(raw.id, `brush-${index + 1}`),
+    name: stringOr(raw.name, `Brush ${index + 1}`),
     width,
     height,
     frames: rawFrames.map((f, i) => normalizeFrame(f, i, width, height)),
     appliedGroups: normalizeAppliedGroups(raw.appliedGroups),
   };
+}
 
+/**
+ * Coerce untrusted JSON into a `BrushDocument`, or return `null` (MASTER D2).
+ *
+ * Accepts both file shapes; the `version` string is never read — the
+ * normaliser is lenient about the string and strict about the structure.
+ * - `raw.brushes` is an array → brush-2: every entry goes through
+ *   `normalizeBrush`; ANY invalid entry rejects the whole document.
+ * - No `brushes` key at all → legacy brush-1: the object itself is one brush,
+ *   `id: "brush-1"`, `name: "Brush 1"` (a legacy file has neither key), its
+ *   frames and applied groups normalised exactly as before — a clean legacy
+ *   file wraps byte-identically.
+ * - A present-but-wrong `brushes` (a string, `null`, an object) → `null`.
+ * Finally runs `assertBrushDocument` (≥ 1 brush, unique ids, uniform layers)
+ * and returns `null` if it throws: a corrupt file is an error, never a blank
+ * default.
+ */
+export function normalizeBrushDocument(raw: unknown): BrushDocument | null {
+  if (!isRecord(raw)) return null;
+
+  let brushes: Brush[];
+  if (Array.isArray(raw.brushes)) {
+    brushes = [];
+    for (let i = 0; i < raw.brushes.length; i++) {
+      const brush = normalizeBrush(raw.brushes[i], i);
+      if (brush === null) return null;
+      brushes.push(brush);
+    }
+  } else if (!("brushes" in raw)) {
+    const brush = normalizeBrush(raw, 0);
+    if (brush === null) return null;
+    brushes = [brush];
+  } else {
+    return null;
+  }
+
+  const doc: BrushDocument = { version: BRUSH_DOCUMENT_VERSION, brushes };
   try {
-    assertUniformLayers(doc);
+    assertBrushDocument(doc);
   } catch {
     return null;
   }
