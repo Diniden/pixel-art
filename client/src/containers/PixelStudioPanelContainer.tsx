@@ -63,8 +63,10 @@ import { observer } from "mobx-react-lite";
 import {
   PixelStudioPanel,
   type PixelStudioBrushInfo,
+  type PixelStudioBrushSizeControls,
 } from "../ui/components/PixelStudioPanel/PixelStudioPanel";
 import { describeLine, presetLines } from "../ui/canvas/model/reflection";
+import { pixelBrushSliderMax } from "../stores/ui/PixelBrushUIStore";
 import { ColorPickerContainer } from "./ColorPickerContainer";
 import { PaletteManagerContainer } from "./PaletteManagerContainer";
 import { useStores } from "../stores/context";
@@ -161,6 +163,39 @@ export const PixelStudioPanelContainer = observer(
       // The same frame rule the brush studio and the stamp use (MASTER D4):
       // `selectedFrameId`, falling back to `frames[0]`.
       const frame = app.brushUI.selectedFrameIn(doc);
+      // ── the stamp-size controls (brush-scale task 13, MASTER D13) ─────────
+      //
+      // Every value the section shows is RESOLVED HERE: the store's `null`
+      // (= native) collapses through `effectiveSize(native)`, and the native
+      // size is the document's own `width` / `height` — read off the
+      // `observable.ref` document, never a grid. The setters take `native`
+      // as an argument by design (the store holds no `BrushStore`), so the
+      // same object is threaded through each callback. Absent without a
+      // document: there is no native size to resolve against.
+      let size: PixelStudioBrushSizeControls | undefined;
+      if (doc) {
+        const pixelBrushUI = ui.pixelBrush;
+        const native = { width: doc.width, height: doc.height };
+        const effective = pixelBrushUI.effectiveSize(native);
+        size = {
+          width: effective.width,
+          height: effective.height,
+          nativeWidth: native.width,
+          nativeHeight: native.height,
+          max: pixelBrushSliderMax(native),
+          lockRatio: pixelBrushUI.lockRatio,
+          scaleX: pixelBrushUI.scaleX,
+          scaleY: pixelBrushUI.scaleY,
+          onWidthChange: (w) => pixelBrushUI.setWidth(w, native),
+          onHeightChange: (h) => pixelBrushUI.setHeight(h, native),
+          onLockRatioChange: (locked) =>
+            pixelBrushUI.setLockRatio(locked, native),
+          // The lock / 2-D rules (D11) are the store's; the section only
+          // names the axis it was asked on.
+          onScaleChange: (axis, id) => pixelBrushUI.setScale(axis, id),
+          onResetSize: () => pixelBrushUI.resetSize(),
+        };
+      }
       pixelBrush = {
         loadState: brushes.loadState,
         brushName: brushes.hasBrush ? brushes.brushName : null,
@@ -174,6 +209,10 @@ export const PixelStudioPanelContainer = observer(
         // `onSetStudioMode`). It also resets the tool to `"pixel"` — unchanged
         // behaviour, MASTER D11.
         onOpenBrushStudio: () => app.lightingUI.setStudioMode("brush"),
+        // `undefined` with no document; the section then draws no size block.
+        // Spread-as-optional rather than `size: undefined` so the info object
+        // carries the key only when there is something to show.
+        ...(size ? { size } : {}),
       };
     }
 

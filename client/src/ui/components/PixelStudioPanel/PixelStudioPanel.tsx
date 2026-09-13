@@ -13,11 +13,14 @@
 import type { ReactNode } from "react";
 import type { Color } from "../../../types";
 import { OtherHandButton } from "../OtherHand/OtherHandButton";
-import { Button } from "../../primitives/Button/Button";
 import {
   ReflectionLinesSection,
   type ReflectionLinesSectionProps,
 } from "./ReflectionLinesSection";
+import {
+  PixelStudioBrushSection,
+  type PixelStudioBrushInfo,
+} from "./PixelStudioBrushSection";
 import { PoseSection, type PoseSectionProps } from "../PosePanel/PoseSection";
 import "./PixelStudioPanel.css";
 
@@ -74,28 +77,16 @@ function OriginColorPicker({
   );
 }
 
-/** `BrushStore.loadState`, mirrored as a plain union so `ui/` never imports the store. */
-export type PixelStudioBrushLoadState =
-  "idle" | "loading" | "loaded" | "failed";
-
 /**
- * What the Brush section names: the brush project the pixel-studio brush tool
- * will stamp, and the frame/layers it stamps (pixel-brush task 04). Supplied
- * by `PixelStudioPanelContainer` (task 06) from `BrushStore` / `BrushUIStore`.
+ * The Brush section's prop types live with the section (brush-scale task 13,
+ * MASTER D13) and are re-exported here so existing imports keep resolving.
  */
-export interface PixelStudioBrushInfo {
-  loadState: PixelStudioBrushLoadState;
-  /** Filename stem of the loaded brush project, or null when none is loaded. */
-  brushName: string | null;
-  width: number | null;
-  height: number | null;
-  frameName: string | null;
-  /** 0-based; null when no frame. */
-  frameIndex: number | null;
-  frameCount: number;
-  layerCount: number;
-  onOpenBrushStudio: () => void;
-}
+export type {
+  PixelStudioBrushAxis,
+  PixelStudioBrushInfo,
+  PixelStudioBrushLoadState,
+  PixelStudioBrushSizeControls,
+} from "./PixelStudioBrushSection";
 
 interface PixelStudioPanelProps {
   selectedTool: string;
@@ -393,68 +384,10 @@ export function PixelStudioPanel({
         </div>
       ) : null}
       {showBrushControls && pixelBrush ? (
-        <div className="panel pixel-studio-panel__section">
-          <div className="panel__header panel__header--compact">
-            <span className="panel__title">Brush</span>
-            {onOtherHand ? (
-              <OtherHandButton onClick={onOtherHand} sectionLabel="Brush" />
-            ) : null}
-          </div>
-          <div className="panel__body panel__body--dense">
-            <div className="pixel-studio-panel__brush">
-              {pixelBrush.loadState === "loaded" && pixelBrush.brushName ? (
-                <dl className="pixel-studio-panel__brush-rows">
-                  <div className="pixel-studio-panel__brush-row">
-                    <dt className="pixel-studio-panel__brush-label">Project</dt>
-                    <dd className="pixel-studio-panel__brush-value">
-                      {pixelBrush.brushName}
-                    </dd>
-                  </div>
-                  <div className="pixel-studio-panel__brush-row">
-                    <dt className="pixel-studio-panel__brush-label">Size</dt>
-                    <dd className="pixel-studio-panel__brush-value">
-                      {pixelBrush.width ?? "?"} × {pixelBrush.height ?? "?"}
-                    </dd>
-                  </div>
-                  <div className="pixel-studio-panel__brush-row">
-                    <dt className="pixel-studio-panel__brush-label">Frame</dt>
-                    <dd className="pixel-studio-panel__brush-value">
-                      {pixelBrush.frameName ?? "—"}
-                      {pixelBrush.frameIndex !== null
-                        ? ` (${pixelBrush.frameIndex + 1}/${pixelBrush.frameCount})`
-                        : ""}
-                    </dd>
-                  </div>
-                  <div className="pixel-studio-panel__brush-row">
-                    <dt className="pixel-studio-panel__brush-label">Layers</dt>
-                    <dd className="pixel-studio-panel__brush-value">
-                      {pixelBrush.layerCount}
-                    </dd>
-                  </div>
-                </dl>
-              ) : (
-                <p className="pixel-studio-panel__brush-status">
-                  {pixelBrush.loadState === "loading"
-                    ? "Loading brush projects…"
-                    : pixelBrush.loadState === "failed"
-                      ? "Could not load brush projects."
-                      : "No brush project loaded. Create one in the Brush Studio."}
-                </p>
-              )}
-              <Button
-                variant="neutral"
-                className="pixel-studio-panel__brush-open"
-                onClick={pixelBrush.onOpenBrushStudio}
-              >
-                Open Brush Studio
-              </Button>
-              <p className="pixel-studio-panel__brush-hint">
-                Stamps the current frame of the open brush project with the
-                selected colour.
-              </p>
-            </div>
-          </div>
-        </div>
+        <PixelStudioBrushSection
+          pixelBrush={pixelBrush}
+          onOtherHand={onOtherHand}
+        />
       ) : null}
       {colorPicker}
       {paletteManager}
