@@ -1,10 +1,10 @@
 # HANDOFF — Multi-brush projects (plan 14)
 
-**Current position:** W3 IN PROGRESS (2026-09-13)
+**Current position:** W4 IN PROGRESS (2026-09-13)
 **Branch:** `feat/14-multi-brush-projects`
 **Worktree:** `/Users/diniden/Desktop/self/pixel-art/.claude/worktrees/feat+14-multi-brush-projects`
 **Base:** `origin/main @ 6f1bc44` (planned against `9007990`; the only commit between is the plan itself)
-**Last commit:** `dfb4fea` (W2 complete — seam open by design)
+**Last commit:** `a8e58dc` (W3 complete — stores green, container seam open by design)
 
 ## Wave ledger
 
@@ -12,8 +12,8 @@
 | --- | --- | --- | --- | --- | --- |
 | W1 | 01, 02, 03, 04 | DONE (Storybook manual checks owed: 03, 04) | 2026-09-13 | `d24bf17` 02 · `51f781f` 01 · `84d42bf` 04 · `c815d30` 03 | tsc clean · eslint 0e/66w · vitest 201 files / 4393 tests · boundaries 5/5 OK · stylelint 2 pre-existing errors / 69 warnings (unchanged) · storybook build OK · server tsc/eslint clean, vitest 5 files / 109 tests · no lockfile · no snapshot change |
 | W2 | 05, 06, 07 | DONE (seam open, as designed) | 2026-09-13 | `f36da70` 06 · `f78fd8e` 07 · `4c425e3` 05 · `dfb4fea` 06 follow-up | `vitest run src/types src/api src/stores/history` 8 files / 264 tests green (corpus suites `roundtrip` 41 + `migrations` 68 unchanged) · format:check clean · no snapshot change · no lockfile · data-safety diff empty · **tsc 21 files, all in the §8 W2 seam list:** `containers/__tests__/BrushLayerPanelContainer.dom.test.tsx` · `containers/__tests__/pixelBrushTool.dom.test.tsx` · `containers/brush/__tests__/brushSelection.test.ts` · `containers/brush/__tests__/brushToolContext.test.ts` · `containers/brush/brushPanes.ts` · `containers/BrushCanvasContainer.tsx` · `containers/BrushLayerPanelContainer.tsx` · `containers/BrushLibraryContainer.tsx` · `containers/BrushTimelineContainer.tsx` · `containers/otherHand/pixelBrushWidgets.ts` · `containers/pixelBrush/__tests__/usePixelBrush.dom.test.ts` · `containers/pixelBrush/usePixelBrush.ts` · `containers/PixelStudioPanelContainer.tsx` · `stores/__tests__/brushWiring.test.ts` · `stores/domain/__tests__/BrushPixelStore.test.ts` · `stores/domain/__tests__/BrushStore.test.ts` · `stores/domain/__tests__/BrushStructureStore.test.ts` · `stores/domain/BrushPixelStore.ts` · `stores/domain/BrushStructureStore.ts` · `stores/ui/__tests__/BrushUIStore.test.ts` · `stores/ui/BrushUIStore.ts` · **vitest 13 failed / 188 passed files (161 / 4257 tests), every failing suite in the §8 W2 expected-red list:** `BrushLayerPanelContainer.dom` · `BrushStudioContainer.dom` · `BrushStudioPanelContainer.dom` · `OtherHandRailContainer.dom` · `pixelBrushTool.dom` · `PixelStudioPanelContainer.dom` · `brushSelection` · `brushToolContext` · `usePixelBrush.dom` · `brushWiring` · `BrushPixelStore` · `BrushStore` · `BrushStructureStore` (allowed but still green: `BrushUIStore`, `brushPanes`, `BrushLibrary.dom`) |
-| W3 | 08, 09, 10, 11 | IN PROGRESS | 2026-09-13 | | |
-| W4 | 12, 13, 14 | TODO | | | |
+| W3 | 08, 09, 10, 11 | DONE (container seam open, as designed) | 2026-09-13 | `5677f4e` 08 · `a698b76` 10 · `326c9e7` 09 · `a8e58dc` 11 | `vitest run src/stores` **48 files / 1217 tests green** (BrushUIStore 53 · BrushStructureStore 130 · BrushPixelStore 50 · BrushStore 39 · brushWiring 16) · eslint 0e/66w · no lockfile · no snapshot change · data-safety diff empty · **tsc 13 files, all `containers/**` per the §8 W3 seam:** `containers/__tests__/BrushLayerPanelContainer.dom.test.tsx` · `containers/__tests__/pixelBrushTool.dom.test.tsx` · `containers/brush/__tests__/brushSelection.test.ts` · `containers/brush/__tests__/brushToolContext.test.ts` · `containers/brush/brushPanes.ts` · `containers/BrushCanvasContainer.tsx` · `containers/BrushLayerPanelContainer.tsx` · `containers/BrushLibraryContainer.tsx` · `containers/BrushTimelineContainer.tsx` · `containers/otherHand/pixelBrushWidgets.ts` · `containers/pixelBrush/__tests__/usePixelBrush.dom.test.ts` · `containers/pixelBrush/usePixelBrush.ts` · `containers/PixelStudioPanelContainer.tsx` · **vitest 8 failed / 193 passed files (57 / 4453 tests), every failing suite in the §8 W3 expected-red list:** `BrushLayerPanelContainer.dom` · `BrushStudioContainer.dom` · `OtherHandRailContainer.dom` · `pixelBrushTool.dom` · `PixelStudioPanelContainer.dom` · `brushSelection` · `brushToolContext` · `usePixelBrush.dom` (allowed but green: `BrushStudioPanelContainer.dom`) |
+| W4 | 12, 13, 14 | IN PROGRESS | 2026-09-13 | | |
 | W5 | 15 | TODO | | | |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
@@ -33,6 +33,10 @@ For W2 and W3 the gate column must carry the actual `tsc` file list and the actu
 - **05** — `LEGACY_BRUSH_DOCUMENT_VERSION` is exported but not read (D2's "version never read" followed over D1's wording). `brushes` "absent" = `!("brushes" in raw)`, so `{ brushes: null }` is rejected as present-but-wrong (pinned).
 - **06** — Committed before task 05 landed (verified against 05's in-flight file, then re-verified after). The new contract test typed the raw `brushApi.get()` payload as `unknown` → 3 tsc errors caught by the W2 gate; fixed in a follow-up commit `dfb4fea` (cast to `BrushDocument`).
 - **07** — None. Constants confirmed (`BYTES_PER_BRUSH_CELL` 10, `BYTES_SNAPSHOT_BASE` 256); the worked example pins to 696.
+- **08** — Private `clearSelection()` helper for the two clear branches of `adoptDocument`; no new public surface. 42 → 53 tests.
+- **09** — Brush ops use the document-level `commit` asserting `assertBrushDocument` (stronger than the task text; catches duplicate ids); `addBrush` returns `""` on non-integer/<1 dimensions; `duplicateBrush` copies applied-group objects. Every existing label and `bumpPixels` value byte-identical (asserted). File already carried one `max-lines` warning (475 → 621 code lines; still one warning, repo-wide count 66), so the optional helper split was not done. 46 → 130 tests (R3 aliasing is an `it.each` over all 19 ops × 2 selections).
+- **10** — None. 39 → 50 tests.
+- **11** — The pre-existing "honours a custom size" case was replaced by the mandated 3×5 case (37 → 39, not 40). Adapter is the locked snippet verbatim at `ApplicationStore.ts:984-986`.
 - **02** — None. Tests pin the full shape with `toStrictEqual` and a JSON round trip beyond the listed assertions.
 
 ## Notes for the next session
