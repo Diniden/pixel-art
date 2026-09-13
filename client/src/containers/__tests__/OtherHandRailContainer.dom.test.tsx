@@ -41,6 +41,7 @@ import { StoreProvider } from "@/stores/context";
 import { OtherHandRailContainer } from "@/containers/OtherHandRailContainer";
 import { OTHER_HAND_SECTIONS } from "@/containers/otherHand/otherHandSections";
 import { tinyProject } from "@/store/__tests__/storeContract";
+import { createBrushDocument } from "@/types";
 import type { Color } from "@/types";
 
 const RED: Color = { r: 255, g: 0, b: 0, a: 255 };
@@ -219,5 +220,237 @@ describe("OtherHandRailContainer — the swap control", () => {
     expect(app.ui.tool.selectedColor).toEqual(RED);
     // Observed, not desired — see the header above.
     expect(app.ui.tool.fillColor).toEqual(RED);
+  });
+});
+
+/* ── The Brush tool's section (plan 13, task 14) ─────────────────────────── */
+
+/**
+ * The Brush tool's thumb widgets are bound to `app.ui.pixelBrush` (task 11)
+ * with the rail section's rules: Width drags Height while the ratio is
+ * locked, `Free` releases it, one strategy pick sets both axes while locked
+ * and each axis has its own stack when not. Sliders are driven by KEYBOARD
+ * (see `nudgeChannel`); the native size comes from the installed document's
+ * `width` / `height` scalars.
+ */
+describe("OtherHandRailContainer — the Brush tool's section", () => {
+  const SECTION_KEY = "tool:brush";
+
+  function installBrush(width: number | null, height = width): void {
+    runInAction(() => {
+      const doc = width === null ? null : createBrushDocument(width, height!);
+      app.brushes.brushName = doc ? "test-brush" : "";
+      app.brushes.installDocument(doc);
+      app.brushes.loadState = doc ? "loaded" : "idle";
+    });
+  }
+
+  function mountBrushSection() {
+    runInAction(() => {
+      app.ui.tool.setTool("brush");
+      app.ui.layout.otherHandSection = OTHER_HAND_SECTIONS.tool;
+    });
+    return mountColorSection();
+  }
+
+  function stackButton(stack: string, name: string): HTMLElement {
+    const group = screen.getByRole("group", { name: stack });
+    return within(group).getByRole("button", { name });
+  }
+
+  function tap(stack: string, name: string): void {
+    act(() => {
+      stackButton(stack, name).click();
+    });
+  }
+
+  beforeEach(() => {
+    // The documents here are installed by hand; the real `init()` is a flow
+    // that would reach the (MSW-guarded) network. Same stub as
+    // `usePixelBrush.dom.test.ts`.
+    vi.spyOn(app.brushes, "init").mockImplementation((() =>
+      Promise.resolve()) as never);
+    installBrush(4);
+  });
+
+  it("⭐ renders Width, Ratio, Height, Scale and Size widgets at the native size", () => {
+    mountBrushSection();
+
+    expect(channelValue("Width")).toBe("4");
+    expect(channelValue("Height")).toBe("4");
+    expect(stackButton("Ratio", "Locked")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("group", { name: "Scale" })).toBeInTheDocument();
+    expect(stackButton("Size", "Native")).not.toHaveAttribute("aria-pressed");
+    // The order the thumb learns: Width, Ratio, Height, Scale, Size.
+    const labels = Array.from(
+      document.querySelectorAll(".other-hand__widget"),
+    ).map((card) =>
+      card.querySelector(".other-hand__grip")?.getAttribute("aria-label"),
+    );
+    expect(labels).toEqual([
+      "Move Width",
+      "Move Ratio",
+      "Move Height",
+      "Move Scale",
+      "Move Size",
+    ]);
+  });
+
+  it("⭐ ArrowUp on Width calls setWidth, and Height follows while locked", () => {
+    mountBrushSection();
+
+    nudgeChannel("Width");
+
+    expect(app.ui.pixelBrush.width).toBe(5);
+    // Locked at the native 1:1 ratio, so the height moves with it.
+    expect(app.ui.pixelBrush.height).toBe(5);
+    expect(channelValue("Width")).toBe("5");
+    expect(channelValue("Height")).toBe("5");
+  });
+
+  it("⭐ tapping Locked → Free releases the ratio: Width then leaves Height alone", () => {
+    mountBrushSection();
+
+    tap("Ratio", "Locked");
+    expect(app.ui.pixelBrush.lockRatio).toBe(false);
+    expect(stackButton("Ratio", "Free")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    nudgeChannel("Width");
+
+    expect(app.ui.pixelBrush.width).toBe(5);
+    expect(app.ui.pixelBrush.height).toBeNull();
+    expect(channelValue("Width")).toBe("5");
+    expect(channelValue("Height")).toBe("4");
+  });
+
+  it("⭐ the Scale stack marks NN active; tapping BIL sets both axes while locked", () => {
+    mountBrushSection();
+
+    expect(stackButton("Scale", "NN")).toHaveAttribute("aria-pressed", "true");
+    expect(stackButton("Scale", "BIL")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    tap("Scale", "BIL");
+
+    expect(app.ui.pixelBrush.scaleX).toBe("bilinear");
+    expect(app.ui.pixelBrush.scaleY).toBe("bilinear");
+    expect(stackButton("Scale", "BIL")).toHaveAttribute("aria-pressed", "true");
+    expect(stackButton("Scale", "NN")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("unlocked shows Scale X and Scale Y stacks, each bound to its own axis", () => {
+    mountBrushSection();
+
+    tap("Ratio", "Locked");
+
+    expect(screen.queryByRole("group", { name: "Scale" })).toBeNull();
+    expect(screen.getByRole("group", { name: "Scale X" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Scale Y" })).toBeInTheDocument();
+
+    tap("Scale Y", "LZ3");
+
+    expect(app.ui.pixelBrush.scaleY).toBe("lanczos3");
+    expect(app.ui.pixelBrush.scaleX).toBe("nearest");
+    expect(stackButton("Scale Y", "LZ3")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(stackButton("Scale X", "NN")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("Native resets the size back to the brush's own", () => {
+    mountBrushSection();
+
+    nudgeChannel("Width");
+    nudgeChannel("Height");
+    expect(app.ui.pixelBrush.width).toBe(6);
+
+    tap("Size", "Native");
+
+    expect(app.ui.pixelBrush.width).toBeNull();
+    expect(app.ui.pixelBrush.height).toBeNull();
+    expect(channelValue("Width")).toBe("4");
+    expect(channelValue("Height")).toBe("4");
+  });
+
+  it("without a document the section shows its empty message", () => {
+    installBrush(null);
+    mountBrushSection();
+
+    expect(screen.queryByRole("slider", { name: "Width" })).toBeNull();
+    expect(
+      screen.getByText(
+        "Brush has no thumb controls. Pick another tool, or leave Other Hand Mode.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * The grip is pointer-only (no keyboard path), and jsdom reports every
+   * rect as zeros — so the stage and card rects are stubbed exactly as
+   * `OtherHand.dom.test.tsx` does for the surface. What is under test is
+   * the SECTION KEY the container persists under, not the drag arithmetic.
+   */
+  it("persists a dragged position under the tool:brush key", () => {
+    const { container } = mountBrushSection();
+    const setPosition = vi.spyOn(app.ui.layout, "setOtherHandWidgetPosition");
+
+    const stage = container.querySelector<HTMLElement>(".other-hand__stage")!;
+    const card = container.querySelector<HTMLElement>(".other-hand__widget")!;
+    const grip = screen.getByRole("button", { name: "Move Width" });
+    Object.assign(grip, {
+      setPointerCapture: () => {},
+      releasePointerCapture: () => {},
+      hasPointerCapture: () => false,
+    });
+    const rect = (x: number, y: number, w: number, h: number) =>
+      ({
+        left: x,
+        top: y,
+        right: x + w,
+        bottom: y + h,
+        width: w,
+        height: h,
+        x,
+        y,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue(
+      rect(0, 0, 400, 800),
+    );
+    vi.spyOn(card, "getBoundingClientRect").mockReturnValue(
+      rect(0, 0, 80, 300),
+    );
+
+    // Three separate events, each its own `act` (RTL's `fireEvent` wraps
+    // one): the surface's `drag` state must flush between down and move.
+    fireEvent.pointerDown(grip, {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      pointerId: 1,
+    });
+    // +100px right, +200px down on a 400×800 stage → 25% / 25%.
+    fireEvent.pointerMove(grip, { clientX: 110, clientY: 210, pointerId: 1 });
+    fireEvent.pointerUp(grip, { pointerId: 1 });
+
+    expect(setPosition).toHaveBeenCalledWith(SECTION_KEY, "width", {
+      x: 25,
+      y: 25,
+    });
+    expect(
+      app.ui.layout.otherHandLayoutFor(SECTION_KEY).positions.width,
+    ).toEqual({ x: 25, y: 25 });
   });
 });
