@@ -155,7 +155,7 @@ describe("the canvas region: Full and Layer panes (follow-ups task 09)", () => {
   /** A 4×4 brush installed straight into the store — no fetch, no init load. */
   function installBrush(): void {
     runInAction(() => {
-      app.brushes.brushName = "test-brush";
+      app.brushes.projectName = "test-brush";
       app.brushes.installDocument(createBrushDocument(4, 4));
       app.brushes.loadState = "loaded";
     });

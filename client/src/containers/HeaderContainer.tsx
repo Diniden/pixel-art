@@ -73,7 +73,7 @@
  * change so it stands over the BRUSH document instead of the project: the
  * switcher button reads "Brush Projects" and opens `BrushSelectModalContainer`, the
  * title shows the brush's name (`"No brush project"` until one exists), and the
- * inline rename dispatches `brushes.renameBrush` against the brush list.
+ * inline rename dispatches `brushes.renameProject` against the brush list.
  * `projectName` is still passed — `Header` uses it for the export, which
  * remains a project export. The save-status dot keeps reading
  * `session.saveStatus`: both auto-save controllers write it (task 11), so it
@@ -223,15 +223,15 @@ export const HeaderContainer = observer(function HeaderContainer() {
       aiServiceUrl={aiServiceUrl}
       projectName={projectName}
       documentName={
-        isBrushMode ? brushes.brushName || "No brush project" : undefined
+        isBrushMode ? brushes.projectName || "No brush project" : undefined
       }
       // The duplicate-rename check runs against the list the rename targets.
-      // `brushList` is `observable.shallow`; hand over a plain array.
-      projectList={isBrushMode ? brushes.brushList.slice() : projectList}
+      // `projectList` is `observable.shallow`; hand over a plain array.
+      projectList={isBrushMode ? brushes.projectList.slice() : projectList}
       onRenameProject={(name) =>
         isBrushMode
-          ? brushes.hasBrush
-            ? flowResult(brushes.renameBrush(name))
+          ? brushes.hasProject
+            ? flowResult(brushes.renameProject(name))
             : // Nothing to rename yet — the title reads "No brush project".
               Promise.resolve(false)
           : flowResult(domain.renameProject(name))

@@ -121,7 +121,7 @@ async function makeRig(doc: BrushDocument = twoByTwoDoc()): Promise<Rig> {
     session: new SessionStore(),
     api: makeFakeApi({ a: doc }),
   });
-  await flowResult(brush.loadBrush("a"));
+  await flowResult(brush.loadProject("a"));
   const selection = new FakeSelection();
   selection.selectedFrameId = "f1";
   selection.selectedLayerId = "top";

@@ -97,7 +97,7 @@ afterEach(() => {
 
 function installLoaded(doc: BrushDocument | null): void {
   runInAction(() => {
-    app.brushes.brushName = doc ? "test-brush" : "";
+    app.brushes.projectName = doc ? "test-brush" : "";
     app.brushes.installDocument(doc);
     app.brushes.loadState = doc ? "loaded" : "idle";
   });
@@ -167,7 +167,7 @@ describe("usePixelBrush — footprint and stamp", () => {
     const doc = threeByThree();
     installLoaded(doc);
     const h = mount(true, RED);
-    const { footprint, stamp, loadState, brushName } = h.latest();
+    const { footprint, stamp, loadState, projectName } = h.latest();
 
     const frame = doc.frames[0]!;
     expect(footprint).toEqual(pixelBrushFootprint(frame.layers, 3, 3));
@@ -183,7 +183,7 @@ describe("usePixelBrush — footprint and stamp", () => {
     expect(stamp?.cells[1]!.color).not.toEqual({ r: 255, g: 0, b: 40, a: 255 });
     expect(stamp?.cells[1]!.color.g).toBeGreaterThan(0);
     expect(loadState).toBe("loaded");
-    expect(brushName).toBe("test-brush");
+    expect(projectName).toBe("test-brush");
   });
 
   it("⭐ the SAME stamp reference survives a re-render with an EQUAL base colour", () => {
@@ -260,12 +260,12 @@ describe("usePixelBrush — footprint and stamp", () => {
     expect(afterHide?.offsets).toEqual([{ dx: 1, dy: 0 }]);
   });
 
-  it("⭐ document === null → footprint and stamp are both null, brushName null", () => {
+  it("⭐ document === null → footprint and stamp are both null, projectName null", () => {
     installLoaded(null);
     const h = mount(true, RED);
     expect(h.latest().footprint).toBeNull();
     expect(h.latest().stamp).toBeNull();
-    expect(h.latest().brushName).toBeNull();
+    expect(h.latest().projectName).toBeNull();
     expect(h.latest().loadState).toBe("idle");
   });
 

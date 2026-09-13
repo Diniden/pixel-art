@@ -198,7 +198,7 @@ export const PixelStudioPanelContainer = observer(
       }
       pixelBrush = {
         loadState: brushes.loadState,
-        brushName: brushes.hasBrush ? brushes.brushName : null,
+        brushName: brushes.hasProject ? brushes.projectName : null,
         width: doc?.width ?? null,
         height: doc?.height ?? null,
         frameName: frame?.name ?? null,

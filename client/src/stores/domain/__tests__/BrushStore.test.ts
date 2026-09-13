@@ -127,10 +127,10 @@ describe("construction", () => {
     expect(store.loadState).toBe("idle");
     expect(store.loadError).toBeNull();
     expect(store.document).toBeNull();
-    expect(store.hasBrush).toBe(false);
-    expect(store.brushName).toBe("");
+    expect(store.hasProject).toBe(false);
+    expect(store.projectName).toBe("");
     expect(store.saveName).toBe("");
-    expect(store.brushList).toEqual([]);
+    expect(store.projectList).toEqual([]);
     expect(store.serialize()).toBeNull();
     expect(store.history).toBeInstanceOf(HistoryStore);
     // Two stores never share a stack unless one is injected.
@@ -156,7 +156,7 @@ describe("init", () => {
     await flowResult(store.init());
     expect(store.loadState).toBe("idle");
     expect(store.document).toBeNull();
-    expect(store.brushList).toEqual([]);
+    expect(store.projectList).toEqual([]);
     expect(store.loadGeneration).toBe(0);
   });
 
@@ -168,11 +168,11 @@ describe("init", () => {
     const { store } = makeStore(fake);
     await flowResult(store.init());
 
-    expect(store.brushList).toEqual(["b", "a"]);
-    expect(store.brushName).toBe("b");
+    expect(store.projectList).toEqual(["b", "a"]);
+    expect(store.projectName).toBe("b");
     expect(store.saveName).toBe("b");
     expect(store.loadState).toBe("loaded");
-    expect(store.hasBrush).toBe(true);
+    expect(store.hasProject).toBe(true);
     expect(store.document?.width).toBe(4);
     expect(store.loadGeneration).toBe(1);
     expect(fake.get).toHaveBeenCalledWith("b");
@@ -226,9 +226,9 @@ describe("init", () => {
   });
 });
 
-/* ── loadBrush ───────────────────────────────────────────────────────────── */
+/* ── loadProject ───────────────────────────────────────────────────────────── */
 
-describe("loadBrush", () => {
+describe("loadProject", () => {
   it("normalises the raw payload and installs it", async () => {
     // A sparse, slightly malformed-but-recoverable file: missing
     // appliedGroups, a short row, a bogus channel type.
@@ -245,7 +245,7 @@ describe("loadBrush", () => {
       ],
     };
     const { store } = makeStore(makeFakeApi({ sparse: raw }));
-    const doc = await flowResult(store.loadBrush("sparse"));
+    const doc = await flowResult(store.loadProject("sparse"));
 
     expect(store.document).toBe(doc);
     expect(doc.version).toBe("brush-1");
@@ -256,17 +256,17 @@ describe("loadBrush", () => {
       [0, 0],
     ]);
     expect(store.loadState).toBe("loaded");
-    expect(store.brushName).toBe("sparse");
+    expect(store.projectName).toBe("sparse");
   });
 
   it("of a malformed payload → failed, 'unknown' ApiError, document UNCHANGED", async () => {
     const fake = makeFakeApi({ good: createBrushDocument(), bad: { nope: 1 } });
     const { store } = makeStore(fake);
-    await flowResult(store.loadBrush("good"));
+    await flowResult(store.loadProject("good"));
     const installed = store.document;
     const generation = store.loadGeneration;
 
-    const error = await flowResult(store.loadBrush("bad")).then(
+    const error = await flowResult(store.loadProject("bad")).then(
       () => null,
       (e: unknown) => e,
     );
@@ -282,7 +282,7 @@ describe("loadBrush", () => {
 
   it("of a missing brush → failed with the API's notFound error, document unchanged", async () => {
     const { store } = makeStore(makeFakeApi());
-    const error = await flowResult(store.loadBrush("ghost")).then(
+    const error = await flowResult(store.loadProject("ghost")).then(
       () => null,
       (e: unknown) => e,
     );
@@ -298,25 +298,25 @@ describe("loadBrush", () => {
       b: createBrushDocument(),
     });
     const { store } = makeStore(fake);
-    await flowResult(store.loadBrush("a"));
+    await flowResult(store.loadProject("a"));
     store.commit("edit", renameFirstLayer);
     expect(store.history.canUndo).toBe(true);
-    await flowResult(store.loadBrush("b"));
+    await flowResult(store.loadProject("b"));
     expect(store.history.canUndo).toBe(false);
     expect(store.history.entries).toEqual([]);
   });
 });
 
-/* ── createBrush ─────────────────────────────────────────────────────────── */
+/* ── createProject ─────────────────────────────────────────────────────────── */
 
-describe("createBrush", () => {
+describe("createProject", () => {
   it("calls api.create with a normalised 16×16 document, then installs it", async () => {
     const fake = makeFakeApi();
     const { store } = makeStore(fake);
     await flowResult(store.init());
     expect(store.loadGeneration).toBe(0);
 
-    const ok = await flowResult(store.createBrush("fresh"));
+    const ok = await flowResult(store.createProject("fresh"));
 
     expect(ok).toBe(true);
     expect(fake.create).toHaveBeenCalledTimes(1);
@@ -328,8 +328,8 @@ describe("createBrush", () => {
     expect(sent.frames[0].layers[0].pixels).toHaveLength(16);
 
     expect(store.document).toEqual(sent);
-    expect(store.brushName).toBe("fresh");
-    expect(store.brushList).toEqual(["fresh"]);
+    expect(store.projectName).toBe("fresh");
+    expect(store.projectList).toEqual(["fresh"]);
     expect(store.loadState).toBe("loaded");
     expect(store.loadGeneration).toBe(1);
   });
@@ -337,7 +337,7 @@ describe("createBrush", () => {
   it("honours a custom size", async () => {
     const fake = makeFakeApi();
     const { store } = makeStore(fake);
-    await flowResult(store.createBrush("wide", 32, 8));
+    await flowResult(store.createProject("wide", 32, 8));
     expect(store.document?.width).toBe(32);
     expect(store.document?.height).toBe(8);
   });
@@ -348,18 +348,18 @@ describe("createBrush", () => {
     await flowResult(store.init());
     const installed = store.document;
 
-    const ok = await flowResult(store.createBrush("a"));
+    const ok = await flowResult(store.createProject("a"));
 
     expect(ok).toBe(false);
     expect(store.document).toBe(installed);
-    expect(store.brushName).toBe("a");
+    expect(store.projectName).toBe("a");
     expect(consoleError).toHaveBeenCalled();
   });
 });
 
-/* ── switchBrush ─────────────────────────────────────────────────────────── */
+/* ── switchProject ─────────────────────────────────────────────────────────── */
 
-describe("switchBrush", () => {
+describe("switchProject", () => {
   it("suspends auto-save for its duration and lifts it after", async () => {
     const fake = makeFakeApi({
       a: createBrushDocument(),
@@ -374,7 +374,7 @@ describe("switchBrush", () => {
     fake.get.mockImplementationOnce(
       () => new Promise((resolve) => (release = resolve)),
     );
-    const pending = flowResult(store.switchBrush("b"));
+    const pending = flowResult(store.switchProject("b"));
     await Promise.resolve();
     expect(session.saveSuspended).toBe(true);
     expect(store.loadState).toBe("loading");
@@ -382,7 +382,7 @@ describe("switchBrush", () => {
     release(createBrushDocument(2, 2));
     expect(await pending).toBe(true);
     expect(session.saveSuspended).toBe(false);
-    expect(store.brushName).toBe("b");
+    expect(store.projectName).toBe("b");
     expect(store.document?.width).toBe(2);
     expect(store.loadState).toBe("loaded");
   });
@@ -393,30 +393,30 @@ describe("switchBrush", () => {
     await flowResult(store.init());
     const installed = store.document;
 
-    const ok = await flowResult(store.switchBrush("ghost"));
+    const ok = await flowResult(store.switchProject("ghost"));
 
     expect(ok).toBe(false);
     expect(store.loadState).toBe("loaded");
     expect(store.document).toBe(installed);
-    expect(store.brushName).toBe("a");
+    expect(store.projectName).toBe("a");
     expect(session.saveSuspended).toBe(false);
   });
 });
 
-/* ── renameBrush / deleteBrush / refreshList ─────────────────────────────── */
+/* ── renameProject / deleteProject / refreshList ─────────────────────────────── */
 
-describe("renameBrush", () => {
+describe("renameProject", () => {
   it("renames on the server, adopts the new name and list, keeps the document", async () => {
     const fake = makeFakeApi({ a: createBrushDocument() });
     const { store, session } = makeStore(fake);
     await flowResult(store.init());
     const installed = store.document;
 
-    expect(await flowResult(store.renameBrush("z"))).toBe(true);
+    expect(await flowResult(store.renameProject("z"))).toBe(true);
     expect(fake.rename).toHaveBeenCalledWith("a", "z");
-    expect(store.brushName).toBe("z");
+    expect(store.projectName).toBe("z");
     expect(store.saveName).toBe("z");
-    expect(store.brushList).toEqual(["z"]);
+    expect(store.projectList).toEqual(["z"]);
     expect(store.document).toBe(installed);
     expect(session.saveSuspended).toBe(false);
   });
@@ -424,7 +424,7 @@ describe("renameBrush", () => {
   it("returns false with no brush loaded and without calling the API", async () => {
     const fake = makeFakeApi();
     const { store } = makeStore(fake);
-    expect(await flowResult(store.renameBrush("z"))).toBe(false);
+    expect(await flowResult(store.renameProject("z"))).toBe(false);
     expect(fake.rename).not.toHaveBeenCalled();
   });
 
@@ -435,12 +435,12 @@ describe("renameBrush", () => {
     );
     const { store } = makeStore(fake);
     await flowResult(store.init());
-    expect(await flowResult(store.renameBrush("z"))).toBe(false);
-    expect(store.brushName).toBe("a");
+    expect(await flowResult(store.renameProject("z"))).toBe(false);
+    expect(store.projectName).toBe("a");
   });
 });
 
-describe("deleteBrush", () => {
+describe("deleteProject", () => {
   it("loads the first remaining brush", async () => {
     const fake = makeFakeApi({
       a: createBrushDocument(4, 4),
@@ -449,10 +449,10 @@ describe("deleteBrush", () => {
     const { store, session } = makeStore(fake);
     await flowResult(store.init());
 
-    expect(await flowResult(store.deleteBrush())).toBe(true);
+    expect(await flowResult(store.deleteProject())).toBe(true);
     expect(fake.remove).toHaveBeenCalledWith("a");
-    expect(store.brushList).toEqual(["b"]);
-    expect(store.brushName).toBe("b");
+    expect(store.projectList).toEqual(["b"]);
+    expect(store.projectName).toBe("b");
     expect(store.document?.width).toBe(8);
     expect(store.loadState).toBe("loaded");
     expect(store.loadGeneration).toBe(2);
@@ -469,12 +469,12 @@ describe("deleteBrush", () => {
     store.commit("edit", renameFirstLayer);
     expect(store.history.canUndo).toBe(true);
 
-    expect(await flowResult(store.deleteBrush())).toBe(true);
+    expect(await flowResult(store.deleteProject())).toBe(true);
     expect(store.loadState).toBe("idle");
     expect(store.document).toBeNull();
-    expect(store.hasBrush).toBe(false);
-    expect(store.brushName).toBe("");
-    expect(store.brushList).toEqual([]);
+    expect(store.hasProject).toBe(false);
+    expect(store.projectName).toBe("");
+    expect(store.projectList).toEqual([]);
     expect(store.history.canUndo).toBe(false);
     expect(store.loadGeneration).toBe(2);
     expect(installed[installed.length - 1]).toBeNull();
@@ -483,7 +483,7 @@ describe("deleteBrush", () => {
   it("returns false with no brush loaded", async () => {
     const fake = makeFakeApi();
     const { store } = makeStore(fake);
-    expect(await flowResult(store.deleteBrush())).toBe(false);
+    expect(await flowResult(store.deleteProject())).toBe(false);
     expect(fake.remove).not.toHaveBeenCalled();
   });
 });
@@ -498,7 +498,7 @@ describe("refreshList", () => {
 
     await flowResult(store.refreshList());
 
-    expect(store.brushList).toEqual(["a", "zzz"]);
+    expect(store.projectList).toEqual(["a", "zzz"]);
     expect(store.document).toBe(installed);
     expect(session.saveSuspended).toBe(false);
   });
@@ -654,11 +654,11 @@ describe("document is observable.ref — never a proxy", () => {
     );
   });
 
-  it("brushList is shallow: the array is tracked, its strings are strings", async () => {
+  it("projectList is shallow: the array is tracked, its strings are strings", async () => {
     const { store } = makeStore(makeFakeApi({ a: createBrushDocument() }));
     await flowResult(store.init());
-    expect(isObservableArray(store.brushList)).toBe(true);
-    expect(typeof store.brushList[0]).toBe("string");
+    expect(isObservableArray(store.projectList)).toBe(true);
+    expect(typeof store.projectList[0]).toBe("string");
   });
 });
 

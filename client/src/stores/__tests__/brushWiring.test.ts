@@ -32,11 +32,11 @@ let app: ApplicationStore;
 let projectSave: ReturnType<typeof vi.fn>;
 let brushSave: ReturnType<typeof vi.fn>;
 
-/** Install a 4×4 brush as if `loadBrush` had just succeeded. */
+/** Install a 4×4 brush as if `loadProject` had just succeeded. */
 function installLoadedBrush(): BrushDocument {
   const doc = createBrushDocument(4, 4);
   runInAction(() => {
-    app.brushes.brushName = BRUSH_NAME;
+    app.brushes.projectName = BRUSH_NAME;
     app.brushes.installDocument(doc);
     app.brushes.loadState = "loaded";
   });
@@ -77,7 +77,7 @@ describe("construction", () => {
   it("does not call brushes.init() — no brush is loaded on a pixel-studio boot", () => {
     expect(app.brushes.loadState).toBe("idle");
     expect(app.brushes.document).toBeNull();
-    expect(app.brushes.brushList).toEqual([]);
+    expect(app.brushes.projectList).toEqual([]);
   });
 
   it("brushAutoSave is null when autoSaveEnabled is false, like autoSave", () => {

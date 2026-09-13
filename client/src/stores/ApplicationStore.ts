@@ -1041,9 +1041,9 @@ export class ApplicationStore {
           this.brushes.history,
           {
             ...options.brushAutoSave,
-            // `saveName` is `brushes.brushName`; the controller passes it as
+            // `saveName` is `brushes.projectName`; the controller passes it as
             // `undefined` when empty. A brush is only ever `loaded` through
-            // `loadBrush`, which sets the name, so the fallback is unreachable
+            // `loadProject`, which sets the name, so the fallback is unreachable
             // in practice — and if it is reached the server's 400 surfaces as
             // `saveStatus = "error"` rather than silently saving nowhere.
             save:

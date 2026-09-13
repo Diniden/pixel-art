@@ -135,9 +135,9 @@ export const BrushLibraryContainer = observer(function BrushLibraryContainer() {
 
   return (
     <BrushLibrary
-      // `brushList` is `observable.shallow`; the component wants a plain array.
-      brushes={brushes.brushList.slice()}
-      currentBrush={brushes.hasBrush ? brushes.brushName : null}
+      // `projectList` is `observable.shallow`; the component wants a plain array.
+      brushes={brushes.projectList.slice()}
+      currentBrush={brushes.hasProject ? brushes.projectName : null}
       currentSize={doc ? { width: doc.width, height: doc.height } : null}
       thumbnailDraw={thumbnailDraw}
       thumbnailRevision={thumbnailRevision}
@@ -146,9 +146,9 @@ export const BrushLibraryContainer = observer(function BrushLibraryContainer() {
       // promise it already is at runtime. The component's callbacks are
       // fire-and-forget — the store reports failure through `console.error`
       // and `loadState`, exactly as `DomainStore`'s lifecycle flows do.
-      onSelectBrush={(name) => void flowResult(brushes.switchBrush(name))}
+      onSelectBrush={(name) => void flowResult(brushes.switchProject(name))}
       onCreateBrush={(name, width, height) =>
-        void flowResult(brushes.createBrush(name, width, height))
+        void flowResult(brushes.createProject(name, width, height))
       }
     />
   );

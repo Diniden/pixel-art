@@ -105,8 +105,8 @@ export interface PixelBrushState {
   size: PixelBrushSize | null;
   /** `brushes.loadState` — for the rail's loading / failed states. */
   loadState: LoadState;
-  /** `brushes.brushName`, or `null` when no document is loaded. */
-  brushName: string | null;
+  /** `brushes.projectName`, or `null` when no document is loaded. */
+  projectName: string | null;
 }
 
 /** The base colour, structurally — the domain `Color` has this shape. */
@@ -141,7 +141,7 @@ export function usePixelBrush(
   const pv = app.brushes.pixelVersion;
   const dv = app.brushes.domainVersion;
   const loadState = app.brushes.loadState;
-  const brushName = app.brushes.brushName;
+  const projectName = app.brushes.projectName;
   // Slider-rate, never pointer-rate: the size and strategy scalars.
   const { width, height, scaleX, scaleY } = app.ui.pixelBrush;
 
@@ -202,6 +202,6 @@ export function usePixelBrush(
     stamp,
     size,
     loadState,
-    brushName: doc ? brushName : null,
+    projectName: doc ? projectName : null,
   };
 }

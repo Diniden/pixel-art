@@ -186,7 +186,7 @@ function load(project: Project): void {
 
 function installBrush(doc: BrushDocument | null): void {
   runInAction(() => {
-    app.brushes.brushName = doc ? "test-brush" : "";
+    app.brushes.projectName = doc ? "test-brush" : "";
     app.brushes.installDocument(doc);
     app.brushes.loadState = doc ? "loaded" : "idle";
   });

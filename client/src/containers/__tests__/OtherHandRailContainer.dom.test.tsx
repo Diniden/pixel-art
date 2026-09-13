@@ -239,7 +239,7 @@ describe("OtherHandRailContainer — the Brush tool's section", () => {
   function installBrush(width: number | null, height = width): void {
     runInAction(() => {
       const doc = width === null ? null : createBrushDocument(width, height!);
-      app.brushes.brushName = doc ? "test-brush" : "";
+      app.brushes.projectName = doc ? "test-brush" : "";
       app.brushes.installDocument(doc);
       app.brushes.loadState = doc ? "loaded" : "idle";
     });

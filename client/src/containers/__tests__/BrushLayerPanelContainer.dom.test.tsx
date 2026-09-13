@@ -64,10 +64,10 @@ beforeEach(() => {
   runInAction(() => {
     app.adoptProject(tinyProject());
     app.domain.loadState = "loaded";
-    // Install the brush as if `loadBrush` had just succeeded.
+    // Install the brush as if `loadProject` had just succeeded.
     // `installDocument` clears the brush's own history and fires
     // `brushUI.adoptDocument`, which selects frame-1 / the top layer.
-    app.brushes.brushName = "panel-brush";
+    app.brushes.projectName = "panel-brush";
     app.brushes.installDocument(twoLayerDocument());
     app.brushes.loadState = "loaded";
   });

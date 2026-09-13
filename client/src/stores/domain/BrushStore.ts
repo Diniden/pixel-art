@@ -1,6 +1,7 @@
 /**
- * BrushStore — the loaded brush document plus its load/save lifecycle
- * (Brush Studio plan, `docs/01-brush-studio`, task 07; MASTER D7/D8/D9).
+ * BrushStore — the loaded brush PROJECT (one brush file) plus its load/save
+ * lifecycle (Brush Studio plan, `docs/01-brush-studio`, task 07; MASTER
+ * D7/D8/D9).
  *
  * The brush-file analogue of `./DomainStore.ts`, and deliberately shaped like
  * it: the same four-state load machine, the same three version counters the
@@ -103,10 +104,10 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
   /** The typed failure behind `loadState === "failed"`, or `null`. */
   loadError: ApiError | null = null;
 
-  /** The filename stem of the loaded brush — its identity (D2). */
-  brushName = "";
-  /** Brush file names as the SERVER returned them (it sorts; the store does not). */
-  brushList: string[] = [];
+  /** The filename stem of the loaded brush project — its identity (D2). */
+  projectName = "";
+  /** Brush project file names as the SERVER returned them (it sorts; the store does not). */
+  projectList: string[] = [];
 
   /**
    * The loaded brush document.
@@ -151,13 +152,13 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
     makeObservable(this, {
       loadState: observable,
       loadError: observableRef,
-      brushName: observable,
-      brushList: observableShallow,
+      projectName: observable,
+      projectList: observableShallow,
       document: observableRef, //  NEVER `observable` — see the field's note
       domainVersion: observable,
       pixelVersion: observable,
       loadGeneration: observable,
-      hasBrush: computed,
+      hasProject: computed,
       isLoading: computed,
       saveName: computed,
       adoptDocument: action,
@@ -166,18 +167,18 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
       commit: action,
       bumpPixelVersion: action,
       init: flow,
-      loadBrush: flow,
-      createBrush: flow,
-      switchBrush: flow,
-      renameBrush: flow,
-      deleteBrush: flow,
+      loadProject: flow,
+      createProject: flow,
+      switchProject: flow,
+      renameProject: flow,
+      deleteProject: flow,
       refreshList: flow,
     });
   }
 
   /* ── computeds ────────────────────────────────────────────────────────── */
 
-  get hasBrush(): boolean {
+  get hasProject(): boolean {
     return this.document !== null;
   }
 
@@ -187,7 +188,7 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
 
   /** `AutoSaveDocument.saveName` — the file the controller saves to. */
   get saveName(): string {
-    return this.brushName;
+    return this.projectName;
   }
 
   /**
@@ -288,13 +289,13 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
     this.loadState = "loading";
     this.loadError = null;
     try {
-      const brushList: string[] = yield this.api.list();
-      this.brushList = brushList;
-      if (brushList.length === 0) {
+      const projectList: string[] = yield this.api.list();
+      this.projectList = projectList;
+      if (projectList.length === 0) {
         this.loadState = "idle";
         return;
       }
-      yield flowResult(this.loadBrush(brushList[0]));
+      yield flowResult(this.loadProject(projectList[0]));
     } catch (error) {
       console.error("Failed to load brushes:", error);
       this.loadState = "failed";
@@ -305,13 +306,15 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
   }
 
   /**
-   * Load one brush by name. THROWS on failure — `loadState` becomes `failed`,
-   * `loadError` records why, and the previously installed document (if any)
-   * is left exactly as it was. A payload `normalizeBrushDocument` rejects is
-   * a failure of kind `"unknown"`: a corrupt brush file is an ERROR, never a
-   * blank default.
+   * Load one brush project by name. THROWS on failure — `loadState` becomes
+   * `failed`, `loadError` records why, and the previously installed document
+   * (if any) is left exactly as it was. A payload `normalizeBrushDocument`
+   * rejects is a failure of kind `"unknown"`: a corrupt brush file is an
+   * ERROR, never a blank default.
    */
-  *loadBrush(name: string): Generator<Promise<unknown>, BrushDocument, never> {
+  *loadProject(
+    name: string,
+  ): Generator<Promise<unknown>, BrushDocument, never> {
     this.loadState = "loading";
     this.loadError = null;
     try {
@@ -324,7 +327,7 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
           message: `Brush "${name}" is not a valid brush document`,
         });
       }
-      this.brushName = name;
+      this.projectName = name;
       this.installDocument(doc);
       this.loadState = "loaded";
       return doc;
@@ -340,11 +343,11 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
   /* `console.error`-on-failure contract.                                     */
 
   /**
-   * Create a new brush file from a fresh `width × height` document, refresh
-   * the list, then load it back — so the in-memory document is exactly what
-   * the server stored.
+   * Create a new brush project file from a fresh `width × height` document,
+   * refresh the list, then load it back — so the in-memory document is
+   * exactly what the server stored.
    */
-  *createBrush(
+  *createProject(
     name: string,
     width = 16,
     height = 16,
@@ -352,9 +355,9 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
     this.session.setSaveSuspended(true);
     try {
       yield this.api.create(name, createBrushDocument(width, height));
-      const brushList: string[] = yield this.api.list();
-      this.brushList = brushList;
-      yield flowResult(this.loadBrush(name));
+      const projectList: string[] = yield this.api.list();
+      this.projectList = projectList;
+      yield flowResult(this.loadProject(name));
       return true;
     } catch (error) {
       console.error("Failed to create brush:", error);
@@ -364,11 +367,11 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
     }
   }
 
-  *switchBrush(name: string): Generator<Promise<unknown>, boolean, never> {
+  *switchProject(name: string): Generator<Promise<unknown>, boolean, never> {
     this.session.setSaveSuspended(true);
     const before = this.loadState;
     try {
-      yield flowResult(this.loadBrush(name));
+      yield flowResult(this.loadProject(name));
       return true;
     } catch (error) {
       console.error("Failed to switch brush:", error);
@@ -380,17 +383,17 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
     }
   }
 
-  *renameBrush(newName: string): Generator<Promise<unknown>, boolean, never> {
-    if (!this.hasBrush) {
+  *renameProject(newName: string): Generator<Promise<unknown>, boolean, never> {
+    if (!this.hasProject) {
       console.error("Cannot rename: no brush is loaded");
       return false;
     }
     this.session.setSaveSuspended(true);
     try {
-      yield this.api.rename(this.brushName, newName);
-      const brushList: string[] = yield this.api.list();
-      this.brushName = newName;
-      this.brushList = brushList;
+      yield this.api.rename(this.projectName, newName);
+      const projectList: string[] = yield this.api.list();
+      this.projectName = newName;
+      this.projectList = projectList;
       return true;
     } catch (error) {
       console.error("Failed to rename brush:", error);
@@ -401,24 +404,25 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
   }
 
   /**
-   * Delete the loaded brush, then load the first remaining one — or, when it
-   * was the last, return to the empty `idle` state with no document. Unlike
-   * projects, deleting the last brush is allowed (MASTER §1).
+   * Delete the loaded brush project, then load the first remaining one — or,
+   * when it was the last, return to the empty `idle` state with no document.
+   * Unlike pixel projects, deleting the last brush project is allowed
+   * (MASTER §1).
    */
-  *deleteBrush(): Generator<Promise<unknown>, boolean, never> {
-    if (!this.hasBrush) {
+  *deleteProject(): Generator<Promise<unknown>, boolean, never> {
+    if (!this.hasProject) {
       console.error("Cannot delete: no brush is loaded");
       return false;
     }
     this.session.setSaveSuspended(true);
     try {
-      yield this.api.remove(this.brushName);
-      const brushList: string[] = yield this.api.list();
-      this.brushList = brushList;
-      if (brushList.length > 0) {
-        yield flowResult(this.loadBrush(brushList[0]));
+      yield this.api.remove(this.projectName);
+      const projectList: string[] = yield this.api.list();
+      this.projectList = projectList;
+      if (projectList.length > 0) {
+        yield flowResult(this.loadProject(projectList[0]));
       } else {
-        this.brushName = "";
+        this.projectName = "";
         this.installDocument(null);
         this.loadState = "idle";
       }
@@ -434,8 +438,8 @@ export class BrushStore implements AutoSaveDocument<BrushDocument> {
   *refreshList(): Generator<Promise<unknown>, void, never> {
     this.session.setSaveSuspended(true);
     try {
-      const brushList: string[] = yield this.api.list();
-      this.brushList = brushList;
+      const projectList: string[] = yield this.api.list();
+      this.projectList = projectList;
     } catch (error) {
       console.error("Failed to refresh brush list:", error);
     } finally {

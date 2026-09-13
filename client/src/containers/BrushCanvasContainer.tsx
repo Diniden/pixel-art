@@ -149,7 +149,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
   const pixelVersion = brushes.pixelVersion;
   const domainVersion = brushes.domainVersion;
   const loadGeneration = brushes.loadGeneration;
-  const brushName = brushes.brushName;
+  const projectName = brushes.projectName;
   const lightGridMode = app.ui.viewport.lightGridMode ?? false;
   // Pencil-only input: tri-state in the file, device-dependent default — the
   // same resolution as the pixel canvas (`CanvasContainer.tsx:648`).
@@ -195,7 +195,7 @@ export const BrushCanvasContainer = observer(function BrushCanvasContainer({
     height,
     zoom,
     camera: paneCamera,
-    resyncKey: `${renderMode}:${brushName}:${selectedFrameId ?? ""}`,
+    resyncKey: `${renderMode}:${projectName}:${selectedFrameId ?? ""}`,
   });
 
   /* ── coordinate mapping ────────────────────────────────────────────────── */

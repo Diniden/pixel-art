@@ -69,10 +69,10 @@ afterEach(() => {
   app.dispose();
 });
 
-/** Install a 4×4 brush as if `loadBrush("panel-brush")` had just succeeded. */
+/** Install a 4×4 brush as if `loadProject("panel-brush")` had just succeeded. */
 function installBrush(): void {
   runInAction(() => {
-    app.brushes.brushName = "panel-brush";
+    app.brushes.projectName = "panel-brush";
     app.brushes.installDocument(createBrushDocument(4, 4));
     app.brushes.loadState = "loaded";
   });
@@ -97,7 +97,7 @@ describe("PixelStudioPanelContainer — the Brush section", () => {
   it("(a) brush tool with no brush document shows the empty state and the button", () => {
     const { container } = mount();
 
-    expect(app.brushes.hasBrush).toBe(false);
+    expect(app.brushes.hasProject).toBe(false);
     expect(app.brushes.loadState).toBe("idle");
     expect(brushSection(container)).not.toBeNull();
     expect(
