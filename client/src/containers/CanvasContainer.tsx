@@ -247,6 +247,7 @@ import { isTouchDevice } from "../ui/utils/pointerDevice";
 import { stampTrace } from "../ui/canvas/tools/traceSampler";
 import type { ToolContext } from "../ui/canvas/tools/toolHandlers";
 import type { StampPoint } from "../ui/canvas/tools/brushStamp";
+import type { PixelBrushTarget } from "../ui/canvas/tools/pixelBrushStamp";
 import { useCanvasGeometry } from "../ui/hooks/useCanvasGeometry";
 import { useCanvasKeyboard } from "../ui/hooks/useCanvasKeyboard";
 import { useCanvasPointer } from "../ui/hooks/useCanvasPointer";
@@ -4381,6 +4382,27 @@ export const CanvasContainer = observer(function CanvasContainer({
     ref: React.MutableRefObject<StampPoint | null> | null;
   }>({ ref: null });
 
+  /* ── the Brush tool's target sampler (plan 13, task 06; MASTER D5) ────── */
+  //
+  // A `"target"`-seeded stamp cell burns / fades the pixel already on the
+  // canvas, so the stamp needs to READ the same grid `setPixels` writes —
+  // `editableGrid()`, exactly as the fills do, never a composited image. The
+  // grid is read inside the bound closure, never observed. A present pixel
+  // with `a === 0` is returned (it is a pixel); only the packed-empty `0` /
+  // a missing cell is `null`, and a burn on nothing writes nothing.
+  //
+  // `touched` is the per-STROKE set of cells already settled; the `brush`
+  // handler clears it on press. It is a ref — neither a dep nor observed —
+  // so pointer-rate writes to it never rebuild `getToolContext`.
+  const pixelBrushTouched = useRef(new Set<number>());
+  const pixelBrushTarget = useMemo<PixelBrushTarget>(
+    () => ({
+      sample: (x, y) => getPixelColor(editableGrid()?.[y]?.[x]),
+      touched: pixelBrushTouched.current,
+    }),
+    [editableGrid],
+  );
+
   /* ══ THE TOOL CONTEXT — the one place tool effects are bound ═══════════ */
   //
   // Assembled per event and handed to `toolHandlers` as-is. Every member is a
@@ -4401,6 +4423,7 @@ export const CanvasContainer = observer(function CanvasContainer({
         eraserShape === "circle" ? getCirclePixels : getSquarePixels,
       line: getLinePixels,
       pixelBrushStamp: pixelBrush.stamp,
+      pixelBrushTarget,
       shapeMode,
       borderRadius,
       lastStrokePixel: strokeCursor.current.ref?.current ?? null,
@@ -4464,6 +4487,8 @@ export const CanvasContainer = observer(function CanvasContainer({
       // Changes only with the brush document / frame / base colour — a memo
       // in `usePixelBrush`, never a pointer-rate value.
       pixelBrush.stamp,
+      // Memoised on `editableGrid` (already a dep above) — never pointer-rate.
+      pixelBrushTarget,
     ],
   );
 

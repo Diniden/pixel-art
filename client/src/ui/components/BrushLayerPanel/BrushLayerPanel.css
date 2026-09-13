@@ -98,9 +98,11 @@
   width: 100%;
 }
 
-/* The badge is the menu trigger: a small labelled chip, colour-coded per
-   channel by the `--<type>` modifiers below. */
-.brush-layer-panel__channel-badge {
+/* The badges are the menu triggers: small labelled chips. The channel badge
+   is colour-coded per channel by the `--<type>` modifiers below; the source
+   badge (plan 13) reads `SEL` / `TGT` and shares every chip rule. */
+.brush-layer-panel__channel-badge,
+.brush-layer-panel__source-badge {
   flex-shrink: 0;
   padding: var(--space-px) var(--space-1);
   font-family: var(--font-mono);
@@ -116,7 +118,8 @@
   transition: all var(--transition-fast);
 }
 
-.brush-layer-panel__channel-badge:hover {
+.brush-layer-panel__channel-badge:hover,
+.brush-layer-panel__source-badge:hover {
   border-color: var(--accent-primary);
   color: var(--text-primary);
 }
@@ -245,7 +248,21 @@
   color: var(--accent-warning);
 }
 
-.brush-layer-panel__channel-badge--open {
+/* Colour source: `selected` (the default) stays muted so it does not compete
+   with the channel chip; `target` takes the one accent family the channel
+   chips do not use, so a burn/fade layer stands out down the stack. */
+.brush-layer-panel__source-badge--selected {
+  color: var(--text-muted);
+}
+
+.brush-layer-panel__source-badge--target {
+  background: var(--accent-success-10);
+  border-color: var(--accent-success-30);
+  color: var(--accent-success);
+}
+
+.brush-layer-panel__channel-badge--open,
+.brush-layer-panel__source-badge--open {
   border-color: var(--accent-primary);
   box-shadow: var(--ring-accent);
 }

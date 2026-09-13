@@ -274,4 +274,35 @@ describe("PixelStudioPanel — the colour picker is always in the rail", () => {
     );
     expect(getByTestId(COLOR_PICKER_ID)).toBeTruthy();
   });
+
+  it("(f) the size block (task 13) reaches the extracted section and the picker still follows it", () => {
+    const { container, getByTestId } = render(
+      <PixelStudioPanel
+        {...baseProps("brush")}
+        pixelBrush={loadedBrush({
+          size: {
+            width: 8,
+            height: 6,
+            nativeWidth: 8,
+            nativeHeight: 6,
+            max: 64,
+            lockRatio: true,
+            scaleX: "nearest",
+            scaleY: "nearest",
+            onWidthChange: vi.fn(),
+            onHeightChange: vi.fn(),
+            onLockRatioChange: vi.fn(),
+            onScaleChange: vi.fn(),
+            onResetSize: vi.fn(),
+          },
+        })}
+      />,
+    );
+    const block = container.querySelector(".pixel-studio-panel__brush-size");
+    expect(block).not.toBeNull();
+    expect(
+      block!.compareDocumentPosition(getByTestId(COLOR_PICKER_ID)) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

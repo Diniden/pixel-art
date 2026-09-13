@@ -7,10 +7,14 @@
  * There are no variants and no per-frame anything: layer order is uniform
  * across frames (MASTER D6), so every move applies everywhere.
  *
- * The header's "+" opens the SAME `BrushChannelMenu` the rows use, in its
- * channel-only form, so a new layer is born with its type chosen —
- * `onAddLayer(channelType)` — rather than defaulting and needing a second
- * click. The menu is a `document.body` portal, so the rail's scroller
+ * The header's "+" opens the SAME `BrushChannelMenu` the rows use, without
+ * the group section, so a new layer is born with its colour source AND its
+ * type chosen — `onAddLayer(channelType, colorSource)` — rather than
+ * defaulting and needing a second click. The two picks read as a two-step
+ * (plan 13, MASTER D3): a colour-source row TICKS and keeps the menu open
+ * (the draft lives in `addSource` here); a channel row creates and closes.
+ * The draft goes back to `"selected"` whenever the menu closes, however it
+ * closes. The menu is a `document.body` portal, so the rail's scroller
  * cannot clip it.
  *
  * `ui/` boundary: React, lucide, the brush types, the `Icon` primitive,
@@ -18,7 +22,11 @@
  */
 import { useCallback, useState } from "react";
 import { Plus } from "lucide-react";
-import type { BrushAppliedGroup, BrushChannelType } from "../../../types";
+import type {
+  BrushAppliedGroup,
+  BrushChannelType,
+  BrushColorSource,
+} from "../../../types";
 import { Icon } from "../../primitives/Icon/Icon";
 import { classNames } from "../../classNames";
 import { BrushChannelMenu } from "./BrushChannelMenu";
@@ -31,13 +39,20 @@ export interface BrushLayerPanelProps {
   selectedLayerId: string | null;
   appliedGroups: ReadonlyArray<BrushAppliedGroup>;
 
-  /** The header "+" — the channel is picked from the menu before the call. */
-  onAddLayer: (channelType: BrushChannelType) => void;
+  /**
+   * The header "+" — the colour source and the channel are both picked from
+   * the menu before the call; the source defaults to `"selected"`.
+   */
+  onAddLayer: (
+    channelType: BrushChannelType,
+    colorSource: BrushColorSource,
+  ) => void;
 
   onSelect: (layerId: string) => void;
   onToggleVisibility: (layerId: string) => void;
   onRename: (layerId: string, name: string) => void;
   onSetChannelType: (layerId: string, type: BrushChannelType) => void;
+  onSetColorSource: (layerId: string, source: BrushColorSource) => void;
   onSetAppliedGroup: (layerId: string, groupId: string | null) => void;
   onCreateAppliedGroup: (layerId: string, name: string) => void;
   onMoveUp: (layerId: string) => void;
@@ -55,6 +70,7 @@ export function BrushLayerPanel({
   onToggleVisibility,
   onRename,
   onSetChannelType,
+  onSetColorSource,
   onSetAppliedGroup,
   onCreateAppliedGroup,
   onMoveUp,
@@ -64,7 +80,12 @@ export function BrushLayerPanel({
 }: BrushLayerPanelProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [addEl, setAddEl] = useState<HTMLButtonElement | null>(null);
-  const closeAdd = useCallback(() => setAddOpen(false), []);
+  /** The creation menu's sticky colour-source tick; reset on every close. */
+  const [addSource, setAddSource] = useState<BrushColorSource>("selected");
+  const closeAdd = useCallback(() => {
+    setAddOpen(false);
+    setAddSource("selected");
+  }, []);
 
   return (
     <div className="panel brush-layer-panel">
@@ -82,7 +103,7 @@ export function BrushLayerPanel({
             aria-expanded={addOpen}
             aria-label="Add layer"
             title="Add layer"
-            onClick={() => setAddOpen((open) => !open)}
+            onClick={() => (addOpen ? closeAdd() : setAddOpen(true))}
           >
             <Icon icon={Plus} size={12} />
           </button>
@@ -106,6 +127,7 @@ export function BrushLayerPanel({
                 onToggleVisibility={onToggleVisibility}
                 onRename={onRename}
                 onSetChannelType={onSetChannelType}
+                onSetColorSource={onSetColorSource}
                 onSetAppliedGroup={onSetAppliedGroup}
                 onCreateAppliedGroup={onCreateAppliedGroup}
                 onMoveUp={onMoveUp}
@@ -122,9 +144,12 @@ export function BrushLayerPanel({
         <BrushChannelMenu
           anchorEl={addEl}
           channelType={null}
-          label="New layer channel"
+          colorSource={addSource}
+          label="New layer — colour source, then channel"
+          // Ticks and stays open: the source is the first half of the pick.
+          onSelectColorSource={setAddSource}
           onSelectChannelType={(type) => {
-            onAddLayer(type);
+            onAddLayer(type, addSource);
             closeAdd();
           }}
           onClose={closeAdd}

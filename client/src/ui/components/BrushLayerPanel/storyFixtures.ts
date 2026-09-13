@@ -18,13 +18,17 @@ export const BRUSH_GROUPS: BrushAppliedGroup[] = [
   { id: "group-fx", name: "FX" },
 ];
 
-/** Four layers, one per channel type; the normal map is grouped. */
+/**
+ * Four layers, one per channel type; the normal map is grouped and the HSL
+ * tint reads the TARGET pixel (plan 13) — every other layer is `"selected"`.
+ */
 export const BRUSH_LAYERS_TYPICAL: BrushLayerRowModel[] = [
   {
     id: "brush-layer-height",
     name: "Height",
     visible: true,
     channelType: "heightmap",
+    colorSource: "selected",
     appliedGroupName: null,
     appliedGroupId: null,
   },
@@ -33,6 +37,7 @@ export const BRUSH_LAYERS_TYPICAL: BrushLayerRowModel[] = [
     name: "Normals",
     visible: true,
     channelType: "normal",
+    colorSource: "selected",
     appliedGroupName: "Body",
     appliedGroupId: "group-body",
   },
@@ -41,6 +46,7 @@ export const BRUSH_LAYERS_TYPICAL: BrushLayerRowModel[] = [
     name: "Tint",
     visible: false,
     channelType: "hsl",
+    colorSource: "target",
     appliedGroupName: null,
     appliedGroupId: null,
   },
@@ -49,6 +55,7 @@ export const BRUSH_LAYERS_TYPICAL: BrushLayerRowModel[] = [
     name: "Base colour",
     visible: true,
     channelType: "rgb",
+    colorSource: "selected",
     appliedGroupName: null,
     appliedGroupId: null,
   },
@@ -60,13 +67,17 @@ export const BRUSH_LAYER_LONG_NAME: BrushLayerRowModel = {
   name: "Specular highlight pass — rim light, upper-left key",
   visible: true,
   channelType: "hsl",
+  colorSource: "selected",
   appliedGroupName: "Shoulder Armour Set",
   appliedGroupId: "group-shoulder",
 };
 
 const CYCLE: BrushChannelType[] = ["rgb", "hsl", "normal", "heightmap"];
 
-/** The dense case: twelve layers, long names, every third one grouped. */
+/**
+ * The dense case: twelve layers, long names, every third one grouped and
+ * every third one (offset by one) target-sourced.
+ */
 export const BRUSH_LAYERS_MANY: BrushLayerRowModel[] = Array.from(
   { length: 12 },
   (_, i): BrushLayerRowModel => {
@@ -76,6 +87,7 @@ export const BRUSH_LAYERS_MANY: BrushLayerRowModel[] = Array.from(
       name: `Detail pass ${i + 1} — rim light and specular highlights`,
       visible: i % 4 !== 3,
       channelType: CYCLE[i % CYCLE.length],
+      colorSource: i % 3 === 2 ? "target" : "selected",
       appliedGroupName: grouped ? BRUSH_GROUPS[i % 2].name : null,
       appliedGroupId: grouped ? BRUSH_GROUPS[i % 2].id : null,
     };

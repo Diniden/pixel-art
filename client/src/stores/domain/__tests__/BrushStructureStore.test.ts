@@ -428,9 +428,27 @@ describe("addLayer", () => {
     expect(rig.brush.history.entries).toHaveLength(1);
   });
 
+  it("births the colorSource key in every frame for \"target\"; the default two-arg call leaves it absent", async () => {
+    const rig = await makeRig();
+
+    const target = rig.structure.addLayer("Burn", "hsl", "target");
+    const plain = rig.structure.addLayer("Plain", "rgb");
+    const explicit = rig.structure.addLayer("Explicit", "rgb", "selected");
+
+    const after = doc(rig);
+    assertUniformLayers(after);
+    for (let f = 0; f < 2; f++) {
+      expect(layerIn(after, f, target).colorSource).toBe("target");
+      expect("colorSource" in layerIn(after, f, plain)).toBe(false);
+      expect("colorSource" in layerIn(after, f, explicit)).toBe(false);
+    }
+    expect(rig.brush.history.entries).toHaveLength(3);
+  });
+
   it("returns '' with no document", () => {
     const rig = emptyRig();
     expect(rig.structure.addLayer("x", "rgb")).toBe("");
+    expect(rig.structure.addLayer("x", "rgb", "target")).toBe("");
     expect(rig.selection.selectLayer).not.toHaveBeenCalled();
   });
 });
@@ -566,6 +584,19 @@ describe("duplicateLayer", () => {
     expect(rig.structure.duplicateLayer("ghost")).toBe("");
     expect(rig.brush.history.entries).toHaveLength(1);
   });
+
+  it("carries a \"target\" colour source into the copy in every frame", async () => {
+    const rig = await makeRig();
+    rig.structure.setLayerColorSource("top", "target");
+    const id = rig.structure.duplicateLayer("top");
+    const after = doc(rig);
+    assertUniformLayers(after);
+    for (let f = 0; f < 2; f++) {
+      expect(layerIn(after, f, id).colorSource).toBe("target");
+      expect(layerIn(after, f, "top").colorSource).toBe("target");
+    }
+    expect(rig.brush.history.entries).toHaveLength(2);
+  });
 });
 
 describe("renameLayer / toggleLayerVisibility", () => {
@@ -639,6 +670,80 @@ describe("setLayerChannelType", () => {
     rig.structure.setLayerChannelType("top", "hsl");
     rig.structure.setLayerChannelType("ghost", "rgb");
     expect(rig.brush.history.entries).toHaveLength(0);
+  });
+});
+
+describe("setLayerColorSource", () => {
+  it("relabels in every frame, leaves every cell value — and the grid reference — untouched, and does NOT bump pixels", async () => {
+    const rig = await makeRig();
+    const before = doc(rig);
+    const pixelV = rig.brush.pixelVersion;
+    const domainV = rig.brush.domainVersion;
+
+    rig.structure.setLayerColorSource("top", "target");
+
+    const after = doc(rig);
+    assertUniformLayers(after);
+    for (let f = 0; f < 2; f++) {
+      const l = layerIn(after, f, "top");
+      expect(l.colorSource).toBe("target");
+      expect(l.pixels).toBe(layerIn(before, f, "top").pixels);
+      expect(l.pixels[0][1]).toEqual([100, f + 1, 1, 2]);
+      expect(l.pixels[1][2]).toEqual([100, f + 1, 3, 4]);
+      // The other layer is shared by reference — a spine copy only.
+      expect(layerIn(after, f, "bottom")).toBe(layerIn(before, f, "bottom"));
+    }
+    // The previous document was never mutated in place.
+    expect("colorSource" in layerIn(before, 0, "top")).toBe(false);
+    expect("colorSource" in layerIn(before, 1, "top")).toBe(false);
+    expect(rig.brush.pixelVersion).toBe(pixelV);
+    expect(rig.brush.domainVersion).toBe(domainV + 1);
+    expect(rig.brush.history.entries).toHaveLength(1);
+    expect(rig.brush.history.entries[0].label).toBe("Change colour source");
+  });
+
+  it("\"selected\" REMOVES the key rather than writing it, in every frame", async () => {
+    const rig = await makeRig();
+    rig.structure.setLayerColorSource("top", "target");
+    const before = doc(rig);
+
+    rig.structure.setLayerColorSource("top", "selected");
+
+    const after = doc(rig);
+    assertUniformLayers(after);
+    for (let f = 0; f < 2; f++) {
+      const l = layerIn(after, f, "top");
+      expect("colorSource" in l).toBe(false);
+      expect(l.pixels).toBe(layerIn(before, f, "top").pixels);
+      // Every other key survives the drop.
+      expect(l.id).toBe("top");
+      expect(l.name).toBe("top");
+      expect(l.channelType).toBe("hsl");
+      expect(l.visible).toBe(true);
+      expect(l.appliedGroupId).toBe("g1");
+    }
+    expect(layerIn(before, 0, "top").colorSource).toBe("target");
+    expect(rig.brush.history.entries).toHaveLength(2);
+
+    rig.brush.history.undo();
+    expect(rig.brush.document).toBe(before);
+    expect(layerIn(doc(rig), 0, "top").colorSource).toBe("target");
+  });
+
+  it("is a no-op when the source is unchanged (absent === \"selected\"), the id unknown, or there is no document", async () => {
+    const rig = await makeRig();
+    rig.structure.setLayerColorSource("top", "selected");
+    rig.structure.setLayerColorSource("ghost", "target");
+    expect(rig.brush.history.entries).toHaveLength(0);
+
+    rig.structure.setLayerColorSource("top", "target");
+    rig.structure.setLayerColorSource("top", "target");
+    expect(rig.brush.history.entries).toHaveLength(1);
+
+    const empty = emptyRig();
+    empty.structure.setLayerColorSource("top", "target");
+    expect(empty.brush.history.entries).toHaveLength(0);
+    expect(empty.brush.document).toBeNull();
   });
 });
 
@@ -851,6 +956,11 @@ describe("every op is exactly one history entry whose undo restores the previous
       name: "setLayerChannelType",
       run: (r) => r.structure.setLayerChannelType("top", "normal"),
       bumpsPixels: true,
+    },
+    {
+      name: "setLayerColorSource",
+      run: (r) => r.structure.setLayerColorSource("top", "target"),
+      bumpsPixels: false,
     },
     {
       name: "setLayerAppliedGroup",

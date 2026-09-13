@@ -76,6 +76,7 @@ import type {
 import { generateLayerColors } from "./hooks/timelineLayerColors";
 import { makeBrushCellThumbnailDraw } from "./hooks/brushCellThumbnail";
 import { useStores } from "../stores/context";
+import { brushLayerColorSource } from "../types";
 import type { BrushFrame, BrushLayer } from "../types";
 
 /** MASTER §1: "Local 200 ms interval, same as `FrameTimeline.tsx`." */
@@ -250,7 +251,9 @@ export const BrushTimelineContainer = observer(
      * Adds to every frame (the store's only add) with a unique placeholder
      * name and opens the header for renaming, exactly like the pixel
      * timeline. The new layer takes the selected layer's channel type so
-     * adding beside an HSL layer gives an HSL layer; `rgb` otherwise.
+     * adding beside an HSL layer gives an HSL layer; `rgb` otherwise. It
+     * inherits the selected layer's colour source the same way (plan 13
+     * D3); with no selection `brushLayerColorSource({})` is `"selected"`.
      */
     const handleAddLayer = useCallback(() => {
       if (doc === null) return;
@@ -258,7 +261,11 @@ export const BrushTimelineContainer = observer(
       let n = layers.length + 1;
       while (taken.has(`Layer ${n}`)) n++;
       const name = `Layer ${n}`;
-      brushStructure.addLayer(name, brushUI.channelTypeIn(doc) ?? "rgb");
+      brushStructure.addLayer(
+        name,
+        brushUI.channelTypeIn(doc) ?? "rgb",
+        brushLayerColorSource(brushUI.selectedLayerIn(doc) ?? {}),
+      );
       handleStartLayerRename(name);
     }, [doc, layers, brushStructure, brushUI, handleStartLayerRename]);
 

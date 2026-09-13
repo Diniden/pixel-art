@@ -1,9 +1,11 @@
 /**
  * BrushLayerRow stories (Brush Studio task 12). **No store provider.**
  *
- * Click the channel badge on any story: the menu must render ABOVE the
- * panel chrome, not clipped by it — it is a `document.body` portal. Open
- * the Actions panel to see every callback fire with `(layerId, …)`.
+ * Click the channel badge — or the `SEL` / `TGT` source badge after it — on
+ * any story: the same menu must render ABOVE the panel chrome, not clipped
+ * by it (it is a `document.body` portal), anchored on the badge pressed.
+ * Open the Actions panel to see every callback fire with `(layerId, …)`;
+ * picking a colour source fires `onSetColorSource` and closes.
  */
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { fn } from "storybook/test";
@@ -22,10 +24,11 @@ const meta = {
     docs: {
       description: {
         component:
-          "One brush layer row: visibility toggle, channel badge (opens the " +
-          "portalled `BrushChannelMenu`), inline rename on double-click, an " +
-          "optional applied-group badge, and up / down / duplicate / delete. " +
-          "Takes a flat `BrushLayerRowModel`, never a `BrushLayer`.",
+          "One brush layer row: visibility toggle, channel badge and colour-" +
+          "source badge (both open the portalled `BrushChannelMenu`), inline " +
+          "rename on double-click, an optional applied-group badge, and up / " +
+          "down / duplicate / delete. Takes a flat `BrushLayerRowModel`, " +
+          "never a `BrushLayer`.",
       },
     },
   },
@@ -50,6 +53,7 @@ const meta = {
     onToggleVisibility: fn(),
     onRename: fn(),
     onSetChannelType: fn(),
+    onSetColorSource: fn(),
     onSetAppliedGroup: fn(),
     onCreateAppliedGroup: fn(),
     onMoveUp: fn(),
@@ -78,6 +82,19 @@ export const Grouped: Story = {
 /** A hidden HSL layer: the eye glyph flips and `--visible` comes off. */
 export const Hidden: Story = {
   args: { layer: BRUSH_LAYERS_TYPICAL[2], index: 3, count: 4 },
+};
+
+/**
+ * Modifier story: `brush-layer-panel__source-badge--target` — a visible
+ * target-sourced tint layer, so the `TGT` chip's accent tint shows next to
+ * the muted `SEL` default of the other stories.
+ */
+export const WithTargetSource: Story = {
+  args: {
+    layer: { ...BRUSH_LAYERS_TYPICAL[2], visible: true },
+    index: 2,
+    count: 4,
+  },
 };
 
 /** Edge: a long name and a long group name compete for one narrow row. */

@@ -8,17 +8,23 @@ import {
   BRUSH_CHANNELS,
   BRUSH_CHANNEL_BADGE,
   BRUSH_CHANNEL_TYPES,
+  BRUSH_COLOR_SOURCES,
+  BRUSH_COLOR_SOURCE_BADGE,
+  BRUSH_COLOR_SOURCE_LABEL,
   BRUSH_DELTA_MAX,
   BRUSH_DELTA_MIN,
   BRUSH_DOCUMENT_VERSION,
+  DEFAULT_BRUSH_COLOR_SOURCE,
   assertUniformLayers,
   brushCellToRgba,
+  brushLayerColorSource,
   clampDelta,
   createBrushDocument,
   createBrushFrame,
   createBrushLayer,
   createEmptyBrushGrid,
   deltaToByte,
+  isColorSource,
   normalizeBrushDocument,
   type BrushCell,
   type BrushDocument,
@@ -40,6 +46,28 @@ describe("channel table", () => {
     expect(BRUSH_DELTA_MIN).toBe(-255);
     expect(BRUSH_DELTA_MAX).toBe(255);
     expect(BRUSH_DOCUMENT_VERSION).toBe("brush-1");
+  });
+
+  it("lists the two colour sources with labels and badges", () => {
+    expect(BRUSH_COLOR_SOURCES).toEqual(["selected", "target"]);
+    expect(BRUSH_COLOR_SOURCE_LABEL).toEqual({
+      selected: "Selected colour",
+      target: "Target pixel",
+    });
+    expect(BRUSH_COLOR_SOURCE_BADGE).toEqual({
+      selected: "SEL",
+      target: "TGT",
+    });
+    expect(DEFAULT_BRUSH_COLOR_SOURCE).toBe("selected");
+    expect(isColorSource("selected")).toBe(true);
+    expect(isColorSource("target")).toBe(true);
+    expect(isColorSource("bogus")).toBe(false);
+    expect(isColorSource(undefined)).toBe(false);
+    expect(isColorSource(1)).toBe(false);
+    // The helper treats an absent key as the default.
+    expect(brushLayerColorSource({})).toBe("selected");
+    expect(brushLayerColorSource({ colorSource: "selected" })).toBe("selected");
+    expect(brushLayerColorSource({ colorSource: "target" })).toBe("target");
   });
 });
 
@@ -148,9 +176,19 @@ describe("factories", () => {
       pixels: createEmptyBrushGrid(4, 3),
     });
     expect(layer.appliedGroupId).toBeUndefined();
+    // The colour-source key is absent (not `undefined`) by default so the
+    // factory output is byte-identical to a pre-plan-13 layer.
+    expect("colorSource" in layer).toBe(false);
+    expect(brushLayerColorSource(layer)).toBe("selected");
     expect(createBrushLayer("l", "L", 1, 1, "normal").channelType).toBe(
       "normal",
     );
+    expect(
+      "colorSource" in createBrushLayer("l", "L", 1, 1, "rgb", "selected"),
+    ).toBe(false);
+    const target = createBrushLayer("l", "L", 1, 1, "rgb", "target");
+    expect(target.colorSource).toBe("target");
+    expect(brushLayerColorSource(target)).toBe("target");
   });
 
   it("createBrushFrame wraps the layers it is given", () => {
@@ -272,8 +310,14 @@ describe("normalizeBrushDocument", () => {
   it("round-trips a factory document through JSON unchanged", () => {
     const doc = createBrushDocument(4, 3);
     doc.frames[0].layers[0].pixels[1][2] = [1, -2, 3, -4];
+    doc.frames[0].layers.push(
+      createBrushLayer("layer-2", "Layer 2", 4, 3, "hsl", "target"),
+    );
     const parsed: unknown = JSON.parse(JSON.stringify(doc));
-    expect(normalizeBrushDocument(parsed)).toEqual(doc);
+    const out = normalizeBrushDocument(parsed);
+    expect(out).toEqual(doc);
+    expect("colorSource" in out!.frames[0].layers[0]).toBe(false);
+    expect(out!.frames[0].layers[1].colorSource).toBe("target");
   });
 
   it("accepts a document with missing appliedGroups / visible / channelType and clamps cells", () => {
@@ -309,6 +353,10 @@ describe("normalizeBrushDocument", () => {
     expect(layer.visible).toBe(true);
     expect(layer.channelType).toBe("rgb");
     expect(layer.appliedGroupId).toBeUndefined();
+    // A pre-plan-13 file has no colorSource: the key stays absent and the
+    // helper resolves it to the default.
+    expect("colorSource" in layer).toBe(false);
+    expect(brushLayerColorSource(layer)).toBe("selected");
     expect(layer.pixels).toEqual([
       [
         [255, -255, 2, 0],
@@ -319,7 +367,35 @@ describe("normalizeBrushDocument", () => {
     expect(() => assertUniformLayers(doc!)).not.toThrow();
   });
 
-  it("preserves known channelType, visible:false, appliedGroupId and appliedGroups", () => {
+  it('normalises colorSource to an absent key unless it is exactly "target"', () => {
+    const layerWith = (colorSource: unknown) => ({
+      id: "l1",
+      name: "L1",
+      colorSource,
+      pixels: [[0]],
+    });
+    const doc = normalizeBrushDocument({
+      width: 1,
+      height: 1,
+      frames: [
+        {
+          layers: [
+            layerWith("bogus"),
+            layerWith("selected"),
+            layerWith("TARGET"),
+            layerWith(1),
+          ],
+        },
+      ],
+    });
+    expect(doc).not.toBeNull();
+    for (const layer of doc!.frames[0].layers) {
+      expect("colorSource" in layer).toBe(false);
+      expect(brushLayerColorSource(layer)).toBe("selected");
+    }
+  });
+
+  it("preserves known channelType, visible:false, appliedGroupId, colorSource and appliedGroups", () => {
     const raw = {
       width: 1,
       height: 1,
@@ -340,6 +416,7 @@ describe("normalizeBrushDocument", () => {
               channelType: "heightmap",
               visible: false,
               appliedGroupId: "g1",
+              colorSource: "target",
               pixels: [[[10, 0, 0, 0]]],
             },
           ],
@@ -355,6 +432,8 @@ describe("normalizeBrushDocument", () => {
     expect(layer.channelType).toBe("heightmap");
     expect(layer.visible).toBe(false);
     expect(layer.appliedGroupId).toBe("g1");
+    expect(layer.colorSource).toBe("target");
+    expect(brushLayerColorSource(layer)).toBe("target");
     expect(layer.pixels).toEqual([[[10, 0, 0, 0]]]);
   });
 

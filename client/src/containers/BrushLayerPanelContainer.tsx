@@ -9,10 +9,11 @@
  *
  * ── Every structural callback goes to `brushStructure`, verbatim ──────────
  *
- *   onAddLayer(type)                 → brushStructure.addLayer("Layer N", type)
+ *   onAddLayer(type, source)         → brushStructure.addLayer("Layer N", type, source)
  *   onToggleVisibility(id)           → brushStructure.toggleLayerVisibility(id)
  *   onRename(id, name)               → brushStructure.renameLayer(id, name)
  *   onSetChannelType(id, type)       → brushStructure.setLayerChannelType(id, type)
+ *   onSetColorSource(id, source)     → brushStructure.setLayerColorSource(id, source)
  *   onSetAppliedGroup(id, groupId)   → brushStructure.setLayerAppliedGroup(id, groupId)
  *   onCreateAppliedGroup(id, name)   → addAppliedGroup(name), then setLayerAppliedGroup(id, newId)
  *   onMoveUp(id) / onMoveDown(id)    → brushStructure.moveLayer(id, "up" | "down")
@@ -42,8 +43,10 @@
  * above it already shows the "create one to start" prompt.
  *
  * No pixel grid crosses this boundary: the row model is ids, a name, two
- * flags and a channel type. `document` is `observable.ref` (D8), so the
- * reads below track its identity only.
+ * flags, a channel type and a colour source (plan 13 D1: resolved here with
+ * `brushLayerColorSource`, so the row never sees the optional key).
+ * `document` is `observable.ref` (D8), so the reads below track its
+ * identity only.
  *
  * `observer()` lives here and only here (ESLint, task 05).
  */
@@ -51,6 +54,7 @@ import { observer } from "mobx-react-lite";
 import { BrushLayerPanel } from "../ui/components/BrushLayerPanel/BrushLayerPanel";
 import type { BrushLayerRowModel } from "../ui/components/BrushLayerPanel/BrushLayerRow";
 import { useStores } from "../stores/context";
+import { brushLayerColorSource } from "../types";
 
 export const BrushLayerPanelContainer = observer(
   function BrushLayerPanelContainer() {
@@ -82,6 +86,7 @@ export const BrushLayerPanelContainer = observer(
           name: layer.name,
           visible: layer.visible,
           channelType: layer.channelType,
+          colorSource: brushLayerColorSource(layer),
           appliedGroupId,
           // A group id the document no longer lists shows no badge, rather
           // than the raw id.
@@ -97,12 +102,17 @@ export const BrushLayerPanelContainer = observer(
         layers={rows}
         selectedLayerId={brushUI.selectedLayerId}
         appliedGroups={appliedGroups}
-        // The panel picks the channel from its menu; the name follows the
-        // pixel studio's "Layer N" convention, counted against frame 0 (the
-        // layer list — uniform across frames, D6).
-        onAddLayer={(channelType) => {
+        // The panel picks the colour source and the channel from its menu
+        // (plan 13 D3); the name follows the pixel studio's "Layer N"
+        // convention, counted against frame 0 (the layer list — uniform
+        // across frames, D6).
+        onAddLayer={(channelType, colorSource) => {
           const count = brushes.document?.frames[0]?.layers.length ?? 0;
-          brushStructure.addLayer(`Layer ${count + 1}`, channelType);
+          brushStructure.addLayer(
+            `Layer ${count + 1}`,
+            channelType,
+            colorSource,
+          );
         }}
         onSelect={(layerId) => brushUI.selectLayer(layerId)}
         onToggleVisibility={(layerId) =>
@@ -111,6 +121,9 @@ export const BrushLayerPanelContainer = observer(
         onRename={(layerId, name) => brushStructure.renameLayer(layerId, name)}
         onSetChannelType={(layerId, type) =>
           brushStructure.setLayerChannelType(layerId, type)
+        }
+        onSetColorSource={(layerId, source) =>
+          brushStructure.setLayerColorSource(layerId, source)
         }
         onSetAppliedGroup={(layerId, groupId) =>
           brushStructure.setLayerAppliedGroup(layerId, groupId)

@@ -11,8 +11,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { BrushCell, BrushChannelType } from "@/types/brush";
-import type { BrushSceneLayer } from "../../render/renderBrushFrame";
+import type {
+  BrushCell,
+  BrushChannelType,
+  BrushColorSource,
+} from "@/types/brush";
 import type { LineFn, StampColor, StampPoint } from "../brushStamp";
 import {
   PIXEL_BRUSH_HUE_PER_DELTA,
@@ -23,7 +26,12 @@ import {
   settlePixelBrushColor,
   stampPixelBrushSegment,
 } from "../pixelBrushStamp";
-import type { PixelBrushLayerDelta, PixelBrushStamp } from "../pixelBrushStamp";
+import type {
+  PixelBrushLayerDelta,
+  PixelBrushSourceLayer,
+  PixelBrushStamp,
+  PixelBrushTarget,
+} from "../pixelBrushStamp";
 
 /* ── Fixtures ──────────────────────────────────────────────────────────────── */
 
@@ -33,12 +41,19 @@ function grid(width: number, height: number): BrushCell[][] {
   );
 }
 
+/**
+ * A scene layer; `colorSource` is written only when given, so a layer built
+ * without one is byte-for-byte the pre-plan-13 `BrushSceneLayer` literal.
+ */
 function layer(
   channelType: BrushChannelType,
   visible: boolean,
   pixels: BrushCell[][],
-): BrushSceneLayer {
-  return { channelType, visible, pixels };
+  colorSource?: BrushColorSource,
+): PixelBrushSourceLayer {
+  const l: PixelBrushSourceLayer = { channelType, visible, pixels };
+  if (colorSource) l.colorSource = colorSource;
+  return l;
 }
 
 function paint(
@@ -595,5 +610,522 @@ describe("stampPixelBrushSegment", () => {
     expect(
       stampPixelBrushSegment(null, { x: 0, y: 0 }, neverCalled, centred, GRID),
     ).toEqual([{ x: 1, y: 1, color: Y }]);
+  });
+});
+
+/* ── Colour source: seed rule (plan 13, D4 / D5) ───────────────────────────── */
+
+const BURN: [number, number, number, number] = [-50, -50, -50, 0];
+
+describe("resolvePixelBrushStamp — colour source seed", () => {
+  it("a target layer at one cell and a selected layer at another: one cell carries targetDeltas, the other does not", () => {
+    // 2×1, origin (1,0). Target rgb [−50,−50,−50,0] at (0,0); selected rgb
+    // [10,0,0,0] at (1,0). Base GREY100.
+    // (0,0): fallback = (100−50, 100−50, 100−50, 255) = (50,50,50,255), seeded target.
+    // (1,0): (110,100,100,255), seeded selected → exactly today's cell.
+    const t = grid(2, 1);
+    paint(t, 0, 0, BURN);
+    const s = grid(2, 1);
+    paint(s, 1, 0, [10, 0, 0, 0]);
+    const layers = [layer("rgb", true, t, "target"), layer("rgb", true, s)];
+
+    const stamp = resolvePixelBrushStamp(layers, 2, 1, GREY100);
+    expect(stamp.cells).toStrictEqual([
+      {
+        dx: -1,
+        dy: 0,
+        color: { r: 50, g: 50, b: 50, a: 255 },
+        targetDeltas: [d("rgb", BURN)],
+      },
+      { dx: 0, dy: 0, color: { r: 110, g: 100, b: 100, a: 255 } },
+    ]);
+    expect("targetDeltas" in stamp.cells[1]!).toBe(false);
+    // The footprint ignores sources.
+    expect(offsetsOf(stamp)).toEqual(pixelBrushFootprint(layers, 2, 1).offsets);
+  });
+
+  it("seed = the BOTTOM-MOST visible painted layer: target below selected → target-seeded with both deltas in order", () => {
+    // 1×1. Bottom: target rgb [−50,−50,−50,0]; top: selected rgb [0,0,0,−55].
+    // Fallback: (50,50,50, 255−55 = 200).
+    const bottom = grid(1, 1);
+    paint(bottom, 0, 0, BURN);
+    const top = grid(1, 1);
+    paint(top, 0, 0, [0, 0, 0, -55]);
+    const stamp = resolvePixelBrushStamp(
+      [layer("rgb", true, bottom, "target"), layer("rgb", true, top)],
+      1,
+      1,
+      GREY100,
+    );
+    expect(stamp.cells).toStrictEqual([
+      {
+        dx: 0,
+        dy: 0,
+        color: { r: 50, g: 50, b: 50, a: 200 },
+        targetDeltas: [d("rgb", BURN), d("rgb", [0, 0, 0, -55])],
+      },
+    ]);
+  });
+
+  it("selected below target → selected-seeded, no targetDeltas (both deltas still fold into the colour)", () => {
+    const bottom = grid(1, 1);
+    paint(bottom, 0, 0, [0, 0, 0, -55]);
+    const top = grid(1, 1);
+    paint(top, 0, 0, BURN);
+    const stamp = resolvePixelBrushStamp(
+      [layer("rgb", true, bottom), layer("rgb", true, top, "target")],
+      1,
+      1,
+      GREY100,
+    );
+    expect(stamp.cells).toStrictEqual([
+      { dx: 0, dy: 0, color: { r: 50, g: 50, b: 50, a: 200 } },
+    ]);
+  });
+
+  it('an explicit `colorSource: "selected"` is the same as an absent one', () => {
+    const a = grid(1, 1);
+    paint(a, 0, 0, BURN);
+    const explicit = resolvePixelBrushStamp(
+      [layer("rgb", true, a, "selected")],
+      1,
+      1,
+      GREY100,
+    );
+    const absent = resolvePixelBrushStamp(
+      [layer("rgb", true, a)],
+      1,
+      1,
+      GREY100,
+    );
+    expect(explicit.cells).toStrictEqual(absent.cells);
+    expect("targetDeltas" in explicit.cells[0]!).toBe(false);
+  });
+
+  it("a HIDDEN target layer is ignored — it neither seeds nor contributes", () => {
+    // Hidden target at (0,0) under a visible selected layer at (0,0): the
+    // visible layer is the bottom-most VISIBLE one, so the seed is selected.
+    const hiddenTarget = grid(1, 1);
+    paint(hiddenTarget, 0, 0, BURN);
+    const sel = grid(1, 1);
+    paint(sel, 0, 0, [10, 0, 0, 0]);
+    const stamp = resolvePixelBrushStamp(
+      [layer("rgb", false, hiddenTarget, "target"), layer("rgb", true, sel)],
+      1,
+      1,
+      GREY100,
+    );
+    expect(stamp.cells).toStrictEqual([
+      { dx: 0, dy: 0, color: { r: 110, g: 100, b: 100, a: 255 } },
+    ]);
+    // A hidden target layer alone paints nothing at all.
+    expect(
+      resolvePixelBrushStamp(
+        [layer("rgb", false, hiddenTarget, "target")],
+        1,
+        1,
+        GREY100,
+      ).cells,
+    ).toEqual([]);
+  });
+
+  it("normal / heightmap target layers seed the cell but do not change the colour", () => {
+    const n = grid(2, 1);
+    paint(n, 0, 0, [255, -255, 100, 0]);
+    const h = grid(2, 1);
+    paint(h, 1, 0, [255, 0, 0, 0]);
+    const stamp = resolvePixelBrushStamp(
+      [
+        layer("normal", true, n, "target"),
+        layer("heightmap", true, h, "target"),
+      ],
+      2,
+      1,
+      GREY100,
+    );
+    expect(stamp.cells).toStrictEqual([
+      {
+        dx: -1,
+        dy: 0,
+        color: { r: 100, g: 100, b: 100, a: 255 },
+        targetDeltas: [d("normal", [255, -255, 100, 0])],
+      },
+      {
+        dx: 0,
+        dy: 0,
+        color: { r: 100, g: 100, b: 100, a: 255 },
+        targetDeltas: [d("heightmap", [255, 0, 0, 0])],
+      },
+    ]);
+    // And at write time the sampled pixel passes through untouched.
+    const target: PixelBrushTarget = {
+      sample: () => ({ r: 200, g: 100, b: 50, a: 255 }),
+      touched: new Set(),
+    };
+    expect(
+      stampPixelBrushSegment(
+        null,
+        { x: 1, y: 0 },
+        () => {
+          throw new Error("no line");
+        },
+        stamp,
+        { gridWidth: 10, gridHeight: 10 },
+        target,
+      ),
+    ).toEqual([
+      { x: 0, y: 0, color: { r: 200, g: 100, b: 50, a: 255 } },
+      { x: 1, y: 0, color: { r: 200, g: 100, b: 50, a: 255 } },
+    ]);
+  });
+
+  it("without any colorSource the stamp is byte-identical to before: no cell has a targetDeltas key", () => {
+    const a = grid(3, 3);
+    paint(a, 0, 0, [10, 0, 0, 0]);
+    paint(a, 1, 1, [10, 0, 0, 0]);
+    const b = grid(3, 3);
+    paint(b, 1, 1, [0, 0, -255, 0]);
+    paint(b, 2, 2, [0, 0, 0, -255]);
+    const s = resolvePixelBrushStamp(
+      [layer("rgb", true, a), layer("hsl", true, b)],
+      3,
+      3,
+      GREY100,
+    );
+    // Same expectations as "carries the footprint geometry…" above, strictly.
+    expect(s.cells).toStrictEqual([
+      { dx: -1, dy: -1, color: { r: 110, g: 100, b: 100, a: 255 } },
+      { dx: 0, dy: 0, color: { r: 0, g: 0, b: 0, a: 255 } },
+      { dx: 1, dy: 1, color: { r: 99, g: 99, b: 99, a: 0 } },
+    ]);
+    for (const c of s.cells) expect("targetDeltas" in c).toBe(false);
+  });
+});
+
+/* ── Colour source: settled at write time (plan 13, D5) ────────────────────── */
+
+describe("stampPixelBrushSegment — target cells through a sampler", () => {
+  const FALLBACK: StampColor = { r: 50, g: 50, b: 50, a: 255 };
+  const SEL: StampColor = { r: 110, g: 100, b: 100, a: 255 };
+  /** One target cell at the origin, burn [−50,−50,−50,0]; fallback (50,50,50,255). */
+  const targetStamp: PixelBrushStamp = {
+    width: 1,
+    height: 1,
+    originX: 0,
+    originY: 0,
+    cells: [{ dx: 0, dy: 0, color: FALLBACK, targetDeltas: [d("rgb", BURN)] }],
+  };
+  const GRID = { gridWidth: 10, gridHeight: 10 };
+  const neverCalled: LineFn = () => {
+    throw new Error("line must not be called");
+  };
+  const PX: StampColor = { r: 200, g: 100, b: 50, a: 255 };
+  const constant =
+    (px: StampColor | null) =>
+    (x: number, y: number): StampColor | null => {
+      void x;
+      void y;
+      return px;
+    };
+  const at = (x: number, y: number): StampPoint => ({ x, y });
+
+  it("settles the sampled pixel with the target deltas: (200,100,50) − 50 → (150,50,0)", () => {
+    const target: PixelBrushTarget = {
+      sample: constant(PX),
+      touched: new Set(),
+    };
+    const out = stampPixelBrushSegment(
+      null,
+      at(3, 2),
+      neverCalled,
+      targetStamp,
+      GRID,
+      target,
+    );
+    expect(out).toEqual([
+      { x: 3, y: 2, color: { r: 150, g: 50, b: 0, a: 255 } },
+    ]);
+    // The write owns a fresh colour — neither the fallback nor the sampled pixel.
+    expect(out[0]!.color).not.toBe(FALLBACK);
+    expect(out[0]!.color).not.toBe(PX);
+    // Marked touched under `y * gridWidth + x` = 2 · 10 + 3 = 23.
+    expect([...target.touched]).toEqual([23]);
+  });
+
+  it("a null sample (empty canvas cell) writes NOTHING and is not marked touched", () => {
+    const target: PixelBrushTarget = {
+      sample: constant(null),
+      touched: new Set(),
+    };
+    expect(
+      stampPixelBrushSegment(
+        null,
+        at(3, 2),
+        neverCalled,
+        targetStamp,
+        GRID,
+        target,
+      ),
+    ).toEqual([]);
+    expect(target.touched.size).toBe(0);
+  });
+
+  it("a present pixel with a = 0 IS sampled, and a settled a = 0 is written as-is", () => {
+    // (0,0,0,0) − 50 → clamp → (0,0,0,0). Written, not skipped.
+    const target: PixelBrushTarget = {
+      sample: constant({ r: 0, g: 0, b: 0, a: 0 }),
+      touched: new Set(),
+    };
+    expect(
+      stampPixelBrushSegment(
+        null,
+        at(0, 0),
+        neverCalled,
+        targetStamp,
+        GRID,
+        target,
+      ),
+    ).toEqual([{ x: 0, y: 0, color: { r: 0, g: 0, b: 0, a: 0 } }]);
+  });
+
+  it("a second segment in the same stroke (same touched set) does not write the cell again; after touched.clear() it does", () => {
+    let calls = 0;
+    const target: PixelBrushTarget = {
+      sample: (x, y) => {
+        calls++;
+        return constant(PX)(x, y);
+      },
+      touched: new Set(),
+    };
+    const first = stampPixelBrushSegment(
+      null,
+      at(3, 2),
+      neverCalled,
+      targetStamp,
+      GRID,
+      target,
+    );
+    expect(first).toHaveLength(1);
+    expect(calls).toBe(1);
+
+    // Drag back over the same cell: skipped BEFORE sampling.
+    const again = stampPixelBrushSegment(
+      at(3, 2),
+      at(3, 2),
+      neverCalled,
+      targetStamp,
+      GRID,
+      target,
+    );
+    expect(again).toEqual([]);
+    expect(calls).toBe(1);
+
+    // New stroke: the handler clears `touched` on press.
+    target.touched.clear();
+    const next = stampPixelBrushSegment(
+      null,
+      at(3, 2),
+      neverCalled,
+      targetStamp,
+      GRID,
+      target,
+    );
+    expect(next).toEqual([
+      { x: 3, y: 2, color: { r: 150, g: 50, b: 0, a: 255 } },
+    ]);
+    expect(calls).toBe(2);
+  });
+
+  it("a drag that crosses the same cell twice in one segment settles it once (no compounding)", () => {
+    // The line visits (0,0) → (1,0) → (0,0). The target cell at (0,0) is
+    // sampled at step 1 only; step 3 finds it touched and skips.
+    const line: LineFn = () => [at(0, 0), at(1, 0), at(0, 0)];
+    const samples: Array<[number, number]> = [];
+    const target: PixelBrushTarget = {
+      sample: (x, y) => {
+        samples.push([x, y]);
+        return PX;
+      },
+      touched: new Set(),
+    };
+    const out = stampPixelBrushSegment(
+      at(0, 0),
+      at(0, 0 + 1),
+      line,
+      targetStamp,
+      GRID,
+      target,
+    );
+    expect(samples).toEqual([
+      [0, 0],
+      [1, 0],
+    ]);
+    expect(out).toEqual([
+      { x: 0, y: 0, color: { r: 150, g: 50, b: 0, a: 255 } },
+      { x: 1, y: 0, color: { r: 150, g: 50, b: 0, a: 255 } },
+    ]);
+  });
+
+  it("with `target` omitted (or null) the fallback colour is written — today's behaviour, pinned", () => {
+    const expected = [{ x: 3, y: 2, color: FALLBACK }];
+    expect(
+      stampPixelBrushSegment(null, at(3, 2), neverCalled, targetStamp, GRID),
+    ).toEqual(expected);
+    expect(
+      stampPixelBrushSegment(
+        null,
+        at(3, 2),
+        neverCalled,
+        targetStamp,
+        GRID,
+        null,
+      ),
+    ).toEqual(expected);
+    // Byte-identical to a stamp whose cell has no targetDeltas at all.
+    const plain: PixelBrushStamp = {
+      ...targetStamp,
+      cells: [{ dx: 0, dy: 0, color: FALLBACK }],
+    };
+    expect(
+      stampPixelBrushSegment(null, at(3, 2), neverCalled, plain, GRID),
+    ).toStrictEqual(
+      stampPixelBrushSegment(null, at(3, 2), neverCalled, targetStamp, GRID),
+    );
+  });
+
+  it("a cell without targetDeltas never consults the sampler, even when one is supplied", () => {
+    const sel: PixelBrushStamp = {
+      ...targetStamp,
+      cells: [{ dx: 0, dy: 0, color: SEL }],
+    };
+    const target: PixelBrushTarget = {
+      sample: () => {
+        throw new Error("sample must not be called");
+      },
+      touched: new Set(),
+    };
+    expect(
+      stampPixelBrushSegment(null, at(3, 2), neverCalled, sel, GRID, target),
+    ).toEqual([{ x: 3, y: 2, color: SEL }]);
+    expect(target.touched.size).toBe(0);
+  });
+
+  it("a mixed stamp: the target cell settles from the canvas, the selected cell keeps its colour", () => {
+    // Cells: target at dx 0, selected at dx 1. Stamp at (4,4).
+    const mixed: PixelBrushStamp = {
+      width: 2,
+      height: 1,
+      originX: 0,
+      originY: 0,
+      cells: [
+        { dx: 0, dy: 0, color: FALLBACK, targetDeltas: [d("rgb", BURN)] },
+        { dx: 1, dy: 0, color: SEL },
+      ],
+    };
+    const target: PixelBrushTarget = {
+      sample: constant(PX),
+      touched: new Set(),
+    };
+    expect(
+      stampPixelBrushSegment(null, at(4, 4), neverCalled, mixed, GRID, target),
+    ).toEqual([
+      { x: 4, y: 4, color: { r: 150, g: 50, b: 0, a: 255 } },
+      { x: 5, y: 4, color: SEL },
+    ]);
+    expect([...target.touched]).toEqual([4 * 10 + 4]);
+  });
+
+  it("a later selected-seeded write to the same key in the same segment still wins (Map semantics unchanged)", () => {
+    // Cells: target at dx 0, selected at dx −1. Line (1,0) → (2,0).
+    // Step (1,0): target → (1,0) settled; selected → (0,0) = SEL.
+    // Step (2,0): target → (2,0) settled; selected → (1,0) = SEL, overwriting
+    // the settled write at (1,0) while keeping its first-touched position.
+    const mixed: PixelBrushStamp = {
+      width: 2,
+      height: 1,
+      originX: 1,
+      originY: 0,
+      cells: [
+        { dx: -1, dy: 0, color: SEL },
+        { dx: 0, dy: 0, color: FALLBACK, targetDeltas: [d("rgb", BURN)] },
+      ],
+    };
+    const line: LineFn = () => [at(1, 0), at(2, 0)];
+    const target: PixelBrushTarget = {
+      sample: constant(PX),
+      touched: new Set(),
+    };
+    expect(
+      stampPixelBrushSegment(at(1, 0), at(2, 0), line, mixed, GRID, target),
+    ).toEqual([
+      { x: 0, y: 0, color: SEL },
+      { x: 1, y: 0, color: SEL },
+      { x: 2, y: 0, color: { r: 150, g: 50, b: 0, a: 255 } },
+    ]);
+    // Both target cells were sampled and are now touched: keys 1 and 2.
+    expect([...target.touched].sort((a, b) => a - b)).toEqual([1, 2]);
+  });
+
+  it("an hsl target layer burns lightness from the canvas pixel, not the selected colour", () => {
+    // Sampled (200,100,50): rgbToHsl → max .784, min .196, l = .490 → 49 %.
+    // L −128 → 49 − 128 · 100/255 = 49 − 50.2 = −1.2 → clamp 0 → black.
+    const stamp: PixelBrushStamp = {
+      ...targetStamp,
+      cells: [
+        {
+          dx: 0,
+          dy: 0,
+          color: FALLBACK,
+          targetDeltas: [d("hsl", [0, 0, -128, 0])],
+        },
+      ],
+    };
+    const target: PixelBrushTarget = {
+      sample: constant(PX),
+      touched: new Set(),
+    };
+    expect(
+      stampPixelBrushSegment(null, at(0, 0), neverCalled, stamp, GRID, target),
+    ).toEqual([{ x: 0, y: 0, color: { r: 0, g: 0, b: 0, a: 255 } }]);
+  });
+
+  it("an off-grid target cell is dropped before the sampler is consulted", () => {
+    const target: PixelBrushTarget = {
+      sample: () => {
+        throw new Error("sample must not be called");
+      },
+      touched: new Set(),
+    };
+    expect(
+      stampPixelBrushSegment(
+        null,
+        at(-1, 0),
+        neverCalled,
+        targetStamp,
+        GRID,
+        target,
+      ),
+    ).toEqual([]);
+  });
+
+  it("end to end: a resolved target stamp burns the sampled pixel, and without a sampler writes its fallback", () => {
+    const t = grid(1, 1);
+    paint(t, 0, 0, BURN);
+    const stamp = resolvePixelBrushStamp(
+      [layer("rgb", true, t, "target")],
+      1,
+      1,
+      GREY100,
+    );
+    const target: PixelBrushTarget = {
+      sample: constant(PX),
+      touched: new Set(),
+    };
+    expect(
+      stampPixelBrushSegment(null, at(2, 2), neverCalled, stamp, GRID, target),
+    ).toEqual([{ x: 2, y: 2, color: { r: 150, g: 50, b: 0, a: 255 } }]);
+    expect(
+      stampPixelBrushSegment(null, at(2, 2), neverCalled, stamp, GRID),
+    ).toEqual([{ x: 2, y: 2, color: { r: 50, g: 50, b: 50, a: 255 } }]);
   });
 });

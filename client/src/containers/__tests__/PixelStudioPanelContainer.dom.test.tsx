@@ -202,3 +202,112 @@ describe("PixelStudioPanelContainer — the Brush section", () => {
     ).toContain("Pencil");
   });
 });
+
+/**
+ * The stamp-size controls (brush-scale task 13) over the REAL
+ * `PixelBrushUIStore` at `app.ui.pixelBrush`: the section shows the resolved
+ * effective size, every intent lands on the store, and the store's lock /
+ * 2-D rules (D11) show back through the section.
+ *
+ * ⚠️ The sliders are driven with `fireEvent.change`, not ArrowRight: jsdom
+ * does not step a native `<input type="range">` on arrow keys, so a keydown
+ * would never reach `onChange`. The keyboard path is the browser's own.
+ */
+describe("PixelStudioPanelContainer — the stamp-size controls", () => {
+  const readout = (container: HTMLElement) =>
+    container.querySelector(".pixel-studio-panel__brush-size-readout")
+      ?.textContent;
+  const sizeBlock = (container: HTMLElement) =>
+    container.querySelector(".pixel-studio-panel__brush-size");
+  const widthSlider = () => screen.getByRole("slider", { name: "Width" });
+  const lockButton = () =>
+    screen.getByRole("button", { name: "Lock aspect ratio" });
+  const nativeButton = () =>
+    screen.getByRole("button", { name: "Native size" }) as HTMLButtonElement;
+  const pick = (dropdown: string, option: string) => {
+    fireEvent.click(screen.getByRole("button", { name: dropdown }));
+    fireEvent.click(screen.getByRole("option", { name: option }));
+  };
+
+  it("with no document there is no size block", () => {
+    const { container } = mount();
+    expect(sizeBlock(container)).toBeNull();
+    // By name: the colour picker below has sliders of its own.
+    expect(screen.queryByRole("slider", { name: "Width" })).toBeNull();
+  });
+
+  it("a 4×4 brush shows 4 × 4 at native, the slider max of 64, and Native size disabled", () => {
+    installBrush();
+    const { container } = mount();
+
+    expect(readout(container)).toBe("4 × 4 (native 4 × 4)");
+    expect(widthSlider()).toHaveAttribute("max", "64");
+    expect(widthSlider()).toHaveValue("4");
+    expect(lockButton()).toHaveAttribute("aria-pressed", "true");
+    expect(nativeButton().disabled).toBe(true);
+    expect(app.ui.pixelBrush.isNative).toBe(true);
+  });
+
+  it("nudging W calls setWidth and, locked, H follows at the native ratio", () => {
+    installBrush();
+    const { container } = mount();
+
+    fireEvent.change(widthSlider(), { target: { value: "8" } });
+
+    expect(app.ui.pixelBrush.width).toBe(8);
+    expect(app.ui.pixelBrush.height).toBe(8);
+    expect(readout(container)).toBe("8 × 8 (native 4 × 4)");
+    expect(screen.getByRole("slider", { name: "Height" })).toHaveValue("8");
+    expect(nativeButton().disabled).toBe(false);
+
+    fireEvent.click(nativeButton());
+    expect(app.ui.pixelBrush.isNative).toBe(true);
+    expect(readout(container)).toBe("4 × 4 (native 4 × 4)");
+  });
+
+  it("choosing bilinear while locked sets both store axes", () => {
+    installBrush();
+    mount();
+
+    pick("Scaling", "Bilinear");
+
+    expect(app.ui.pixelBrush.scaleX).toBe("bilinear");
+    expect(app.ui.pixelBrush.scaleY).toBe("bilinear");
+    expect(
+      screen.getByRole("button", { name: "Scaling" }).textContent,
+    ).toContain("Bilinear");
+  });
+
+  it("unlock, then choose on X: only that axis changes and the sliders move independently", () => {
+    installBrush();
+    const { container } = mount();
+    pick("Scaling", "Bilinear");
+
+    fireEvent.click(lockButton());
+    expect(app.ui.pixelBrush.lockRatio).toBe(false);
+    expect(lockButton()).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: "Scaling" })).toBeNull();
+
+    pick("Scale X", "Lanczos 3");
+    expect(app.ui.pixelBrush.scaleX).toBe("lanczos3");
+    expect(app.ui.pixelBrush.scaleY).toBe("bilinear");
+
+    fireEvent.change(widthSlider(), { target: { value: "12" } });
+    expect(app.ui.pixelBrush.width).toBe(12);
+    expect(app.ui.pixelBrush.height).toBeNull();
+    expect(readout(container)).toBe("12 × 4 (native 4 × 4)");
+  });
+
+  it("a 2-D pick on one axis while unlocked takes both axes (D11)", () => {
+    installBrush();
+    mount();
+    fireEvent.click(lockButton());
+
+    pick("Scale Y", "EPX / Scale2x");
+    expect(app.ui.pixelBrush.scaleX).toBe("epx");
+    expect(app.ui.pixelBrush.scaleY).toBe("epx");
+    expect(
+      screen.getByRole("button", { name: "Scale X" }).textContent,
+    ).toContain("EPX / Scale2x");
+  });
+});

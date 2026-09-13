@@ -217,6 +217,88 @@
   line-height: var(--leading-snug);
 }
 
+/* The stamp-size block (brush-scale task 13): W / H sliders with the ratio
+   lock between them, the strategy picker(s), then "Native size" + a readout.
+   Sits between the `<dl>` and the Open button. */
+.pixel-studio-panel__brush-size {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+/* Two slider rows in the first column; the lock button in the second column
+   spans BOTH rows so it reads as a bracket joining W to H. The lock sits
+   between the rows in DOM order (Tab: W → lock → H) — the grid placement is
+   what turns that order into the bracket. `minmax(0, 1fr)` is the shrink
+   override: a `1fr` track refuses to go below its content's intrinsic width
+   and would push the rail wider at its narrowest. */
+.pixel-studio-panel__brush-size-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: var(--space-1);
+  row-gap: var(--space-0-5);
+}
+
+/* 24px, not the primitive's 32px: the rows it bridges are 22px each. */
+.pixel-studio-panel__brush-lock {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 24px;
+  height: 24px;
+  color: var(--text-secondary);
+}
+
+.pixel-studio-panel__brush-scale {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.pixel-studio-panel__brush-scale-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The `__brush-label` treatment, under its own name: the `<dl>` label class
+   is what the tests count rows by. */
+.pixel-studio-panel__brush-scale-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  min-width: 40px;
+  flex-shrink: 0;
+}
+
+/* The dropdown is `inline-block` by default; in the rail it fills the row so
+   the trigger's width is the row's, whatever the selected label's length. */
+.pixel-studio-panel__brush-scale-picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.pixel-studio-panel__brush-scale-trigger {
+  width: 100%;
+  font-size: var(--text-xs);
+}
+
+.pixel-studio-panel__brush-size-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+}
+
+.pixel-studio-panel__brush-size-readout {
+  font-size: var(--text-65);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
 .pixel-studio-panel__brush-open {
   align-self: flex-start;
 }
@@ -229,6 +311,30 @@
 }
 
 /* modifiers */
+
+/* The engaged lock wears the same accent ring as an active shape button, so
+   "locked" reads as the on-state of the same family. */
+.pixel-studio-panel__brush-lock.pixel-studio-panel__brush-lock--active {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
+/* ⚠️ The IconButton primitive's own hover is the modal close-button skin —
+   `--accent-danger` (red) at (0,3,0). A lock that turns red on hover reads as
+   "destructive", so both states restate their hover at (0,4,0): the
+   parent's-state-changes-a-child compound `selector-max-class` allows. The
+   active hover comes LAST at equal specificity so it wins over the free one. */
+.pixel-studio-panel__brush-size-row
+  .pixel-studio-panel__brush-lock:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pixel-studio-panel__brush-size-row
+  .pixel-studio-panel__brush-lock--active:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: var(--text-on-accent);
+}
 
 /* base.base--modifier compound: matches the old `.eraser-controls
    .shape-btn.active` (0,3,0) winning over the (0,2,0) hover rule. */

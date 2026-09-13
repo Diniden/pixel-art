@@ -14,13 +14,17 @@
  * clamp to the viewport, dismiss on outside `pointerdown` or Escape. jsdom
  * cannot observe the clipping; the DOM test asserts the parentage instead.
  *
- * ── Two sections, one menu ────────────────────────────────────────────────
+ * ── Three sections, one menu ──────────────────────────────────────────────
  *
+ * "Colour source" (plan 13, task 03) appears only when the caller passes
+ * `onSelectColorSource`: two `menuitemradio` rows, `BRUSH_COLOR_SOURCES` in
+ * order, ABOVE the channels so the creation flow reads source-then-channel.
  * "Channels" is always there: four `menuitemradio` rows, one per
  * `BRUSH_CHANNEL_TYPES` entry. "Applied group" appears only when the caller
  * passes `onSelectAppliedGroup` — the header's add-layer button reuses this
- * menu to pick a NEW layer's channel and has no group to assign. "New group…"
- * swaps itself for an inline input + confirm; Enter or the tick commits.
+ * menu to pick a NEW layer's source and channel and has no group to assign.
+ * "New group…" swaps itself for an inline input + confirm; Enter or the tick
+ * commits.
  *
  * ── Keyboard ──────────────────────────────────────────────────────────────
  * Arrow keys / Home / End move focus across the rows (wrapping), Enter and
@@ -28,8 +32,10 @@
  * new-group input the arrows belong to the input, and Escape only abandons
  * the draft — a second Escape closes the menu.
  *
- * Every selection callback is the CALLER's cue to close, exactly as with the
- * eyedropper menu; nothing here closes itself except the dismissals.
+ * Every selection callback is the CALLER's cue to close (or, for the
+ * creation menu's colour source, to tick and stay open — MASTER D3), exactly
+ * as with the eyedropper menu; nothing here closes itself except the
+ * dismissals.
  *
  * `ui/` boundary: React, react-dom, lucide, the brush types, `classNames`
  * and the panel stylesheet. No store, no MobX, no context.
@@ -40,8 +46,11 @@ import { Check, Plus } from "lucide-react";
 import {
   BRUSH_CHANNELS,
   BRUSH_CHANNEL_TYPES,
+  BRUSH_COLOR_SOURCES,
+  BRUSH_COLOR_SOURCE_LABEL,
   type BrushAppliedGroup,
   type BrushChannelType,
+  type BrushColorSource,
 } from "../../../types";
 import { Icon } from "../../primitives/Icon/Icon";
 import { classNames } from "../../classNames";
@@ -53,6 +62,13 @@ const CHANNEL_LABEL: Record<BrushChannelType, string> = {
   rgb: "RGB",
   normal: "Normal",
   heightmap: "Heightmap",
+};
+
+/** The second line of each colour-source row; the label comes from the types. */
+const COLOR_SOURCE_DETAIL: Record<BrushColorSource, string> = {
+  selected: "Deltas apply to the colour you picked",
+  target:
+    "Deltas apply to the pixel already on the canvas — burns, fades, tints",
 };
 
 export interface BrushChannelMenuProps {
@@ -68,6 +84,15 @@ export interface BrushChannelMenuProps {
   onSelectChannelType: (type: BrushChannelType) => void;
   /** Dismiss without choosing (outside click, Escape). */
   onClose: () => void;
+
+  /** The colour source in force — that row is ticked. `null` ticks nothing. */
+  colorSource?: BrushColorSource | null;
+  /**
+   * Commits a colour source. Supplying this is what SHOWS the "Colour
+   * source" section. Whether the caller closes is the caller's business:
+   * the row closes, the creation menu ticks and stays open.
+   */
+  onSelectColorSource?: (source: BrushColorSource) => void;
 
   /** The existing applied groups, in display order. */
   appliedGroups?: ReadonlyArray<BrushAppliedGroup>;
@@ -97,6 +122,8 @@ export function BrushChannelMenu({
   channelType,
   onSelectChannelType,
   onClose,
+  colorSource = null,
+  onSelectColorSource,
   appliedGroups = [],
   selectedGroupId = null,
   onSelectAppliedGroup,
@@ -111,6 +138,7 @@ export function BrushChannelMenu({
   /** `null` = the "New group…" row; a string = the inline draft. */
   const [draft, setDraft] = useState<string | null>(null);
   const creating = draft !== null;
+  const showColorSource = onSelectColorSource !== undefined;
   const showGroups = onSelectAppliedGroup !== undefined;
 
   /**
@@ -270,6 +298,21 @@ export function BrushChannelMenu({
       onDoubleClick={(e) => e.stopPropagation()}
       onKeyDown={handleKeyDown}
     >
+      {showColorSource && (
+        <>
+          <div className="brush-layer-panel__menu-title">Colour source</div>
+          {BRUSH_COLOR_SOURCES.map((s) =>
+            radio(
+              `source-${s}`,
+              s === colorSource,
+              () => onSelectColorSource(s),
+              BRUSH_COLOR_SOURCE_LABEL[s],
+              COLOR_SOURCE_DETAIL[s],
+            ),
+          )}
+        </>
+      )}
+
       <div className="brush-layer-panel__menu-title">Channels</div>
       {BRUSH_CHANNEL_TYPES.map((t) =>
         radio(

@@ -3,8 +3,12 @@
  *
  * The manual check lives here: open a row's channel menu inside the panel
  * — it must render above the panel, un-clipped, because it is a
- * `document.body` portal. The header "+" opens the same menu in its
- * channel-only form and reports `onAddLayer(channelType)`.
+ * `document.body` portal. The header "+" opens the same menu without the
+ * group section: "Colour source" above "Channels". Picking a source ticks
+ * and KEEPS the menu open; picking a channel reports
+ * `onAddLayer(channelType, colorSource)` and closes (plan 13, MASTER D3).
+ * Each row shows the channel badge then the `SEL` / `TGT` source badge;
+ * either opens the row menu, anchored on the badge that was pressed.
  */
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { fn } from "storybook/test";
@@ -45,6 +49,7 @@ const meta = {
     onToggleVisibility: fn(),
     onRename: fn(),
     onSetChannelType: fn(),
+    onSetColorSource: fn(),
     onSetAppliedGroup: fn(),
     onCreateAppliedGroup: fn(),
     onMoveUp: fn(),

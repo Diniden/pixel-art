@@ -51,13 +51,40 @@
  * layer gave a hue keeps that hue when a later `hsl` layer finally lifts L.
  * Consecutive `hsl` layers stay in HSL space and never round-trip at all.
  *
+ * ## Colour source: selected vs target (plan 13, task 05)
+ *
+ * Each brush layer has a `colorSource` (`brushLayerColorSource`, absent =
+ * `"selected"`). A cell's SEED is the source of its **bottom-most visible
+ * painted layer**; every visible layer's delta still applies in order (one
+ * fold, as above). A `"selected"`-seeded cell is settled here, once, against
+ * the user's base colour — today's path. A `"target"`-seeded cell cannot be
+ * settled ahead of time because its base is the canvas pixel under it, so
+ * the stamp carries the raw `targetDeltas` and `stampPixelBrushSegment`
+ * settles them at write time through an injected `PixelBrushTarget.sample`
+ * (a bound closure — no grid crosses into `ui/`, as `TraceSamplerFn`).
+ *
+ * **A target cell is settled at most once per stroke, from its pre-stroke
+ * pixel.** `PixelBrushTarget.touched` (keyed `y * gridWidth + x`) remembers
+ * the cells this stroke has already settled, and the handler clears it on
+ * press, so a drag that crosses a cell twice does not compound the burn while
+ * a second stroke does. An empty pixel (`sample` → `null`) is never written:
+ * a burn on nothing is nothing. Without a `target` every cell writes its
+ * pre-settled `color` — the selected-seed settle, which a target cell keeps
+ * as its FALLBACK — so consumers that never supply a sampler (the Brush
+ * Studio, older callers) see exactly the old output.
+ *
  * Pure: no React, no MobX, no store, no DOM. Grids are read by reference and
  * never observed. Does NOT import `toolHandlers.ts` (that module imports this
  * one); `PixelBrushWrite` is declared structurally and is assignable to
  * `ToolPixelWrite` by shape.
  */
 
-import type { BrushChannelType, BrushDelta } from "@/types/brush";
+import { brushLayerColorSource } from "@/types/brush";
+import type {
+  BrushChannelType,
+  BrushColorSource,
+  BrushDelta,
+} from "@/types/brush";
 import type { BrushSceneLayer } from "../render/renderBrushFrame";
 import { hslToRgb, rgbToHsl } from "../../utils/colorMath";
 import { inBounds } from "./brushStamp";
@@ -83,9 +110,48 @@ export interface PixelBrushFootprint {
   offsets: ReadonlyArray<PixelBrushOffset>;
 }
 
+/**
+ * A brush layer as the stamp sees it: the compositor's slice plus the
+ * optional colour source. A real `BrushLayer` satisfies this structurally,
+ * and so does a plain `BrushSceneLayer` (the key is optional — absent means
+ * `"selected"`, via `brushLayerColorSource`).
+ */
+export interface PixelBrushSourceLayer extends BrushSceneLayer {
+  colorSource?: BrushColorSource;
+}
+
+/** One visible layer's raw delta at a position, with the space it applies in. */
+export interface PixelBrushLayerDelta {
+  channelType: BrushChannelType;
+  delta: BrushDelta;
+}
+
 /** One footprint cell with its settled colour. Owns its `color` object. */
 export interface PixelBrushCell extends PixelBrushOffset {
+  /**
+   * Settled from the selected colour. For a target-seeded cell this is the
+   * FALLBACK used when no sampler is supplied.
+   */
   color: StampColor;
+  /**
+   * Present ⇒ target-seeded: the visible-layer deltas, bottom → top, to apply
+   * to the canvas pixel under the cell at write time.
+   */
+  targetDeltas?: ReadonlyArray<PixelBrushLayerDelta>;
+}
+
+/** The canvas pixel at grid `(x, y)`, or `null` when the cell is empty. */
+export type PixelBrushTargetSampler = (
+  x: number,
+  y: number,
+) => StampColor | null;
+
+/** What a target-seeded cell needs at write time. Bound by the container. */
+export interface PixelBrushTarget {
+  /** The canvas pixel at grid (x, y), or `null` when the cell is empty. Bound by the container. */
+  sample: PixelBrushTargetSampler;
+  /** Cells (keyed `y * gridWidth + x`) already settled in THIS stroke. Cleared by the handler on press. */
+  touched: Set<number>;
 }
 
 /** The footprint with a settled colour per cell for one base colour. */
@@ -95,12 +161,6 @@ export interface PixelBrushStamp {
   originX: number;
   originY: number;
   cells: ReadonlyArray<PixelBrushCell>;
-}
-
-/** One visible layer's raw delta at a position, with the space it applies in. */
-export interface PixelBrushLayerDelta {
-  channelType: BrushChannelType;
-  delta: BrushDelta;
 }
 
 /**
@@ -129,13 +189,13 @@ export function pixelBrushOrigin(
  * footprint and the stamp so the two walk exactly the same cells.
  */
 function forEachPaintedCell(
-  layers: ReadonlyArray<BrushSceneLayer>,
+  layers: ReadonlyArray<PixelBrushSourceLayer>,
   width: number,
   height: number,
   visit: (
     x: number,
     y: number,
-    layer: BrushSceneLayer,
+    layer: PixelBrushSourceLayer,
     delta: BrushDelta,
   ) => void,
 ): void {
@@ -274,10 +334,15 @@ export function settlePixelBrushColor(
  * Every cell owns its own colour object — no two cells share one.
  *
  * For the same layers, `cells.map(({ dx, dy }) => ({ dx, dy }))` equals
- * `pixelBrushFootprint(...).offsets`.
+ * `pixelBrushFootprint(...).offsets` — the footprint ignores colour sources.
+ *
+ * The cell's seed is the `colorSource` of the FIRST (bottom-most) layer that
+ * contributes to it. A `"target"` seed adds `targetDeltas` (the same list the
+ * fallback `color` was settled from); a `"selected"` seed emits exactly the
+ * cell it always did, with no extra key.
  */
 export function resolvePixelBrushStamp(
-  layers: ReadonlyArray<BrushSceneLayer>,
+  layers: ReadonlyArray<PixelBrushSourceLayer>,
   width: number,
   height: number,
   base: StampColor,
@@ -290,23 +355,34 @@ export function resolvePixelBrushStamp(
   const perCell: Array<PixelBrushLayerDelta[] | undefined> = new Array<
     PixelBrushLayerDelta[] | undefined
   >(w * h);
+  // The seed per cell, recorded on the FIRST contribution only.
+  const seed: Array<BrushColorSource | undefined> = new Array<
+    BrushColorSource | undefined
+  >(w * h);
 
   forEachPaintedCell(layers, w, h, (x, y, layer, delta) => {
     const key = y * w + x;
-    const list = perCell[key] ?? (perCell[key] = []);
+    let list = perCell[key];
+    if (!list) {
+      list = perCell[key] = [];
+      seed[key] = brushLayerColorSource(layer);
+    }
     list.push({ channelType: layer.channelType, delta });
   });
 
   const cells: PixelBrushCell[] = [];
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      const deltas = perCell[y * w + x];
+      const key = y * w + x;
+      const deltas = perCell[key];
       if (!deltas) continue;
-      cells.push({
+      const cell: PixelBrushCell = {
         dx: x - originX,
         dy: y - originY,
         color: settlePixelBrushColor(base, deltas),
-      });
+      };
+      if (seed[key] === "target") cell.targetDeltas = deltas;
+      cells.push(cell);
     }
   }
   return { width: w, height: h, originX, originY, cells };
@@ -318,9 +394,17 @@ export function resolvePixelBrushStamp(
  * `next`, exactly as `stampSegment`), stamp every cell at every step, drop
  * out-of-bounds cells, last write wins per cell.
  *
+ * Target-seeded cells (`cell.targetDeltas` present) with a `target` supplied
+ * are settled here, against `target.sample(x, y)`, **at most once per stroke
+ * per cell** (`target.touched`); an empty pixel (`null`) writes nothing. A
+ * selected-seeded write to the same key later in the segment still wins —
+ * the `Map` semantics are unchanged. Without a `target`, or for a cell with
+ * no `targetDeltas`, the pre-settled `cell.color` is written as before.
+ *
  * Writes share their stamp cell's colour object — a write is consumed
  * immediately by `setPixels`, so this is safe; the discipline that matters
  * (no two STAMP cells sharing a colour) is `resolvePixelBrushStamp`'s.
+ * A target write owns a fresh object from `settlePixelBrushColor`.
  */
 export function stampPixelBrushSegment(
   prev: StampPoint | null,
@@ -328,6 +412,7 @@ export function stampPixelBrushSegment(
   line: LineFn,
   stamp: PixelBrushStamp,
   bounds: StampBounds,
+  target?: PixelBrushTarget | null,
 ): PixelBrushWrite[] {
   const moved = prev !== null && (prev.x !== next.x || prev.y !== next.y);
   const segment = moved ? line(prev, next) : [next];
@@ -340,9 +425,18 @@ export function stampPixelBrushSegment(
       const y = step.y + cell.dy;
       if (!inBounds({ x, y }, bounds)) continue;
       // In-bounds, so `y * gridWidth + x` is a unique non-negative key.
+      const key = y * gridWidth + x;
+      let color = cell.color;
+      if (cell.targetDeltas && target) {
+        if (target.touched.has(key)) continue;
+        const px = target.sample(x, y);
+        if (px === null) continue;
+        target.touched.add(key);
+        color = settlePixelBrushColor(px, cell.targetDeltas);
+      }
       // `Map.set` on an existing key keeps its insertion position, so the
       // output stays in first-touched order while the colour is the last.
-      map.set(y * gridWidth + x, { x, y, color: cell.color });
+      map.set(key, { x, y, color });
     }
   }
 

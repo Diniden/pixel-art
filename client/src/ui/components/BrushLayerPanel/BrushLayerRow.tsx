@@ -7,7 +7,9 @@
  * per-frame move scope (brush layer order is uniform across frames, MASTER
  * D6, so up/down is simply up/down). What it gains is the CHANNEL BADGE — a
  * button showing `BRUSH_CHANNEL_BADGE[type]` that opens the portalled
- * `BrushChannelMenu` — and an optional applied-group badge after the name.
+ * `BrushChannelMenu` — the SOURCE BADGE right after it (`SEL` / `TGT`,
+ * plan 13 D3), which opens the SAME menu anchored on itself, and an optional
+ * applied-group badge after the name.
  *
  * ── No `BrushLayer` crosses this boundary ─────────────────────────────────
  * The row takes a `BrushLayerRowModel`: ids, a name and booleans. A
@@ -31,8 +33,10 @@ import { useCallback, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Copy, Eye, EyeOff, X } from "lucide-react";
 import {
   BRUSH_CHANNEL_BADGE,
+  BRUSH_COLOR_SOURCE_BADGE,
   type BrushAppliedGroup,
   type BrushChannelType,
+  type BrushColorSource,
 } from "../../../types";
 import { Icon } from "../../primitives/Icon/Icon";
 import { classNames } from "../../classNames";
@@ -45,6 +49,8 @@ export interface BrushLayerRowModel {
   name: string;
   visible: boolean;
   channelType: BrushChannelType;
+  /** Already resolved by the container (`brushLayerColorSource`), never absent. */
+  colorSource: BrushColorSource;
   /** Resolved group name for the badge; `null` when ungrouped. */
   appliedGroupName: string | null;
   /**
@@ -68,6 +74,7 @@ export interface BrushLayerRowProps {
   onToggleVisibility: (layerId: string) => void;
   onRename: (layerId: string, name: string) => void;
   onSetChannelType: (layerId: string, type: BrushChannelType) => void;
+  onSetColorSource: (layerId: string, source: BrushColorSource) => void;
   onSetAppliedGroup: (layerId: string, groupId: string | null) => void;
   onCreateAppliedGroup: (layerId: string, name: string) => void;
   onMoveUp: (layerId: string) => void;
@@ -86,6 +93,7 @@ export function BrushLayerRow({
   onToggleVisibility,
   onRename,
   onSetChannelType,
+  onSetColorSource,
   onSetAppliedGroup,
   onCreateAppliedGroup,
   onMoveUp,
@@ -93,11 +101,19 @@ export function BrushLayerRow({
   onDuplicate,
   onDelete,
 }: BrushLayerRowProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  // A state-held element rather than a ref read during render: the menu
-  // wants the element itself, and reading `ref.current` in render is what
+  // One menu, two triggers. `anchorEl` is whichever badge was pressed last,
+  // so the portal hangs off the button the user actually clicked; `menuOpen`
+  // is a single flag because both badges open the same menu. A state-held
+  // element rather than a ref read during render: the menu wants the
+  // element itself, and reading `ref.current` in render is what
   // `react-hooks/refs` exists to catch.
-  const [badgeEl, setBadgeEl] = useState<HTMLButtonElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
+  const [channelBadgeEl, setChannelBadgeEl] =
+    useState<HTMLButtonElement | null>(null);
+  const [sourceBadgeEl, setSourceBadgeEl] = useState<HTMLButtonElement | null>(
+    null,
+  );
   /** `null` = not renaming; a string = the draft in the input. */
   const [draft, setDraft] = useState<string | null>(null);
   // Enter and Escape both remove the input; a blur that follows must not
@@ -105,6 +121,15 @@ export function BrushLayerRow({
   const skipBlurRef = useRef(false);
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
+  /** Pressing the open menu's own anchor toggles it shut; the other badge re-anchors. */
+  const toggleMenu = (el: HTMLButtonElement | null) => {
+    if (menuOpen && el === anchorEl) {
+      closeMenu();
+      return;
+    }
+    setAnchorEl(el);
+    setMenuOpen(true);
+  };
 
   const selectedGroupId =
     layer.appliedGroupId ??
@@ -125,6 +150,9 @@ export function BrushLayerRow({
   };
 
   const badge = BRUSH_CHANNEL_BADGE[layer.channelType];
+  const sourceBadge = BRUSH_COLOR_SOURCE_BADGE[layer.colorSource];
+  const channelOpen = menuOpen && anchorEl === channelBadgeEl;
+  const sourceOpen = menuOpen && anchorEl === sourceBadgeEl;
 
   return (
     <div
@@ -158,23 +186,42 @@ export function BrushLayerRow({
       <div className="brush-layer-panel__main-col">
         <div className="brush-layer-panel__label-row">
           <button
-            ref={setBadgeEl}
+            ref={setChannelBadgeEl}
             type="button"
             className={classNames(
               "brush-layer-panel__channel-badge",
               `brush-layer-panel__channel-badge--${layer.channelType}`,
-              menuOpen && "brush-layer-panel__channel-badge--open",
+              channelOpen && "brush-layer-panel__channel-badge--open",
             )}
             aria-haspopup="menu"
-            aria-expanded={menuOpen}
+            aria-expanded={channelOpen}
             aria-label={`Channel: ${badge}`}
             title="Channel type and applied group"
             onClick={(e) => {
               e.stopPropagation();
-              setMenuOpen((open) => !open);
+              toggleMenu(channelBadgeEl);
             }}
           >
             {badge}
+          </button>
+          <button
+            ref={setSourceBadgeEl}
+            type="button"
+            className={classNames(
+              "brush-layer-panel__source-badge",
+              `brush-layer-panel__source-badge--${layer.colorSource}`,
+              sourceOpen && "brush-layer-panel__source-badge--open",
+            )}
+            aria-haspopup="menu"
+            aria-expanded={sourceOpen}
+            aria-label={`Colour source: ${sourceBadge}`}
+            title="Where the brush takes its colour"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleMenu(sourceBadgeEl);
+            }}
+          >
+            {sourceBadge}
           </button>
 
           {draft !== null ? (
@@ -285,11 +332,16 @@ export function BrushLayerRow({
 
       {menuOpen && (
         <BrushChannelMenu
-          anchorEl={badgeEl}
+          anchorEl={anchorEl}
           channelType={layer.channelType}
+          colorSource={layer.colorSource}
           appliedGroups={appliedGroups}
           selectedGroupId={selectedGroupId}
           label={`${layer.name} channel`}
+          onSelectColorSource={(source) => {
+            onSetColorSource(layer.id, source);
+            closeMenu();
+          }}
           onSelectChannelType={(type) => {
             onSetChannelType(layer.id, type);
             closeMenu();

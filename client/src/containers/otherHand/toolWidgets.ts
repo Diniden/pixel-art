@@ -14,6 +14,7 @@
  */
 import type { ThumbWidgetSpec } from "../../ui/components/OtherHand/thumbWidgets";
 import type { ApplicationStore } from "../../stores/ApplicationStore";
+import { pixelBrushWidgets } from "./pixelBrushWidgets";
 import type {
   SelectionBehavior,
   SelectionMode,
@@ -397,6 +398,9 @@ export function planToolSection(app: ApplicationStore): ToolSectionPlan {
             })),
           },
         );
+        break;
+      case "brush":
+        widgets.push(...pixelBrushWidgets(app));
         break;
       default:
         break;
