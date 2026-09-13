@@ -5,11 +5,11 @@
  * A behaviour module over `BrushStore.document`, the brush analogue of
  * `./FrameStore.ts` + `./LayerStore.ts` folded into one: frames (add /
  * duplicate / delete / rename / move / reorder), layers (add / delete / rename
- * / visibility / move / duplicate / channel type / applied group), applied
- * groups (add / rename / delete) and the document resize. Each public method
- * is exactly ONE undoable `brush.commit(...)` — one whole-document snapshot
- * entry in `BrushStore`'s own history — or a silent no-op when there is no
- * document or the target does not exist.
+ * / visibility / move / duplicate / channel type / colour source / applied
+ * group), applied groups (add / rename / delete) and the document resize.
+ * Each public method is exactly ONE undoable `brush.commit(...)` — one
+ * whole-document snapshot entry in `BrushStore`'s own history — or a silent
+ * no-op when there is no document or the target does not exist.
  *
  * ── Layers are UNIFORM across frames (D6) ──────────────────────────────────
  * A brush layer's id is stable across every frame: the same ids in the same
@@ -39,12 +39,14 @@
  */
 import {
   assertUniformLayers,
+  brushLayerColorSource,
   createBrushLayer,
   createEmptyBrushGrid,
   generateId,
   type BrushAppliedGroup,
   type BrushCell,
   type BrushChannelType,
+  type BrushColorSource,
   type BrushDocument,
   type BrushFrame,
   type BrushLayer,
@@ -134,6 +136,15 @@ function mapLayer(
 /** A layer without its `appliedGroupId` key (omitted, not `undefined`). */
 function withoutAppliedGroup(layer: BrushLayer): BrushLayer {
   const { appliedGroupId: _dropped, ...rest } = layer;
+  return rest;
+}
+
+/**
+ * A layer without its `colorSource` key (omitted, not `undefined`) — the
+ * absent key IS `"selected"` (plan 13 D1), so the default never writes one.
+ */
+function withoutColorSource(layer: BrushLayer): BrushLayer {
+  const { colorSource: _dropped, ...rest } = layer;
   return rest;
 }
 
@@ -363,11 +374,16 @@ export class BrushStructureStore {
   /* ══ Layers — every op touches EVERY frame (D6) ═════════════════════════ */
 
   /**
-   * Append the same `{id, name, channelType}` with a fresh empty grid to the
-   * TOP (array end) of every frame, and select it. Returns the new id, or
-   * `""` with no document.
+   * Append the same `{id, name, channelType, colorSource}` with a fresh empty
+   * grid to the TOP (array end) of every frame, and select it. The
+   * `colorSource` key is born only for `"target"` (plan 13 D1 / D2). Returns
+   * the new id, or `""` with no document.
    */
-  addLayer(name: string, channelType: BrushChannelType): string {
+  addLayer(
+    name: string,
+    channelType: BrushChannelType,
+    colorSource: BrushColorSource = "selected",
+  ): string {
     const doc = this.brush.document;
     if (!doc) return "";
     const layerId = generateId();
@@ -385,6 +401,7 @@ export class BrushStructureStore {
               current.width,
               current.height,
               channelType,
+              colorSource,
             ),
           ],
         })),
@@ -525,6 +542,32 @@ export class BrushStructureStore {
       "Change channel type",
       (current) => mapLayer(current, id, (l) => ({ ...l, channelType })),
       true,
+    );
+  }
+
+  /**
+   * Relabel: every frame's copy of the layer gets the source; `"selected"`
+   * drops the key (the absent key is the default, plan 13 D1). Grids are
+   * shared untouched. A colour source changes what FUTURE strokes do, not
+   * what the studio renders, so `pixelVersion` is not bumped (D2) — only
+   * `domainVersion`, which is what the pixel-studio brush memo keys on.
+   */
+  setLayerColorSource(id: string, source: BrushColorSource): void {
+    const doc = this.brush.document;
+    if (!doc) return;
+    const index = BrushStructureStore.layerIndexOf(doc, id);
+    if (index === -1) return;
+    if (brushLayerColorSource(doc.frames[0].layers[index]) === source) return;
+
+    this.commit(
+      "Change colour source",
+      (d) =>
+        mapLayer(d, id, (l) =>
+          source === "target"
+            ? { ...l, colorSource: "target" }
+            : withoutColorSource(l),
+        ),
+      false,
     );
   }
 
