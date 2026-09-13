@@ -47,16 +47,20 @@ export const handlers = [
   http.post("*/api/project/rename", () => HttpResponse.json({ success: true })),
   http.delete("*/api/project", () => HttpResponse.json({ success: true })),
   http.post("*/api/project/switch", () => HttpResponse.json({ success: true })),
-  // Brush Studio (task 04). `*/api/brush/create` and `*/api/brush/rename` are
-  // registered BEFORE the bare `*/api/brush` predicates so nothing can swallow
-  // them (MSW matches in array order). `*/api/brush` and `*/api/brushes` are
-  // distinct paths.
+  // Brush Studio (task 04; multi-brush task 06). These routes name brush
+  // PROJECT files — one file holds many brushes, and `GET */api/brush` answers
+  // with the whole project (`fixtureBrushDocument()`, a two-brush document).
+  // `*/api/brush/create` and `*/api/brush/rename` are registered BEFORE the
+  // bare `*/api/brush` predicates so nothing can swallow them (MSW matches in
+  // array order). `*/api/brush` and `*/api/brushes` are distinct paths.
+  // `{brushes}` here is the server's list of brush PROJECT file names.
   http.get("*/api/brushes", () =>
     HttpResponse.json({ brushes: fixtureBrushList }),
   ),
   http.post("*/api/brush/create", async ({ request }) => {
     const body = (await request.json()) as { name?: string };
     const name = body?.name ?? "unnamed";
+    // 409 when a brush project of that name already exists (server wording).
     if (fixtureBrushList.includes(name)) {
       return HttpResponse.json(
         { error: "Brush already exists" },
@@ -67,6 +71,7 @@ export const handlers = [
   }),
   http.post("*/api/brush/rename", () => HttpResponse.json({ success: true })),
   http.get("*/api/brush", ({ request }) => {
+    // 404 unless a brush project of that name is listed; else the project.
     const name = new URL(request.url).searchParams.get("name") ?? "";
     if (!fixtureBrushList.includes(name)) {
       return HttpResponse.json(
@@ -109,7 +114,10 @@ export function serverDownHandlers() {
   ];
 }
 
-/** The named resources do not exist: 404 with the server's `{error}` shape. */
+/**
+ * The named resources (project, brush project, export) do not exist: 404 with
+ * the server's `{error}` shape.
+ */
 export function notFoundHandlers() {
   return [
     http.get("*/api/project", () =>

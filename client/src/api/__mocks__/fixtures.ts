@@ -7,7 +7,8 @@
  * against `server/src/routes/*.ts` and `server/src/export/exportRouter.ts`).
  */
 import {
-  createBrushDocument,
+  BRUSH_DOCUMENT_VERSION,
+  createBrush,
   type BrushDocument,
   type CompactProject,
 } from "../../types";
@@ -150,21 +151,35 @@ export function fixtureJob(
 }
 
 // ============================================
-// Brush Studio (docs/01-brush-studio, task 04)
+// Brush Studio (docs/01-brush-studio, task 04; docs/14-multi-brush-projects,
+// task 06). One brush PROJECT is one file (`server/src/data/brushes/<name>.json`)
+// holding many brushes, each with its own size, frames and layers.
 // ============================================
 
+/** A brush PROJECT file name — `fixtureBrushList` lists project files. */
 export const FIXTURE_BRUSH_NAME = "Soft Round";
 
 export const fixtureBrushList: string[] = [FIXTURE_BRUSH_NAME, "Scatter"];
 
 /**
- * An 8×8 `brush-1` document with two painted cells. The in-memory shape IS
- * the wire shape (MASTER D3), so this is exactly what `GET /api/brush` sends.
+ * The ids of the two brushes INSIDE `fixtureBrushDocument()`, in array order
+ * (index 0 is the top of the displayed list). Locked for the container tests.
+ */
+export const FIXTURE_BRUSH_IDS = ["brush-1", "brush-2"] as const;
+
+/**
+ * A `brush-2` project holding TWO brushes (MASTER 14 D1): "Round", 8×8 with
+ * two painted cells, and "Dot", 4×4 with one. The in-memory shape IS the wire
+ * shape, so this is exactly what `GET /api/brush?name=Soft%20Round` sends.
  */
 export function fixtureBrushDocument(): BrushDocument {
-  const doc = createBrushDocument(8, 8);
-  const grid = doc.frames[0].layers[0].pixels;
-  grid[1][1] = [255, 0, -255, 0];
-  grid[6][6] = [-100, 100, 0, 255];
-  return doc;
+  const round = createBrush(FIXTURE_BRUSH_IDS[0], "Round", 8, 8);
+  const roundGrid = round.frames[0].layers[0].pixels;
+  roundGrid[1][1] = [255, 0, -255, 0];
+  roundGrid[6][6] = [-100, 100, 0, 255];
+
+  const dot = createBrush(FIXTURE_BRUSH_IDS[1], "Dot", 4, 4);
+  dot.frames[0].layers[0].pixels[2][2] = [0, 0, 0, 0];
+
+  return { version: BRUSH_DOCUMENT_VERSION, brushes: [round, dot] };
 }
