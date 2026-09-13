@@ -1,10 +1,10 @@
 # HANDOFF — Brush colour source and resizable brushes (plan 13)
 
-**Current position:** W5 IN PROGRESS (2026-09-13)
+**Current position:** PLAN COMPLETE (PARTIAL) — every wave DONE, final gate exit 0 (coordinator re-ran it 2026-09-13), **0 of 12 manual QA rows performed**
 **Branch:** `feat/13-brush-source-and-resize`
 **Worktree:** `/Users/diniden/Desktop/self/pixel-art/.claude/worktrees/feat+13-brush-source-and-resize`
 **Base:** `origin/main @ 33266af`
-**Last commit:** `2e98340` (W4 complete; manual checks owed)
+**Last commit:** `b118941` task 15 docs; this ledger close follows it
 
 ## Wave ledger
 
@@ -14,7 +14,7 @@
 | W2 | 02, 03, 05, 09 | DONE (tsc seam closed by 04 in W3) | 2026-09-13 | `d85bec0` 02 · `1b6b995` 09 · `39a234e` 05 · `02ed705` 03 | tsc **2 errors** (`BrushLayerPanelContainer.tsx:80,96` — `colorSource` / `onSetColorSource` missing; task 04's files) · eslint 0e/66w · vitest 196 files / 4248 tests · boundaries 5/5 OK · stylelint 2 pre-existing errors only, panel CSS clean · storybook build OK · no lockfile · no snapshot change |
 | W3 | 04, 06, 10, 11 | DONE (manual checks owed: 04 ×5, 06 ×4) | 2026-09-13 | `f46e0c8` 04 · `be79eb2` 11 · `3286ac1` 06 · `94a018a` 10 | tsc clean · eslint 0e/66w · vitest 199 files / 4322 tests · boundaries 5/5 OK · `git diff --stat 33266af..HEAD -- client/src/types/codecs client/src/services server/src/export` empty · no snapshot change · no lockfile |
 | W4 | 12, 13, 14 | DONE (manual checks owed: 12 ×4, 13 ×8, 14 ×4) | 2026-09-13 | `8f91c67` 14 · `e378801` 12 · `2e98340` 13 | tsc clean · eslint 0e/66w (≤ 66 ✓) · vitest 200 files / 4361 tests · boundaries 5/5 OK · stylelint 2 pre-existing errors / 69 warnings (unchanged from W2) · storybook build OK · no lockfile · no snapshot change |
-| W5 | 15 | PARTIAL (gate green; all 12 manual QA rows not performed — no browser / no device) | 2026-09-13 | `docs(13): ARCHITECTURE brush colour source + scaling; final gate; QA ledger` (this ledger's own commit — SHA is `git log -1` on the branch) | `bun run verify` exit 0: client tsc clean · server tsc clean · eslint 0e/66w client, 0e/0w server · format:check clean · vitest 200 files / 4361 tests · vite build OK · boundaries 5/5 OK · stylelint 71 problems = 2 pre-existing errors (`OtherHand.css:338,359`) / 69 warnings · storybook build OK · server tsc clean / eslint clean / vitest 4 files / 102 tests · no lockfile · data-safety diff `33266af..HEAD` empty · no snapshot change |
+| W5 | 15 | PARTIAL (gate green; all 12 manual QA rows not performed — no browser / no device) | 2026-09-13 | `b118941` 15 | `bun run verify` exit 0: client tsc clean · server tsc clean · eslint 0e/66w client, 0e/0w server · format:check clean · vitest 200 files / 4361 tests · vite build OK · boundaries 5/5 OK · stylelint 71 problems = 2 pre-existing errors (`OtherHand.css:338,359`) / 69 warnings · storybook build OK · server tsc clean / eslint clean / vitest 4 files / 102 tests · no lockfile · data-safety diff `33266af..HEAD` empty · no snapshot change |
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
@@ -57,6 +57,8 @@ Summary: **0 of 12 rows ✅, 12 of 12 ❌** (not performed). The plan is **PARTI
 - **08** — xBR tie rule: the published `d(E,F) <= d(E,H) ? F : H` is not transpose-symmetric on ties, so ties are resolved symmetrically (equal cells → that cell; different cells → keep `E`); documented in the header and pinned. Extra exports `cellDistance`, `XBR_PAINT_PENALTY` (4096), `PixelBrushGrid` for task 10's reuse (MASTER D9).
 
 ## Notes for the next session
+- **Coordinator's own final-gate run (2026-09-13, after `b118941`)**: `bun run verify` → client tsc clean · eslint 0e/66w · prettier clean · vitest 200 files / 4361 tests · vite build ✓ 2104 modules; server tsc clean · eslint clean · vitest 4 files / 102 tests; boundaries 5/5 OK; stylelint 71 problems = 2 pre-existing errors (`OtherHand.css:338,359`) / 69 warnings; storybook ✓ built; data-safety diff `33266af..HEAD` empty; no snapshot change; no lockfile. 20 commits on `feat/13-brush-source-and-resize` above `origin/main @ 33266af`.
+- **To finish the plan**: perform the 12 manual QA rows above in a browser (rows 11 needs a tablet), record observations, then set Current position to COMPLETE. Merge from the launch checkout with `git merge --no-ff feat/13-brush-source-and-resize`.
 - **Corpus fixtures**: `client/src/test/__fixtures__/corpus/*.json` is gitignored and absent in a fresh worktree; `server/src/data/` (the regenerate source) is absent too. The 11 JSONs were copied read-only from the launch checkout's corpus dir into this worktree (2026-09-13); corpus suites then pass (`src/types/__tests__/` 3 files / 139 tests, digests unchanged). A new worktree needs the same copy.
 - `bun run install:all` and any `bunx` in `client/` write gitignored `client/bun.lock` / `server/bun.lock` (no `bunfig.toml` in those dirs). Delete before every commit.
 - Baseline gate on `main @ 9df1e72`: tsc clean · eslint 0e/66w · vitest 193 files / 4027 tests · build OK · no lockfile.
