@@ -67,8 +67,10 @@ Branch: `feat/XX-<slug>`. Worktree directory: `.claude/worktrees/feat+XX-<slug>`
    in your own commands and in every subagent prompt — is under the worktree, never
    under ROOT.
 
-4. **Carry the plan in.** `/plan-steps` leaves `docs/XX-<slug>/` uncommitted in ROOT,
-   so a worktree cut from `origin/main` usually does not contain it.
+4. **Carry the plan in.** `/plan-steps` normally commits `docs/XX-<slug>/` on `main` and
+   pushes it, so a worktree cut from `origin/main` already contains it. If it does not
+   (the push step was skipped or refused), the folder is still sitting uncommitted in
+   ROOT.
 
    - If `docs/XX-<slug>/` is missing in the worktree: copy it from ROOT and commit it
      as the branch's first commit:

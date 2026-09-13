@@ -1,6 +1,6 @@
 ---
 name: plan-steps
-description: Analyze the project and write a wave-based implementation plan for a requested feature under docs/XX-<feature>/ (numbered task files + MASTER.md). Planning only — writes no application code. Run /plan-go afterwards, in a fresh context, to execute it.
+description: Analyze the project and write a wave-based implementation plan for a requested feature under docs/XX-<feature>/ (numbered task files + MASTER.md). Planning only — writes no application code. Ends by committing the plan folder on main and pushing it to origin/main so /plan-go (run afterwards, in a fresh context) finds it in a worktree cut from the remote.
 argument-hint: <description of the feature(s) to implement>
 ---
 
@@ -16,7 +16,8 @@ If `$ARGUMENTS` is empty, ask the user what they want planned and stop.
 
 ## Hard constraints
 
-- **Do not modify any application source file.** This skill writes only under `docs/`.
+- **Do not modify any application source file.** This skill writes only under `docs/`,
+  and the closing commit (Step 8) stages **only** the plan folder — never `git add -A`.
 - Respect every rule in `CLAUDE.md` (Bun only, no lockfiles, `ui/` boundary, never
   deep-observe pixel grids, protect `server/src/data/`). Plans must not ask an executor
   to break them.
@@ -162,7 +163,7 @@ A checklist. Every item objectively checkable.
 
 Status values: `TODO` · `IN PROGRESS` · `DONE` · `PARTIAL` · `BLOCKED`.
 
-## Step 7 — Self-review, then report
+## Step 7 — Self-review
 
 Before finishing, re-open every task file and check:
 
@@ -171,5 +172,49 @@ Before finishing, re-open every task file and check:
 - No two tasks in the same wave share a file.
 - Each task's Context is enough for a stranger to start without reading this chat.
 
-Then tell the user: the folder path, the number of tasks and waves, the wave table,
-the biggest risk, and that the next step is **`/clear` followed by `/plan-go`**.
+## Step 8 — Publish the plan to `origin/main`
+
+`/plan-go` executes from a worktree cut from the **latest `origin/main`**, so the plan
+must be on the remote before it can be run. Pushing the plan is part of this skill —
+the user has asked for it by invoking `/plan-steps` — but it is a docs-only push and
+every precondition below must hold, otherwise stop, report, and leave the folder
+uncommitted for the user to land themselves.
+
+1. **Preconditions.** All three must hold:
+
+   ```sh
+   git branch --show-current                 # must print: main
+   git fetch origin main
+   git merge --ff-only origin/main           # local main catches up; must succeed
+   ```
+
+   If not on `main`, or local `main` has diverged from the remote (the fast-forward
+   fails), do not push. Reconciling that is the user's call.
+
+2. **Commit only the plan folder.** Other dirty or untracked files in the checkout stay
+   exactly as they are:
+
+   ```sh
+   git add docs/XX-<slug>
+   git status --short --untracked-files=no   # only docs/XX-<slug>/ paths may be staged
+   git commit -m "docs(XX): plan — <feature title>"
+   ```
+
+   Add whatever attribution trailers the session requires to the commit message.
+
+3. **Push.**
+
+   ```sh
+   git push origin main
+   ```
+
+   If the push is rejected (someone pushed in between), `git fetch origin main` and
+   retry the fast-forward once; if it still fails, report and stop — never force-push.
+
+4. **Confirm.** `git rev-parse --short origin/main` must equal `HEAD`. Record the SHA.
+
+## Step 9 — Report
+
+Tell the user: the folder path, the commit SHA now on `origin/main` (or why it was not
+pushed), the number of tasks and waves, the wave table, the biggest risk, and that the
+next step is **`/clear` followed by `/plan-go`**.
