@@ -22,6 +22,37 @@
  * the container must project, which is the rule the task states as "never
  * pass an observable array or a domain node".
  *
+ * ── ⚠️ THE THUMBNAIL IS A `draw` CALLBACK FOR THE SAME REASON ─────────────
+ *
+ * The row shows the current frame's thumbnail for its layer, and it does so
+ * WITHOUT gaining a `pixels` reference: the container supplies a bound
+ * `draw(ctx, size)` closure and a `thumbnailRevision`, exactly the contract
+ * `TimelineCell` already uses. `cacheKey` opts the paint into the shared
+ * bounded LRU — the siderail and the timeline show the same layers at the
+ * same revision, so the second of them to paint is a blit.
+ *
+ * ── THE THUMBNAIL *IS* THE VISIBILITY TOGGLE ──────────────────────────────
+ *
+ * There is ONE control in the left column, not a preview beside a button:
+ * tapping the thumbnail hides the layer, and the box then shows `EyeOff` in
+ * the thumbnail's place. Reading the state off the artwork itself is the
+ * point — a hidden layer stops showing its pixels, which is what "hidden"
+ * means everywhere else in the app.
+ *
+ * Two consequences worth stating, because both are easy to regress:
+ *
+ *  - It stays a real `<button>` with `aria-pressed`. The glyph swap is the
+ *    only visual state, so the same fact has to exist for a screen reader,
+ *    and the thumbnail canvas inside stays `aria-hidden` (no `label`) —
+ *    the button already names itself.
+ *  - The canvas is NOT rendered while hidden, so a hidden layer costs no
+ *    paint and no cache entry. Re-showing repaints from the LRU if the
+ *    revision has not moved.
+ *
+ * A row with no `drawThumbnail` (a fixture, or a layer whose painter the
+ * container withheld) keeps the original small eye button — the toggle must
+ * never disappear just because there is nothing to preview.
+ *
  * ── The two collapsed callbacks ───────────────────────────────────────────
  *
  * `onMoveLayer` and `onSquashLayer` both take a `scope` and (for move) a
@@ -35,6 +66,7 @@
  * domain type either — the view-model is defined locally.
  */
 import { Icon } from "../../primitives/Icon/Icon";
+import { ThumbnailCanvas } from "../../primitives/ThumbnailCanvas/ThumbnailCanvas";
 import {
   Hexagon,
   ArrowDownToLine,
@@ -50,6 +82,9 @@ import {
 } from "lucide-react";
 import type { LayerScope, MoveDirection } from "./layerScope";
 import "./LayerPanel.css";
+
+/** Thumbnail canvas edge for a siderail row, in CSS px. */
+export const LAYER_THUMB_SIZE = 32;
 
 /**
  * The flat projection of one layer, built by `LayerPanelContainer`.
@@ -71,6 +106,17 @@ export interface LayerRowModel {
   canSquashDown: boolean;
   /** This layer may squash into the one above it (frame scope). */
   canSquashUp: boolean;
+
+  /**
+   * Paints this layer's thumbnail for the CURRENT frame. Supplied by the
+   * container, which closes over the pixels — they never become a prop.
+   * Omitted means this row renders no thumbnail.
+   */
+  drawThumbnail?: (ctx: CanvasRenderingContext2D, size: number) => void;
+  /** Changes exactly when this row's thumbnail content changes. */
+  thumbnailRevision?: number;
+  /** Shared-LRU key; must encode the revision. See `thumbnailCacheKey`. */
+  thumbnailCacheKey?: string;
 }
 
 export interface LayerRowProps {
@@ -168,15 +214,42 @@ export function LayerRow({
     >
       <div className="layer-panel__content-row">
         <div className="layer-panel__visibility-col">
+          {/*
+            The thumbnail IS the visibility toggle — one control, not a
+            preview next to a button. Visible: the layer's thumbnail. Hidden:
+            the EyeOff glyph in the same box, so the swap reads as the state
+            change rather than as the row losing its preview.
+
+            It stays a real <button> because it is now the only affordance
+            for the toggle: `aria-pressed` carries the state that the glyph
+            carries visually, and the keyboard path survives.
+          */}
           <button
-            className={`layer-panel__visibility-btn ${layer.visible ? "layer-panel__visibility-btn--visible" : ""}`}
+            className={`layer-panel__visibility-btn ${layer.visible ? "layer-panel__visibility-btn--visible" : ""} ${layer.drawThumbnail ? "layer-panel__visibility-btn--thumb" : ""}`}
             onClick={(e) => {
               e.stopPropagation();
               onToggleVisibility(layer.id);
             }}
             title={layer.visible ? "Hide layer" : "Show layer"}
+            aria-pressed={layer.visible}
+            aria-label={
+              layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`
+            }
           >
-            <Icon icon={layer.visible ? Eye : EyeOff} size={12} />
+            {layer.drawThumbnail && layer.visible ? (
+              <ThumbnailCanvas
+                size={LAYER_THUMB_SIZE}
+                revision={layer.thumbnailRevision ?? 0}
+                draw={layer.drawThumbnail}
+                cacheKey={layer.thumbnailCacheKey}
+                className="layer-panel__thumbnail"
+              />
+            ) : (
+              <Icon
+                icon={layer.visible ? Eye : EyeOff}
+                size={layer.drawThumbnail ? 16 : 12}
+              />
+            )}
           </button>
           {/* Variant select button for variant layers - always visible */}
           {layer.isVariant && (

@@ -17,7 +17,7 @@ import { render } from "@testing-library/react";
 import { Toolbar } from "../Toolbar";
 
 const base = {
-  isLightingMode: false,
+  studioMode: "pixel" as const,
   isFocusMode: false,
   isLightGrid: false,
   isFrameReferenceVisible: true,
@@ -64,9 +64,7 @@ describe("spread", () => {
   });
 
   it("composes with a vertical dock — spread means COLUMNS there", () => {
-    const { container } = render(
-      <Toolbar {...base} edge="left" spread={3} />,
-    );
+    const { container } = render(<Toolbar {...base} edge="left" spread={3} />);
     const cls = bar(container).className;
     expect(cls).toContain("toolbar--vertical");
     expect(cls).toContain("toolbar--spread-3");
@@ -89,13 +87,14 @@ describe("spread", () => {
 });
 
 describe("the studio switcher", () => {
-  it("renders both studio buttons whatever the dock", () => {
+  it("renders all three studio buttons whatever the dock", () => {
     // They stack via CSS when vertical; the markup is the same either way.
+    // Three since brush-studio task 03 (pixel, lighting, brush).
     for (const edge of ["top", "left"] as const) {
       const { container } = render(<Toolbar {...base} edge={edge} />);
       expect(
         container.querySelectorAll(".toolbar__studio-mode-btn"),
-      ).toHaveLength(2);
+      ).toHaveLength(3);
       expect(
         container.querySelector(".toolbar__studio-mode-toggle"),
       ).not.toBeNull();
@@ -111,7 +110,9 @@ describe("the studio switcher", () => {
     expect(pixel.querySelector("[data-testid=pixel-tools]")).not.toBeNull();
     expect(pixel.querySelector("[data-testid=lighting-tools]")).toBeNull();
 
-    const lighting = render(<Toolbar {...base} isLightingMode />).container;
+    const lighting = render(
+      <Toolbar {...base} studioMode="lighting" />,
+    ).container;
     expect(
       lighting.querySelector("[data-testid=lighting-tools]"),
     ).not.toBeNull();

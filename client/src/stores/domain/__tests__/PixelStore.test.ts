@@ -569,6 +569,263 @@ describe("PixelStore — the sole grid writer", () => {
       expect(command.cells[0].after).not.toBe(rig.layer().pixels[1][1]);
     });
   });
+
+  /* ══ setPixelCells — THE ATOMIC THREE-CHANNEL WRITE (task 05) ═════════ */
+
+  /**
+   * `setPixelCells` writes colour, normal and height in ONE commit. It exists
+   * because no combination of the three older bulk actions can: `setPixels`
+   * writes colour only, and `setNormalPixels`/`setHeightPixels` route through
+   * `collectLightingPatches`, which skips every cell whose colour is `0` —
+   * so a stamp onto transparent cells loses all of its lighting data and
+   * costs three undo steps.
+   *
+   * The FIRST test below is the central one: it is exactly the case the
+   * lighting actions drop.
+   */
+  describe("setPixelCells — colour + normal + height in one entry", () => {
+    it("CENTRAL: all three members land on a PREVIOUSLY EMPTY cell", () => {
+      // The cell starts fully transparent — `setNormalPixels` and
+      // `setHeightPixels` would both skip it entirely (the colour guard).
+      expect(rig.layer().pixels[3][4]).toEqual({
+        color: 0,
+        normal: 0,
+        height: 0,
+      });
+
+      rig.pixels.setPixelCells([
+        { x: 4, y: 3, color: RED, normal: { x: 10, y: -20, z: 127 }, height: 9 },
+      ]);
+
+      const cell = rig.layer().pixels[3][4];
+      expect(cell.color).toEqual(RED);
+      expect(cell.normal).toEqual({ x: 10, y: -20, z: 127 });
+      expect(cell.height).toBe(9);
+    });
+
+    it("proves the contrast: setNormalPixels DROPS that same empty cell", () => {
+      // Not a test of the new action so much as a pin on WHY it exists. If
+      // this ever stops dropping, the justification for `setPixelCells`
+      // deserves a re-read (but the action still gives one undo entry).
+      rig.pixels.setNormalPixels([
+        { x: 4, y: 3, normal: { x: 10, y: -20, z: 127 } },
+      ]);
+      expect(rig.layer().pixels[3][4].normal).toBe(0);
+    });
+
+    it("a whole batch is EXACTLY ONE history entry, labelled 'Stamp pose'", () => {
+      rig.pixels.setPixelCells([
+        { x: 0, y: 0, color: RED, normal: { x: 1, y: 2, z: 3 }, height: 4 },
+        { x: 1, y: 0, color: BLUE, normal: { x: 5, y: 6, z: 7 }, height: 8 },
+        { x: 2, y: 1, color: RED, normal: { x: 9, y: 10, z: 11 }, height: 12 },
+      ]);
+      expect(rig.history.entries).toHaveLength(1);
+      expect(rig.history.entries[0].label).toBe("Stamp pose");
+    });
+
+    it("ONE undo reverts EVERY cell — colour, normal and height alike", () => {
+      // Seed one cell so undo has something non-empty to restore to.
+      runInAction(() => {
+        rig.layer().pixels[0][0] = {
+          color: BLUE,
+          normal: { x: 1, y: 1, z: 1 },
+          height: 5,
+        } as PixelData;
+      });
+
+      rig.pixels.setPixelCells([
+        { x: 0, y: 0, color: RED, normal: { x: 20, y: 30, z: 40 }, height: 11 },
+        { x: 1, y: 0, color: RED, normal: { x: 21, y: 31, z: 41 }, height: 12 },
+        { x: 2, y: 2, color: RED, normal: { x: 22, y: 32, z: 42 }, height: 13 },
+      ]);
+
+      rig.history.undo();
+
+      expect(rig.layer().pixels[0][0]).toEqual({
+        color: BLUE,
+        normal: { x: 1, y: 1, z: 1 },
+        height: 5,
+      });
+      expect(rig.layer().pixels[0][1]).toEqual({
+        color: 0,
+        normal: 0,
+        height: 0,
+      });
+      expect(rig.layer().pixels[2][2]).toEqual({
+        color: 0,
+        normal: 0,
+        height: 0,
+      });
+    });
+
+    it("redo re-applies all three members", () => {
+      rig.pixels.setPixelCells([
+        { x: 5, y: 5, color: RED, normal: { x: 3, y: 4, z: 5 }, height: 6 },
+      ]);
+      rig.history.undo();
+      rig.history.redo();
+      expect(rig.layer().pixels[5][5]).toEqual({
+        color: RED,
+        normal: { x: 3, y: 4, z: 5 },
+        height: 6,
+      });
+    });
+
+    it("out-of-bounds cells are FILTERED, not thrown on", () => {
+      expect(() =>
+        rig.pixels.setPixelCells([
+          { x: -1, y: 0, color: RED, normal: 0, height: 1 },
+          { x: 0, y: -1, color: RED, normal: 0, height: 1 },
+          { x: 16, y: 0, color: RED, normal: 0, height: 1 },
+          { x: 0, y: 16, color: RED, normal: 0, height: 1 },
+          { x: 7, y: 7, color: RED, normal: { x: 1, y: 2, z: 3 }, height: 4 },
+        ]),
+      ).not.toThrow();
+
+      // Only the in-bounds cell was written, and it is the only patch.
+      expect(rig.layer().pixels[7][7].color).toEqual(RED);
+      const command = rig.history.entries[0] as unknown as {
+        cells: unknown[];
+      };
+      expect(command.cells).toHaveLength(1);
+    });
+
+    it("an editMask excludes the masked-out cells", () => {
+      rig.pixels.setPixelCells(
+        [
+          { x: 1, y: 1, color: RED, normal: { x: 1, y: 1, z: 1 }, height: 2 },
+          { x: 2, y: 1, color: RED, normal: { x: 1, y: 1, z: 1 }, height: 2 },
+        ],
+        {
+          behavior: "editMask",
+          mask: new Set([1 * 16 + 1]), // only (1,1)
+          maskSize: { width: 16, height: 16 },
+        },
+      );
+
+      expect(rig.layer().pixels[1][1].color).toEqual(RED);
+      expect(rig.layer().pixels[1][1].height).toBe(2);
+      expect(rig.layer().pixels[1][2]).toEqual({
+        color: 0,
+        normal: 0,
+        height: 0,
+      });
+    });
+
+    it("duplicate coordinates collapse to ONE patch, and the LAST write wins", () => {
+      rig.pixels.setPixelCells([
+        { x: 3, y: 3, color: RED, normal: { x: 1, y: 1, z: 1 }, height: 1 },
+        { x: 3, y: 3, color: BLUE, normal: { x: 2, y: 2, z: 2 }, height: 2 },
+      ]);
+
+      expect(rig.layer().pixels[3][3]).toEqual({
+        color: BLUE,
+        normal: { x: 2, y: 2, z: 2 },
+        height: 2,
+      });
+
+      const command = rig.history.entries[0] as unknown as {
+        cells: { before: PixelData; after: PixelData }[];
+      };
+      expect(command.cells).toHaveLength(1);
+      // Undo lands on the TRUE pre-batch value, not the intermediate RED.
+      rig.history.undo();
+      expect(rig.layer().pixels[3][3]).toEqual({
+        color: 0,
+        normal: 0,
+        height: 0,
+      });
+    });
+
+    it("trackHistory: false writes the cells but records NO entry", () => {
+      rig.pixels.setPixelCells(
+        [{ x: 6, y: 6, color: RED, normal: { x: 7, y: 8, z: 9 }, height: 10 }],
+        { trackHistory: false },
+      );
+      expect(rig.layer().pixels[6][6]).toEqual({
+        color: RED,
+        normal: { x: 7, y: 8, z: 9 },
+        height: 10,
+      });
+      expect(rig.history.entries).toHaveLength(0);
+    });
+
+    it("an EMPTY array is a complete no-op — no history, no bump, no publish", () => {
+      const version = rig.domain.pixelVersion;
+      const publishes = rig.publishes;
+      rig.pixels.setPixelCells([]);
+      expect(rig.history.entries).toHaveLength(0);
+      expect(rig.domain.pixelVersion).toBe(version);
+      expect(rig.publishes).toBe(publishes);
+    });
+
+    it("a fully out-of-bounds batch is also a no-op — commitCells early-returns", () => {
+      // ⚠️ Deliberately NOT `commitLighting`'s behaviour, which publishes and
+      // bumps even on an empty patch list. This action is a colour-family
+      // write and must record and save nothing when nothing qualifies.
+      const version = rig.domain.pixelVersion;
+      const publishes = rig.publishes;
+      rig.pixels.setPixelCells([
+        { x: 99, y: 99, color: RED, normal: 0, height: 1 },
+      ]);
+      expect(rig.history.entries).toHaveLength(0);
+      expect(rig.domain.pixelVersion).toBe(version);
+      expect(rig.publishes).toBe(publishes);
+    });
+
+    it("bumps pixelVersion exactly ONCE for the whole batch", () => {
+      const before = rig.domain.pixelVersion;
+      rig.pixels.setPixelCells(
+        Array.from({ length: 25 }, (_, i) => ({
+          x: i % 5,
+          y: Math.floor(i / 5),
+          color: RED,
+          normal: { x: 1, y: 2, z: 3 } as const,
+          height: 4,
+        })),
+      );
+      expect(rig.domain.pixelVersion).toBe(before + 1);
+    });
+
+    it("writes a colour of 0 with a normal and height, unlike nextCell's erase", () => {
+      // OBSERVED, and intended: every member is authoritative here. `setPixel`
+      // with colour 0 forces normal 0 / height 0 (`nextCell`'s erase branch);
+      // this action writes exactly what the caller asked for.
+      rig.pixels.setPixelCells([
+        { x: 8, y: 8, color: 0, normal: { x: 1, y: 2, z: 3 }, height: 5 },
+      ]);
+      expect(rig.layer().pixels[8][8]).toEqual({
+        color: 0,
+        normal: { x: 1, y: 2, z: 3 },
+        height: 5,
+      });
+    });
+
+    it("R2: the grid stays RAW and is replaced WHOLESALE", () => {
+      const beforeGrid = rig.layer().pixels;
+      const untouchedRow = rig.layer().pixels[12];
+      rig.pixels.setPixelCells([
+        { x: 1, y: 1, color: RED, normal: { x: 1, y: 2, z: 3 }, height: 4 },
+      ]);
+      expect(rig.layer().pixels).not.toBe(beforeGrid);
+      expect(rig.layer().pixels[12]).toBe(untouchedRow);
+      assertGridsAreRaw(rig.domain.objects, rig.domain.variants);
+    });
+
+    it("honours variantFrameIndex, like every other write", () => {
+      const vrig = makeRig(mkVariantProject());
+      vrig.pixels.setPixelCells(
+        [{ x: 2, y: 2, color: RED, normal: { x: 1, y: 2, z: 3 }, height: 4 }],
+        { variantFrameIndex: 1 },
+      );
+      expect(vrig.variantLayer(1).pixels[2][2]).toEqual({
+        color: RED,
+        normal: { x: 1, y: 2, z: 3 },
+        height: 4,
+      });
+      expect(vrig.variantLayer(0).pixels[2][2].color).toBe(0);
+    });
+  });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════

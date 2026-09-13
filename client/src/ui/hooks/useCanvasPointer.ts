@@ -22,15 +22,23 @@
  * differ. Drawing behaviour cannot diverge again without someone deliberately
  * writing a branch.
  *
- * ## Touch is a deliberate subset — preserved
+ * ## Touch is a deliberate subset — narrowed, not removed
  *
  * The legacy touch handlers did NOT implement the eyedropper, the selection
  * tool, the origin tool, or the trace tools; a touch on any of them fell
- * through to plain drawing. That asymmetry is preserved rather than "fixed":
- * extending touch to those tools is a behaviour change, needs its own gesture
- * design (marquee-drag on a touchscreen conflicts with panning), and is well
- * outside a refactor's remit. `canDispatchTool` states it in one place instead
- * of leaving it implicit in which branches happen to be missing.
+ * through to plain drawing. That asymmetry was preserved rather than "fixed",
+ * because extending touch to those tools is a behaviour change needing its own
+ * gesture design (marquee-drag on a touchscreen conflicts with panning).
+ *
+ * ⚠️ `"selection"` HAS NOW HAD THAT DESIGN and is no longer excluded (plan 09
+ * task 08). The Pencil drives rect and lasso selection with the same
+ * press/drag/release feel as the mouse; the gesture body is shared between the
+ * two devices inside `CanvasContainer`, and a pinch is arbitrated away from it
+ * exactly as it is for drawing. The remaining three — `eyedropper`, `origin`
+ * and `reference-trace` — are STILL unimplemented on touch and stay excluded.
+ *
+ * `canDispatchTool` states the remaining exclusion in one place instead of
+ * leaving it implicit in which branches happen to be missing.
  *
  * ## Purity
  *
@@ -46,13 +54,14 @@ import type {
 } from "../canvas/tools/toolHandlers";
 import type { StampPoint } from "../canvas/tools/brushStamp";
 
-/** Tools the touch path deliberately does not dispatch — see the module note. */
-const MOUSE_ONLY_TOOLS = new Set([
-  "eyedropper",
-  "selection",
-  "origin",
-  "reference-trace",
-]);
+/**
+ * Tools the touch path deliberately does not dispatch — see the module note.
+ *
+ * ⚠️ `"selection"` was removed from this set (plan 09 task 08) and must not be
+ * put back: rect and lasso selection are now implemented for touch. These
+ * three genuinely have no touch gesture yet.
+ */
+const MOUSE_ONLY_TOOLS = new Set(["eyedropper", "origin", "reference-trace"]);
 
 /** True when `tool` may be dispatched from `device`. */
 export function canDispatchTool(tool: string, device: PointerDevice): boolean {
@@ -119,10 +128,19 @@ export function useCanvasPointer({
       if (!coords) return false;
 
       const handler = getToolHandler(currentTool);
-      if (!handler?.onDown) return false;
+      if (!handler) return false;
 
+      /* ⚠️ THE GESTURE OPENS FOR ANY HANDLED TOOL, NOT ONLY ONES WITH `onDown`.
+         The three shape tools (line/rectangle/ellipse) deliberately define ONLY
+         `onMove` — they preview on drag and commit on release. Guarding this
+         path on `onDown` therefore returned before `startDrawing`, so
+         `isDrawing` stayed false and `drawStartPoint` stayed null; then
+         `continueStroke`'s own `if (!isDrawing) return false` bailed on every
+         move. The shapes previewed nothing and committed nothing (2026-09-01).
+         `startDrawing` is what makes a drag a drag, so it must not be gated on
+         a callback that the drag-only tools have no reason to define. */
       startDrawing(coords);
-      handler.onDown(makeEvent(coords, device), getToolContext());
+      handler.onDown?.(makeEvent(coords, device), getToolContext());
       return true;
     },
     [currentTool, getCoords, getToolContext, makeEvent, startDrawing],

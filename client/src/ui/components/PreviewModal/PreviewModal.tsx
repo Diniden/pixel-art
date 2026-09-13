@@ -11,6 +11,7 @@ import {
   PixelData,
 } from "../../../types";
 import { Icon } from "../../primitives/Icon/Icon";
+import { NumberInput } from "../../primitives/NumberInput/NumberInput";
 import { Zap, X } from "lucide-react";
 import "./PreviewModal.css";
 
@@ -501,14 +502,13 @@ export function PreviewModal({
               onChange={(e) => setFps(Number(e.target.value))}
               className="preview-modal__fps-slider"
             />
-            <input
-              type="number"
-              min="1"
-              max="60"
+            <NumberInput
+              unstyled
+              label="FPS"
+              min={1}
+              max={60}
               value={fps}
-              onChange={(e) =>
-                setFps(Math.max(1, Math.min(60, Number(e.target.value) || 1)))
-              }
+              onChange={setFps}
               className="preview-modal__fps-input"
             />
           </div>

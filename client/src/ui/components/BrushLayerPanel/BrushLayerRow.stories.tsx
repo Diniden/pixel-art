@@ -1,0 +1,86 @@
+/**
+ * BrushLayerRow stories (Brush Studio task 12). **No store provider.**
+ *
+ * Click the channel badge on any story: the menu must render ABOVE the
+ * panel chrome, not clipped by it — it is a `document.body` portal. Open
+ * the Actions panel to see every callback fire with `(layerId, …)`.
+ */
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { fn } from "storybook/test";
+import { BrushLayerRow } from "./BrushLayerRow";
+import {
+  BRUSH_GROUPS,
+  BRUSH_LAYERS_TYPICAL,
+  BRUSH_LAYER_LONG_NAME,
+} from "./storyFixtures";
+
+const meta = {
+  title: "Components/BrushLayerPanel/BrushLayerRow",
+  component: BrushLayerRow,
+  tags: ["autodocs"],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          "One brush layer row: visibility toggle, channel badge (opens the " +
+          "portalled `BrushChannelMenu`), inline rename on double-click, an " +
+          "optional applied-group badge, and up / down / duplicate / delete. " +
+          "Takes a flat `BrushLayerRowModel`, never a `BrushLayer`.",
+      },
+    },
+  },
+  decorators: [
+    (Story) => (
+      <div className="panel brush-layer-panel" style={{ width: 260 }}>
+        <div className="panel__body">
+          <div className="brush-layer-panel__list">
+            <Story />
+          </div>
+        </div>
+      </div>
+    ),
+  ],
+  args: {
+    layer: BRUSH_LAYERS_TYPICAL[3],
+    isSelected: false,
+    index: 1,
+    count: 4,
+    appliedGroups: BRUSH_GROUPS,
+    onSelect: fn(),
+    onToggleVisibility: fn(),
+    onRename: fn(),
+    onSetChannelType: fn(),
+    onSetAppliedGroup: fn(),
+    onCreateAppliedGroup: fn(),
+    onMoveUp: fn(),
+    onMoveDown: fn(),
+    onDuplicate: fn(),
+    onDelete: fn(),
+  },
+} satisfies Meta<typeof BrushLayerRow>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+/** Default: a middle RGB layer, every action live. */
+export const Default: Story = {};
+
+/** Modifier story: `brush-layer-panel__item--selected`, at the top of the stack. */
+export const Selected: Story = {
+  args: { layer: BRUSH_LAYERS_TYPICAL[0], isSelected: true, index: 0 },
+};
+
+/** A grouped normal-map layer: the `__group-badge` follows the name. */
+export const Grouped: Story = {
+  args: { layer: BRUSH_LAYERS_TYPICAL[1] },
+};
+
+/** A hidden HSL layer: the eye glyph flips and `--visible` comes off. */
+export const Hidden: Story = {
+  args: { layer: BRUSH_LAYERS_TYPICAL[2], index: 3, count: 4 },
+};
+
+/** Edge: a long name and a long group name compete for one narrow row. */
+export const LongName: Story = {
+  args: { layer: BRUSH_LAYER_LONG_NAME },
+};

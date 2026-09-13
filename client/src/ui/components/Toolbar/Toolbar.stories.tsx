@@ -44,7 +44,7 @@ const LightingTools = (
 const meta = {
   component: Toolbar,
   args: {
-    isLightingMode: false,
+    studioMode: "pixel",
     isFocusMode: false,
     isLightGrid: false,
     isFrameReferenceVisible: true,
@@ -69,7 +69,16 @@ export const PixelStudio: Story = {};
  * not catch a regression that made it always visible.
  */
 export const LightingStudio: Story = {
-  args: { isLightingMode: true },
+  args: { studioMode: "lighting" },
+};
+
+/**
+ * Brush mode (brush-studio task 03). The third studio button is active with
+ * its own tint; the Frame Reference button is hidden (pixel-only), and the
+ * PIXEL tool group shows because the brush studio shares that tool table.
+ */
+export const BrushStudio: Story = {
+  args: { studioMode: "brush" },
 };
 
 /** Every toggle ON — exercises all the `--active` modifiers at once. */

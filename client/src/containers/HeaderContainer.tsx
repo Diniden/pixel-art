@@ -66,13 +66,27 @@
  * `session.aiServiceUrl` would never be populated from a loaded project.
  * Task 38 replaces those hydration points when it deletes the bridge; the
  * list move belongs there, in one piece.
+ *
+ * ── Brush mode (brush-studio task 19, MASTER D21) ─────────────────────────
+ *
+ * The header is the same element in every studio; in brush mode four props
+ * change so it stands over the BRUSH document instead of the project: the
+ * switcher button reads "Brush Projects" and opens `BrushSelectModalContainer`, the
+ * title shows the brush's name (`"No brush project"` until one exists), and the
+ * inline rename dispatches `brushes.renameBrush` against the brush list.
+ * `projectName` is still passed — `Header` uses it for the export, which
+ * remains a project export. The save-status dot keeps reading
+ * `session.saveStatus`: both auto-save controllers write it (task 11), so it
+ * reports the brush save in brush mode without any switch here.
  */
 import { useState, useEffect, useCallback } from "react";
 import { observer } from "mobx-react-lite";
+import { isTouchDevice } from "../ui/utils/pointerDevice";
 import { flowResult } from "mobx";
 import { Header } from "../ui/components/Header/Header";
 import type { AiHealthStatus } from "../ui/components/AiConfigPopover/AiConfigPopover";
 import { ProjectSelectModalContainer } from "./ProjectSelectModalContainer";
+import { BrushSelectModalContainer } from "./BrushSelectModalContainer";
 import { BrowseBackupsModalContainer } from "./BrowseBackupsModalContainer";
 import { ExportPreviewModalContainer } from "./ExportPreviewModalContainer";
 import { useSessionStore, useStores } from "../stores/context";
@@ -86,9 +100,14 @@ import {
 
 export const HeaderContainer = observer(function HeaderContainer() {
   const app = useStores();
-  const { domain } = app;
+  const { domain, brushes, lightingUI } = app;
   const session = useSessionStore();
   const aiServiceUrl = session.aiServiceUrl;
+
+  // Brush mode re-points the title, the rename and the switcher — see the
+  // header block. Reading `studioMode` here is what re-renders the header
+  // when the studio changes.
+  const isBrushMode = lightingUI.studioMode === "brush";
 
   // Phase B — MobX owns these; Zustand only held a mirror (W29c).
   const projectName = domain.projectName;
@@ -123,6 +142,7 @@ export const HeaderContainer = observer(function HeaderContainer() {
   // no click is involved in that path. Applying it only on click would leave
   // the DOM showing the previous project's theme.
   const layoutStore = app.ui.layout;
+  const viewport = app.ui.viewport;
   const deviceTheme = useState(loadStoredTheme)[0];
   const theme: ThemeId = layoutStore.theme ?? deviceTheme ?? DEFAULT_THEME;
 
@@ -202,8 +222,21 @@ export const HeaderContainer = observer(function HeaderContainer() {
       saveSuspended={session.saveSuspended}
       aiServiceUrl={aiServiceUrl}
       projectName={projectName}
-      projectList={projectList}
-      onRenameProject={(name) => flowResult(domain.renameProject(name))}
+      documentName={
+        isBrushMode ? brushes.brushName || "No brush project" : undefined
+      }
+      // The duplicate-rename check runs against the list the rename targets.
+      // `brushList` is `observable.shallow`; hand over a plain array.
+      projectList={isBrushMode ? brushes.brushList.slice() : projectList}
+      onRenameProject={(name) =>
+        isBrushMode
+          ? brushes.hasBrush
+            ? flowResult(brushes.renameBrush(name))
+            : // Nothing to rename yet — the title reads "No brush project".
+              Promise.resolve(false)
+          : flowResult(domain.renameProject(name))
+      }
+      projectButtonLabel={isBrushMode ? "Brush Projects" : undefined}
       aiHealthStatus={aiHealthStatus}
       aiHealthDetail={aiHealthDetail}
       serverDefaultUrl={serverDefaultUrl}
@@ -214,10 +247,30 @@ export const HeaderContainer = observer(function HeaderContainer() {
       }}
       theme={theme}
       onThemeChange={handleThemeChange}
+      /* Pencil-only input (2026-08-31).
+
+         ⚠️ THE DEVICE DECIDES TWO THINGS HERE, and the store deliberately
+         decides neither. Whether the button exists at all (`isTouchDevice`),
+         and what the toggle means when the project file says nothing —
+         `pencilOnly` is tri-state on the wire, so `?? isTouchDevice()`
+         resolves it. Storing a `true` default instead would switch the mode on
+         for a mouse-only desktop, where no contact ever reports as a stylus
+         and drawing would stop working entirely. */
+      showPencilOnly={isTouchDevice()}
+      pencilOnly={viewport.pencilOnly ?? isTouchDevice()}
+      onTogglePencilOnly={() =>
+        viewport.setPencilOnly(!(viewport.pencilOnly ?? isTouchDevice()))
+      }
       layoutMode={layoutStore.layoutMode}
       onToggleLayoutMode={() => layoutStore.toggleLayoutMode()}
       onExport={() => exportApi.run(projectName)}
-      projectModal={(props) => <ProjectSelectModalContainer {...props} />}
+      projectModal={(props) =>
+        isBrushMode ? (
+          <BrushSelectModalContainer {...props} />
+        ) : (
+          <ProjectSelectModalContainer {...props} />
+        )
+      }
       backupsModal={(props) => <BrowseBackupsModalContainer {...props} />}
       exportPreviewModal={(props) => <ExportPreviewModalContainer {...props} />}
     />

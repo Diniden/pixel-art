@@ -13,11 +13,13 @@ import { classNames } from "../../classNames";
  * `ResizeModal.tsx:65-85` and the IDENTICAL FPS clamp duplicated at
  * `PreviewModal.tsx:449-456` and `ExportPreviewModal.tsx:506-515`.
  *
- * Clamping semantics (the legacy behaviour, centralised): free typing is
- * allowed while focused — including a transiently empty or out-of-range
- * field — and the value is parsed, clamped to `[min, max]` and committed on
- * blur or Enter. Arrow keys / spinners commit immediately through the same
- * clamp.
+ * **Commits on blur and Enter only. Keystrokes update a local draft and never
+ * call `onChange`.** Escape reverts the draft to the incoming `value` and
+ * blurs. Free typing is allowed while focused — including a transiently empty
+ * or out-of-range field — and the draft is parsed and clamped to `[min, max]`
+ * at commit time. A live-committing branch used to exist here (task 09/02); it
+ * is what made a field with `min={1}` snap to `1` after the first keystroke of
+ * `10`, so it must not come back.
  */
 
 export interface NumberInputProps extends Omit<
@@ -34,6 +36,18 @@ export interface NumberInputProps extends Omit<
   /** Accessible name for the input. */
   label?: string;
   className?: string;
+  /**
+   * Drop the `slider__input` base class and render with `className` alone.
+   *
+   * Task 02 adopts this primitive purely for its commit semantics at call
+   * sites that already have their own stylesheet — a modal field, a dialog
+   * size box. Most of those rules out-specify `.slider__input` (`.block input`
+   * is 0,1,1 against its 0,1,0) so the look survives, but not all of them set
+   * every property `.slider__input` does: `width: 42px` and `flex-shrink: 0`
+   * would leak into a field styled to fill its column. Those sites pass
+   * `unstyled` so the swap is a behaviour change and nothing else.
+   */
+  unstyled?: boolean;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -49,6 +63,7 @@ export function NumberInput({
   boxed = false,
   label,
   className,
+  unstyled = false,
   onBlur,
   onKeyDown,
   ...rest
@@ -66,7 +81,16 @@ export function NumberInput({
 
   const commit = useCallback(
     (raw: string) => {
-      const parsed = Number(raw);
+      // ⚠️ THE EMPTY STRING IS REJECTED BEFORE PARSING, and a `Number.isFinite`
+      // check alone does NOT cover it: `Number("")` is `0`, not `NaN`, so a
+      // box cleared and then blurred would commit `clamp(0, min, max)` — i.e.
+      // `min`. That is exactly the "clearing a field writes a value" bug this
+      // primitive exists to end, and it is invisible in a field whose minimum
+      // happens to be 0. `"   "` goes the same way for the same reason.
+      // Measured against `PoseSection.dom.test.tsx`'s scale box, whose store
+      // floor is 1e-3: clearing it collapsed the model instead of no-opping.
+      const trimmed = raw.trim();
+      const parsed = trimmed === "" ? Number.NaN : Number(trimmed);
       const next = Number.isFinite(parsed) ? clamp(parsed, min, max) : value;
       setDraft(String(next));
       if (next !== value) onChange(next);
@@ -74,26 +98,20 @@ export function NumberInput({
     [min, max, value, onChange],
   );
 
+  // Draft only. Never calls `onChange` — see the module header.
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setDraft(e.target.value);
-      // Spinner clicks / arrow keys produce complete numbers — commit those
-      // immediately, exactly like the legacy inline `onChange` clamps.
-      const parsed = Number(e.target.value);
-      if (e.target.value !== "" && Number.isFinite(parsed)) {
-        const next = clamp(parsed, min, max);
-        if (next === parsed && next !== value) onChange(next);
-      }
     },
-    [min, max, value, onChange],
+    [],
   );
 
   return (
     <input
       type="number"
       className={classNames(
-        "slider__input",
-        boxed && "slider__input--boxed",
+        !unstyled && "slider__input",
+        !unstyled && boxed && "slider__input--boxed",
         className,
       )}
       value={draft}
@@ -107,6 +125,16 @@ export function NumberInput({
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") commit(e.currentTarget.value);
+        else if (e.key === "Escape") {
+          // Revert, then blur. The DOM value is written directly as well as
+          // through state because the blur handler fires synchronously, before
+          // React has re-rendered with the reverted draft — reading the stale
+          // DOM value there would commit exactly the entry Escape discards.
+          const reverted = String(value);
+          setDraft(reverted);
+          e.currentTarget.value = reverted;
+          e.currentTarget.blur();
+        }
         onKeyDown?.(e);
       }}
       {...(label ? { "aria-label": label } : {})}

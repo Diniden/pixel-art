@@ -2,7 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Color, Palette } from "../../../types";
 import { Icon } from "../../primitives/Icon/Icon";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { CurrentPalette, type CurrentPaletteProps } from "./CurrentPalette";
 import "./PaletteManager.css";
+
+/**
+ * The id the pinned "Current Palette" row occupies in `expandedId`.
+ *
+ * ⚠️ It is NOT a palette id and matches nothing in `palettes`. The row is
+ * synthetic — it has no entry in the domain tree until the user presses "Save
+ * as Palette" — but it shares the one-row-open-at-a-time expansion state with
+ * the real rows, so it needs a key in the same space. The `__` prefix keeps it
+ * clear of `generateId()`'s output.
+ */
+const CURRENT_PALETTE_ID = "__current__";
 
 /**
  * Props supplied by `PaletteManagerContainer` (REFRESH task 23). `palettes`
@@ -36,6 +48,21 @@ interface PaletteManagerProps {
   selectedColor: Color;
   /** Makes a swatch the active drawing colour. */
   onSelectColor: (color: Color) => void;
+  /**
+   * Everything the pinned "Current Palette" row needs, MINUS the three pieces
+   * this component owns itself: `expanded` / `onToggleExpanded` (the list
+   * allows one open row, and that state lives here) and `onSelectColor`
+   * (already a prop, and the same callback the real rows use).
+   *
+   * Grouped into one prop rather than spread as ten, so the many existing
+   * stories and callers of this component are not each rewritten for a row
+   * they do not exercise. Absent, the row is simply not drawn — which is what
+   * keeps `PaletteManager` usable outside the pixel studio.
+   */
+  currentPalette?: Omit<
+    CurrentPaletteProps,
+    "expanded" | "onToggleExpanded" | "onSelectColor"
+  >;
 }
 
 export function PaletteManager({
@@ -47,6 +74,7 @@ export function PaletteManager({
   onRemoveColorFromPalette,
   selectedColor,
   onSelectColor,
+  currentPalette,
 }: PaletteManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -132,6 +160,18 @@ export function PaletteManager({
       </div>
       <div className="panel__body">
         <div className="palette-manager__list">
+          {currentPalette && (
+            <CurrentPalette
+              {...currentPalette}
+              expanded={expandedId === CURRENT_PALETTE_ID}
+              onToggleExpanded={() =>
+                setExpandedId(
+                  expandedId === CURRENT_PALETTE_ID ? null : CURRENT_PALETTE_ID,
+                )
+              }
+              onSelectColor={onSelectColor}
+            />
+          )}
           {palettes.map((palette) => (
             <div
               key={palette.id}
@@ -232,7 +272,7 @@ export function PaletteManager({
           ))}
         </div>
 
-        {palettes.length === 0 && (
+        {palettes.length === 0 && !currentPalette && (
           <div className="palette-manager__empty">
             No palettes yet. Create one to save colors.
           </div>

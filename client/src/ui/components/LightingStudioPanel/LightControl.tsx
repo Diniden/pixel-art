@@ -11,6 +11,13 @@ import { Color } from "../../../types";
 // `ColorPicker.tsx` (verified byte-identical by diff). Both now come from the
 // single extracted module, so the two copies cannot drift.
 import { hslToRgb, rgbToHsl } from "../../utils/colorMath";
+// Task 02: the four number boxes here ARE `NumberInput` — that adoption is
+// about commit semantics only (a keystroke is a draft; the value applies on
+// blur or Enter) and is unrelated to the `SliderWithNumber` rejection noted
+// below, which is about the ROW WRAPPER and the sliders' inline gradients.
+// `boxed` renders exactly the `slider__input slider__input--boxed` pair these
+// rows spelled by hand, so nothing about the look changes.
+import { NumberInput } from "../../primitives/NumberInput/NumberInput";
 import "./LightControl.css";
 
 interface ColorSliderProps {
@@ -122,15 +129,13 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
           value={hsl.h}
           onChange={(e) => updateColor({ ...hsl, h: parseInt(e.target.value) })}
         />
-        <input
-          type="number"
-          className="slider__input slider__input--boxed"
-          min="0"
-          max="360"
+        <NumberInput
+          boxed
+          label="H"
+          min={0}
+          max={360}
           value={hsl.h}
-          onChange={(e) =>
-            updateColor({ ...hsl, h: parseInt(e.target.value) || 0 })
-          }
+          onChange={(next) => updateColor({ ...hsl, h: next })}
         />
       </div>
 
@@ -149,15 +154,13 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
               hsl(${hsl.h}, 100%, ${hsl.l}%))`,
           }}
         />
-        <input
-          type="number"
-          className="slider__input slider__input--boxed"
-          min="0"
-          max="100"
+        <NumberInput
+          boxed
+          label="S"
+          min={0}
+          max={100}
           value={hsl.s}
-          onChange={(e) =>
-            updateColor({ ...hsl, s: parseInt(e.target.value) || 0 })
-          }
+          onChange={(next) => updateColor({ ...hsl, s: next })}
         />
       </div>
 
@@ -177,15 +180,13 @@ function ColorSlider({ label, color, onChange }: ColorSliderProps) {
               hsl(${hsl.h}, ${hsl.s}%, 100%))`,
           }}
         />
-        <input
-          type="number"
-          className="slider__input slider__input--boxed"
-          min="0"
-          max="100"
+        <NumberInput
+          boxed
+          label="L"
+          min={0}
+          max={100}
           value={hsl.l}
-          onChange={(e) =>
-            updateColor({ ...hsl, l: parseInt(e.target.value) || 0 })
-          }
+          onChange={(next) => updateColor({ ...hsl, l: next })}
         />
       </div>
     </div>
@@ -259,15 +260,13 @@ export function LightControl({
               value={heightScale}
               onChange={(e) => onHeightScaleChange(parseInt(e.target.value))}
             />
-            <input
-              type="number"
-              className="slider__input slider__input--boxed"
-              min="1"
-              max="500"
+            <NumberInput
+              boxed
+              label="Scale"
+              min={1}
+              max={500}
               value={heightScale}
-              onChange={(e) =>
-                onHeightScaleChange(parseInt(e.target.value) || 100)
-              }
+              onChange={onHeightScaleChange}
             />
           </div>
         </div>

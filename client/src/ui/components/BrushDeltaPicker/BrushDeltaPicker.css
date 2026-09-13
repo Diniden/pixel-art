@@ -1,0 +1,256 @@
+/*
+ * brush-delta-picker — per-channel delta sliders for the brush studio
+ * (Brush Studio plan, task 14; BEM block per MASTER D24, tokens only).
+ *
+ * Elements, DOM order:
+ *   brush-delta-picker__target-row    Edge/Fill tabs + swap (follow-ups task 05)
+ *   brush-delta-picker__targets       the `role="tablist"`
+ *   brush-delta-picker__target        one tab; --active when it is the slot edited
+ *   brush-delta-picker__target-swatch that slot's colourised delta
+ *   brush-delta-picker__swap          swap edge <-> fill; sibling of the tablist
+ *   brush-delta-picker__preview       swatch + readout + reset row
+ *   brush-delta-picker__swatch        colourised result (127 = zero delta)
+ *   brush-delta-picker__swatch-bg     transparency checkerboard
+ *   brush-delta-picker__swatch-color  the rgba fill
+ *   brush-delta-picker__readout       hex + alpha caption
+ *   brush-delta-picker__hex
+ *   brush-delta-picker__alpha
+ *   brush-delta-picker__reset
+ *   brush-delta-picker__channels      the slider rows
+ *   brush-delta-picker__row           label + track + number input
+ *   brush-delta-picker__label
+ *   brush-delta-picker__track         positioned wrapper; carries the zero tick
+ *   brush-delta-picker__slider        the `.slider` primitive, stretched
+ *
+ * Modifiers:
+ *   brush-delta-picker--disabled
+ *   brush-delta-picker__target--active
+ *
+ * The number input is the shared `slider__input` primitive; the track is the
+ * shared `slider` primitive. Neither block file is edited here (task rule).
+ *
+ * `touch-action: none` on the root and the slider is the CSS half of the
+ * two-part iPad touch fix recorded in ColorPicker.css — without it iPadOS
+ * gives the Pencil's first movement to the rail's scroll and the drag is
+ * never delivered.
+ */
+
+.brush-delta-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.brush-delta-picker--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ── Target row (Edge / Fill) ──────────────────────────────────────────── */
+
+/* Mirrors `.color-picker__target-row` and friends (ColorPicker.css): the same
+   segmented choice with a swatch on each tab, so BOTH deltas are visible at
+   once, not just the active one. The swap button is a SIBLING of the
+   tablist, not a member of it — see the JSX note: a third child inside
+   `role="tablist"` would be announced as a third tab. */
+.brush-delta-picker__target-row {
+  display: flex;
+  gap: var(--space-1);
+  align-items: stretch;
+}
+
+.brush-delta-picker__targets {
+  display: flex;
+  flex: 1;
+  gap: var(--space-0-5);
+  padding: var(--space-0-5);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.brush-delta-picker__target {
+  display: flex;
+  flex: 1;
+  gap: var(--space-1-5);
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1-5) var(--space-2);
+  font-size: var(--text-70);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.brush-delta-picker__target:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* The swatch keeps a border so a delta matching the tab background — the
+   mid-grey of a zero delta on the panel — is still visible. */
+.brush-delta-picker__target-swatch {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-xs);
+}
+
+/* Swap edge ⇄ fill. Square, sized off the tabs it sits beside on a fine
+   pointer; the coarse-pointer rule takes it to 44px, Apple's minimum
+   comfortable target — the same number and reason as `.color-picker__swap`. */
+.brush-delta-picker__swap {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.brush-delta-picker__swap:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+@media (pointer: coarse) {
+  .brush-delta-picker__swap {
+    width: 44px;
+    min-height: 44px;
+  }
+}
+
+.brush-delta-picker__target.brush-delta-picker__target--active {
+  background: var(--accent-primary);
+  color: var(--white);
+}
+
+/* ── Preview row ───────────────────────────────────────────────────────── */
+
+.brush-delta-picker__preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brush-delta-picker__swatch {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: transparent;
+}
+
+/* Transparency checkerboard behind the colour (the `swatch__bg` idea). */
+.brush-delta-picker__swatch-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(45deg, var(--white-15) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--white-15) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--white-15) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--white-15) 75%);
+  background-size: 8px 8px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0;
+}
+
+.brush-delta-picker__swatch-color {
+  position: absolute;
+  inset: 0;
+}
+
+.brush-delta-picker__readout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+}
+
+.brush-delta-picker__hex {
+  color: var(--text-primary);
+}
+
+.brush-delta-picker__alpha {
+  color: var(--text-muted);
+}
+
+.brush-delta-picker__reset {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-65);
+}
+
+/* ── Channel rows ──────────────────────────────────────────────────────── */
+
+.brush-delta-picker__channels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.brush-delta-picker__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  height: 22px;
+}
+
+.brush-delta-picker__label {
+  width: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* The track wrapper exists so the zero tick can be positioned against the
+   slider alone, not the whole row. −255..255 is symmetric, so the thumb's
+   centre sits at exactly 50% of the track when the delta is 0. */
+.brush-delta-picker__track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.brush-delta-picker__track::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  background: var(--text-muted);
+  border-radius: var(--radius-xs);
+  pointer-events: none;
+}
+
+.brush-delta-picker__slider {
+  width: 100%;
+  position: relative;
+  z-index: var(--z-raised);
+  touch-action: none;
+}

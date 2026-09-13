@@ -77,7 +77,6 @@ import { FrameTimelineContainer } from "./FrameTimelineContainer";
 import { CanvasContainer } from "./CanvasContainer";
 import { CanvasSplit } from "../ui/components/CanvasSplit/CanvasSplit";
 import { CanvasInfoContainer } from "./CanvasInfoContainer";
-import { LayerColorsContainer } from "./LayerColorsContainer";
 import { FrameReferencePanelContainer } from "./FrameReferencePanelContainer";
 import { ReferenceImagePanelContainer } from "./ReferenceImagePanelContainer";
 import { useStores } from "../stores/context";
@@ -166,10 +165,17 @@ export const PixelStudioContainer = observer(function PixelStudioContainer() {
     ),
   }));
 
+  // ⚠️ `toast` is pulled OUT of the spread and rendered as a sibling, not
+  // passed to the layout. It is `position: fixed` over the whole window and
+  // belongs to neither studio's arrangement — threading it through would put
+  // a piece of transient chrome into the layout's prop surface, and both
+  // layouts would have to carry a prop they only forward.
+  const { toast, ...layoutProps } = railLayout;
+
   return (
+    <>
     <PixelStudioLayout
-      {...railLayout}
-      focusMode={viewport.focusMode}
+      {...layoutProps}
       // `!== false` — the panel is visible when the key is absent
       // (`App.tsx:261`). The default is resolved here so the layout takes a
       // plain boolean.
@@ -214,7 +220,8 @@ export const PixelStudioContainer = observer(function PixelStudioContainer() {
         />
       }
       canvasInfo={<CanvasInfoContainer referenceImage={referenceImage} />}
-      layerColors={<LayerColorsContainer />}
     />
+    {toast}
+    </>
   );
 });

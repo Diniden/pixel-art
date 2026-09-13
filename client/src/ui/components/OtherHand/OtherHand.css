@@ -90,6 +90,77 @@
   gap: var(--space-2);
 }
 
+/* ── The colour preview ────────────────────────────────────────────────────
+
+   The composed colour the section's sliders are producing, at the top of the
+   rail (2026-08-31). Each thumb slider shows one CHANNEL, so without this the
+   rail can show every component of a colour and never the colour itself.
+
+   ⚠️ NOT INTERACTIVE, and it must not become so. In Other Hand Mode the thumb
+   works by feel on a rail it is not looking at; a square that looks tappable
+   but does nothing costs a misplaced tap. There is no `cursor`, no `:hover`
+   and no `:active` here on purpose — compare `.swatch`, the real button
+   primitive, which has all three.
+
+   Sits in `__extras`, so it shares the bar with the HSL/RGB switch and wraps
+   with it on a narrow rail (`__bar` is `flex-wrap: wrap`). */
+.other-hand__previews {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.other-hand__preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-px);
+}
+
+/* 28px: comfortably larger than the 20px `swatch` default, because this is
+   read at arm's length from the corner of the eye rather than inspected. */
+.other-hand__preview-chip {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+
+/* The transparency checkerboard, so an alpha slider's effect is visible
+   rather than reading as a darker colour. Geometry copied from `.swatch__bg`
+   deliberately — the two squares should look like the same material. */
+.other-hand__preview-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(45deg, var(--white-15) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--white-15) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--white-15) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--white-15) 75%);
+  background-size: 8px 8px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0;
+}
+
+.other-hand__preview-color {
+  position: absolute;
+  inset: 0;
+}
+
+/* Only rendered where a section drives MORE than one colour — it is what
+   tells Light from Ambient. A single-colour section shows the square alone. */
+.other-hand__preview-label {
+  font-size: var(--text-70);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* The colour section's HSL / RGB switch. */
 .other-hand__segment {
   display: flex;

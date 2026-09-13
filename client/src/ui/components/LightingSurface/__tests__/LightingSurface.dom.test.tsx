@@ -11,10 +11,12 @@
  * destructured 14 store members; if one had survived into the presentational
  * half, these tests would throw rather than pass quietly.
  *
- * ⚠️ The `LightingPreviewPanel` stories are covered by their own file next
- * door, and they are the stronger case: that panel is where a persistence KEY
- * could have leaked in.
+ * ⚠️ There used to be a companion file next door for the floating
+ * `LightingPreviewPanel`. That panel was retired on 2026-08-29 (MASTER D7)
+ * when the lit composite became a workspace pane, so this file is now the
+ * whole of the lighting studio's `ui/` purity gate.
  */
+import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { composeStories } from "@storybook/react-vite";
@@ -76,16 +78,23 @@ describe("LightingSurface — the markup, from props alone", () => {
     const surface = container.querySelector<HTMLElement>(
       ".lighting-canvas__surface",
     );
-    expect(surface?.style.transform).toBe("translate(24px, 24px) scale(1)");
+    // ⚠️ `scale(14)`, not `scale(1)`. The canvases are 1:1 with the pixel data
+    // (task 08), so the shared pixel scale reaches the DOM ONLY here. A
+    // regression to `scale(viewZoom)` would render the sprite at 1/14th size
+    // — visible, but the arithmetic is what pins it.
+    expect(surface?.style.transform).toBe("translate(24px, 24px) scale(14)");
     expect(surface?.style.transformOrigin).toBe("0 0");
   });
 
-  it("Zoomed carries its own scale, not the default", () => {
+  it("Zoomed multiplies the view zoom INTO the pixel scale, never replaces it", () => {
     const { container } = render(<composed.Zoomed />);
     const surface = container.querySelector<HTMLElement>(
       ".lighting-canvas__surface",
     );
-    expect(surface?.style.transform).toBe("translate(0px, 0px) scale(1.75)");
+    // 14 * 1.75. This is the assertion that would catch someone passing
+    // `viewZoom` alone into `combinedScale` — the exact shape of the bug the
+    // old pre-scaled backing store used to hide.
+    expect(surface?.style.transform).toBe("translate(0px, 0px) scale(24.5)");
   });
 
   it("labels the info bar from `editMode` — 'Normals' vs 'Height'", () => {
@@ -107,12 +116,131 @@ describe("LightingSurface — the markup, from props alone", () => {
     expect(container.querySelector(".lighting-canvas__info")).toBeNull();
   });
 
-  it("sizes both canvases to the backing-store props", () => {
+  it("sizes both canvases 1:1 WITH THE PIXEL DATA, not `cells * zoom`", () => {
     const { container } = render(<composed.Default />);
-    for (const canvas of container.querySelectorAll("canvas")) {
-      expect(canvas.getAttribute("width")).toBe("224"); // 16 * 14
-      expect(canvas.getAttribute("height")).toBe("224");
+    const canvases = container.querySelectorAll("canvas");
+    expect(canvases.length).toBe(2);
+    for (const canvas of canvases) {
+      // 16 grid cells → 16 device pixels. It was 224 (16 × 14) before task 08.
+      expect(canvas.getAttribute("width")).toBe("16");
+      expect(canvas.getAttribute("height")).toBe("16");
     }
+  });
+
+  /**
+   * ⚠️ THE HEADLINE CLAIM OF TASK 08, AS ARITHMETIC.
+   *
+   * The sprite occupies the same screen box it always did — `cellWidth * zoom`
+   * — while the backing store it is drawn into shrank by `zoom²`. Both halves
+   * have to be asserted together: shrinking the canvas alone would be a bug
+   * (a sprite rendered at 1/14th size), and the transform alone would be a
+   * no-op. This is the pair.
+   */
+  it("keeps the ON-SCREEN box identical while the backing store drops by zoom²", () => {
+    const { container } = render(<composed.Default />);
+    const canvas = container.querySelector<HTMLCanvasElement>(
+      ".lighting-canvas__edit-canvas",
+    );
+    const surface = container.querySelector<HTMLElement>(
+      ".lighting-canvas__surface",
+    );
+
+    const backing = Number(canvas?.getAttribute("width"));
+    const scale = Number(
+      /scale\(([\d.]+)\)/.exec(surface?.style.transform ?? "")?.[1],
+    );
+
+    // On screen: 16 × 14 = 224 CSS px, byte-identical to the pre-task-08 box.
+    expect(backing * scale).toBe(224);
+    // In memory: 16², not 224². A 196× reduction at this zoom, and 2,500× at
+    // the ceiling of 50 — which is what makes a 256×224 sprite allocatable at
+    // all (546 MB → 224 KB).
+    expect(backing * backing).toBe(256);
+  });
+});
+
+/**
+ * ⚠️ THE SVG CHROME (plan 05, D5, task 08).
+ *
+ * The grid and the brush outline left the canvas because BOTH fail SILENTLY at
+ * 1:1 — `strokeGrid` puts one line per pixel column and paints a flat wash of
+ * colour over the whole canvas, and `strokeBrushOutlines` sizes each rect
+ * `zoom - 1` and strokes 0×0 rectangles that render nothing at all. Neither
+ * throws, so only an assertion on the DOM catches a regression to either.
+ */
+describe("LightingSurface — the SVG chrome", () => {
+  it("renders the grid as ONE path inside the transformed surface", () => {
+    const { container } = render(<composed.Default />);
+
+    const svg = container.querySelector("svg.lighting-canvas__svg");
+    expect(svg).not.toBeNull();
+    // One user unit = one CELL, matching the 1:1 canvases. A viewBox in device
+    // pixels would put every line at the wrong seam.
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 16 16");
+
+    const grid = container.querySelector("path.lighting-canvas__svg-grid");
+    expect(grid).not.toBeNull();
+    expect(grid?.getAttribute("d")?.length ?? 0).toBeGreaterThan(0);
+
+    // Inside the TRANSFORMED surface — it must scale and pan with the sprite,
+    // unlike the view controls, which must not.
+    const surface = container.querySelector(".lighting-canvas__surface");
+    expect(surface?.contains(svg!)).toBe(true);
+  });
+
+  it("gives every chrome stroke `non-scaling-stroke` — the screen-constant hairline", () => {
+    const { container } = render(<composed.Default />);
+    const paths = container.querySelectorAll("svg.lighting-canvas__svg path");
+    expect(paths.length).toBeGreaterThan(0);
+    for (const path of paths) {
+      // Without this the stroke width is multiplied by `combinedScale`, so a
+      // 1px grid line is 14px here and 200px at the ceiling.
+      expect(path.getAttribute("vector-effect")).toBe("non-scaling-stroke");
+    }
+  });
+
+  it("the grid follows `lightGridMode` — the two themes stroke different colours", () => {
+    const dark = render(<composed.Default />);
+    const light = render(<composed.LightGridMode />);
+
+    const strokeOf = (r: ReturnType<typeof render>) =>
+      r.container
+        .querySelector("path.lighting-canvas__svg-grid")
+        ?.getAttribute("stroke");
+
+    expect(strokeOf(dark)).not.toBeNull();
+    expect(strokeOf(light)).not.toBeNull();
+    // The measured rule: white 5% dark, black 8% light (`gridOverlayAttrs`).
+    expect(strokeOf(dark)).not.toBe(strokeOf(light));
+  });
+
+  it("BrushOverlay draws the outline as a path — the canvas has only the fill", () => {
+    const { container } = render(<composed.BrushOverlay />);
+    const paths = container.querySelectorAll("svg.lighting-canvas__svg path");
+    // The grid, plus the brush outline.
+    expect(paths.length).toBe(2);
+    const outline = Array.from(paths).find(
+      (p) => !p.classList.contains("lighting-canvas__svg-grid"),
+    );
+    expect(outline?.getAttribute("d")?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("renders no brush-outline path when nothing is hovered", () => {
+    const { container } = render(<composed.Default />);
+    const paths = container.querySelectorAll("svg.lighting-canvas__svg path");
+    expect(paths.length).toBe(1);
+    expect(paths[0]?.classList.contains("lighting-canvas__svg-grid")).toBe(true);
+  });
+
+  it("the SVG never takes pointer events — the edit canvas is the only input surface", () => {
+    const { container } = render(<composed.Default />);
+    const svg = container.querySelector<SVGElement>(".lighting-canvas__svg");
+    expect(svg).not.toBeNull();
+    // Stacked above both canvases by source order, so without this it would
+    // swallow every stroke. The rule is in the stylesheet; this pins that the
+    // element is the LAST child of the stack, which is what makes it matter.
+    const stack = container.querySelector(".lighting-canvas__stack");
+    expect(stack?.lastElementChild).toBe(svg);
   });
 });
 
@@ -167,5 +295,30 @@ describe("LightingSurface — the `viewControls` slot", () => {
     const { container } = render(<composed.Empty />);
     expect(container.querySelector(".canvas-view-controls")).toBeNull();
     expect(container.querySelector(".lighting-canvas__viewport")).toBeNull();
+  });
+
+  it("\u2b50 NEVER promotes the transformed element to its own layer \u2014 that GPU-upscales one 1:1 bitmap and blurs worse the further you zoom", () => {
+    // This element carries `scale(combinedScale)`. Promoting it makes the
+    // browser rasterise the subtree ONCE at 1:1 and bilinearly stretch that
+    // bitmap, so the child canvases' `image-rendering: pixelated` never
+    // applies \u2014 they stop rasterising themselves and become texels in the
+    // parent's texture.
+    //
+    // It DID carry `will-change: transform` from before plan 05, which was
+    // harmless while this element was sized `viewCells * zoom` (the bitmap was
+    // already at final resolution) and became a permanent blur once task 08
+    // made these canvases 1:1. Removed 2026-08-31; see the matching test and
+    // comment on `.canvas__layout`.
+    //
+    // jsdom applies no author CSS, so this is asserted against the sheet.
+    const css = readFileSync(
+      "src/ui/components/LightingSurface/LightingSurface.css",
+      "utf8",
+    );
+    const rule = /\.lighting-canvas__surface \{[^}]*\}/.exec(css)?.[0] ?? "";
+    expect(rule).not.toBe("");
+    expect(rule).not.toMatch(/will-change/);
+    expect(rule).not.toMatch(/backface-visibility/);
+    expect(rule).not.toMatch(/translate[zZ]|translate3d/);
   });
 });

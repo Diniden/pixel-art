@@ -80,7 +80,28 @@ function isInsideRoundedRect(
   return true;
 }
 
-// Check if a point is on the border of a rounded rectangle
+/**
+ * True when `(x,y)` is inside the rounded rect but touches the outside — i.e.
+ * it is a boundary cell.
+ *
+ * ⚠️ DERIVED FROM `isInsideRoundedRect`, NOT from the four straight edges.
+ * The previous version opened with an early-out that demanded the pixel sit on
+ * one of `minX`/`maxX`/`minY`/`maxY`:
+ *
+ *     if (!onLeft && !onRight && !onTop && !onBottom) return false;
+ *
+ * A rounded corner's arc is by construction pulled INWARD, off all four of
+ * those lines, so every arc pixel was rejected before the corner math below it
+ * could run. Outline rectangles therefore drew four disconnected segments with
+ * blank corners (measured 2026-09-01: an 12x10 outline at radius 3 emitted 20
+ * pixels against the square's 40), while `fill` mode — which never consulted
+ * this function — rounded correctly.
+ *
+ * Testing "inside, with a 4-neighbour outside" needs no per-corner cases and
+ * no `r - 1` annulus band: it is correct for any radius, including r == 0
+ * (where it reproduces the plain rectangle exactly) and the clamped case where
+ * r saturates at half the shorter side.
+ */
 function isOnRoundedRectBorder(
   x: number,
   y: number,
@@ -90,51 +111,23 @@ function isOnRoundedRectBorder(
   maxY: number,
   radius: number,
 ): boolean {
-  const width = maxX - minX;
-  const height = maxY - minY;
-  const r = Math.min(radius, Math.floor(width / 2), Math.floor(height / 2));
+  /* ⚠️ Bounds-check HERE, not in `isInsideRoundedRect`. That function assumes
+     its caller already stayed within the bbox — its `r <= 0` path returns
+     `true` unconditionally — and every other caller loops `minX..maxX`. The
+     neighbour probes below are the only reads that step OUTSIDE the box, so a
+     cell on the bbox edge needs this to see the outside as outside. */
+  const solid = (px: number, py: number) =>
+    px >= minX &&
+    px <= maxX &&
+    py >= minY &&
+    py <= maxY &&
+    isInsideRoundedRect(px, py, minX, minY, maxX, maxY, radius);
 
-  // Check if on edge
-  const onLeft = x === minX;
-  const onRight = x === maxX;
-  const onTop = y === minY;
-  const onBottom = y === maxY;
+  if (!solid(x, y)) return false;
 
-  if (!onLeft && !onRight && !onTop && !onBottom) return false;
-
-  if (r <= 0) return true;
-
-  // Check corners - need to verify the point is actually on the rounded corner
-  // Top-left corner region
-  if (x < minX + r && y < minY + r) {
-    const dx = x - (minX + r);
-    const dy = y - (minY + r);
-    const distSq = dx * dx + dy * dy;
-    return distSq <= r * r && distSq >= (r - 1) * (r - 1);
-  }
-  // Top-right corner region
-  if (x > maxX - r && y < minY + r) {
-    const dx = x - (maxX - r);
-    const dy = y - (minY + r);
-    const distSq = dx * dx + dy * dy;
-    return distSq <= r * r && distSq >= (r - 1) * (r - 1);
-  }
-  // Bottom-left corner region
-  if (x < minX + r && y > maxY - r) {
-    const dx = x - (minX + r);
-    const dy = y - (maxY - r);
-    const distSq = dx * dx + dy * dy;
-    return distSq <= r * r && distSq >= (r - 1) * (r - 1);
-  }
-  // Bottom-right corner region
-  if (x > maxX - r && y > maxY - r) {
-    const dx = x - (maxX - r);
-    const dy = y - (maxY - r);
-    const distSq = dx * dx + dy * dy;
-    return distSq <= r * r && distSq >= (r - 1) * (r - 1);
-  }
-
-  return true;
+  return (
+    !solid(x - 1, y) || !solid(x + 1, y) || !solid(x, y - 1) || !solid(x, y + 1)
+  );
 }
 
 // Rectangle pixels with optional border radius
@@ -184,6 +177,36 @@ export function getRectanglePixels(
   }
 
   return pixels;
+}
+
+/**
+ * Which pixels of a shape are its OUTLINE — the set that takes the edge colour
+ * when a shape is drawn in `"both"` mode.
+ *
+ * ⚠️ Derived by re-running the generator in `"outline"` mode rather than by
+ * re-deriving the boundary here. The two must not disagree: if `"outline"`
+ * mode and this set ever drew different pixels, a `"both"` shape would show a
+ * seam of fill colour where its edge should be, or a doubled edge. One
+ * generator, asked twice, cannot drift.
+ *
+ * Returns a `Set` of `"x,y"` keys — the same encoding the generators use
+ * internally for de-duplication.
+ */
+export function getShapeOutlineKeys(
+  tool: "line" | "rectangle" | "ellipse",
+  start: Point,
+  end: Point,
+  borderRadius: number = 0,
+): Set<string> {
+  // A line is ALL edge and has no interior, so its own pixels are the set.
+  const pixels =
+    tool === "line"
+      ? getLinePixels(start, end)
+      : tool === "rectangle"
+        ? getRectanglePixels(start, end, "outline", borderRadius)
+        : getEllipsePixels(start, end, "outline");
+
+  return new Set(pixels.map((p) => `${p.x},${p.y}`));
 }
 
 // Midpoint ellipse algorithm

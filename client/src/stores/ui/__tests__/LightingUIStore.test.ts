@@ -255,6 +255,17 @@ describe("LightingUIStore — the ported value semantics (task 08's pins)", () =
     expect(tool.selectedTool).toBe("pixel");
   });
 
+  it('setStudioMode("brush") resets the tool to the PIXEL default, not lighting', () => {
+    // Brush studio (MASTER D1) shares the pixel studio's tool table, so
+    // entering it from lighting mode must drop "normal-pencil" for "pixel".
+    const { lighting, tool } = makeRig();
+    runInAction(() => lighting.setStudioMode("lighting"));
+    expect(tool.selectedTool).toBe("normal-pencil");
+    runInAction(() => lighting.setStudioMode("brush"));
+    expect(lighting.studioMode).toBe("brush");
+    expect(tool.selectedTool).toBe("pixel");
+  });
+
   it("NONE of the nine records history — the store holds no HistoryStore", () => {
     // `trackHistory = false` was deliberate for all eight legacy setters, and
     // `autoSave.test.ts` retains that pin. Here it is structural: there is no

@@ -8,10 +8,14 @@
  * ProjectSelectModal.css's bare `.modal-overlay` additionally clobbered the
  * shared overlay with its blur. Both cross-file dependencies end here.
  *
- * OVERLAY DECISION (spec step 3): the overlay is `--overlay-70` WITH
- * `backdrop-filter: blur(4px)` — the value that actually rendered before this
- * task (ProjectSelectModal's, which won on emission order). ReferenceImageModal
- * had authored `--overlay-80` without blur and was already losing.
+ * OVERLAY DECISION (spec step 3): the overlay is `--overlay-70`, with NO
+ * backdrop blur. It carried `backdrop-filter: blur(4px)` — the value that
+ * actually rendered before task 18 (ProjectSelectModal's, which won on
+ * emission order; ReferenceImageModal had authored `--overlay-80` without blur
+ * and was already losing). The blur was removed on 2026-08-31 when the owner
+ * asked for blur effects to come out of the application; the `--overlay-70`
+ * scrim alone is what separates the dialog from the page now. The unification
+ * this task performed still stands — one overlay, declared here.
  *
  * The `.close-btn` LEGACY ALIAS is GONE (retired by the coordinator at the W14
  * merge): tasks 20-22 migrated all 13 render sites onto `modal__close`, leaving
@@ -42,7 +46,6 @@
   position: fixed;
   inset: 0;
   background: var(--overlay-70);
-  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;

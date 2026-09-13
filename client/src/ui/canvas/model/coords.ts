@@ -14,7 +14,7 @@
  * source that already includes it. A `zoom`-based mapping would silently break
  * while a pinch is in flight.
  *
- * ## The two modes
+ * ## The three modes
  *
  * - `"pixel"` — floors to a whole cell, maps into VARIANT-LOCAL space when
  *   editing a variant (it subtracts the variant offset), and rejects anything
@@ -22,11 +22,23 @@
  * - `"origin"` — snaps to the nearest HALF cell (`Math.round(v * 2) / 2`), stays
  *   in OBJECT space (it does NOT subtract the variant offset), and allows one
  *   cell of slop outside the object on every side.
+ * - `"corner"` — snaps to the nearest CELL CORNER (`Math.round`), in the same
+ *   variant-local space as `"pixel"`, and CLAMPS to `[0, gridWidth] ×
+ *   [0, gridHeight]` instead of rejecting out-of-range points.
  *
  * These are genuinely different rules, not an accident: an origin marker is
  * placed on the object, may sit on a half-pixel, and may be dragged slightly
  * off the object; a paint coordinate must be a whole cell inside the variant
  * being edited. Pure: no store, no MobX, no DOM beyond the rect passed in.
+ *
+ * ## Why `"corner"` clamps rather than returning null
+ *
+ * It exists for the reflection tool, whose lines are drawn BETWEEN pixels — on
+ * the integer lattice of cell corners, which runs `0..gridWidth` inclusive, one
+ * larger in each axis than the cell range `"pixel"` uses. Dragging a mirror line
+ * out past the edge of the canvas is the normal way to place it ON the edge, so
+ * the out-of-range case is clamped to the boundary corner instead of failing.
+ * A degenerate rect still returns `null`, as in the other two modes.
  */
 
 /** A whole- or half-cell coordinate. */
@@ -65,7 +77,7 @@ export interface CanvasViewGeometry {
   viewHeight: number;
 }
 
-export type SnapMode = "pixel" | "origin";
+export type SnapMode = "pixel" | "pixel-unbounded" | "origin" | "corner";
 
 /**
  * Map a client (screen) coordinate to a grid coordinate.
@@ -95,7 +107,18 @@ export function screenToPixel(
     viewHeight,
   } = geom;
 
-  if (mode === "pixel") {
+  /* `"pixel-unbounded"` shares EVERY line of `"pixel"`'s mapping and differs
+     only in the last step: it returns the cell it computed, however far
+     outside the grid that lands, where `"pixel"` returns `null`.
+     
+     ⚠️ UNBOUNDED, NOT CLAMPED. A shape drag has to keep tracking the real
+     pointer once it leaves the canvas: the user is sizing a circle against the
+     cursor and does not need the whole shape to fit on the stage (owner,
+     2026-09-01). Clamping to the border instead PINS the shape's corner at the
+     edge, so dragging further out stops changing it — which reads as the drag
+     having died. Off-grid cells are dropped when the shape is committed, not
+     when it is aimed. */
+  if (mode === "pixel" || mode === "pixel-unbounded") {
     let x: number;
     let y: number;
 
@@ -113,8 +136,36 @@ export function screenToPixel(
       y = Math.floor(((clientY - rect.top) / rect.height) * gridHeight);
     }
 
+    if (mode === "pixel-unbounded") return { x, y };
+
     if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return null;
     return { x, y };
+  }
+
+  if (mode === "corner") {
+    // Same space as "pixel" (variant-local while editing a variant), but snapped
+    // to the nearest cell CORNER and clamped rather than rejected.
+    let x: number;
+    let y: number;
+
+    if (editingVariant) {
+      const localViewX = ((clientX - rect.left) / rect.width) * viewWidth;
+      const localViewY = ((clientY - rect.top) / rect.height) * viewHeight;
+      const worldX = viewMinX + localViewX;
+      const worldY = viewMinY + localViewY;
+      x = Math.round(worldX - variantOffset.x);
+      y = Math.round(worldY - variantOffset.y);
+    } else {
+      x = Math.round(((clientX - rect.left) / rect.width) * gridWidth);
+      y = Math.round(((clientY - rect.top) / rect.height) * gridHeight);
+    }
+
+    // The corner lattice is INCLUSIVE of gridWidth/gridHeight — there are
+    // `gridWidth + 1` corners along a row of `gridWidth` cells.
+    return {
+      x: Math.min(gridWidth, Math.max(0, x)),
+      y: Math.min(gridHeight, Math.max(0, y)),
+    };
   }
 
   // mode === "origin": OBJECT space, half-cell snapping, one cell of slop.

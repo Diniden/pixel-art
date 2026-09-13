@@ -42,12 +42,11 @@
 
 import { useEffect, useRef } from "react";
 
-/** Tools reachable from the keyboard. A subset of the 17-member `Tool` union. */
+/** Tools reachable from the keyboard. A subset of the 19-member `Tool` union. */
 export type HotkeyTool =
   | "pixel"
   | "eraser"
   | "eyedropper"
-  | "fill-square"
   | "flood-fill"
   | "gaussian-fill"
   | "line"
@@ -56,18 +55,26 @@ export type HotkeyTool =
   | "move"
   | "selection"
   | "origin"
-  | "reflection";
+  | "reflection"
+  | "pose"
+  | "brush";
 
 /**
- * The 13 tool hotkeys, exported so a test can assert the map rather than
- * re-typing it. `g`/`G`, `o`/`O` and `r`/`R` are listed in both cases because
- * the lookup is by raw `e.key`, which is case-sensitive.
+ * The 14 tool hotkeys, exported so a test can assert the map rather than
+ * re-typing it.
+ *
+ * ⚠️ "4" IS DELIBERATELY ABSENT. It bound `fill-square` ("Square Brush"),
+ * removed 2026-09-01: the pencil's own square/circle shape setting
+ * (`pencilBrushShape`) already covers a square brush, so the tool was a
+ * duplicate. The remaining digits were NOT renumbered — a user's muscle memory
+ * for 5-9 is worth more than a contiguous run, and the hotkeys are printed on
+ * the buttons. `g`/`G`, `o`/`O`, `r`/`R`, `p`/`P` and `b`/`B` are listed in
+ * both cases because the lookup is by raw `e.key`, which is case-sensitive.
  */
 export const TOOL_HOTKEYS: Readonly<Record<string, HotkeyTool>> = {
   "1": "pixel",
   "2": "eraser",
   "3": "eyedropper",
-  "4": "fill-square",
   "5": "flood-fill",
   "6": "line",
   "7": "rectangle",
@@ -80,6 +87,10 @@ export const TOOL_HOTKEYS: Readonly<Record<string, HotkeyTool>> = {
   O: "origin",
   r: "reflection",
   R: "reflection",
+  p: "pose",
+  P: "pose",
+  b: "brush",
+  B: "brush",
 };
 
 const WASD_KEYS = ["w", "a", "s", "d", "W", "A", "S", "D"];

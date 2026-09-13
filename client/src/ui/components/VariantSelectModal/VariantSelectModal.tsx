@@ -4,6 +4,7 @@ import { Layer, VariantGroup, Variant } from "../../../types";
 import { renderVariantFramePreview } from "../../../utils/previewRenderer";
 import { AnchorGrid, AnchorPosition } from "../AnchorGrid/AnchorGrid";
 import { Icon } from "../../primitives/Icon/Icon";
+import { NumberInput } from "../../primitives/NumberInput/NumberInput";
 import { Hexagon, X, Scaling, Copy, Check } from "lucide-react";
 import "./VariantSelectModal.css";
 
@@ -320,25 +321,19 @@ export function VariantSelectModal({
               <div className="variant-select-modal__resize-inputs">
                 <label>
                   Width:
-                  <input
-                    type="number"
+                  <NumberInput
+                    unstyled
                     value={resizeWidth}
-                    onChange={(e) =>
-                      setResizeWidth(Math.max(1, parseInt(e.target.value) || 1))
-                    }
+                    onChange={setResizeWidth}
                     min={1}
                   />
                 </label>
                 <label>
                   Height:
-                  <input
-                    type="number"
+                  <NumberInput
+                    unstyled
                     value={resizeHeight}
-                    onChange={(e) =>
-                      setResizeHeight(
-                        Math.max(1, parseInt(e.target.value) || 1),
-                      )
-                    }
+                    onChange={setResizeHeight}
                     min={1}
                   />
                 </label>

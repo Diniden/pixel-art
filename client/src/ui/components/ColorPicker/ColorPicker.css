@@ -3,10 +3,25 @@
    styles/blocks/slider.css; this component renders the block names directly.
    Only the channel-specific skins live here, as compounds on `.slider` so
    they outrank the base track regardless of emission order (same pattern as
-   `.slider.slider--thick`, task 18). */
+   `.slider.slider--thick`, task 18).
+
+   ⚠️ `touch-action: none` ON EVERY COLOUR SURFACE IS LOAD-BEARING, NOT
+   COSMETIC (plan 09 task 03, 2026-09-06). It is one half of a two-part touch
+   fix: the other half is the `onPointerDown/Move/Up/Cancel` +
+   `setPointerCapture` handlers in `ColorPicker.tsx`. NEITHER HALF WORKS ALONE
+   ON iOS. Without these lines iPadOS claims the Apple Pencil's first movement
+   over the SV square, the hue bar or a channel slider as a pan/scroll of the
+   rail, the pointer stream is cancelled, and the drag is never delivered — so
+   the picker appears to need a second tap and then to drop the drag. Same
+   line, same reason, as `.other-hand__grip` (OtherHand.css:296) and
+   `.normal-picker__canvas`. The root carries it so a stray Pencil contact
+   anywhere in the picker is absorbed here rather than falling through to the
+   drawing canvas beneath. */
 
 .color-picker {
   flex-shrink: 0;
+  /* See the sheet header: the CSS half of the two-part touch fix. */
+  touch-action: none;
 }
 
 /* elements, DOM order */
@@ -58,6 +73,8 @@
   height: 100%;
   cursor: crosshair;
   display: block;
+  /* Required, not cosmetic — see the sheet header. */
+  touch-action: none;
 }
 
 .color-picker__sv-handle {
@@ -84,6 +101,8 @@
   height: 100%;
   cursor: crosshair;
   display: block;
+  /* Required, not cosmetic — see the sheet header. */
+  touch-action: none;
 }
 
 .color-picker__hue-handle {
@@ -185,6 +204,13 @@
   color: var(--text-secondary);
 }
 
+/* Every channel slider in the picker. The range input keeps its own native
+   drag; this only stops the browser stealing the gesture first. Required,
+   not cosmetic — see the sheet header. */
+.color-picker input[type="range"] {
+  touch-action: none;
+}
+
 /* Channel-specific slider backgrounds */
 /* dynamic: color-picker__slider--{r|g|b} built at ColorPicker.tsx:621
    (`slider color-picker__slider--${channel}`) — never a literal.
@@ -236,6 +262,99 @@
 
 .slider.color-picker__slider--b::-moz-range-thumb {
   background: var(--channel-b);
+}
+
+/* ── The edge/fill target tabs ──────────────────────────────────────────────
+   Two GLOBAL colour slots (2026-09-01). Styled after
+   `right-sidebar-top-controls__segmented` so the control reads as the same
+   kind of segmented choice the shape Mode control uses, with a swatch added:
+   the point is to see BOTH colours at once, not just the active one. */
+/* The tabs and the swap control on one line. The swap button is a SIBLING of
+   the tablist, not a member of it — see the JSX note: a third child inside
+   `role="tablist"` would be announced as a third tab. */
+.color-picker__target-row {
+  display: flex;
+  gap: var(--space-1);
+  align-items: stretch;
+  margin-bottom: var(--space-2);
+}
+
+.color-picker__targets {
+  display: flex;
+  flex: 1;
+  gap: var(--space-0-5);
+  padding: var(--space-0-5);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.color-picker__target {
+  display: flex;
+  flex: 1;
+  gap: var(--space-1-5);
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1-5) var(--space-2);
+  font-size: var(--text-70);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.color-picker__target:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* The swatch keeps a border so a colour matching the tab background — white
+   on the active tab, the panel on an inactive one — is still visible. */
+.color-picker__target-swatch {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-xs);
+}
+
+/* Swap edge ⇄ fill. Square, so the icon is not lopsided, and sized off the
+   tabs it sits beside on a fine pointer; the coarse-pointer rule below takes
+   it to 44px, Apple's minimum comfortable target — the same number and the
+   same reason as `.other-hand__grip` (OtherHand.css:334) and
+   `.thumb-buttons__btn` (:393). */
+.color-picker__swap {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.color-picker__swap:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+@media (pointer: coarse) {
+  .color-picker__swap {
+    width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* modifiers */
+
+.color-picker__target.color-picker__target--active {
+  background: var(--accent-primary);
+  color: var(--white);
 }
 
 @media (max-width: 768px) {

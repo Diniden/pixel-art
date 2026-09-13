@@ -41,6 +41,11 @@ export {
   type SaveProjectResult,
 } from "./resources/projectApi";
 export {
+  brushApi,
+  type CreateBrushResult,
+  type SaveBrushResult,
+} from "./resources/brushApi";
+export {
   backupApi,
   type BackupEntry,
   type MigrationBackupResult,

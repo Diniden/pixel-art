@@ -29,7 +29,7 @@
 // (`enforceActions: "always"` + the dev-only strictness flags) before any
 // observable in this tree is created.
 import "./configure";
-import { computed, makeObservable, runInAction } from "mobx";
+import { computed, makeObservable, reaction, runInAction } from "mobx";
 import { SessionStore } from "./session/SessionStore";
 import {
   AutoSaveController,
@@ -39,7 +39,12 @@ import {
   SyncController,
   type SyncControllerOptions,
 } from "./session/SyncController";
-import { SyncClient, type ProjectSavedEvent } from "../api";
+import { SyncClient, brushApi, type ProjectSavedEvent } from "../api";
+import { clearThumbnailCache } from "../ui/canvas/thumbnailCache";
+import { BrushStore } from "./domain/BrushStore";
+import { BrushStructureStore } from "./domain/BrushStructureStore";
+import { BrushPixelStore } from "./domain/BrushPixelStore";
+import { BrushUIStore } from "./ui/BrushUIStore";
 import { DomainStore, type ProjectHost } from "./domain/DomainStore";
 import { DomainMutator, type DomainMirror } from "./domain/DomainMutator";
 import { UIStore } from "./ui/UIStore";
@@ -63,11 +68,14 @@ import { ReferenceUIStore } from "./ui/ReferenceUIStore";
 import { CanvasInteractionStore } from "./ui/CanvasInteractionStore";
 import { CanvasViewsUIStore } from "./ui/CanvasViewsUIStore";
 import { LightingViewsUIStore } from "./ui/LightingViewsUIStore";
+import { ReflectionUIStore } from "./ui/ReflectionUIStore";
+import { PoseUIStore } from "./ui/PoseUIStore";
 import { editorHistory } from "./history/editorHistory";
 import { createSnapshotCommand } from "./history/commands";
 import type { Command, SnapshotHost } from "./history/commands";
 import type { HistoryStore } from "./history/HistoryStore";
 import type {
+  BrushDocument,
   Color,
   CurrentVariant,
   Frame,
@@ -131,6 +139,13 @@ export interface ApplicationStoreOptions {
   projectHost?: ProjectHost;
   /** Auto-save transport/clock overrides for tests. */
   autoSave?: AutoSaveControllerOptions;
+  /**
+   * The BRUSH auto-save's transport/clock overrides for tests (Brush Studio
+   * task 11). Separate from `autoSave` because the two controllers save
+   * different document types through different transports; MSW errors on an
+   * unhandled request, so a test that edits a brush injects a spy `save`.
+   */
+  brushAutoSave?: AutoSaveControllerOptions<BrushDocument>;
   /**
    * Where a committed domain mutation is published for the not-yet-migrated
    * Zustand consumers (task 23). Defaults to the Zustand mirror; tests
@@ -354,6 +369,41 @@ export class ApplicationStore {
    */
   readonly lightingUI: LightingUIStore;
 
+  /* ── Brush Studio (docs/01-brush-studio, task 11; MASTER D7/D10/D11) ──── */
+  /**
+   * The brush studio's session state: selected frame/layer, the delta vector
+   * the tools paint, the brush canvas camera, the play flag. Nothing here is
+   * persisted. It is ALSO the selection source/sink the two brush behaviour
+   * stores are wired to, and the sink of `BrushStore`'s `onDocumentInstalled`
+   * callback — so it is constructed before `brushes`.
+   */
+  readonly brushUI: BrushUIStore;
+  /**
+   * The loaded brush document and its lifecycle, with its OWN `HistoryStore`
+   * (D7). `brushes.init()` is deliberately NOT called here — the brush
+   * studio container calls it on entering brush mode, so a pixel-studio boot
+   * (and every test) makes no brush request.
+   */
+  readonly brushes: BrushStore;
+  /** Structural brush edits (frames, layers, applied groups, resize). */
+  readonly brushStructure: BrushStructureStore;
+  /** Cell writes on the selected brush layer. */
+  readonly brushPixels: BrushPixelStore;
+  /**
+   * The SECOND auto-save controller (D11), saving `brushes` through
+   * `brushApi.save`. `null` when `autoSaveEnabled: false`, exactly like
+   * `autoSave`. Shares `session` (status dot, `saveSuspended`) with the
+   * project controller.
+   */
+  readonly brushAutoSave: AutoSaveController<BrushDocument> | null;
+  /**
+   * The brush studio's Full/Layer pane state (docs/11-brush-studio-followups
+   * task 09 consumes it); independent of `canvasViews`; layer pane camera =
+   * `brushViews.layerCamera`, full pane camera = `brushUI`. Session-only,
+   * nothing persisted; `presentVariantPanes` is never called on it.
+   */
+  readonly brushViews: CanvasViewsUIStore;
+
   /**
    * Task 29: the reference-image + trace-overlay slice, and the replacement
    * for the module-level `persistentState` singleton that lived inside
@@ -398,6 +448,56 @@ export class ApplicationStore {
    * `canvasViews`.
    */
   readonly lightingViews: LightingViewsUIStore;
+
+  /**
+   * The reflection tool's guide lines and in-flight draft (reflection-tool
+   * task 03). Session-only: not in `toPersistedUIState()`, not in history,
+   * never schedules a save. No dependencies in either direction, like
+   * `canvasViews`.
+   *
+   * Lines outlive layer/frame/object switches and are cleared only when a
+   * DIFFERENT project is installed — see `disposeReflectionReaction` below.
+   */
+  readonly reflection: ReflectionUIStore;
+
+  /**
+   * Stops the `loadGeneration` → `reflection.clear()` reaction; run by
+   * {@link ApplicationStore.dispose}.
+   */
+  private readonly disposeReflectionReaction: () => void;
+
+  /**
+   * The pose tool's 3D reference state — mesh (a primitive, the whole
+   * mannequin, or one of its parts), rotation, light, outline width, camera
+   * and pan (pose-tool task 02; framing deleted 2026-09-03, MASTER E2 —
+   * a part is its own geometry now). ⚠️ The MODEL and OUTLINE colours are the
+   * app's own Fill/Edge slots on `ui.tool`, not pose state (E8/E9).
+   * Session-only: not in
+   * `toPersistedUIState()`, not in history, never schedules a save. No
+   * dependencies in either direction, like `reflection`.
+   *
+   * The pose outlives layer/frame/object switches and is cleared only when a
+   * DIFFERENT project is installed — see `disposePoseReaction` below.
+   */
+  readonly pose: PoseUIStore;
+
+  /**
+   * Stops the `loadGeneration` → `pose.clear()` reaction; run by
+   * {@link ApplicationStore.dispose}.
+   */
+  private readonly disposePoseReaction: () => void;
+
+  /**
+   * Stops the `loadGeneration` → `clearThumbnailCache()` reaction; run by
+   * {@link ApplicationStore.dispose}.
+   */
+  private readonly disposeThumbnailCacheReaction: () => void;
+
+  /**
+   * Stops the "a variant layer was selected" → `presentVariantPanes()`
+   * reaction; run by {@link ApplicationStore.dispose}.
+   */
+  private readonly disposeVariantPanesReaction: () => void;
 
   readonly options: Readonly<{
     api: unknown;
@@ -506,6 +606,35 @@ export class ApplicationStore {
     this.canvasViews = new CanvasViewsUIStore();
     // Lighting-preview-split task 01: same reasoning as `canvasViews`.
     this.lightingViews = new LightingViewsUIStore();
+    // Reflection-tool task 03: same reasoning as `canvasViews`.
+    this.reflection = new ReflectionUIStore();
+    // Locked D6 — guides are cleared when a DIFFERENT project is installed.
+    // `DomainStore.loadGeneration` is bumped once per fresh install (init /
+    // load / create / switch / delete) and NOT by `adoptProject`, which also
+    // runs on snapshot undo/redo; hooking that would wipe the guides on undo.
+    this.disposeReflectionReaction = reaction(
+      () => this.domain.loadGeneration,
+      () => this.reflection.clear(),
+    );
+    // Pose-tool task 02: same reasoning as `reflection`.
+    this.pose = new PoseUIStore();
+    // Locked D6 — the pose is cleared when a DIFFERENT project is installed.
+    // `DomainStore.loadGeneration` is bumped once per fresh install (init /
+    // load / create / switch / delete) and NOT by `adoptProject`, which also
+    // runs on snapshot undo/redo; hooking that would wipe the pose on undo.
+    this.disposePoseReaction = reaction(
+      () => this.domain.loadGeneration,
+      () => this.pose.clear(),
+    );
+    // The thumbnail LRU is keyed by LAYER ID, and layer ids are unique within
+    // a project, not across projects. A fresh install must therefore drop it —
+    // the same `loadGeneration` signal, and NOT `adoptProject`, which also
+    // runs on snapshot undo/redo where the cached thumbnails are still valid
+    // for the ids they name (`pixelVersion` moves them along anyway).
+    this.disposeThumbnailCacheReaction = reaction(
+      () => this.domain.loadGeneration,
+      () => clearThumbnailCache(),
+    );
     // ── task 38: the NATIVE sinks — the hosted `uiState` replaces Zustand ──
     //
     // During the bridge era these wrote the Zustand SOURCE and the bridge
@@ -590,6 +719,55 @@ export class ApplicationStore {
     });
     this.timelineUI = timelineUI;
     this.selection = timelineUI;
+
+    // ⚠️ THIS REACTION MUST BE CREATED AFTER `this.selection` IS ASSIGNED,
+    // WHICH IS THE LINE ABOVE — do not move it up with the other three.
+    //
+    // `reaction` evaluates its tracked expression EAGERLY, at construction.
+    // The expression here reaches `this.currentLayer`, which reads
+    // `this.currentFrame` and then `this.selection.selectedLayerId`; with the
+    // reaction created alongside the `loadGeneration` ones it ran while
+    // `this.selection` was still undefined and threw
+    // `Cannot read properties of undefined (reading 'selectedObjectId')` on
+    // every construction. MobX swallows that into an "uncaught exception in
+    // Reaction" log rather than failing, so the suite stayed green and only
+    // the console showed it — measured 2026-09-08.
+    //
+    // Selecting a VARIANT layer opens both canvas panes with the variant's own
+    // canvas LEFT and the composite view RIGHT (owner report, 2026-09-08:
+    // "the default editor should be the variant canvas and NOT the composed
+    // view on the left, BUT the composed view should be automatically opened
+    // and on the right as the default").
+    //
+    // ⚠️ WHY A REACTION HERE AND NOT A CALL IN `selectLayer`.
+    //
+    // `TimelineUIStore` owns the selection, but it reaches the rest of the app
+    // only through the injected `TimelineContext` callbacks — deliberately, so
+    // that no store type crosses that boundary (see its header). Handing it a
+    // `canvasViews` reference to call would be the exact cross-module edge
+    // task 28 exists to remove. A layer is also selected from more than one
+    // place — the layer panel, the timeline's carry-over ladder in
+    // `selectFrame`, variant creation — and a reaction on the SELECTION covers
+    // all of them, where a call site would have to be repeated in each and
+    // would silently miss the next one added.
+    //
+    // The tracked expression is the selected layer's `isVariant`, NOT the
+    // layer id: it fires when the selection ARRIVES on a variant layer and
+    // stays quiet while the user moves between variant layers, so the panes
+    // are arranged once rather than re-imposed on every click. Moving to a
+    // normal layer sets it false and leaves the panes exactly as they are —
+    // this reaction never closes a pane.
+    //
+    // `fireImmediately` is deliberately OFF. A project that loads with a
+    // variant layer already selected must come back to the single Full pane a
+    // reload has always shown (this store persists nothing); rearranging the
+    // panes is a response to the user's act of selecting, not to a restore.
+    this.disposeVariantPanesReaction = reaction(
+      () => this.currentLayer?.isVariant === true,
+      (isVariant) => {
+        if (isVariant) this.canvasViews.presentVariantPanes();
+      },
+    );
     this.ui = new UIStore({
       session: this.session,
       selection: timelineUI,
@@ -597,6 +775,17 @@ export class ApplicationStore {
       tool,
       lighting: lightingUI,
       reference: referenceUI,
+      // Plan 08 task 08: `UIStore` reads exactly ONE field off the pose store
+      // — `posePresets`, the owner's saved scenes (F12). Injected rather than
+      // constructed there because THIS is the pose store the whole app writes
+      // to (the `loadGeneration` reaction below clears it), and a second one
+      // inside `UIStore` would be a store nobody writes to, so the presets
+      // would silently never reach the file. Construction order holds: `pose`
+      // is built above, at the `reflection` block.
+      //
+      // ⚠️ The LIVE pose is still session-only (MASTER D6). Only the presets
+      // cross into the wire format, and only when at least one exists (F13).
+      pose: this.pose,
     });
     const uiRef = this.ui;
     // ⚠️ INJECTED, not imported: `DomainStore` may not depend on
@@ -752,6 +941,40 @@ export class ApplicationStore {
       publish: options.selectionPublisher ?? (() => {}),
     });
 
+    // ── Brush Studio (task 11): the four brush stores ──────────────────────
+    //
+    // Appended after every pixel-studio store — none of them is needed by
+    // anything above, and they need nothing above but `session`. Within the
+    // block the order IS load-bearing: `brushUI` first, because `BrushStore`
+    // takes it as the `onDocumentInstalled` sink, and the two behaviour
+    // stores take it as their selection source/sink (the `FrameStore` /
+    // `LayerStore` injection pattern — `stores/domain/**` may not import
+    // `stores/ui/**`).
+    //
+    // `onDocumentInstalled` fires from `BrushStore.adoptDocument`, the SINGLE
+    // writer of `document` (install, replace, commit, undo/redo restore all
+    // funnel through it), so the UI selection is re-seated on every document
+    // change without a separate `reaction` here.
+    const brushUI = new BrushUIStore();
+    this.brushUI = brushUI;
+    this.brushes = new BrushStore({
+      session: this.session,
+      onDocumentInstalled: (doc) => brushUI.adoptDocument(doc),
+    });
+    this.brushStructure = new BrushStructureStore({
+      brush: this.brushes,
+      source: brushUI,
+      select: brushUI,
+    });
+    this.brushPixels = new BrushPixelStore({
+      brush: this.brushes,
+      source: brushUI,
+    });
+    // docs/11-brush-studio-followups task 04: a SECOND, independent pane
+    // store for the brush split view. No dependencies in either direction;
+    // its own observable, so no `makeObservable` entry here.
+    this.brushViews = new CanvasViewsUIStore();
+
     makeObservable(this, {
       currentObject: computed,
       currentFrame: computed,
@@ -766,6 +989,12 @@ export class ApplicationStore {
       // comparison for a grid.
       editableGrid: computed,
       selectionDims: computed,
+      // Plan 09 task 05: derives from `ToolUIStore`'s own observables
+      // (`colorTarget`, `selectedColor`, `fillColor`), so it re-evaluates
+      // when either slot or the target changes and is memoised in between.
+      activeColor: computed,
+      // Brush Studio task 11 (D10): which undo stack ⌘Z drives.
+      activeHistory: computed,
     });
 
     // The save reaction — constructed LAST so it observes fully-built stores.
@@ -786,6 +1015,42 @@ export class ApplicationStore {
           this.history,
           options.autoSave,
           this.ui,
+        )
+      : null;
+
+    // ── Brush Studio (task 11, D11): the SECOND auto-save controller ───────
+    //
+    // Same class, a different document: the trigger is `BrushStore`'s
+    // `[loadGeneration, domainVersion, pixelVersion]` (no UI source — nothing
+    // brush-studio is persisted), gated by `brushes.loadState === "loaded"`
+    // and `brushes.history.isReplaying`, and the transport is `brushApi.save`.
+    //
+    // ⚠️ Replay DOES schedule a brush save, and that is accepted (HANDOFF
+    // W3/07(g), W4/09). Brush undo/redo restores bump `domainVersion` /
+    // `pixelVersion` (the brush canvas has no dirty channel; it redraws from
+    // the counter), so once `isReplaying` clears the counters sit past the
+    // last-saved baseline and the controller debounces a save of the
+    // restored document. That save is CORRECT — the file on disk ends up
+    // matching what the owner sees after ⌘Z — and it costs one debounced
+    // request per undo burst. Gating it away would leave an undone brush
+    // unsaved until the next edit, which is the worse outcome.
+    this.brushAutoSave = this.options.autoSaveEnabled
+      ? new AutoSaveController<BrushDocument>(
+          this.brushes,
+          this.session,
+          this.brushes.history,
+          {
+            ...options.brushAutoSave,
+            // `saveName` is `brushes.brushName`; the controller passes it as
+            // `undefined` when empty. A brush is only ever `loaded` through
+            // `loadBrush`, which sets the name, so the fallback is unreachable
+            // in practice — and if it is reached the server's 400 surfaces as
+            // `saveStatus = "error"` rather than silently saving nowhere.
+            save:
+              options.brushAutoSave?.save ??
+              ((doc, name) => brushApi.save(doc, name ?? "")),
+          },
+          null,
         )
       : null;
 
@@ -1204,7 +1469,11 @@ export class ApplicationStore {
    * the mode. A computed would re-run it on any tree change, and observing the
    * grids to know when to do so is the exact modelling error R2 forbids.
    */
-  startColorAdjustment(color: Color, allFrames: boolean): void {
+  startColorAdjustment(
+    color: Color,
+    allFrames: boolean,
+    allLayers = false,
+  ): void {
     const layer = this.currentLayer;
     const obj = this.currentObject;
     if (!layer || !obj) return;
@@ -1271,10 +1540,39 @@ export class ApplicationStore {
           affectedPixels: [], // pin 1 — the unused half of the union
           affectedPixelsByFrame,
         };
+      } else if (allLayers) {
+        // ⚠️ EVERY layer of the current variant frame — so this cannot use
+        // the flat `affectedPixels` payload, which addresses one layer only.
+        // It takes the same by-frame Map as the all-frames case, with the one
+        // synthetic key for the frame the editor is on. `adjustColor`'s
+        // variant branch already dispatches on the Map being present.
+        const affectedPixelsByFrame = new Map<
+          string,
+          Map<string, { x: number; y: number }[]>
+        >();
+        const frameIdx = variant.frames.indexOf(variantData.variantFrame);
+        const frameKey = `variant-frame-${frameIdx}`;
+        for (const vLayer of variantData.variantFrame.layers) {
+          const pixels = scan(vLayer.pixels, width, height);
+          if (pixels.length > 0) {
+            if (!affectedPixelsByFrame.has(frameKey)) {
+              affectedPixelsByFrame.set(frameKey, new Map());
+            }
+            affectedPixelsByFrame.get(frameKey)!.set(vLayer.id, pixels);
+          }
+        }
+        next = {
+          originalColor: color,
+          allFrames: false,
+          allLayers: true,
+          affectedPixels: [], // pin 1 — the unused half of the union
+          affectedPixelsByFrame,
+        };
       } else {
         next = {
           originalColor: color,
           allFrames: false,
+          allLayers: false,
           affectedPixels: scan(variantLayer.pixels, width, height),
         };
       }
@@ -1288,9 +1586,11 @@ export class ApplicationStore {
         >();
         for (const frame of obj.frames) {
           // pin 2 — `filter`, by NAME. Every same-named layer, not the first.
-          const matchingLayers = frame.layers.filter(
-            (l) => l.name === layer.name,
-          );
+          // `allLayers` is exactly "skip the name filter": every layer of the
+          // frame is in scope, which is what makes the two toggles orthogonal.
+          const matchingLayers = allLayers
+            ? frame.layers
+            : frame.layers.filter((l) => l.name === layer.name);
           for (const matchingLayer of matchingLayers) {
             const pixels = scan(matchingLayer.pixels, width, height);
             if (pixels.length > 0) {
@@ -1306,6 +1606,33 @@ export class ApplicationStore {
         next = {
           originalColor: color,
           allFrames: true,
+          allLayers,
+          affectedPixels: [], // pin 1
+          affectedPixelsByFrame,
+        };
+      } else if (allLayers) {
+        // ⚠️ EVERY layer of the current frame. Like the variant twin above
+        // this needs the by-frame Map rather than the flat list, because the
+        // flat payload addresses the SELECTED layer only. The key is the real
+        // `frame.id`, so `PixelStore.adjustColorAcross` resolves it normally.
+        const affectedPixelsByFrame = new Map<
+          string,
+          Map<string, { x: number; y: number }[]>
+        >();
+        const frame = this.currentFrame;
+        for (const frameLayer of frame?.layers ?? []) {
+          const pixels = scan(frameLayer.pixels, width, height);
+          if (pixels.length > 0) {
+            if (!affectedPixelsByFrame.has(frame!.id)) {
+              affectedPixelsByFrame.set(frame!.id, new Map());
+            }
+            affectedPixelsByFrame.get(frame!.id)!.set(frameLayer.id, pixels);
+          }
+        }
+        next = {
+          originalColor: color,
+          allFrames: false,
+          allLayers: true,
           affectedPixels: [], // pin 1
           affectedPixelsByFrame,
         };
@@ -1313,6 +1640,7 @@ export class ApplicationStore {
         next = {
           originalColor: color,
           allFrames: false,
+          allLayers: false,
           affectedPixels: scan(layer.pixels, width, height),
         };
       }
@@ -1429,7 +1757,20 @@ export class ApplicationStore {
     const options = { trackHistory };
     let written = 0;
 
-    const byFrame = state.allFrames ? state.affectedPixelsByFrame : undefined;
+    // ⚠️ DISPATCH ON THE PAYLOAD, NOT ON `allFrames`.
+    //
+    // This read `state.allFrames ? state.affectedPixelsByFrame : undefined`
+    // while all-frames was the ONLY way to produce a multi-layer snapshot.
+    // The `allLayers` axis breaks that equivalence: `allLayers && !allFrames`
+    // fills the Map with the current frame's layers, and the old test would
+    // have sent it down the flat-list branch, which addresses the SELECTED
+    // layer only — every other layer would silently keep its old colour while
+    // the swatch strip claimed the whole frame had been recoloured.
+    //
+    // Which payload is populated is the tagged union's real discriminant (pin
+    // 1: the two are disjoint, and the unused half is an empty array), so
+    // testing it directly is both correct and axis-agnostic.
+    const byFrame = state.affectedPixelsByFrame;
 
     if (this.isEditingVariant && layer.variantGroupId) {
       const variantId = layer.selectedVariantId;
@@ -1544,14 +1885,39 @@ export class ApplicationStore {
    * methods become bare `HistoryStore` calls.
    */
 
-  /** Undo one entry, keeping the bridge-era history mirror consistent. */
-  undo(): void {
-    this.historyOps.undo();
+  /**
+   * Brush Studio task 11 (D10): the undo stack ⌘Z drives — the brush's own
+   * `HistoryStore` in brush mode, the shared editor history otherwise. A
+   * `computed` so the toolbar's canUndo/canRedo can observe the switch.
+   */
+  get activeHistory(): HistoryStore {
+    return this.lightingUI.studioMode === "brush"
+      ? this.brushes.history
+      : this.history;
   }
 
-  /** Redo one entry, keeping the bridge-era history mirror consistent. */
+  /**
+   * Undo one entry on {@link activeHistory}. The PROJECT path is unchanged —
+   * it still goes through `historyOps` (the `historyControl` seam); only the
+   * brush path is a bare `HistoryStore` call, since nothing mirrors it.
+   */
+  undo(): void {
+    const target = runInAction(() => this.activeHistory);
+    if (target === this.history) {
+      this.historyOps.undo();
+      return;
+    }
+    runInAction(() => target.undo());
+  }
+
+  /** Redo one entry on {@link activeHistory}; same routing as {@link undo}. */
   redo(): void {
-    this.historyOps.redo();
+    const target = runInAction(() => this.activeHistory);
+    if (target === this.history) {
+      this.historyOps.redo();
+      return;
+    }
+    runInAction(() => target.redo());
   }
 
   /**
@@ -1619,6 +1985,80 @@ export class ApplicationStore {
   }
 
   /**
+   * THE single colour-set entry point — it honours `colorTarget` (plan 09,
+   * task 05).
+   *
+   * Every colour surface in the app (the picker, the palette grid, the pinned
+   * current palette, the eyedropper, the other-hand thumb rail) sets "the
+   * current colour". Before this method, FIVE call sites each decided for
+   * themselves which slot that meant, and four of them hardcoded the edge —
+   * which is the defect the user reported as "selecting from the palettes
+   * only sets the edge colour". One branch point replaces five.
+   *
+   * The behaviour generalised here is `ColorPickerContainer.tsx:116-120`, the
+   * one call site that already branched correctly.
+   *
+   * ⚠️ THE HISTORY ASYMMETRY IS DELIBERATE AND IS PRESERVED VERBATIM: the
+   * EDGE path adds to `colorHistory`, the FILL path does NOT. `colorHistory`
+   * is the recent-colours strip, and the owner expects it to track the colour
+   * that is DRAWING — the edge slot. Routing the fill slot through
+   * {@link setColorAndAddToHistory} as well would fill that strip with fill
+   * colours the user never drew a stroke with.
+   *
+   * ⚠️ THE TWO SLOTS ALSO HAVE DIFFERENT WRITE PATHS, and that is why this
+   * is not a one-line ternary over a single setter. `selectedColor` has a
+   * ride-along copy in the hosted project's `uiState` and goes through
+   * {@link setColorAndAddToHistory}, which patches it; `fillColor` is
+   * MobX-only and is written directly. See `ColorPickerContainer`'s own note.
+   */
+  setActiveColor(color: Color): void {
+    if (this.ui.tool.colorTarget === "fill") {
+      runInAction(() => this.ui.tool.setFillColor(color));
+      return;
+    }
+    this.setColorAndAddToHistory(color);
+  }
+
+  /**
+   * Read the colour the user is currently editing — the mirror of
+   * {@link setActiveColor}.
+   *
+   * Exists so read sites branch in ONE place too. The fill side goes through
+   * {@link ToolUIStore.fillColorOrSelected}, so a project that predates the
+   * edge/fill split reports its single colour for both targets rather than
+   * `undefined`.
+   */
+  get activeColor(): Color {
+    const tool = this.ui.tool;
+    return tool.colorTarget === "fill"
+      ? tool.fillColorOrSelected
+      : tool.selectedColor;
+  }
+
+  /**
+   * Swap the edge and fill colours as exactly ONE undo step.
+   *
+   * The snapshot is taken BEFORE the mutation, matching how
+   * `ColorPickerContainer.tsx:131` brackets the picker's own edits, so undo
+   * restores the pre-swap pair in a single press rather than unwinding two
+   * separate colour writes.
+   *
+   * ⚠️ The `undefined`-fill semantics live in {@link ToolUIStore.swapColors}
+   * — read its header before changing anything here.
+   *
+   * The `colorSink` call keeps the hosted project's `uiState.selectedColor`
+   * ride-along in step with the store, exactly as
+   * {@link setColorAndAddToHistory} does for the ordinary edge write. The
+   * swap deliberately does NOT touch `colorHistory`: it reorders two colours
+   * the user already has, it does not pick a new one.
+   */
+  swapEdgeAndFillColors(): void {
+    this.saveStateToHistory("Swap colors");
+    runInAction(() => this.ui.tool.swapColors());
+    this.colorSink(this.ui.tool.selectedColor);
+  }
+
+  /**
    * Apply an accepted AI interpolation — the 182-line `handleAccept` that used
    * to live in `AIInterpolateModal` (task 34).
    *
@@ -1664,6 +2104,11 @@ export class ApplicationStore {
 
   dispose(): void {
     this.autoSave?.dispose();
+    this.brushAutoSave?.dispose();
+    this.disposeReflectionReaction();
+    this.disposePoseReaction();
+    this.disposeThumbnailCacheReaction();
+    this.disposeVariantPanesReaction();
     this.syncClient?.dispose();
     this.ui.dispose();
     this.referenceUI.dispose();

@@ -97,14 +97,51 @@ export const ColorPickerContainer = observer(function ColorPickerContainer() {
 
   return (
     <ColorPicker
-      selectedColor={ui.tool.selectedColor}
+      /* ⚠️ The picker edits ONE slot at a time, and the two are written by
+         DIFFERENT paths. `selectedColor` must go through the Zustand bridge
+         (`setColorAndAddToHistory` / `adjustColor`) or the next unrelated
+         Zustand change re-hydrates it away — see the note above. `fillColor`
+         is MobX-only, has no legacy mirror, and is written directly. */
+      target={ui.tool.colorTarget}
+      onTargetChange={(target) => ui.tool.setColorTarget(target)}
+      edgeColor={ui.tool.selectedColor}
+      fillColor={ui.tool.fillColorOrSelected}
+      selectedColor={
+        ui.tool.colorTarget === "fill"
+          ? ui.tool.fillColorOrSelected
+          : ui.tool.selectedColor
+      }
       colorHistory={session.colorHistory}
-      colorAdjustment={Boolean(colorAdjustment)}
-      onSetColor={(color) => app.setColorAndAddToHistory(color)}
+      colorAdjustment={ui.tool.colorTarget === "edge" && Boolean(colorAdjustment)}
+      /* ⚠️ The branch that used to live inline here IS `setActiveColor`
+         (plan 09, task 05/06). This call site was the only one of five that
+         got the edge/fill split right, so task 05 generalised it onto the
+         store and the other four now share it. Behaviour is identical —
+         including the history asymmetry — and there is exactly ONE branch
+         point in the app again. Do NOT re-inline it. */
+      onSetColor={(color) => app.setActiveColor(color)}
       onAdjustColor={(color, trackHistory) =>
-        app.adjustColor(color, trackHistory)
+        /* Colour ADJUSTMENT recolours existing pixels and is an edge-slot
+           operation only: there is no "adjust every pixel of the fill colour"
+           concept, and running it while the fill tab is open would silently
+           recolour artwork the user was not looking at. On the fill tab the
+           picker just sets the slot. */
+        ui.tool.colorTarget === "fill"
+          ? ui.tool.setFillColor(color)
+          : app.adjustColor(color, trackHistory)
       }
       onSaveStateToHistory={(label) => app.saveStateToHistory(label)}
+      /* ⚠️ THIS PROP IS WHAT MAKES THE SWAP BUTTON EXIST (plan 09, R8).
+         `ColorPicker.onSwapColors` is OPTIONAL and the control renders only
+         when a caller supplies it — task 07 shipped the button that way
+         because `ColorPickerContainer` belonged to task 06 in the same wave,
+         so until this line the desktop picker showed no swap control at all.
+
+         ⚠️ DO NOT bracket this with `saveStateToHistory`.
+         `swapEdgeAndFillColors` already snapshots ONCE before it mutates and
+         then calls `colorSink`, which is what makes the swap a single undo
+         step. A second save here would make one swap take two undos. */
+      onSwapColors={() => app.swapEdgeAndFillColors()}
       onOtherHand={
         ui.layout.otherHandAvailable
           ? () => ui.layout.enterOtherHand(OTHER_HAND_SECTIONS.color)

@@ -2,7 +2,8 @@
  * ReviewStep — the generated sequence strip plus the animation preview
  * (REFRESH task 34, from `AIInterpolateModal.tsx:1160-1216`).
  *
- * PURE: React types, the two `parts/` components, nothing else.
+ * PURE: React types, the two `parts/` components and the `NumberInput`
+ * primitive, nothing else.
  *
  * Shown in the `review` step AND during `generating` once at least one pair
  * has completed, which is why it takes the whole sequence rather than a
@@ -13,6 +14,7 @@
  * is a runtime-interpolated modifier over the `"keyframe" | "generated"` union.
  * No static search finds those two class names. Do not delete them as dead.
  */
+import { NumberInput } from "../../../primitives/NumberInput/NumberInput";
 import { Base64Thumbnail } from "../parts/Base64Thumbnail";
 import { SyncedAnimatedPreview } from "../parts/SyncedAnimatedPreview";
 
@@ -81,16 +83,13 @@ export function ReviewStep({
             </h4>
             <div className="ai-interpolate-modal__fps-control">
               <label>FPS:</label>
-              <input
-                type="number"
+              <NumberInput
+                unstyled
+                label="FPS"
                 min={1}
                 max={120}
                 value={previewFps}
-                onChange={(e) =>
-                  onPreviewFpsChange(
-                    Math.max(1, Math.min(120, parseInt(e.target.value) || 8)),
-                  )
-                }
+                onChange={onPreviewFpsChange}
                 className="ai-interpolate-modal__fps-input"
               />
             </div>

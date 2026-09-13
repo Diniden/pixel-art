@@ -19,6 +19,7 @@ import {
   getLinePixels,
   getRectanglePixels,
   getSquarePixels,
+  getShapeOutlineKeys,
 } from "@/components/Canvas/drawingUtils";
 import type { Color, PixelData, Point } from "@/types";
 
@@ -242,6 +243,91 @@ describe("getRectanglePixels", () => {
       [2, 4],
       [3, 4],
     ]);
+  });
+
+  /* ⚠️ REGRESSION (2026-09-01): rounded outlines drew BLANK CORNERS.
+     `isOnRoundedRectBorder` began by demanding the pixel sit on one of the four
+     straight edges (x === minX/maxX || y === minY/maxY) and returned false
+     otherwise — but a corner arc is pulled INWARD, off all four of those lines,
+     so every arc pixel was discarded and the outline fell apart into four
+     disconnected segments.
+
+     The radius-1 test above cannot catch it: at r == 1 the arc DEGENERATES to
+     "drop the four corner pixels", which the broken code also produced. The
+     bug only appears at r >= 2, where the arc has intermediate pixels to lose.
+     These pin an actual arc, and its connectivity. */
+  it("a radius-3 outline draws CONNECTED corner arcs, not blank corners", () => {
+    const px = getRectanglePixels({ x: 0, y: 0 }, { x: 11, y: 9 }, "outline", 3);
+    const at = new Set(px.map((p) => `${p.x},${p.y}`));
+
+    // The arc pixels that the edge-only guard used to throw away.
+    for (const [x, y] of [
+      [1, 1],
+      [2, 1],
+      [1, 2],
+      [9, 1],
+      [10, 1],
+      [10, 2],
+      [1, 8],
+      [2, 8],
+      [1, 7],
+      [9, 8],
+      [10, 8],
+      [10, 7],
+    ]) {
+      expect(at.has(`${x},${y}`)).toBe(true);
+    }
+
+    // Corner CELLS stay empty — the shape is rounded, not square.
+    for (const [x, y] of [
+      [0, 0],
+      [11, 0],
+      [0, 9],
+      [11, 9],
+    ]) {
+      expect(at.has(`${x},${y}`)).toBe(false);
+    }
+
+    // A closed ring: every pixel has >= 2 of its 8 neighbours in the set.
+    for (const p of px) {
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if ((dx || dy) && at.has(`${p.x + dx},${p.y + dy}`)) n++;
+        }
+      }
+      expect(n).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("a rounded outline is exactly the fill's boundary", () => {
+    const fill = getRectanglePixels({ x: 0, y: 0 }, { x: 11, y: 9 }, "fill", 3);
+    const solid = new Set(fill.map((p) => `${p.x},${p.y}`));
+    const outline = getRectanglePixels(
+      { x: 0, y: 0 },
+      { x: 11, y: 9 },
+      "outline",
+      3,
+    );
+
+    /* Set EQUALITY, in both directions. Checking only that each emitted pixel
+       is a valid boundary cell is vacuous — the broken version emitted a
+       subset (four straight segments), and every pixel in that subset was
+       individually legitimate. The missing arc is caught only by deriving the
+       expected boundary independently and comparing whole sets. */
+    const expected = fill
+      .filter((p) =>
+        [
+          [p.x - 1, p.y],
+          [p.x + 1, p.y],
+          [p.x, p.y - 1],
+          [p.x, p.y + 1],
+        ].some(([x, y]) => !solid.has(`${x},${y}`)),
+      )
+      .map((p) => `${p.x},${p.y}`)
+      .sort();
+
+    expect(outline.map((p) => `${p.x},${p.y}`).sort()).toEqual(expected);
   });
 
   it("clamps a radius larger than half the size, producing a diamond/disc", () => {
@@ -702,5 +788,81 @@ describe("getCirclePixels", () => {
     const at0 = coords(getCirclePixels({ x: 0, y: 0 }, 4, RED));
     const at10 = coords(getCirclePixels({ x: 10, y: 20 }, 4, RED));
     expect(at10).toEqual(at0.map(([x, y]) => [x + 10, y + 20]));
+  });
+});
+
+describe("getShapeOutlineKeys — which pixels take the EDGE colour", () => {
+  /* The edge/fill colour split (2026-09-01): in `"both"` mode a shape's
+     outline takes the edge colour and its interior the fill colour, so the
+     commit needs to know which pixels are which. */
+  it("a rectangle's outline set is exactly its \"outline\" mode pixels", () => {
+    const keys = getShapeOutlineKeys(
+      "rectangle",
+      { x: 0, y: 0 },
+      { x: 6, y: 5 },
+      0,
+    );
+    const outline = getRectanglePixels(
+      { x: 0, y: 0 },
+      { x: 6, y: 5 },
+      "outline",
+      0,
+    );
+    expect(keys).toEqual(new Set(outline.map((p) => `${p.x},${p.y}`)));
+  });
+
+  it("respects the border radius — a rounded corner is not an edge cell", () => {
+    const keys = getShapeOutlineKeys(
+      "rectangle",
+      { x: 0, y: 0 },
+      { x: 11, y: 9 },
+      3,
+    );
+    // The bare corner is rounded away...
+    expect(keys.has("0,0")).toBe(false);
+    // ...and the arc pixel that replaces it IS an edge.
+    expect(keys.has("1,1")).toBe(true);
+  });
+
+  /* ⚠️ THE PARTITION PROPERTY — the one that matters for a seam. Every pixel
+     of a `"both"` shape must be either outline or interior: a pixel in neither
+     set would go uncoloured, and the two sets disagreeing would show the wrong
+     colour along the edge. */
+  it("partitions a \"both\" rectangle with no gap and no overlap", () => {
+    const both = getRectanglePixels({ x: 0, y: 0 }, { x: 11, y: 9 }, "both", 3);
+    const keys = getShapeOutlineKeys(
+      "rectangle",
+      { x: 0, y: 0 },
+      { x: 11, y: 9 },
+      3,
+    );
+
+    // Every outline pixel is part of the shape.
+    for (const k of keys) {
+      expect(both.some((p) => `${p.x},${p.y}` === k)).toBe(true);
+    }
+    // And the shape's own pixels split cleanly in two non-empty groups.
+    const edge = both.filter((p) => keys.has(`${p.x},${p.y}`));
+    const interior = both.filter((p) => !keys.has(`${p.x},${p.y}`));
+    expect(edge.length + interior.length).toBe(both.length);
+    expect(edge.length).toBeGreaterThan(0);
+    expect(interior.length).toBeGreaterThan(0);
+  });
+
+  it("partitions a \"both\" ellipse the same way", () => {
+    const both = getEllipsePixels({ x: 8, y: 8 }, { x: 14, y: 13 }, "both");
+    const keys = getShapeOutlineKeys("ellipse", { x: 8, y: 8 }, { x: 14, y: 13 });
+    const edge = both.filter((p) => keys.has(`${p.x},${p.y}`));
+    const interior = both.filter((p) => !keys.has(`${p.x},${p.y}`));
+    expect(edge.length + interior.length).toBe(both.length);
+    expect(edge.length).toBeGreaterThan(0);
+    expect(interior.length).toBeGreaterThan(0);
+  });
+
+  it("a LINE is all edge — it has no interior to fill", () => {
+    const line = getLinePixels({ x: 0, y: 0 }, { x: 9, y: 4 });
+    const keys = getShapeOutlineKeys("line", { x: 0, y: 0 }, { x: 9, y: 4 });
+    expect(keys.size).toBe(line.length);
+    for (const p of line) expect(keys.has(`${p.x},${p.y}`)).toBe(true);
   });
 });

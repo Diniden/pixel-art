@@ -1,0 +1,560 @@
+/* blocks: pose-panel + direction-orb (pose-tool task 07, 2026-09-02).
+
+   The Pose tool's section inside the right rail, and the reusable drag orb it
+   uses twice (light direction, model rotation — MASTER D13).
+
+   `PixelStudioPanel` wraps the section in the standard `.panel` /
+   `panel__header--compact` / `panel__body--dense` card, exactly as it wraps
+   the reflection section, so this sheet styles only what is INSIDE that body.
+
+   Borrowed, deliberately, from `pixel-studio-panel`: the button rows copy the
+   `__shape-buttons` / `__shape-btn` skin (a tinted tray of flush segments),
+   which is the established idiom for a row of small toggles and the one the
+   task names. It is COPIED rather than reused because a `ui/` block may not
+   reach into another block's classes — that cross-component dependency is
+   what the BEM conversion removed.
+
+   Tokens only. No colour literals, no `!important`, and NO numeric `z-index`
+   (DOM order is z-order in this app, and a literal is a stylelint error).
+   Max two class compounds per selector. */
+
+.pose-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0 var(--space-1);
+}
+
+/* ── a labelled group ─────────────────────────────────────────────────────── */
+
+.pose-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pose-panel__group-label {
+  color: var(--text-tertiary);
+  font-size: var(--text-60);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── button rows ──────────────────────────────────────────────────────────
+
+   WRAPS, like the reflection preset row and for the same measured reason: six
+   framing labels ("Full", "Head", "Torso", "Arm", "Leg", "Hand") and five
+   camera presets do not fit the rail's width on one line at any theme scale,
+   and an equal-segment `flex: 1` row would squash them to ellipses. */
+.pose-panel__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-px);
+  padding: var(--space-px);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.pose-panel__btn {
+  flex: 1 1 auto;
+  padding: var(--space-1) var(--space-1-5);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+/* `:not(:disabled)` rather than a plain `:hover`: disabled buttons still take
+   pointer events (they must, to show their explanatory title), and a hover
+   highlight on a dead button reads as a bug. Same guard the reflection presets
+   use — stylelint's `no-descending-specificity` cannot see that the `:not()`
+   makes these non-overlapping, hence the existing 22 false positives. */
+.pose-panel__btn:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.pose-panel__btn--active {
+  background: var(--accent-primary-20);
+  color: var(--text-primary);
+}
+
+.pose-panel__btn:disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  /* 0.5 is the house disabled value (`blocks/btn.css:42`); `opacity` is not on
+     `.stylelintrc.json`'s strict-value list. */
+  opacity: 0.5;
+}
+
+/* ── the pair of orbs ─────────────────────────────────────────────────────── */
+
+.pose-panel__orbs {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  justify-content: space-around;
+}
+
+/* ── the app's two colour slots ────────────────────────────────────────────
+
+   MASTER E8/E9/E10 (pose-refinements task 03). The rail no longer renders a
+   native `<input type="color">`; it shows the app's Fill and Edge colours and
+   switches which one the main picker edits. The skin is COPIED from
+   `color-picker__targets` / `__target` / `__target-swatch` — the same two
+   colours, shown the same way — rather than reused, because a `ui/` block may
+   not reach into another block's classes. */
+
+.pose-panel__slots {
+  display: flex;
+  gap: var(--space-px);
+  padding: var(--space-px);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.pose-panel__slot {
+  display: flex;
+  flex: 1;
+  gap: var(--space-1);
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1) var(--space-1-5);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.pose-panel__slot:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.pose-panel__slot--active {
+  background: var(--accent-primary-20);
+  color: var(--text-primary);
+}
+
+/* The swatch keeps a border so a colour matching the tray behind it — white,
+   or the panel's own grey — is still visible. Same reasoning, and the same
+   border token, as `color-picker__target-swatch`. */
+.pose-panel__slot-swatch {
+  flex: none;
+  width: var(--space-3);
+  height: var(--space-3);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-xs);
+}
+
+/* A key-light tint chip, inside a `__btn`. Smaller than a slot swatch: the
+   tint presets are a row of five in a 240px rail, so the label carries the
+   meaning and the chip only confirms it. */
+.pose-panel__tint {
+  display: inline-block;
+  width: var(--space-2);
+  height: var(--space-2);
+  margin-right: var(--space-0-5);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-xs);
+  vertical-align: middle;
+}
+
+/* ── a slider row ─────────────────────────────────────────────────────────── */
+
+.pose-panel__slider-row {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+/*
+ * A vertical stack of axis rows — the model's per-axis scale.
+ *
+ * ⚠️ Three slider+number pairs DO NOT fit side by side in a 240px rail: the
+ * owner reported the Z axis was not even visible. The rotation boxes above get
+ * away with a single row because they are number-only; each of these carries a
+ * slider as well, so they stack and each axis gets the rail's full width.
+ *
+ * Owner-reported 2026-09-04.
+ */
+.pose-panel__axis-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Each axis gets the full width: the label and number box are fixed, so the
+   slider takes whatever is left rather than being squeezed by its siblings. */
+.pose-panel__axis-stack .pose-panel__slider {
+  flex: 1;
+  min-width: 0;
+}
+
+.pose-panel__slider-label {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+}
+
+/* ⚠️ `touch-action: none` IS THE TOUCH FIX HERE TOO, not a nicety — the same
+   line, for the same reason, as `.direction-orb__sphere` below (MASTER D13).
+   Without it the browser claims a finger drag on the thumb as a scroll
+   gesture: the rail scrolls, the pointer events never reach the input, and
+   the slider does not move. The owner works on an iPad, so this is
+   load-bearing.
+
+   ⚠️ THIS WAS A CONFIRMED, MEASURED DEFECT, not a precaution. Plan 07 found
+   the orb had the line and the slider did not, and deliberately left it for
+   plan 08 task 08 (2026-09-04), which added more sliders and numeric rows to
+   this panel — task 07's degree boxes reuse `__slider-row` and inherited the
+   same gap.
+
+   ⚠️ It remains UNVERIFIED. No agent in plans 06, 07 or 08 has had a device,
+   and no automated test in this repo can observe a browser deciding to scroll
+   instead of dispatching a pointermove. It is an owed manual check. */
+.pose-panel__slider {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.pose-panel__slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* The zoom's UNBOUNDED entry (MASTER E11). It sits where `__slider-value`
+   sits on the other rows and matches its metrics, so the camera group's rows
+   still line up — but it is editable, because the slider's finite travel is an
+   affordance and this is the path with no ceiling. Monospace for the same
+   reason `__slider-value` is: the digits must not jitter the row's width. */
+.pose-panel__number {
+  flex: none;
+  /* FOUR characters wide, and `ch` is exact here because the font is
+     monospace: 4ch is the advance width of four digits, so `-180` or `1e-6`
+     fills the box and nothing wider forces the row to grow. The padding and
+     border sit outside it via `content-box`, so the field holds four glyphs
+     rather than four-glyphs-minus-the-chrome. Owner-requested 2026-09-04. */
+  box-sizing: content-box;
+  width: 4ch;
+  min-width: 0;
+  padding: var(--space-0-5);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  text-align: right;
+}
+
+/* SIX characters for an angle, where the base `__number` is four.
+   An angle needs the room: `-180.0` is six glyphs exactly, and it is the
+   widest value either control produces — the rotation boxes run -180..180 and
+   the light's azimuth canonicalises into the same range, both displayed to
+   tenths. Four would clip the sign or the decimal on precisely the values
+   that matter most. Owner-requested 2026-09-04. */
+.pose-panel__number--angle {
+  width: 6ch;
+}
+
+/* Monospace so the digits do not jitter the row's width as the value changes
+   — the same reason `__origin-position-value` uses it. */
+.pose-panel__slider-value {
+  flex: none;
+  min-width: var(--space-8);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  text-align: right;
+}
+
+.pose-panel__hint {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-65);
+  line-height: var(--leading-snug);
+}
+
+/* ── advanced camera mode (plan 08 task 06) ──────────────────────
+
+   Exact numeric entry for the projection fields. Collapsed by default — the
+   rail is 240px and this is not an every-session control — so the disclosure
+   button is the only thing it costs when closed.
+
+   ⚠️ The field grid is TWO columns, not a row per field: six boxes stacked
+   one-per-row would push the Camera group off the rail, and a single flex row
+   would squash `Bottom` to an ellipsis at 240px. Two columns fit `Left`/`Right`
+   and `Bottom`/`Top` as the pairs they actually are.
+
+   No numeric `z-index` here either — nothing in this block stacks. */
+
+.pose-panel__disclosure {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-1) var(--space-1-5);
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-65);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.pose-panel__disclosure:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.pose-panel__disclosure-caret {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: var(--text-60);
+}
+
+.pose-panel__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pose-panel__fields {
+  display: grid;
+  gap: var(--space-1);
+  grid-template-columns: 1fr 1fr;
+}
+
+.pose-panel__field {
+  display: flex;
+  gap: var(--space-0-5);
+  align-items: center;
+  min-width: 0;
+}
+
+.pose-panel__field-label {
+  flex: none;
+  min-width: var(--space-8);
+  color: var(--text-secondary);
+  font-size: var(--text-60);
+}
+
+/* `min-width: 0` is load-bearing inside the grid: an `<input>` carries a
+   default intrinsic width that would otherwise overflow a 120px column and
+   scroll the 240px rail sideways. */
+.pose-panel__field-input {
+  /* Four characters, matching `__number` — see its note. `flex: none` rather
+     than `flex: 1` because the advanced panel's two-column grid would
+     otherwise stretch these to the column and the four-char rule would only
+     hold at the narrowest rail. */
+  flex: none;
+  box-sizing: content-box;
+  width: 4ch;
+  min-width: 0;
+  padding: var(--space-0-5);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-65);
+  text-align: right;
+}
+
+/* The invalid state is a BORDER, not a background: the value stays legible
+   while it is being corrected, which is the whole reason the draft survives
+   rejection rather than snapping back. */
+.pose-panel__field-input--invalid {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
+
+.pose-panel__error {
+  margin: 0;
+  color: var(--accent-danger);
+  font-size: var(--text-65);
+  line-height: var(--leading-snug);
+}
+
+.pose-panel__preset-name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-0-5) var(--space-1);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-65);
+}
+
+/* ══ block: direction-orb ═══════════════════════════════════════════════════
+
+   A flat SVG disc standing in for a sphere, with a draggable handle. Used
+   twice by `pose-panel` and reusable anywhere — it knows nothing about pose. */
+
+.direction-orb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  align-items: center;
+}
+
+/* ⚠️ `touch-action: none` IS THE TOUCH FIX, not a nicety. Without it the
+   browser claims a finger drag as a scroll gesture and the rail scrolls
+   instead of the orb turning — pointermove never reaches React. The owner
+   works on an iPad, so this line is load-bearing (MASTER D13). */
+.direction-orb__sphere {
+  width: var(--space-12);
+  height: var(--space-12);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-pill);
+  cursor: grab;
+  touch-action: none;
+}
+
+.direction-orb__sphere--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.direction-orb__globe {
+  fill: var(--bg-secondary);
+  stroke: var(--border-primary);
+  stroke-width: 1;
+}
+
+/* The two great circles that make the disc read as a sphere. `fill: none` so
+   they do not stack up into a solid, and non-scaling strokes are unnecessary
+   here because the viewBox is square and uniformly scaled. */
+.direction-orb__meridian,
+.direction-orb__equator {
+  fill: none;
+  stroke: var(--border-secondary);
+  stroke-width: 1;
+}
+
+.direction-orb__handle {
+  fill: var(--accent-primary);
+  stroke: var(--bg-primary);
+  stroke-width: 1.5;
+}
+
+/* Behind the sphere: hollow, so the two hemispheres are distinguishable. An
+   orthographic projection maps a direction and its mirror to the same disc
+   position, and without this the handle looks stuck at the far pole. */
+.direction-orb__handle--behind {
+  fill: var(--bg-primary);
+  stroke: var(--accent-primary);
+}
+
+.direction-orb__label {
+  color: var(--text-tertiary);
+  font-size: var(--text-60);
+}
+
+/* ── saved scene presets (plan 08 task 08) ────────────────────────────────
+
+   ⚠️ THE ONE PERSISTED CONTROL IN THIS PANEL. Everything else on the pose rail
+   is session state (MASTER D6); a saved scene goes into the project file.
+
+   The list is a real `<ul>` so a screen reader announces how many scenes there
+   are, and each row is a two-button flex line: the name applies, the `×`
+   deletes. The name button takes all the slack and truncates rather than
+   wrapping, because a 240px rail cannot afford a row whose height depends on
+   how long the owner's label is — the full name is in the `title`.
+
+   No numeric `z-index` anywhere in this block; nothing here stacks. */
+
+.pose-panel__preset-save {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+/* ⚠️ `.pose-panel__preset-name` is NOT re-declared here. Task 06 already
+   styles it for the advanced panel's own save box, identically — same flex,
+   same padding, same tokens — and a second block would be both a
+   `no-duplicate-selectors` stylelint ERROR and a second place to keep in
+   sync. The two boxes are the same control doing the same job. */
+
+.pose-panel__presets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pose-panel__preset {
+  display: flex;
+  gap: var(--space-0-5);
+  align-items: stretch;
+}
+
+/* `min-width: 0` plus the ellipsis is what keeps a long name from pushing the
+   delete button off the rail — a flex item's default `min-width: auto` would
+   let the text set the row's width. */
+.pose-panel__preset-apply {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--space-0-5) var(--space-1);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-65);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.pose-panel__preset-apply:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-secondary);
+}
+
+.pose-panel__preset-delete {
+  flex: none;
+  padding: var(--space-0-5) var(--space-1);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-65);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.pose-panel__preset-delete:hover {
+  color: var(--text-primary);
+}
+
+/* ⚠️ The ARMED state must be unmistakable: it is one press from destroying a
+   scene the owner set up by hand, and there is no undo for UI state (the pose
+   is not in history, MASTER D6). It is deliberately the loudest thing in the
+   panel. */
+.pose-panel__preset-delete--armed {
+  background: var(--bg-secondary);
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+  font-weight: var(--weight-semibold);
+}

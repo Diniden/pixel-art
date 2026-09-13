@@ -19,44 +19,25 @@
  * sliders' `onDragStart` / `onDragEnd` hooks, so a colour adjusted by thumb
  * undoes exactly like one adjusted by mouse.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { ThumbSliderSpec } from "../../ui/components/OtherHand/thumbWidgets";
 import type { OtherHandColorModel } from "../../ui/layout/railLayout";
-import { hslToRgb, rgbToHsl } from "../../ui/utils/colorMath";
 import type { Color } from "../../types";
+import type { Hsl } from "../../ui/hooks/useHslMirror";
 
-export type Hsl = { h: number; s: number; l: number };
+/* ⚠️ `useHslMirror` MOVED to `ui/hooks/useHslMirror.ts` on 2026-08-31, and is
+   re-exported here so this module's existing importers are unchanged.
 
-const sameColor = (a: Color, b: Color) =>
-  a.r === b.r && a.g === b.g && a.b === b.b && a.a === b.a;
-
-/**
- * An HSL view of `color` that survives the round trip through black/white.
- * Re-derived only when the store's colour actually changes VALUE, so the
- * slider being dragged does not jitter from RGB rounding on every move.
- */
-export function useHslMirror(color: Color): [Hsl, (next: Hsl) => void] {
-  const [hsl, setHsl] = useState<Hsl>(() =>
-    rgbToHsl(color.r, color.g, color.b),
-  );
-  const [seen, setSeen] = useState<Color>(color);
-  if (!sameColor(seen, color)) {
-    // Adjusting state during render (React's sanctioned "derive from props"
-    // form): the colour changed from outside, resync the mirror.
-    setSeen(color);
-    setHsl(rgbToHsl(color.r, color.g, color.b, hsl));
-  }
-  const set = useCallback(
-    (next: Hsl) => {
-      setHsl(next);
-      // The colour this HSL produces is what the store will echo back — mark
-      // it seen now so the echo does not trigger a lossy resync.
-      setSeen({ ...hslToRgb(next.h, next.s, next.l), a: color.a });
-    },
-    [color.a],
-  );
-  return [hsl, set];
-}
+   It moved because the NORMAL `ColorPicker` needed it: that picker re-derived
+   its HSL from RGB on every store echo, which made the hue drift while S was
+   dragged and collapse to 0 at S = 0 — the bug the owner reported as "watch
+   the other values drift around ... zero out any of the values then it gets
+   kind of stuck". Other Hand Mode never had either symptom precisely because
+   of this hook, so the fix was to share it rather than write a second one.
+   `ColorPicker` lives under `ui/`, which may not import from `containers/`,
+   so `ui/hooks/` is where a hook both layers use has to live. */
+export type { Hsl };
+export { useHslMirror } from "../../ui/hooks/useHslMirror";
 
 /** The `ColorPicker` undo lifecycle, as a pair of drag hooks. */
 export function useColorSliderHistory(

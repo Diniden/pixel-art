@@ -20,7 +20,22 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useCanvasViewport } from "../useCanvasViewport";
+import { useCanvasViewport, viewZoomFloor } from "../useCanvasViewport";
+
+/**
+ * The shared pixel scale, and the 1:1 grid it now magnifies.
+ *
+ * ⚠️ `contentWidth` is `CELLS * ZOOM` — the on-screen CSS box at view zoom 1 —
+ * NOT the `<canvas>` backing store, which is `CELLS` (plan 05, task 02). The
+ * fixture used to pass `canvasWidth: 400`, which was both at once because the
+ * backing store WAS `40 * 10`. Splitting the constants keeps the numbers below
+ * identical while making it impossible to pass the wrong one by accident.
+ */
+const ZOOM = 10;
+const CELLS_X = 40;
+const CELLS_Y = 40;
+const CONTENT_W = CELLS_X * ZOOM; // 400 — the old `canvasWidth`, unchanged
+const CONTENT_H = CELLS_Y * ZOOM; // 400
 
 /** A container with a known rect, so gesture centres are predictable. */
 function makeContainer() {
@@ -46,8 +61,8 @@ function setup(el: HTMLElement) {
   return renderHook(() =>
     useCanvasViewport({
       containerRef,
-      canvasWidth: 400,
-      canvasHeight: 400,
+      contentWidth: CONTENT_W,
+      contentHeight: CONTENT_H,
       panOffset: { x: 0, y: 0 },
     }),
   );
@@ -146,7 +161,16 @@ describe("two-finger ZOOM still works, and composes with pan", () => {
     for (let i = 0; i < 12; i++) {
       act(() => result.current.updatePinch(touches([399, 300], [401, 300])));
     }
-    expect(result.current.viewZoom).toBeGreaterThanOrEqual(0.25);
+    // ⚠️ The floor is DERIVED from the content size now, not the flat 0.25
+    // this once asserted (plan 09, task 04). This fixture's content is
+    // 400x400, so the pinch may shrink it until its longest side is
+    // `MIN_CANVAS_SCREEN_PX` — 50/400 = 0.125. The old assertion was the
+    // very limit the task removes: a hard 0.25 stopped a 2560px composition
+    // at 640px, so a large sprite could never be seen whole.
+    expect(result.current.viewZoom).toBeGreaterThanOrEqual(
+      viewZoomFloor(CONTENT_W, CONTENT_H),
+    );
+    expect(viewZoomFloor(CONTENT_W, CONTENT_H)).toBeCloseTo(0.125, 10);
   });
 });
 
@@ -183,5 +207,187 @@ describe("the listener binding iPad depends on", () => {
       el.dispatchEvent(new TouchEvent("touchend", { touches: [] }));
     });
     expect(result.current.isPinching()).toBe(false);
+  });
+});
+
+/**
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ R1 — THE SAVED `panOffset` MUST STILL LAND WHERE THE OWNER LEFT IT
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * This is a DATA-SAFETY test, not a rendering one. `panOffset` persists in
+ * post-transform CSS pixels, measured against a content box of
+ * `gridWidth * zoom`, and there is **no migration hook for `zoom`** —
+ * `ViewportUIStore.ts:230` hydrates it straight in. So if the move to 1:1
+ * backing stores had renormalised `zoom`, merged it into `viewZoom`, or
+ * dropped it from the content box, every saved pan in every real project would
+ * silently mean a different position and every sprite would load off-screen.
+ *
+ * The invariant that makes the change safe is arithmetic: the backing store
+ * shrank by a factor of `zoom` and the CSS transform grew by the same factor,
+ * so `contentWidth = cellWidth * zoom` is the SAME NUMBER the old
+ * `canvasWidth` was. These tests pin that number at the two places it is
+ * observable from this hook — the pan clamp and the centring formula — with
+ * `zoom: 10`, the shipped default (`types/constants.ts:34`).
+ */
+describe("R1: a saved panOffset still means the same position", () => {
+  /** The shipped default, and what every existing project's pan was saved at. */
+  const SAVED_ZOOM = 10;
+  const GRID_W = 40;
+  const GRID_H = 40;
+
+  /**
+   * BEFORE this task: `canvasWidth = gridWidth * zoom`, and the canvas was
+   * that many device pixels wide. AFTER: `cellWidth = gridWidth` and
+   * `contentWidth = cellWidth * zoom`. The on-screen box is unchanged, which
+   * is the entire basis of "zero migration".
+   */
+  const legacyCanvasWidth = GRID_W * SAVED_ZOOM;
+  const legacyCanvasHeight = GRID_H * SAVED_ZOOM;
+  const cellWidth = GRID_W;
+  const cellHeight = GRID_H;
+  const contentWidth = cellWidth * SAVED_ZOOM;
+  const contentHeight = cellHeight * SAVED_ZOOM;
+
+  it("⭐ the content box is byte-identical to the pre-1:1 canvas box", () => {
+    expect(contentWidth).toBe(legacyCanvasWidth);
+    expect(contentHeight).toBe(legacyCanvasHeight);
+    // And the backing store really did shrink — otherwise this test would
+    // pass vacuously against a refactor that changed nothing.
+    expect(cellWidth).toBe(contentWidth / SAVED_ZOOM);
+    expect(cellWidth * cellHeight).toBeLessThan(
+      (legacyCanvasWidth * legacyCanvasHeight) / 50,
+    );
+  });
+
+  it("⭐ handleResetView's centring produces the same pan as before", () => {
+    // `CanvasContainer.handleResetView` centres with
+    // `(container.clientWidth - <content width>) / 2`. The container is the
+    // 800x600 box `makeContainer` defines.
+    const CONTAINER_W = 800;
+    const CONTAINER_H = 600;
+    const before = {
+      x: Math.round((CONTAINER_W - legacyCanvasWidth) / 2),
+      y: Math.round((CONTAINER_H - legacyCanvasHeight) / 2),
+    };
+    const after = {
+      x: Math.round((CONTAINER_W - contentWidth) / 2),
+      y: Math.round((CONTAINER_H - contentHeight) / 2),
+    };
+    expect(after).toEqual(before);
+    // Not a tautology against zero: this sprite is genuinely off-centre.
+    expect(after.x).toBe(200);
+    expect(after.y).toBe(100);
+  });
+
+  it("⭐ a saved pan survives the clamp unchanged, at the same coordinates", () => {
+    const el = makeContainer();
+    const containerRef = { current: el };
+    // A pan the owner might have saved: the sprite nudged up and left inside
+    // the 800x600 viewport.
+    const savedPan = { x: 120, y: 60 };
+
+    const { result } = renderHook(() =>
+      useCanvasViewport({
+        containerRef,
+        contentWidth,
+        contentHeight,
+        panOffset: savedPan,
+      }),
+    );
+
+    // Seeded verbatim — no renormalisation on the way in.
+    expect(result.current.viewPanOffset).toEqual(savedPan);
+
+    // And the clamp, given the same content box, returns it untouched.
+    const clamped = result.current.clampPanToViewport(
+      savedPan,
+      contentWidth,
+      contentHeight,
+    );
+    expect(clamped).toEqual(savedPan);
+
+    // ── the negative control ────────────────────────────────────────────
+    //
+    // Handing the clamp `cellWidth` instead of `contentWidth` is the R1 bug in
+    // miniature, and it is only VISIBLE past the edge of the correct box. In
+    // the 800px viewport the correct content box (400) allows pans in
+    // [0, 400]; the 1:1 cell box (40) allows [0, 760]. A pan of 600 is
+    // therefore pinned to 400 by the correct box and waved straight through by
+    // the wrong one — which is exactly how a sprite ends up somewhere the
+    // owner never left it.
+    const farPan = { x: 600, y: 500 };
+    expect(
+      result.current.clampPanToViewport(farPan, contentWidth, contentHeight),
+    ).toEqual({ x: 400, y: 200 });
+    expect(
+      result.current.clampPanToViewport(farPan, cellWidth, cellHeight),
+    ).toEqual(farPan);
+  });
+
+  it("⭐ wheel-panning is UNRESTRICTED — no clamp, in either direction", () => {
+    // Changed 2026-08-31. This test used to assert that the wheel clamped
+    // against the full content size; panning is unrestricted now (the owner
+    // reported the clamp "tries to lock the region into place"), so it asserts
+    // the opposite. See the hook's header.
+    //
+    // ⚠️ The old assertion could not have caught this change: it panned to
+    // {50, 30}, which sat INSIDE the old clamp's [0, 400] range, so it passed
+    // with or without clamping. The second gesture below is the one that
+    // discriminates — it lands far outside that range, where the old code
+    // would have pinned it to the boundary.
+    const el = makeContainer();
+    const containerRef = { current: el };
+    const { result } = renderHook(() =>
+      useCanvasViewport({
+        containerRef,
+        contentWidth,
+        contentHeight,
+        panOffset: { x: 0, y: 0 },
+      }),
+    );
+
+    act(() => {
+      el.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaX: -50,
+          deltaY: -30,
+          cancelable: true,
+        }),
+      );
+    });
+
+    // 0 - (-50) = 50. Unremarkable on its own — it is inside the old range.
+    expect(result.current.viewPanOffset.x).toBeCloseTo(50, 5);
+    expect(result.current.viewPanOffset.y).toBeCloseTo(30, 5);
+
+    // The discriminating gesture. `contentWidth` is 400 in an 800px viewport,
+    // so the old clamp's range was [0, 400] on x and [0, 200] on y, and this
+    // would have been pinned to exactly those bounds. It must now travel the
+    // full distance instead.
+    act(() => {
+      el.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaX: -2000,
+          deltaY: -2000,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(result.current.viewPanOffset.x).toBeCloseTo(2050, 5);
+    expect(result.current.viewPanOffset.y).toBeCloseTo(2030, 5);
+
+    // And negative, past the other edge — the old clamp's floor was 0.
+    act(() => {
+      el.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaX: 5000,
+          deltaY: 5000,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(result.current.viewPanOffset.x).toBeCloseTo(-2950, 5);
+    expect(result.current.viewPanOffset.y).toBeCloseTo(-2970, 5);
   });
 });

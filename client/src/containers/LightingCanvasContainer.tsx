@@ -11,13 +11,10 @@
  * Where each went:
  *
  *   (a) viewport pan/zoom      → `ui/hooks/useCanvasViewport`   (task 31)
- *   (b) three renderers        → `ui/canvas/render/renderLightingPreview`,
+ *   (b) three renderers        → `ui/canvas/render/renderLitComposite`,
  *                                `renderNormalEdit`, `renderBrushOverlay`
  *   (c) normal/height painting → `ui/hooks/useLightingPaint`
  *   (d) keyboard               → this file (see the note below)
- *   (e) the floating panel     → `ui/components/LightingPreviewPanel` on the
- *                                task-19 `FloatingPanel` primitive, wired by
- *                                `LightingPreviewPanelContainer`
  *   the markup                 → `ui/components/LightingSurface`
  *   the store binding          → **this file, the only place left**
  *
@@ -29,7 +26,7 @@
  * `observableRef` objects — the zoom, the brush, the light direction, the
  * current layer's IDENTITY. It never reads a pixel grid, and there is no code
  * path by which it could: the grids are consumed only inside `renderEdit` and
- * `renderPreview` below, which run from a scheduled animation frame and not
+ * `renderLitPane` below, which run from a scheduled animation frame and not
  * from React's render phase.
  *
  * The redraw signal is `useCanvasRender(render, deps)` with `pixelVersion` in
@@ -67,11 +64,10 @@
  *    owner decision (2026-08-16, "unify onto Canvas's behaviour; both canvases
  *    honour `lightGridMode`") asks for, and it is flagged in the task report.
  *
- *    The FLOATING PREVIEW is deliberately NOT theme-aware: it stays
- *    `backgroundTheme(false)`. It is a thumbnail of the LIT SPRITE, not an
- *    editing grid, and its cyan border and dark well are designed against the
- *    dark base. Q3 is about the two canvases' GRIDS agreeing, and the preview
- *    has no grid.
+ *    The PREVIEW PANE is deliberately NOT theme-aware: it stays
+ *    `backgroundTheme(false)`. It shows the LIT SPRITE, not an editing grid,
+ *    and its dark well is designed against the dark base. Q3 is about the two
+ *    canvases' GRIDS agreeing, and the preview has no grid.
  *
  * ── ⚠️ THE KEYBOARD IS NOT `useCanvasKeyboard` ────────────────────────────
  *
@@ -138,40 +134,94 @@ import {
   getSquarePixels,
   getCirclePixels,
 } from "../components/Canvas/drawingUtils";
-import {
-  backgroundTheme,
-  strokeGrid,
-} from "../ui/canvas/render/canvasBackground";
-import type { BackgroundGeometry } from "../ui/canvas/render/canvasBackground";
-import {
-  renderLightingPreview,
-  PREVIEW_THUMB_SIZE,
-  PREVIEW_BORDER,
-} from "../ui/canvas/render/renderLightingPreview";
+import { backgroundTheme } from "../ui/canvas/render/canvasBackground";
 import { renderNormalEdit } from "../ui/canvas/render/renderNormalEdit";
-import {
-  paintBrushCells,
-  strokeBrushOutlines,
-} from "../ui/canvas/render/renderBrushOverlay";
+import { drawLitComposite } from "../ui/canvas/render/renderLitComposite";
+import { paintBrushCells } from "../ui/canvas/render/renderBrushOverlay";
+// ⚠️ THE GRID AND THE BRUSH OUTLINE ARE VECTORS NOW (plan 05, D5 + task 08).
+// Both come from task 03's modules — the SAME implementations `CanvasSurface`
+// renders. Reused, never reimplemented: a second grid is how the two engines
+// drift apart again, which is the thing task 08 exists to stop.
+import { gridOverlayPath } from "../ui/canvas/svg/gridOverlay";
+import type { SvgPathSpec } from "../ui/canvas/svg/gridOverlay";
+import { brushOutlineOverlay } from "../ui/canvas/svg/chromeOverlay";
 import { stampAt } from "../ui/canvas/tools/brushStamp";
 import { useCanvasRender } from "../ui/hooks/useCanvasRender";
-import { useCanvasViewport } from "../ui/hooks/useCanvasViewport";
+import {
+  useCanvasViewport,
+  viewZoomFloor,
+} from "../ui/hooks/useCanvasViewport";
 import { useLightingPaint } from "../ui/hooks/useLightingPaint";
 import { LightingSurface } from "../ui/components/LightingSurface/LightingSurface";
-import { LightingPreviewPanelContainer } from "./LightingPreviewPanelContainer";
+import { CanvasViewControls } from "../ui/components/CanvasViewControls/CanvasViewControls";
+import type { CanvasCamera } from "../stores/ui/CanvasCameraStore";
+import type { LightingRenderMode } from "../stores/ui/LightingViewsUIStore";
 
 /** The colour the brush shapes are asked for. Discarded — see `brushStamp`. */
 const SHAPE_COLOR = { r: 0, g: 0, b: 0, a: 255 } as const;
 
+/**
+ * The `zoom` every raster painter in this file is now called with: **one**.
+ *
+ * Named rather than inlined so the constraint is greppable, exactly as
+ * `chromeOverlay.ts`'s `CELL_SPACE_ZOOM` is. Every painter below writes into a
+ * backing store that is 1:1 with the pixel data, so a `zoom` of 1 is what makes
+ * one source pixel one canvas pixel; the magnification is the CSS transform's
+ * job. Search for `CELL_SCALE` and you find every call site that had to opt in,
+ * and any future `zoom` argument that is not this constant stands out as the
+ * regression it would be.
+ */
+const CELL_SCALE = 1;
+
+/**
+ * The painter a scheduler is given when its surface does not exist in this
+ * render mode, and the handler a read-only pane gives a required pointer prop.
+ *
+ * Module scope so its identity is STABLE — a fresh `() => {}` per render would
+ * re-run `useCanvasRender`'s effect on every render. A `function` declaration
+ * with a lower-case name rather than a `const` arrow, so `react-refresh` does
+ * not read it as a component export.
+ */
+function noop(): void {}
+
+/**
+ * ⚠️ READ-ONLY PANE, NOT A DISABLED ONE.
+ *
+ * `LightingSurfaceProps` makes the seven pointer handlers REQUIRED, and that
+ * file belongs to task 03 — so the Preview pane supplies no-ops rather than
+ * widening a prop type in another task's scope. The effect is what the owner
+ * asked for: a click, a drag or a touch on the Preview pane resolves no brush
+ * cells, opens no history transaction and writes no pixel. There is
+ * deliberately no hover marker either — `setHoverPixel` is never called from
+ * here.
+ *
+ * One object at module scope, so the identity is stable across renders.
+ */
+const READ_ONLY_POINTERS = {
+  onMouseDown: noop,
+  onMouseMove: noop,
+  onMouseUp: noop,
+  onMouseLeave: noop,
+  onTouchStart: noop,
+  onTouchMove: noop,
+  onTouchEnd: noop,
+} as const;
+
+export interface LightingCanvasContainerProps {
+  /** Which mode this instance shows. `"edit"` (default) is today's painting canvas. */
+  renderMode?: LightingRenderMode;
+}
+
 export const LightingCanvasContainer = observer(
-  function LightingCanvasContainer() {
+  function LightingCanvasContainer({
+    renderMode = "edit",
+  }: LightingCanvasContainerProps) {
     const app = useStores();
 
     /* ── refs ────────────────────────────────────────────────────────────── */
     const rootRef = useRef<HTMLDivElement>(null);
     const editCanvasRef = useRef<HTMLCanvasElement>(null);
     const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
-    const previewCanvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     /* ── observable reads ────────────────────────────────────────────────── */
@@ -187,6 +237,15 @@ export const LightingCanvasContainer = observer(
     const viewport = app.ui.viewport;
     const lighting = app.ui.lightingUI;
     const tool = app.ui.tool;
+
+    // ── which pane this is, and the camera that belongs to it ──────────────
+    //
+    // ⚠️ `viewport.zoom` below stays the SHARED pixel scale for both panes
+    // (MASTER D4). "Camera" here is pan + view zoom only, and each pane owns
+    // its own — session-only, exactly as the lighting transform already was.
+    const views = app.lightingViews;
+    const previewMode = renderMode === "preview";
+    const camera: CanvasCamera = views.cameraFor(renderMode);
 
     const zoom = viewport.zoom;
     // 🔧 W19 BUG 3, SECOND HALF. See the header — this is the read that
@@ -229,27 +288,132 @@ export const LightingCanvasContainer = observer(
         ? variantData.variant.gridSize.height
         : objHeight;
 
-    const canvasWidth = gridWidth * zoom;
-    const canvasHeight = gridHeight * zoom;
+    // ⚠️ The Preview pane shows the WHOLE OBJECT composite — what the retiring
+    // floating thumbnail showed — so it sizes from `objWidth/objHeight`, not
+    // from the (possibly variant-cropped) edit grid. Cropping the preview to
+    // the edit grid would make it a different thing (MASTER §1).
+    const viewCellsX = previewMode ? objWidth : gridWidth;
+    const viewCellsY = previewMode ? objHeight : gridHeight;
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  ⚠️ THREE SIZES, AND THEY ARE NOT INTERCHANGEABLE (plan 05, task 08)
+    // ══════════════════════════════════════════════════════════════════════
+    //
+    // 🏁 **RISK R7 IS CLOSED HERE.** From task 02 until this line, the pixel
+    // canvas read `viewport.zoom` as a CSS scale factor while this container
+    // read the SAME field as a backing-store multiplier — `zoom` meant two
+    // things at once in one app. Both engines now interpret it identically:
+    // backing stores are 1:1 with pixel data and ALL magnification is one CSS
+    // transform. The divergence was contained (the lighting studio is a
+    // separate mode, so the two canvases can never be on screen together) but
+    // it is gone rather than merely contained.
+    //
+    //   - `cellWidth`/`cellHeight`      — GRID CELLS. The `<canvas>` backing
+    //                                     store. One sprite pixel is one
+    //                                     canvas pixel.
+    //   - `contentWidth`/`contentHeight`— `cellWidth * zoom`. The on-screen
+    //                                     CSS box at view zoom 1. This — NOT
+    //                                     `cellWidth` — is what pan clamping
+    //                                     and view centring measure against.
+    //
+    // The rename from `canvasWidth` is deliberate rather than cosmetic: under
+    // the old name a stale `* zoom` would be invisible, and the compiler finds
+    // every site under the new one. This mirrors `useCanvasGeometry`'s
+    // post-task-02 shape exactly; it is NOT extracted into that hook because
+    // this pane has no variant-edit view union, no `bgCacheKey` and no
+    // `coordGeom` — the four fields it would actually share are two
+    // multiplications, and reopening a finished wave-2 file to save them is a
+    // worse trade than stating them here (task 08 step 1's explicit option).
+    const cellWidth = viewCellsX;
+    const cellHeight = viewCellsY;
+
+    // ⚠️ `zoom` stays a multiplier here and is NOT renormalised (R1, D2). It
+    // keeps the on-screen box the same size it has always been, which is what
+    // makes the pan the shared viewport hook clamps — and this pane's own
+    // reset-view centring — land exactly where they did before.
+    const contentWidth = cellWidth * zoom;
+    const contentHeight = cellHeight * zoom;
 
     /* ── the viewport engine (task 31) ───────────────────────────────────── */
     //
-    // ⚠️ NO `onCommitPan`, exactly as `LightingCanvas` behaved: its pan stayed
-    // local and its wheel handler had none of `Canvas`'s `scheduleCommitPan()`
-    // calls. Supplying one here would silently start persisting the lighting
-    // studio's pan.
+    // ⚠️ THE CAMERA IS NOW THE STORE'S, not the hook's (plan 04 task 05).
+    // Until 2026-08-29 this passed a fresh `panOffset: {x:0,y:0}` literal with
+    // no commit sinks and no `resyncKey`, so the lighting transform was
+    // hook-local and unaddressable — it could not be reset, and two panes could
+    // not hold two different views. It is STILL session-only (neither
+    // `LightingViewsUIStore` camera is persisted, MASTER D3), so a reload comes
+    // back to 1x at the origin exactly as before.
     const {
       viewZoom,
       viewPanOffset,
+      setViewZoom,
+      setViewPanOffset,
       // `beginPinch` / `updatePinch` / `endPinch` are bound by the hook
       // itself now; only the suppression flag is read here.
       isPinching,
     } = useCanvasViewport({
       containerRef,
-      canvasWidth,
-      canvasHeight,
-      panOffset: { x: 0, y: 0 },
+      // ⚠️ The shared hook clamps against the ON-SCREEN box, never the backing
+      // store. Until task 08 those were the same number here and the argument
+      // was correct by coincidence; it is now correct by construction. Task
+      // 02's pan-clamp fix lives inside this hook, so it already applied to
+      // both panes — there is no separate clamp in this file to repair.
+      contentWidth,
+      contentHeight,
+      panOffset: camera.panOffset,
+      onCommitPan: (pan) => camera.setPanOffset(pan),
+      viewZoom: camera.viewZoom,
+      // ⚠️ The floor is passed IN. The store may not measure the DOM, so the
+      // derived zoom-out limit (longest on-screen dimension down to
+      // `MIN_CANVAS_SCREEN_PX`) is computed here, where the measurement
+      // already is, and handed to the clamp. Omitting it would silently
+      // re-impose the legacy flat 0.25 on the committed value while the
+      // gesture itself went lower — the two clamps must agree.
+      onCommitViewZoom: (z) =>
+        camera.setViewZoom(z, viewZoomFloor(contentWidth, contentHeight)),
+      resyncKey: `${app.timelineUI.selectedObjectId ?? ""}|${
+        app.timelineUI.selectedFrameId ?? ""
+      }|${renderMode}`,
     });
+
+    /**
+     * Recentre this pane and return its view to 100%.
+     *
+     * ⚠️ The centring MUST be MEASURED from the untransformed viewport box, not
+     * assumed: the lighting studio's canvas area changes size with the rails and
+     * — from task 06 — with the split, so a hard-coded offset would centre the
+     * sprite in yesterday's viewport. A store may not read the DOM, so the pan
+     * is computed here and `resetView` takes the result.
+     *
+     * ⚠️ `zoom` (the shared PIXEL scale) is deliberately not reset. This button
+     * rescues a lost view; it does not discard the scale the user picked.
+     */
+    const handleResetView = useCallback(() => {
+      const container = containerRef.current;
+      // ⚠️ `contentWidth`, NOT `cellWidth`. This resets VIEW zoom to 1, so the
+      // combined scale becomes `zoom * 1` and the on-screen content box is
+      // `cellWidth * zoom` — which is exactly `contentWidth`. Centring against
+      // the 1:1 backing size instead would offset the sprite by (zoom-1)/zoom
+      // of its width, typically 90%: the sprite would sit almost entirely off
+      // the left edge, which is the whole failure this note exists to prevent.
+      //
+      // The comment that stood here said "at view zoom 1 the content is
+      // exactly canvasWidth × canvasHeight". That was TRUE only while the
+      // backing store was itself pre-scaled, when one number was both things.
+      // It is the same broken assumption task 02 found in `CanvasContainer`,
+      // and it is corrected the same way. The arithmetic is unchanged —
+      // `contentWidth` is the number the old `canvasWidth` held — so the reset
+      // button centres a sprite exactly where it did before this task.
+      const centered = container
+        ? {
+            x: Math.round((container.clientWidth - contentWidth) / 2),
+            y: Math.round((container.clientHeight - contentHeight) / 2),
+          }
+        : { x: 0, y: 0 };
+      setViewZoom(1);
+      setViewPanOffset(centered);
+      camera.resetView(centered);
+    }, [contentWidth, contentHeight, setViewZoom, setViewPanOffset, camera]);
 
     /* ── the editable layer, and the grid reads ──────────────────────────── */
     //
@@ -331,6 +495,21 @@ export const LightingCanvasContainer = observer(
       resolveBrushCells,
       paintNormals,
       paintHeights,
+      // ── ONE UNDO ENTRY PER STROKE (plan 04 task 02, owner's request) ─────
+      //
+      // Every `setNormalPixels` / `setHeightPixels` between these two calls
+      // buffers into one `CompositeCommand`, so a drag across ten cells is a
+      // single ⌘Z instead of ten. `ui/` may not import a store, so the
+      // transaction crosses the boundary as callbacks.
+      //
+      // ⚠️ NEVER in Preview mode — that pane paints nothing, and an open
+      // transaction it never closed would swallow every later edit in the app
+      // (`PixelStore.ts:948-961`). The hook guards the close and also closes
+      // on unmount; passing `undefined` here means it never opens one at all.
+      onStrokeStart: previewMode
+        ? undefined
+        : (label: string) => app.history.beginTransaction(label),
+      onStrokeEnd: previewMode ? undefined : () => app.history.endTransaction(),
     });
 
     /* ── coordinate mapping ──────────────────────────────────────────────── */
@@ -355,14 +534,84 @@ export const LightingCanvasContainer = observer(
       [gridWidth, gridHeight],
     );
 
-    /* ── render: the floating lit thumbnail (concern b1) ─────────────────── */
-    const renderPreview = useCallback(() => {
-      const canvas = previewCanvasRef.current;
+    /* ── render: the editable surface (concern b2) ───────────────────────── */
+    const bgTheme = useMemo(
+      () => backgroundTheme(lightGridMode),
+      [lightGridMode],
+    );
+
+    const renderEdit = useCallback(() => {
+      const canvas = editCanvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      const editLayer = getEditLayer();
+      if (!canvas || !ctx || !editLayer) return;
+
+      // ⚠️ 1:1 WITH THE PIXEL DATA (plan 05, task 08 — R7 closed). This was
+      // `cellWidth * zoom`; at the ceiling zoom of 50 a 256x224 sprite asked
+      // for a 12800x11200 backing store, i.e. 546 MB that the browser simply
+      // cannot allocate. It is now 224 KB and the CSS transform on
+      // `.lighting-canvas__surface` does the magnification on the GPU.
+      canvas.width = cellWidth;
+      canvas.height = cellHeight;
+      ctx.imageSmoothingEnabled = false;
+
+      const source =
+        editMode === "height"
+          ? renderHeightAsGrayscale(editLayer, gridWidth, gridHeight)
+          : renderNormalAsRGB(editLayer, gridWidth, gridHeight);
+
+      // ⚠️ ONE `putImageData` replaces the legacy background + temp-canvas
+      // `drawImage` pair. `renderNormalEdit` does the nearest-neighbour upscale
+      // in arithmetic, so there is no second canvas allocated per frame and no
+      // uncached O(w·h) `fillRect` checkerboard (W19 bug 1's second half, which
+      // W22 had already addressed at the call site).
+      //
+      // ⚠️ `zoom: CELL_SCALE` — the upscale is GONE, and that is the point.
+      // The renderer's `floor(y / zoom)` collapses to an identity copy at 1,
+      // so what used to be a `zoom²`-times-larger write per source pixel is
+      // now one write per source pixel. The checkerboard it paints underneath
+      // likewise becomes one checker pixel per cell, magnified by the same
+      // transform — which is why `image-rendering: pixelated` on
+      // `.lighting-canvas__edit-canvas` is now LOAD-BEARING rather than
+      // belt-and-braces: without it a 1px checker at 50x is grey mush.
+      const buffer = ctx.createImageData(cellWidth, cellHeight);
+      renderNormalEdit(buffer, {
+        source,
+        gridWidth,
+        gridHeight,
+        zoom: CELL_SCALE,
+        theme: bgTheme,
+      });
+      ctx.putImageData(buffer, 0, 0);
+
+      // ⚠️ THE GRID IS NO LONGER STROKED HERE. `strokeGrid` places its lines
+      // at `x * zoom + 0.5`; at 1:1 that is one line per pixel column and the
+      // grid degenerates into a flat wash of `gridStroke` over the entire
+      // canvas — MASTER §4's first named SILENT failure, no error and no
+      // artifact, just a grey rectangle. It is SVG chrome now (`gridPath`
+      // below), reusing task 03's `gridOverlayPath` — the same single
+      // implementation `CanvasSurface` renders. There is no third grid.
+    }, [getEditLayer, gridWidth, gridHeight, cellWidth, cellHeight, editMode, bgTheme]);
+
+    /* ── render: the Preview render mode's lit composite pane ────────────── */
+    //
+    // The SAME `composeLayers` → `renderWithLighting` pipeline the floating
+    // thumbnail used, painted into THIS pane's main canvas at the editor's own
+    // scale instead of a fixed 200 px square.
+    //
+    // ⚠️ NOT `renderLightingPreview`. Its `previewPlacement` picks an integer
+    // fit into `PREVIEW_THUMB_SIZE` and CROPS anything larger — correct for a
+    // thumbnail, wrong for a workspace pane, which is a real viewport driven by
+    // the shared pixel scale and its own camera. `drawLitComposite` does no
+    // fit, no centring and no crop (MASTER D9).
+    const renderLitPane = useCallback(() => {
+      const canvas = editCanvasRef.current;
       const ctx = canvas?.getContext("2d");
       if (!canvas || !ctx || !frame || !obj) return;
 
-      canvas.width = PREVIEW_THUMB_SIZE;
-      canvas.height = PREVIEW_THUMB_SIZE;
+      // 1:1, exactly as `renderEdit` — see the note there.
+      canvas.width = cellWidth;
+      canvas.height = cellHeight;
       ctx.imageSmoothingEnabled = false;
 
       const baseFrameIndex = obj.frames.findIndex((f) => f.id === frame.id);
@@ -381,26 +630,15 @@ export const LightingCanvasContainer = observer(
         heightScale,
       });
 
-      const buffer = ctx.createImageData(
-        PREVIEW_THUMB_SIZE,
-        PREVIEW_THUMB_SIZE,
-      );
-      renderLightingPreview(buffer, {
-        lit,
+      const buffer = ctx.createImageData(cellWidth, cellHeight);
+      drawLitComposite(buffer, {
+        source: lit,
         objWidth,
         objHeight,
-        // Deliberately NOT `lightGridMode` — see the header. The thumbnail is a
-        // lit-sprite preview, not an editing grid.
-        theme: backgroundTheme(false),
+        zoom: CELL_SCALE,
+        theme: bgTheme,
       });
       ctx.putImageData(buffer, 0, 0);
-
-      // The border is a STROKE, so it stays here: `canvasStub` cannot rasterise
-      // it and hashing it would be a lie. `PREVIEW_BORDER` keeps the values with
-      // the renderer so the two cannot drift.
-      ctx.strokeStyle = PREVIEW_BORDER.strokeStyle;
-      ctx.lineWidth = PREVIEW_BORDER.lineWidth;
-      ctx.strokeRect(0.5, 0.5, PREVIEW_THUMB_SIZE - 1, PREVIEW_THUMB_SIZE - 1);
     }, [
       frame,
       obj,
@@ -412,64 +650,8 @@ export const LightingCanvasContainer = observer(
       lightColor,
       ambientColor,
       heightScale,
-    ]);
-
-    /* ── render: the editable surface (concern b2) ───────────────────────── */
-    const bgTheme = useMemo(
-      () => backgroundTheme(lightGridMode),
-      [lightGridMode],
-    );
-
-    const renderEdit = useCallback(() => {
-      const canvas = editCanvasRef.current;
-      const ctx = canvas?.getContext("2d");
-      const editLayer = getEditLayer();
-      if (!canvas || !ctx || !editLayer) return;
-
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      ctx.imageSmoothingEnabled = false;
-
-      const source =
-        editMode === "height"
-          ? renderHeightAsGrayscale(editLayer, gridWidth, gridHeight)
-          : renderNormalAsRGB(editLayer, gridWidth, gridHeight);
-
-      // ⚠️ ONE `putImageData` replaces the legacy background + temp-canvas
-      // `drawImage` pair. `renderNormalEdit` does the nearest-neighbour upscale
-      // in arithmetic, so there is no second canvas allocated per frame and no
-      // uncached O(w·h) `fillRect` checkerboard (W19 bug 1's second half, which
-      // W22 had already addressed at the call site).
-      const buffer = ctx.createImageData(canvasWidth, canvasHeight);
-      renderNormalEdit(buffer, {
-        source,
-        gridWidth,
-        gridHeight,
-        zoom,
-        theme: bgTheme,
-      });
-      ctx.putImageData(buffer, 0, 0);
-
-      const geom: BackgroundGeometry = {
-        canvasWidth,
-        canvasHeight,
-        cellsX: gridWidth,
-        cellsY: gridHeight,
-        offsetX: 0,
-        offsetY: 0,
-        zoom,
-      };
-      // 🔧 W19 BUG 3 COMPLETE: the grid is now `bgTheme`'s, i.e. white 5% in
-      // dark mode and black 8% in light mode — Canvas's rule, verbatim.
-      strokeGrid(ctx, geom, bgTheme);
-    }, [
-      getEditLayer,
-      gridWidth,
-      gridHeight,
-      canvasWidth,
-      canvasHeight,
-      zoom,
-      editMode,
+      cellWidth,
+      cellHeight,
       bgTheme,
     ]);
 
@@ -479,22 +661,31 @@ export const LightingCanvasContainer = observer(
       const ctx = canvas?.getContext("2d");
       if (!canvas || !ctx) return;
 
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      // 1:1, exactly as `renderEdit`.
+      canvas.width = cellWidth;
+      canvas.height = cellHeight;
+      ctx.clearRect(0, 0, cellWidth, cellHeight);
       if (!hoverPixel) return;
 
       const cells = resolveBrushCells(hoverPixel);
       if (cells.length === 0) return;
       ctx.imageSmoothingEnabled = false;
 
-      const buffer = ctx.createImageData(canvasWidth, canvasHeight);
-      paintBrushCells(buffer, cells, zoom);
+      // The FILL stays raster: it is a cell fill, which is safe at 1:1 (D6) —
+      // one cell is one pixel and `paintBrushCells`' inner `dy/dx` loops run
+      // exactly once each.
+      const buffer = ctx.createImageData(cellWidth, cellHeight);
+      paintBrushCells(buffer, cells, CELL_SCALE);
       ctx.putImageData(buffer, 0, 0);
-      // The outlines are strokes; see `renderBrushOverlay`'s header for why the
-      // module splits fill from outline.
-      strokeBrushOutlines(ctx, cells, zoom);
-    }, [canvasWidth, canvasHeight, hoverPixel, resolveBrushCells, zoom]);
+
+      // ⚠️ THE OUTLINE IS NO LONGER STROKED HERE (R3). `strokeBrushOutlines`
+      // sizes each rect `zoom - 1`, so at 1:1 every call becomes
+      // `strokeRect(x, y, 0, 0)` — it renders NOTHING, with no error and no
+      // artifact. It is SVG chrome now (`brushOutline` below), reusing task
+      // 03's `brushOutlineOverlay`, where `vector-effect: non-scaling-stroke`
+      // gives it back the screen-constant hairline the raster painter always
+      // documented as its intent.
+    }, [cellWidth, cellHeight, hoverPixel, resolveBrushCells]);
 
     /* ── 🔧 W19 BUG 1: rAF COALESCING ────────────────────────────────────── */
     //
@@ -502,16 +693,22 @@ export const LightingCanvasContainer = observer(
     // Both now go through the same scheduler `Canvas` uses: at most one paint
     // per animation frame, and the pending frame is cancelled on unmount.
     //
-    // Two schedulers, not one, because the two surfaces invalidate on different
-    // signals — the preview depends on the LIGHTING parameters, the edit canvas
-    // on the grid and the theme. Merging them would repaint a 200x200 lit
-    // composite every time the cursor changed the brush overlay.
-    const { invalidate: invalidatePreview } = useCanvasRender(renderPreview, [
-      renderPreview,
+    // ⚠️ Which painter owns the MAIN canvas depends on the render mode. In
+    // Preview mode `renderEdit`'s normal/height visualisation and the brush
+    // overlay are BOTH skipped: the pane is read-only, so there is no hover
+    // cell to mark and no editable channel to visualise. Each pane runs exactly
+    // one main painter and, in Edit mode only, the overlay — the third
+    // scheduler that used to drive the retired floating thumbnail is gone.
+    useCanvasRender(previewMode ? renderLitPane : renderEdit, [
+      previewMode,
+      renderLitPane,
+      renderEdit,
       pixelVersion,
     ]);
-    useCanvasRender(renderEdit, [renderEdit, pixelVersion]);
-    useCanvasRender(renderBrushOverlay, [renderBrushOverlay]);
+    useCanvasRender(previewMode ? noop : renderBrushOverlay, [
+      previewMode,
+      renderBrushOverlay,
+    ]);
 
     /* ── pointer handling ────────────────────────────────────────────────── */
     const handleMouseDown = useCallback(
@@ -607,12 +804,7 @@ export const LightingCanvasContainer = observer(
         // Touch never carried Shift in the legacy handler.
         continueStroke(coords, false);
       },
-      [
-        isPinching,
-        isPaintingRef,
-        getPixelCoordsFromClient,
-        continueStroke,
-      ],
+      [isPinching, isPaintingRef, getPixelCoordsFromClient, continueStroke],
     );
 
     // The hook's own listener ends the gesture; this only closes the stroke.
@@ -625,6 +817,12 @@ export const LightingCanvasContainer = observer(
     // Three shortcuts, verbatim. See the header for why `useCanvasKeyboard` is
     // NOT adopted here.
     useEffect(() => {
+      // ⚠️ EXACTLY ONE PANE MAY BIND THIS. The listener is on `window`, so with
+      // both panes mounted an ungated effect would register it twice and every
+      // ⌘Z would undo twice and every `.` would step two frames. `keyboardOwner`
+      // is Edit whenever Edit is open, else Preview (MASTER D12).
+      if (views.keyboardOwner !== renderMode) return;
+
       const handleKeyDown = (e: KeyboardEvent) => {
         if (
           e.target instanceof HTMLInputElement ||
@@ -662,20 +860,71 @@ export const LightingCanvasContainer = observer(
       };
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [app, app.timelineUI.selectedFrameId]);
+    }, [app, app.timelineUI.selectedFrameId, views.keyboardOwner, renderMode]);
 
-    /* ── the panel, and its one imperative coupling ──────────────────────── */
+    /* ── per-pane view controls ──────────────────────────────────────────── */
     //
-    // Expanding the panel re-mounts the thumbnail canvas, so the ref it was
-    // painted through is a NEW element with a blank backing store. The legacy
-    // code re-rendered on the next frame (`LightingCanvas.tsx:565-570`);
-    // `invalidate()` is the same thing through the scheduler.
-    const handlePanelMinimizedChange = useCallback(
-      (next: boolean) => {
-        if (!next) invalidatePreview();
-      },
-      [invalidatePreview],
+    // Mode button (open the other pane, or swap sides when both are open) above
+    // close (only when both are open) above reset — the same cluster the pixel
+    // studio grew in plan 02.
+    //
+    // ⚠️ NO `onNudgeOffset`. The variant-offset arrows are a pixel-studio
+    // feature; the lighting studio has never had them and this plan does not
+    // add them.
+    const otherMode: LightingRenderMode = previewMode ? "edit" : "preview";
+    const modeButton = views.bothOpen
+      ? {
+          kind: "swap" as const,
+          label: "Swap pane sides",
+          onClick: () => views.swap(),
+        }
+      : {
+          kind: "open" as const,
+          label: previewMode ? "Open Edit view" : "Open Preview view",
+          onClick: () => views.openMode(otherMode),
+        };
+    const onClose = views.bothOpen
+      ? {
+          label: previewMode ? "Close Preview view" : "Close Edit view",
+          onClick: () => views.closeMode(renderMode),
+        }
+      : undefined;
+
+    /* ── the SVG chrome (D5) ─────────────────────────────────────────────── */
+    //
+    // Both paths live in CELL space — one SVG user unit is one grid cell,
+    // matching the 1:1 canvases — and the element inherits the same
+    // `scale(zoom * viewZoom)` the canvases do, with
+    // `vector-effect: non-scaling-stroke` exempting the stroke WIDTHS from it.
+    // That pair is what gives the grid and the brush outline back the
+    // screen-constant hairline their canvas painters documented and which 1:1
+    // would otherwise have destroyed silently.
+
+    /**
+     * The grid.
+     *
+     * ⚠️ No variant-offset sub-rectangle, unlike `CanvasContainer`'s. The
+     * lighting studio's editable surface always starts at the grid origin —
+     * `renderNormalEdit` passes `offsetX: 0` for exactly the same reason, and
+     * a variant is rendered at its own 0,0 rather than at its object offset.
+     * The Preview pane shows the whole object, so its grid is the object's.
+     */
+    const gridPath = useMemo(
+      () => gridOverlayPath({ cellWidth, cellHeight }, lightGridMode),
+      [cellWidth, cellHeight, lightGridMode],
     );
+
+    /**
+     * The brush footprint's outline. `null` in Preview mode (a read-only pane
+     * has no hover cell) and whenever nothing is hovered, so the surface
+     * renders no `<path>` at all rather than an empty `d`.
+     */
+    const brushOutline = useMemo<SvgPathSpec | null>(() => {
+      if (previewMode || !hoverPixel) return null;
+      const cells = resolveBrushCells(hoverPixel);
+      if (cells.length === 0) return null;
+      return brushOutlineOverlay(cells);
+    }, [previewMode, hoverPixel, resolveBrushCells]);
 
     const empty = !obj || !frame;
 
@@ -685,29 +934,40 @@ export const LightingCanvasContainer = observer(
         overlayCanvasRef={overlayCanvasRef}
         containerRef={containerRef}
         rootRef={rootRef}
-        canvasWidth={canvasWidth}
-        canvasHeight={canvasHeight}
+        cellWidth={cellWidth}
+        cellHeight={cellHeight}
         viewPanOffset={viewPanOffset}
-        viewZoom={viewZoom}
+        // ⚠️ `zoom * viewZoom`, NOT `viewZoom` alone. The canvases are 1:1
+        // now, so this one declaration carries ALL the magnification — the
+        // pixel scale that used to live in the backing store included.
+        combinedScale={zoom * viewZoom}
+        grid={gridPath}
+        brushOutline={brushOutline}
         editMode={editMode}
-        gridWidth={gridWidth}
-        gridHeight={gridHeight}
+        // The readout describes what THIS pane shows: the edit grid in Edit
+        // mode, the whole object in Preview mode.
+        gridWidth={viewCellsX}
+        gridHeight={viewCellsY}
         zoom={zoom}
         empty={empty}
-        previewPanel={
-          <LightingPreviewPanelContainer
-            canvasRef={previewCanvasRef}
-            containerRef={rootRef}
-            onMinimizedChange={handlePanelMinimizedChange}
+        viewControls={
+          <CanvasViewControls
+            onResetView={handleResetView}
+            modeButton={modeButton}
+            onClose={onClose}
           />
         }
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        {...(previewMode
+          ? READ_ONLY_POINTERS
+          : {
+              onMouseDown: handleMouseDown,
+              onMouseMove: handleMouseMove,
+              onMouseUp: handleMouseUp,
+              onMouseLeave: handleMouseLeave,
+              onTouchStart: handleTouchStart,
+              onTouchMove: handleTouchMove,
+              onTouchEnd: handleTouchEnd,
+            })}
       />
     );
   },

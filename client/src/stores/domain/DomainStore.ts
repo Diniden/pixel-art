@@ -98,6 +98,32 @@ import type { ReferenceSelectionBox } from "../../utils/referenceImage";
 export type LoadState = "idle" | "loading" | "loaded" | "failed";
 
 /**
+ * The cells changed by the most recent pixel write — the D7 dirty-region
+ * channel (plan `docs/05-canvas-perf`, task 01).
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ `null` MEANS "REPAINT EVERYTHING" AND EVERY CONSUMER MUST HANDLE IT
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * The nullability is load-bearing, not laziness (plan risk R6). A writer that
+ * replaces a grid wholesale — the two flips, the empty-patch lighting path —
+ * cannot name the cells it touched, so it publishes `null` and the renderer
+ * falls back to the full repaint it does today. Every path is therefore
+ * correct-but-slow by default and only the paths that CAN describe themselves
+ * get the fast one. A consumer that treats `null` as "nothing changed" leaves
+ * stale pixels on screen.
+ *
+ * `cells` is read-only and is never entered into the observable graph — see
+ * the `observableRef` annotation on {@link DomainStore.pixelDirty}.
+ */
+export interface PixelDirtyRegion {
+  /** The layer whose grid changed. */
+  layerId: string;
+  /** Changed cells, in the layer's own grid space. */
+  cells: readonly { x: number; y: number }[];
+}
+
+/**
  * Where the project TREE lives while it is still Zustand-owned (until task
  * 23+). `installProject` resets the undo history (load/switch/create/delete);
  * `replaceProject` preserves it (restore-from-backup is undoable);
@@ -199,6 +225,21 @@ export class DomainStore {
   pixelVersion = 0;
 
   /**
+   * The D7 dirty-region channel — a SEPARATE channel from `pixelVersion`,
+   * deliberately.
+   *
+   * `pixelVersion` is the auto-save trigger and its bump is gated on
+   * `history.isReplaying` (`PixelStore.publishAndBump`), so it is silent
+   * during undo/redo by design. The renderer must NOT be silent there — the
+   * undone pixels have to reach the canvas — so this field is published on
+   * the replay path too (D8) and its semantics are independent of the save
+   * trigger's. Nothing here may be folded back into `pixelVersion`.
+   *
+   * `null` means "repaint everything"; see {@link PixelDirtyRegion}.
+   */
+  pixelDirty: PixelDirtyRegion | null = null;
+
+  /**
    * Bumped once per FRESH INSTALL of a project (init / load / create /
    * switch / delete — not restore, which is an undoable edit). The
    * `AutoSaveController` adopts the version counters as its clean baseline
@@ -230,10 +271,16 @@ export class DomainStore {
       hasProject: computed,
       domainVersion: observable,
       pixelVersion: observable,
+      pixelDirty: observableRef, //       NEVER `observable` — see R2. The
+      //                                  region holds a cell ARRAY; deep
+      //                                  observation would proxy one entry
+      //                                  per changed pixel, which is the same
+      //                                  modelling error as proxying a grid.
       loadGeneration: observable,
       isLoading: computed,
       bumpDomainVersion: action,
       bumpPixelVersion: action,
+      setPixelDirty: action,
       initProject: flow,
       loadProject: flow,
       refreshFromServer: flow,
@@ -251,6 +298,10 @@ export class DomainStore {
     return this.loadState === "loading";
   }
 
+  get saveName(): string {
+    return this.projectName;
+  }
+
   /**
    * One committed domain mutation. During the bridge era the ONLY caller
    * was the Zustand bridge, the single place that saw every `project`
@@ -264,6 +315,21 @@ export class DomainStore {
   /** Placeholder until `PixelStore` owns the grid (task 26). */
   bumpPixelVersion(): void {
     this.pixelVersion += 1;
+  }
+
+  /**
+   * Publish which cells the write that just landed changed (D7).
+   *
+   * `PixelStore` is the only caller. Pass `null` from any path that replaced
+   * a grid wholesale and cannot enumerate its cells — that is the
+   * correct-but-slow default, never an error.
+   *
+   * The region object is stored BY REFERENCE and must be treated as frozen by
+   * both writer and consumer; nothing in here is persisted, cloned, or
+   * entered into the undo stack.
+   */
+  setPixelDirty(region: PixelDirtyRegion | null): void {
+    this.pixelDirty = region;
   }
 
   /* ── the tree (task 23) ────────────────────────────────────────────────── */

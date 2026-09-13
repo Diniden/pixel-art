@@ -23,7 +23,7 @@
  *
  * ── Ordering rules (MASTER D6) ────────────────────────────────────────────
  * - A NEWLY opened mode goes on the RIGHT; the pane that was already open
- *   stays left.
+ *   stays left. `presentVariantPanes` is the ONE exception and says why.
  * - The last open pane cannot be closed — `closeMode` is a no-op then.
  * - `swap` flips sides only when both are open.
  * - Exactly ONE pane owns the window keyboard map (otherwise every WASD press
@@ -55,6 +55,7 @@ export class CanvasViewsUIStore {
       openMode: action,
       closeMode: action,
       swap: action,
+      presentVariantPanes: action,
     });
   }
 
@@ -97,6 +98,36 @@ export class CanvasViewsUIStore {
     if (!this.isOpen(mode) || !this.bothOpen) return;
     if (mode === "full") this.fullOpen = false;
     else this.layerOpen = false;
+  }
+
+  /**
+   * Both panes open, with the **Layer** pane LEFT and the **Full** (composite)
+   * pane RIGHT. Called when the user selects a variant layer.
+   *
+   * ⚠️ THIS DELIBERATELY BREAKS THE "NEW PANE GOES RIGHT" RULE (MASTER D6),
+   * which is why it is its own action rather than two `openMode` calls.
+   *
+   * From the usual starting state — Full alone, open and left —
+   * `openMode("layer")` puts Layer on the RIGHT, which is the opposite of what
+   * is wanted: the owner reported (2026-09-08) that on selecting a variant
+   * layer "the default editor should be the variant canvas and NOT the
+   * composed view on the left, BUT the composed view should be automatically
+   * opened and on the right as the default". The pane the user EDITS belongs
+   * under the primary hand; the composite is reference beside it. So this sets
+   * `leftMode` outright instead of letting the open order decide.
+   *
+   * Idempotent, and it does not consult the current state: re-selecting the
+   * same variant layer, or selecting a different one, lands on the same
+   * arrangement. That also means it OVERRIDES a manual `swap` on the next
+   * variant selection — acceptable, because the selection is the user's own
+   * act and this is the documented response to it. It is deliberately NOT
+   * called for a non-variant layer, so a user who arranges the panes by hand
+   * keeps that arrangement for all ordinary layer work.
+   */
+  presentVariantPanes(): void {
+    this.layerOpen = true;
+    this.fullOpen = true;
+    this.leftMode = "layer";
   }
 
   /** Flip which side each pane takes. No-op unless both are open. */

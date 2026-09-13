@@ -241,6 +241,16 @@
   border-left: 1px solid var(--border-primary);
 }
 
+/* ⚠️ THE HANDLE SUPPLIES THE BORDER (2026-08-30). A rail with a drawer
+   handle draws no inner border of its own: `rail-handle` is a 3px strip
+   sitting exactly where the 1px rule was, and keeping both would stack a
+   thin line against a thick one. Both edges are suppressed in one rule
+   because a rail has a handle on whichever side it is placed. */
+.app__side-panel--has-handle {
+  border-right-color: transparent;
+  border-left-color: transparent;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    RAIL SCALING — A TRANSFORM, NOT A WIDTH (2026-08-25)
    ══════════════════════════════════════════════════════════════════════════
@@ -358,6 +368,13 @@
 .app__bottom--at-top {
   border-top: none;
   border-bottom: 1px solid var(--border-primary);
+}
+
+/* Same as the side rails: the handle is the border. Both edges again, since
+   the timeline can be flipped above the canvas. */
+.app__bottom--has-handle {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
 }
 
 /* Responsive Design.

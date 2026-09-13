@@ -149,25 +149,28 @@ describe("LayoutUIStore — narrowing untrusted persisted values", () => {
   });
 
   it("round-trips a spread through persistence", () => {
-    const store = new LayoutUIStore("tablet");
+    // ⚠️ Orientation pinned, and the key is composite (plan 09, task 10) —
+    // a tablet stores under `tablet:<orientation>`. See
+    // `orientationLayout.test.ts` for the keying itself.
+    const store = new LayoutUIStore("tablet", "landscape");
     runInAction(() => store.stepToolbarSpread(1));
 
     const persisted = store.toPersistedRailLayouts()!;
-    expect(persisted.tablet.toolbar?.spread).toBe(2);
+    expect(persisted["tablet:landscape"].toolbar?.spread).toBe(2);
 
-    const reloaded = new LayoutUIStore("tablet");
+    const reloaded = new LayoutUIStore("tablet", "landscape");
     runInAction(() => reloaded.hydrate({ railLayouts: persisted }));
     expect(reloaded.layout.toolbar.spread).toBe(2);
   });
 
   it("round-trips a toolbar edge through persistence", () => {
-    const store = new LayoutUIStore("tablet");
+    const store = new LayoutUIStore("tablet", "landscape");
     runInAction(() => store.setToolbarEdge("right"));
 
     const persisted = store.toPersistedRailLayouts()!;
-    expect(persisted.tablet.toolbar?.edge).toBe("right");
+    expect(persisted["tablet:landscape"].toolbar?.edge).toBe("right");
 
-    const reloaded = new LayoutUIStore("tablet");
+    const reloaded = new LayoutUIStore("tablet", "landscape");
     runInAction(() => reloaded.hydrate({ railLayouts: persisted }));
     expect(reloaded.layout.toolbar.edge).toBe("right");
   });
@@ -230,5 +233,144 @@ describe("LayoutUIStore — layout mode is session-only", () => {
 
     runInAction(() => store.setLayoutMode(false));
     expect(store.layoutMode).toBe(false);
+  });
+});
+
+/**
+ * Layout presets (2026-08-30).
+ *
+ * The pure preset rules live in `ui/layout/__tests__/layoutPresets`; what is
+ * asserted here is what the STORE adds: device keying, the round trip through
+ * the persisted shape, and the narrowing of values a file may carry.
+ */
+describe("LayoutUIStore — layout presets", () => {
+  it("offers this device's built-ins, and a tablet's differ from a desktop's", () => {
+    const desktop = new LayoutUIStore("desktop").availablePresets;
+    const tablet = new LayoutUIStore("tablet").availablePresets;
+
+    expect(desktop.length).toBeGreaterThan(0);
+    expect(desktop.map((p) => p.id)).not.toEqual(tablet.map((p) => p.id));
+    // Nothing is saved yet, so nothing is deletable.
+    expect(desktop.some((p) => p.custom)).toBe(false);
+  });
+
+  it("marks the matching preset as active, and only one of them", () => {
+    const store = new LayoutUIStore("desktop");
+    // A fresh store IS the historical arrangement, which is `classic`.
+    expect(store.activePresetId).toBe("classic");
+
+    const wide = store.availablePresets.find((p) => p.id === "wide-canvas")!;
+    runInAction(() => store.applyLayoutPreset(wide));
+    expect(store.activePresetId).toBe("wide-canvas");
+    expect(store.layout).toEqual({ ...wide.layout, otherHand: {} });
+  });
+
+  it("goes inactive once the user nudges a rail by hand", () => {
+    const store = new LayoutUIStore("desktop");
+    runInAction(() => store.scaleRail("left", 1));
+    expect(store.activePresetId).toBeNull();
+  });
+
+  it("saves the CURRENT arrangement, and the saved copy does not follow later edits", () => {
+    // The snapshot property: a preset records how things were when saved.
+    const store = new LayoutUIStore("desktop");
+    runInAction(() => {
+      store.flipBottomEdge();
+      store.saveCurrentAsPreset("Top strip");
+      // ...and now change the live layout out from under it.
+      store.scaleRail("left", 1);
+    });
+
+    const saved = store.availablePresets.find((p) => p.custom)!;
+    expect(saved.name).toBe("Top strip");
+    expect(saved.layout.bottom.edge).toBe("top");
+    expect(saved.layout.left.scale).toBe("regular");
+    expect(store.layout.left.scale).toBe("large");
+  });
+
+  it("keeps a saved preset out of the OTHER device's list", () => {
+    const store = new LayoutUIStore("tablet");
+    runInAction(() => store.saveCurrentAsPreset("Thumb grip"));
+
+    const persisted = store.toPersistedLayoutPresets()!;
+    expect(Object.keys(persisted)).toEqual(["tablet"]);
+
+    // A desktop store hydrated from the same project sees none of it.
+    const desktop = new LayoutUIStore("desktop");
+    runInAction(() => desktop.hydrate({ layoutPresets: persisted }));
+    expect(desktop.availablePresets.some((p) => p.custom)).toBe(false);
+  });
+
+  it("refuses a blank name — an unnamed card is unidentifiable", () => {
+    const store = new LayoutUIStore("desktop");
+    runInAction(() => store.saveCurrentAsPreset("   "));
+    expect(store.toPersistedLayoutPresets()).toBeUndefined();
+  });
+
+  it("deletes a saved preset and leaves the built-ins alone", () => {
+    const store = new LayoutUIStore("desktop");
+    runInAction(() => store.saveCurrentAsPreset("Mine"));
+    const saved = store.availablePresets.find((p) => p.custom)!;
+
+    runInAction(() => store.deleteLayoutPreset(saved.id));
+    expect(store.availablePresets.some((p) => p.custom)).toBe(false);
+
+    // A built-in id is not in the persisted list, so deleting one is a
+    // harmless no-op rather than something that corrupts the shortlist.
+    const before = store.availablePresets.length;
+    runInAction(() => store.deleteLayoutPreset("classic"));
+    expect(store.availablePresets).toHaveLength(before);
+  });
+
+  it("is ABSENT from the persisted record until something is saved", () => {
+    // The corpus-protecting property, at the store level.
+    const store = new LayoutUIStore("desktop");
+    expect(store.toPersistedLayoutPresets()).toBeUndefined();
+    runInAction(() => store.applyLayoutPreset(store.availablePresets[1]));
+    // Applying is not saving — it moves rails, it does not add a card.
+    expect(store.toPersistedLayoutPresets()).toBeUndefined();
+  });
+
+  it("narrows a hydrated preset, defaulting fields it does not recognise", () => {
+    const store = new LayoutUIStore("desktop");
+    runInAction(() =>
+      store.hydrate({
+        layoutPresets: {
+          desktop: [
+            {
+              id: "custom-1",
+              name: "From a newer build",
+              layout: {
+                left: { slot: "nonsense", scale: "gigantic" },
+                right: { slot: "rightOuter", scale: "large" },
+                bottom: { edge: "top", scale: "compact" },
+              },
+            },
+            // Unusable in a keyed list — dropped rather than rendered.
+            { name: "no id" },
+          ] as never,
+        },
+      }),
+    );
+
+    const saved = store.availablePresets.filter((p) => p.custom);
+    expect(saved).toHaveLength(1);
+    // The bad fields fell back; the good ones survived.
+    expect(saved[0].layout.left.slot).toBe(DEFAULT_RAIL_LAYOUT.left.slot);
+    expect(saved[0].layout.left.scale).toBe(DEFAULT_RAIL_LAYOUT.left.scale);
+    expect(saved[0].layout.right.scale).toBe("large");
+    expect(saved[0].layout.bottom.edge).toBe("top");
+  });
+
+  it("applying a preset preserves the Other Hand positions", () => {
+    const store = new LayoutUIStore("tablet");
+    runInAction(() => {
+      store.setOtherHandWidgetPosition("color", "hue", { x: 25, y: 60 });
+      store.applyLayoutPreset(store.availablePresets[1]);
+    });
+    expect(store.layout.otherHand.color.positions.hue).toEqual({
+      x: 25,
+      y: 60,
+    });
   });
 });

@@ -128,13 +128,55 @@ export interface UIState {
   selectedLayerId: string | null;
   selectedTool: Tool;
   selectedColor: Color;
+  /**
+   * The FILL colour — bucket, gaussian fill, and a shape's interior.
+   *
+   * ⚠️ OPTIONAL, and must stay optional: every project saved before the
+   * edge/fill split (2026-09-01) has no such key. Readers fall back to
+   * `selectedColor` via `ToolUIStore.fillColorOrSelected`, so those projects
+   * keep their single-colour behaviour and their corpus digests.
+   */
+  fillColor?: Color;
   // Selection tool options
   selectionMode?: SelectionMode;
   selectionBehavior?: SelectionBehavior;
   // Focus mode: hide side/bottom panels for distraction-free editing
   focusMode?: boolean;
+  /**
+   * Which rails the user has dismissed (2026-08-30), by rail name.
+   *
+   * OPTIONAL and conditionally emitted: absent until a rail is actually
+   * hidden, so an untouched project gains no key. WIDE `string[]` like the
+   * rest of this file — a file may name a rail this build does not know.
+   *
+   * ⚠️ It does NOT replace `focusMode`, which stays in the wire format
+   * unconditionally (it is part of the frozen key set). `focusMode` remains
+   * true exactly when the two classic focus rails are both hidden, so an
+   * older build reading a newer file still behaves sensibly.
+   */
+  hiddenRails?: string[];
   // Light grid mode: use a light background for the canvas grid instead of dark
   lightGridMode?: boolean;
+  /**
+   * Pencil-only input (2026-08-31): only an Apple Pencil may edit pixels.
+   *
+   * When true, a FINGER cannot draw — it can still pan, pinch and operate
+   * every control, but it will not put a pixel down. That is the whole point:
+   * on an iPad the hand resting on the glass is not trying to paint. When
+   * false the canvas behaves as it always has and a single finger draws.
+   *
+   * ⚠️ OPTIONAL AND CONDITIONALLY EMITTED, exactly like `hiddenRails` above.
+   * An untouched project gains no key, so existing files round-trip
+   * byte-identically and the corpus snapshots do not move. `undefined` means
+   * "absent from the file"; readers collapse it at the read site.
+   *
+   * ⚠️ The DEFAULT for a fresh value is decided in the UI layer, not here,
+   * and it is device-dependent: a touch device defaults it ON, which is what
+   * the owner asked for ("selected by default"). Baking a default into the
+   * wire format would force it onto desktops that have no stylus at all and
+   * silently disable mouse drawing there.
+   */
+  pencilOnly?: boolean;
   brushSize: number;
   bitDepth: BitDepth;
   shapeMode: ShapeMode;
@@ -146,6 +188,18 @@ export interface UIState {
   // Pixel pencil brush settings
   pencilBrushShape: "circle" | "square";
   pencilBrushMax: 8 | 16 | 32 | 64 | 128;
+  /**
+   * The ERASER's own size and max (plan 09).
+   *
+   * ⚠️ OPTIONAL, and must stay optional — the same rule as `fillColor` above.
+   * Every project saved before the pencil/eraser split has neither key, and
+   * `brushSize` above keeps its meaning as THE PENCIL'S size. Readers fall
+   * back through `ToolUIStore.effectiveEraserSize` / `effectiveEraserMax`, so
+   * those projects keep their single-size behaviour and their corpus digests.
+   * That fallback IS the migration; there is no migration code.
+   */
+  eraserBrushSize?: number;
+  eraserBrushMax?: 8 | 16 | 32 | 64 | 128;
   // Trace mode nudge: how far Shift+WASD moves reference/frame trace offsets
   traceNudgeAmount: 10 | 20 | 25 | 50 | 100;
   // Variant editing state
@@ -205,7 +259,42 @@ export interface UIState {
   // theme is deliberately NOT keyed that way — one theme per project, on
   // every device (owner decision).
   railLayouts?: { [deviceClass: string]: PersistedRailLayout };
+  /**
+   * The user's OWN saved layouts, keyed by device class like `railLayouts`
+   * (2026-08-30). Optional and, like the two keys above, absent until the
+   * user actually saves one — an untouched project gains no key, which is
+   * what keeps the corpus digests unchanged.
+   *
+   * Separate from `railLayouts` rather than a field inside it because the two
+   * answer different questions: `railLayouts` is "where are this device's
+   * rails right now", this is "which arrangements has the user kept". A
+   * device can have the second with none of the first, and losing one must
+   * not lose the other.
+   */
+  layoutPresets?: { [deviceClass: string]: PersistedLayoutPreset[] };
   theme?: string;
+
+  /**
+   * The user's saved POSE SCENE presets (plan 08 task 08, 2026-09-04 — owner
+   * item 10: *"a way to save ALL orientations of camera settings and model to
+   * a preset that I can reload easily"*).
+   *
+   * Optional and, exactly like `layoutPresets` above, **absent until the user
+   * saves one**. That conditionality is not a style choice — it is the whole
+   * mechanism that keeps the owner's 151 backup snapshots byte-identical
+   * (plan 08 **F13**). `PoseUIStore.toPersistedPosePresets()` returns
+   * `undefined` for an empty list and the builder emits it through
+   * `assign()`, so an untouched project gains no key. **Never write it as
+   * `posePresets: undefined`** — measured, that form changed all 11 corpus
+   * digests, because "present with value undefined" is still a key.
+   *
+   * ⚠️ **Only the presets persist. The LIVE pose does not.** `rotation`,
+   * `scale`, `pan`, `edgeWidth`, `meshId` and the light stay session-only
+   * (MASTER D6) — the reference model is not part of the document until it is
+   * stamped. A preset is a thing the owner deliberately named and kept, which
+   * is a different claim entirely.
+   */
+  posePresets?: PersistedPosePreset[];
 
   /**
    * The canvas VIEW transform's scale (pinch/wheel), distinct from `zoom`
@@ -258,6 +347,114 @@ export interface PersistedRailLayout {
   };
 }
 
+/**
+ * One layout the user saved and named, as persisted.
+ *
+ * WIDE types for the same reason `PersistedRailLayout` is wide: this is the
+ * wire format, and a file may carry a preset written by a newer build. The
+ * narrowing happens once, on hydrate.
+ *
+ * ⚠️ The `layout` is a full `PersistedRailLayout`, not a diff against a
+ * built-in. A preset must reproduce the same screen years later even if the
+ * built-in it happened to resemble has since been re-tuned.
+ */
+export interface PersistedLayoutPreset {
+  id: string;
+  name: string;
+  layout: PersistedRailLayout;
+}
+
+/**
+ * One POSE SCENE the user saved and named, as persisted (plan 08, **F15**).
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ *  ⚠️ EVERY FIELD IS WIDE, AND EVERY FIELD BUT `id`/`name` IS OPTIONAL
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Wide (`string`, not the `PoseMeshId` union; `number`, not a clamped range)
+ * for the same reason `PersistedRailLayout` and `PersistedLayoutPreset` are:
+ * this is the **wire format**, and a file on disk may legitimately carry a
+ * value this build does not know — a preset written by a newer version with a
+ * mesh id that did not exist yet, or a hand-edited file. `types/` must never
+ * assume the data matches the current build. The narrowing happens exactly
+ * once, in `PoseUIStore.narrowPosePresets()`, where an unknown value is
+ * dropped to the field's default rather than poisoning the store with an
+ * impossible union member.
+ *
+ * Optional beyond `id`/`name` for the forward-compatibility half of the same
+ * rule: a preset written by an OLDER build has fewer fields, and an older
+ * build reading a newer preset must ignore what it does not understand rather
+ * than crash. `?? default` on read (F14) is what makes both directions work
+ * with **no migration** — there is none, and none is needed.
+ *
+ * ## What a preset carries, and what it deliberately does not
+ *
+ * **Open question 4, decided 2026-09-04 by task 08.** The owner asked to save
+ * *"ALL orientations of camera settings and model"*, so the test applied was:
+ * **would the owner recognise the view this restores?**
+ *
+ * | Field | In? | Why |
+ * | --- | --- | --- |
+ * | `meshId` | ✅ | A scene without its subject is not a scene. Restoring a torso's angles onto a loaded sphere is not the picture that was saved. |
+ * | `rotation` | ✅ | The literal "orientation of the model" the owner named. |
+ * | `projection`, `cameraPreset`, `fov` | ✅ | The literal "camera settings" the owner named. |
+ * | `scale` | ✅ | How big the model reads IS most of the picture, and unlike a camera preset (open question 1) a **scene** preset is a whole remembered view rather than a change of angle. See below. |
+ * | `lightDirection`, `lightColor` | ✅ | The light is what makes a 3D reference legible; two identical geometries under different keys read as different references. |
+ * | `edgeWidth` | ✅ | The outline is part of how the reference LOOKS, and it is one integer. |
+ * | `pan` | ❌ | Framing, not orientation — see below. |
+ *
+ * ## ⚠️ `pan` is excluded, and `scale` is included — the asymmetry is deliberate
+ *
+ * Both were left alone by a **camera preset** (open question 1, task 05), so
+ * including `scale` here needs a reason rather than an assumption.
+ *
+ * The two questions are genuinely different. A **camera preset** is a verb —
+ * *"put me at the isometric angle"* — and it fires while the owner is working
+ * at a scale and a pan they chose; taking those away would punish them for
+ * changing angle. A **scene preset** is a noun — *"the setup I saved"* — and
+ * the owner asked for it so they could *"reload it easily"*. Restoring
+ * everything except how big the model was gives back a view they did not
+ * save, which is the failure mode the feature exists to prevent.
+ *
+ * `pan` is excluded even so, because it is the one field whose meaning does
+ * not survive the trip: it is measured in **grid cells** of whatever canvas
+ * was open, so a pan saved on a 64×64 sprite lands somewhere else entirely on
+ * a 32×32 one — and a pan is unbounded (MASTER E13), so a restored preset
+ * could put the model completely off screen with no visible cause. Scale is
+ * canvas-independent; pan is not. If the owner disagrees, the change is one
+ * field here and three lines in `applyPosePreset`.
+ */
+export interface PersistedPosePreset {
+  /** Unique within the list. Generated on save; never re-used. */
+  id: string;
+  /** What the owner typed. Trimmed, never empty. */
+  name: string;
+  /** `PoseMeshId` on the wire as a bare string — see the header. */
+  meshId?: string;
+  /** Model orientation, **euler radians** (the store's unit, not degrees). */
+  rotation?: { x: number; y: number; z: number };
+  /** `"perspective"` | `"orthographic"`, wide. */
+  projection?: string;
+  /** A `PoseCameraPreset` id, wide. */
+  cameraPreset?: string;
+  /** Field of view in DEGREES, as the store holds it. */
+  fov?: number;
+  /** The model's own scale multiplier about its own origin. */
+  scale?: number;
+  /**
+   * The model's per-axis scale — the **S of its ISROT transform**. Floored at
+   * `0.001` per component, **not capped**. Absent reads as `{1,1,1}`, which is
+   * what a preset saved before this field existed actually had.
+   */
+  axisScale?: { x: number; y: number; z: number };
+  /** Key-light direction. Re-normalised on apply, so drift is harmless. */
+  lightDirection?: { x: number; y: number; z: number };
+  /** Key-light tint, as plain 0–255 components. */
+  lightColor?: { r: number; g: number; b: number; a: number };
+  /** Outline thickness in whole pixels; `0` means no outline. */
+  edgeWidth?: number;
+}
+
 export type Tool =
   | "pixel"
   | "fill-square"
@@ -273,11 +470,17 @@ export type Tool =
   | "selection"
   | "origin"
   | "reflection"
+  // A gesture/reference tool: it renders a 3D reference above the layers and
+  // never writes pixels through the tool table. See docs/06-pose-tool/.
+  | "pose"
   | "normal-pencil"
   | "auto-normal"
-  | "height-map";
+  | "height-map"
+  // Stamps the brush document open in the Brush Studio onto the pixel canvas.
+  // See docs/12-pixel-brush-tool/.
+  | "brush";
 
-export type StudioMode = "pixel" | "lighting";
+export type StudioMode = "pixel" | "lighting" | "brush";
 
 export interface SelectionBox {
   x: number;

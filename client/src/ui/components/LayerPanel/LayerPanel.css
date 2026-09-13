@@ -104,15 +104,33 @@
 .layer-panel__content-row {
   display: flex;
   gap: var(--space-2);
-  align-items: flex-start;
+  align-items: center;
 }
 
+/*
+ * `center`, not `flex-start`: the visibility control is now thumbnail-sized
+ * and taller than the label row, so the column is the tall element and the
+ * two must meet in the middle. A variant row adds the variant-select button
+ * below the thumbnail, and centring keeps that pair balanced against the
+ * name + action strip instead of hanging off the top.
+ */
 .layer-panel__visibility-col {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: var(--space-1);
   flex-shrink: 0;
+}
+
+/*
+ * The thumbnail fills its button edge-to-edge — the button IS the thumbnail
+ * frame, so the canvas carries no border of its own and no inset.
+ */
+.layer-panel__thumbnail {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .layer-panel__main-col {
@@ -148,6 +166,28 @@
 
 .layer-panel__visibility-btn:hover {
   border-color: var(--accent-primary);
+}
+
+/*
+ * The thumbnail-carrying variant. Fixed to LAYER_THUMB_SIZE (32px,
+ * LayerRow.tsx) so a row's height does not depend on the project's grid —
+ * the canvas is always square and the aspect fitting happens inside the
+ * paint. `overflow: hidden` keeps the canvas inside the rounded corners.
+ */
+.layer-panel__visibility-btn--thumb {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  overflow: hidden;
+}
+
+/*
+ * Hidden state: the box holds the EyeOff glyph where the artwork was, dimmed
+ * so a hidden layer reads as hidden at a glance down the stack.
+ */
+.layer-panel__visibility-btn--thumb:not(.layer-panel__visibility-btn--visible) {
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
 }
 
 .layer-panel__variant-icon {

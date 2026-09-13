@@ -96,3 +96,64 @@ export const NORMAL_SPHERE_MID = "#2d3748";
 export const NORMAL_SPHERE_LO = "#1a202c";
 export const NORMAL_SPHERE_EDGE = "#718096";
 export const NORMAL_SPHERE_GRID = "rgba(113, 128, 150, 0.4)";
+
+/* ------------------------------------------------------------------ *
+ * Layer-focus dimming (plan 05, locked decisions D4 and D10)
+ *
+ * These are NOT colours and have no CSS counterpart — they are OPACITY
+ * multipliers applied to a whole layer canvas while a variant is being
+ * edited, so a reader can tell the edited variant from its surroundings.
+ * They live in the canvas-only section deliberately: `CSS_MIRROR` is for
+ * values that must byte-match `styles/tokens.css`, and there is no token
+ * for either of these on either side.
+ *
+ * ⚠️ Moved here VERBATIM from `ui/canvas/render/renderScene.ts:76-80`,
+ * which task 05 deleted (D10). The values, and the rules that select
+ * between them, are the ones `CanvasContainer`'s variant-edit branch has
+ * always used:
+ *
+ *   | Layer, while a variant is being edited | Opacity |
+ *   | -------------------------------------- | ------- |
+ *   | Regular layer, `layerFocusMode === "normal"` | 1.0        |
+ *   | Regular layer, otherwise                     | REGULAR_DIM |
+ *   | The variant layer being edited               | 1.0        |
+ *   | Another variant layer, `normal`              | 1.0        |
+ *   | Another variant layer, otherwise             | OTHER_DIM  |
+ *
+ * ⚠️ `layerFocusMode === "onion"` is NOT an opacity. It is outline-only
+ * rendering driven by a 4-neighbour emptiness test, and it stays a
+ * PAINT-time decision inside the per-layer painter. Expressing it here —
+ * or as a CSS opacity — renders solid silhouettes instead of outlines.
+ * ------------------------------------------------------------------ */
+
+/** Dimming applied to a regular layer while a variant is being edited. */
+export const VARIANT_EDIT_REGULAR_DIM = 0.5;
+/** Dimming applied to a NON-edited variant layer while a variant is being edited. */
+export const VARIANT_EDIT_OTHER_DIM = 0.7;
+/**
+ * Opacity of the in-flight preview (brush) pixels.
+ *
+ * ⚠️ Applies to the BRUSH preview only. The SHAPE tools paint their preview
+ * opaque and ring its silhouette instead — a translucent shape blends into
+ * artwork of a similar colour and reads as being drawn underneath it
+ * (2026-09-01). See `renderChrome`.
+ */
+export const PREVIEW_ALPHA = 0.6;
+
+/**
+ * The ring around an in-flight shape preview, tracing exactly the cells the
+ * operation will affect.
+ *
+ * White at half alpha over a dark editor, which is legible against artwork of
+ * ANY colour — including white, where the ring's own translucency lets the
+ * pixel show through rather than disappearing into it. It marks EXTENT, not
+ * colour, so it is deliberately not derived from the tool's colour.
+ */
+export const PREVIEW_RING = "rgba(255, 255, 255, 0.5)";
+
+/**
+ * Ring width in CELL units — the whole surface is magnified by the CSS
+ * transform, so this is a hairline at any zoom rather than a fixed pixel
+ * count that would swell into a slab when zoomed in.
+ */
+export const PREVIEW_RING_WIDTH = 0.08;

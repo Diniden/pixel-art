@@ -2,8 +2,8 @@
  * ConfigureStep — the keyframe strip and the settings tab (REFRESH task 34,
  * from `AIInterpolateModal.tsx:960-1157`).
  *
- * PURE: React, its own two sibling step/part components, nothing else. No
- * store, no API, no MobX.
+ * PURE: React, its own two sibling step/part components and the `NumberInput`
+ * primitive, nothing else. No store, no API, no MobX.
  *
  * This is the one step that stays mounted across three modal steps
  * (`configure`, `generating`, `review`), because the keyframe strip remains
@@ -23,6 +23,7 @@
  * a computed style from the container.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { NumberInput } from "../../../primitives/NumberInput/NumberInput";
 import { Base64Thumbnail } from "../parts/Base64Thumbnail";
 import { GeneratingStep, type GenPairView } from "./GeneratingStep";
 
@@ -303,17 +304,14 @@ export function ConfigureStep({
                   pair.
                 </span>
               </div>
-              <input
-                type="number"
+              <NumberInput
+                unstyled
                 className="ai-interpolate-modal__setting-input"
+                label="Frames Between Keyframes"
                 min={1}
                 max={64}
                 value={numFrames}
-                onChange={(e) =>
-                  onNumFramesChange(
-                    Math.max(1, Math.min(64, parseInt(e.target.value) || 1)),
-                  )
-                }
+                onChange={onNumFramesChange}
                 disabled={isGenerating}
               />
             </div>

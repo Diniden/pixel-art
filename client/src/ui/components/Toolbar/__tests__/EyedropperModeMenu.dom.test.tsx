@@ -1,13 +1,20 @@
 /**
- * The eyedropper's mode menu, driven by the REAL gesture (2026-08-28).
+ * The eyedropper's mode menu, driven by the REAL gesture.
  *
- * ⚠️ WHAT THIS PINS, and why it exists: the menu is opened by a long press
- * and dismissed by an outside `pointerdown`. Those two facts collide — the
- * long press fires at 500 ms while the finger is STILL DOWN, so the menu
- * mounts mid-gesture and its own dismissal listener is live before the user
- * has lifted. Every event remaining in that gesture is therefore a candidate
- * for closing the menu the instant it opened, which is exactly the bug this
- * file was written to catch.
+ * ⚠️ THE OPENING GESTURE CHANGED ON 2026-08-31. It was a long press; it is now
+ * a double-tap / double-click (with right-click as the pointer equivalent).
+ * The owner asked for long-press to show TOOLTIPS on every tool, on every
+ * platform, and a touch device has only the one hold gesture — it cannot both
+ * describe a button and operate it. See `PixelStudioTools`' note on
+ * `secondary`.
+ *
+ * The original hazard this file was written for is GONE with that change: a
+ * long press fired at 500 ms while the finger was still down, so the menu
+ * mounted mid-gesture with its dismissal listener live, and the pointerup and
+ * click that ended the same gesture could close it instantly. A double-click
+ * completes before the menu mounts, so no part of the opening gesture is left
+ * to dismiss it. The release-survival cases are kept anyway, retargeted, since
+ * they cost nothing and the dismissal listener is still live.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -30,11 +37,15 @@ const base = {
   referenceImageModal: () => null,
 };
 
-/** The eyedropper's button, found the way a user finds it: by its label. */
+/** The eyedropper's button, found the way a user finds it: by its label.
+ *
+ * ⚠️ Reads `aria-label`, not `title`. The tool buttons' `title=` attributes
+ * became `Tooltip` wrappers on 2026-08-31 — a `title` is invisible on an iPad
+ * and unstyleable everywhere, which is why the tools had no tooltips there. */
 function eyedropperButton(): HTMLElement {
   const btn = screen
     .getAllByRole("button")
-    .find((b) => b.getAttribute("title")?.startsWith("Eyedropper"));
+    .find((b) => b.getAttribute("aria-label")?.startsWith("Eyedropper"));
   if (!btn) throw new Error("no eyedropper button rendered");
   return btn;
 }
@@ -42,21 +53,34 @@ function eyedropperButton(): HTMLElement {
 const menu = () => screen.queryByRole("menu", { name: "Eyedropper mode" });
 
 /**
- * Press and hold past the long-press threshold, then release — the COMPLETE
- * gesture, including the pointerup and the click that follow it.
+ * The COMPLETE opening gesture: two taps, including the clicks the browser
+ * sends before the `dblclick`.
  *
- * ⚠️ The release is the point. A test that only presses and advances the
- * timer passes even when the release immediately closes the menu again.
+ * ⚠️ The trailing events are the point. `onClick` fires TWICE before
+ * `onDoubleClick` does, so a helper that only dispatches `doubleClick` would
+ * pass even if the real gesture selected the tool twice and then opened a menu
+ * that the second click had already dismissed.
  */
-function longPress(el: HTMLElement, { release = true } = {}) {
+function doubleTap(el: HTMLElement) {
   fireEvent.pointerDown(el, { clientX: 10, clientY: 10 });
+  fireEvent.pointerUp(el, { clientX: 10, clientY: 10 });
+  fireEvent.click(el, { clientX: 10, clientY: 10 });
+  fireEvent.pointerDown(el, { clientX: 10, clientY: 10 });
+  fireEvent.pointerUp(el, { clientX: 10, clientY: 10 });
+  fireEvent.click(el, { clientX: 10, clientY: 10 });
+  fireEvent.doubleClick(el, { clientX: 10, clientY: 10 });
+}
+
+/**
+ * A long press — which must now do NOTHING to the menu, because that gesture
+ * belongs to the tooltip.
+ */
+function longPress(el: HTMLElement) {
+  fireEvent.pointerDown(el, { pointerType: "touch", clientX: 10, clientY: 10 });
   act(() => {
     vi.advanceTimersByTime(600);
   });
-  if (release) {
-    fireEvent.pointerUp(el, { clientX: 10, clientY: 10 });
-    fireEvent.click(el, { clientX: 10, clientY: 10 });
-  }
+  fireEvent.pointerUp(el, { pointerType: "touch", clientX: 10, clientY: 10 });
 }
 
 beforeEach(() => {
@@ -73,23 +97,33 @@ describe("opening the menu", () => {
     expect(menu()).toBeNull();
   });
 
-  it("⭐ a long press OPENS it — and it SURVIVES the release", () => {
-    // The regression: the menu mounts while the finger is still down, so the
-    // pointerup and click that end the very same gesture arrive after its
-    // dismissal listener is live.
+  it("⭐ a double tap OPENS it — and it SURVIVES the clicks that precede it", () => {
+    // `onClick` fires twice before `onDoubleClick`, and the menu's dismissal
+    // listener goes live the moment it mounts.
     render(<PixelStudioTools {...base} />);
 
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
     expect(menu()).not.toBeNull();
   });
 
-  it("a double click opens it", () => {
+  it("a bare double click opens it too — the mouse route", () => {
     render(<PixelStudioTools {...base} />);
 
     fireEvent.doubleClick(eyedropperButton());
 
     expect(menu()).not.toBeNull();
+  });
+
+  it("⭐ a LONG PRESS no longer opens it — that gesture is the tooltip's now", () => {
+    // Changed 2026-08-31 at the owner's request. Pinned rather than deleted:
+    // restoring a long-press here would silently take the gesture back off the
+    // tooltip on every tool button.
+    render(<PixelStudioTools {...base} />);
+
+    longPress(eyedropperButton());
+
+    expect(menu()).toBeNull();
   });
 
   it("a plain click does NOT open it — that still just selects the tool", () => {
@@ -102,17 +136,22 @@ describe("opening the menu", () => {
     expect(onSelectTool).toHaveBeenCalledWith("eyedropper");
   });
 
-  it("⭐ the long press does NOT also select the tool", () => {
-    // `didLongPress()` guards the click that follows a completed hold.
+  it("the double tap selects the tool on the way — and that is harmless", () => {
+    // ⚠️ A DELIBERATE behaviour change. The long press used to suppress its
+    // trailing click via `didLongPress()`; a double tap has no such guard and
+    // its two clicks DO select the eyedropper before the menu opens. That is
+    // fine, and is why the secondary action had to be idempotent: selecting
+    // the tool you are configuring is what the user wanted anyway.
     const onSelectTool = vi.fn();
     render(<PixelStudioTools {...base} onSelectTool={onSelectTool} />);
 
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
-    expect(onSelectTool).not.toHaveBeenCalled();
+    expect(onSelectTool).toHaveBeenCalledWith("eyedropper");
+    expect(menu()).not.toBeNull();
   });
 
-  it("no OTHER tool opens a menu on a long press", () => {
+  it("no OTHER tool opens a menu on a double tap", () => {
     // Only the eyedropper claims the gesture; the rest keep slot-B assignment.
     const onSelectAlternateTool = vi.fn();
     render(
@@ -124,8 +163,8 @@ describe("opening the menu", () => {
 
     const pencil = screen
       .getAllByRole("button")
-      .find((b) => b.getAttribute("title")?.startsWith("Pencil"))!;
-    longPress(pencil);
+      .find((b) => b.getAttribute("aria-label")?.startsWith("Pencil"))!;
+    doubleTap(pencil);
 
     expect(menu()).toBeNull();
     expect(onSelectAlternateTool).toHaveBeenCalledWith("pixel");
@@ -143,7 +182,7 @@ describe("⭐ the portal — the reason the menu was invisible", () => {
     // invisibility itself. Asserting on the menu's PARENTAGE is the part of
     // the fix that is testable here — hence this test rather than a size one.
     const { container } = render(<PixelStudioTools {...base} />);
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
     const el = menu()!;
     expect(el).not.toBeNull();
@@ -153,21 +192,21 @@ describe("⭐ the portal — the reason the menu was invisible", () => {
 
   it("is not a DESCENDANT of the button — no nested-button markup", () => {
     render(<PixelStudioTools {...base} />);
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
     expect(eyedropperButton().contains(menu())).toBe(false);
   });
 
   it("carries the dock edge as a modifier", () => {
     render(<PixelStudioTools {...base} edge="bottom" />);
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
     expect(menu()!.className).toContain("eyedropper-mode-menu--bottom");
   });
 
   it("unmounts on close, leaving nothing behind in the body", () => {
     render(<PixelStudioTools {...base} />);
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(document.querySelector(".eyedropper-mode-menu")).toBeNull();
@@ -183,7 +222,7 @@ describe("choosing a mode", () => {
         onSelectEyedropperMode={onSelectEyedropperMode}
       />,
     );
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
     fireEvent.click(screen.getByRole("menuitemradio", { name: /stay/i }));
 
@@ -193,7 +232,7 @@ describe("choosing a mode", () => {
 
   it("ticks the mode in force", () => {
     render(<PixelStudioTools {...base} eyedropperMode="stay" />);
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
     expect(
       screen.getByRole("menuitemradio", { name: /stay/i }),
@@ -206,8 +245,15 @@ describe("choosing a mode", () => {
   it("choosing a mode does NOT also select the tool", () => {
     const onSelectTool = vi.fn();
     render(<PixelStudioTools {...base} onSelectTool={onSelectTool} />);
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
+    // ⚠️ Scoped to the MENU CLICK, not the whole interaction. The opening
+    // double tap legitimately selects the eyedropper on its way through (see
+    // "the double tap selects the tool on the way"), so the old
+    // `not.toHaveBeenCalled()` would now fail for a reason that has nothing to
+    // do with what this test is about: clicking a menu item must not reach the
+    // button underneath it.
+    onSelectTool.mockClear();
     fireEvent.click(screen.getByRole("menuitemradio", { name: /stay/i }));
 
     expect(onSelectTool).not.toHaveBeenCalled();
@@ -217,7 +263,7 @@ describe("choosing a mode", () => {
 describe("dismissing", () => {
   it("⭐ an outside pointerdown closes it", () => {
     render(<PixelStudioTools {...base} />);
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
     expect(menu()).not.toBeNull();
 
     fireEvent.pointerDown(document.body);
@@ -227,7 +273,7 @@ describe("dismissing", () => {
 
   it("Escape closes it", () => {
     render(<PixelStudioTools {...base} />);
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
     fireEvent.keyDown(document, { key: "Escape" });
 
@@ -236,10 +282,10 @@ describe("dismissing", () => {
 
   it("a second long press toggles it shut", () => {
     render(<PixelStudioTools {...base} />);
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
     expect(menu()).not.toBeNull();
 
-    longPress(eyedropperButton());
+    doubleTap(eyedropperButton());
 
     expect(menu()).toBeNull();
   });

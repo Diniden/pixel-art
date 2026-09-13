@@ -45,6 +45,15 @@ export const MAX_COLOR_HISTORY = 10;
 export interface ColorAdjustmentState {
   originalColor: Color; // The original color that was selected
   allFrames: boolean; // Whether to adjust across all frames
+  /**
+   * Whether the scan ignored layer identity and took EVERY layer in scope.
+   *
+   * Orthogonal to `allFrames` — the two toggles on the Current Palette are
+   * independent, giving four scopes. Optional because the legacy Zustand
+   * `colorAdjustmentActions.ts` never wrote it; absent means "current layer
+   * only", which is the pre-existing behaviour.
+   */
+  allLayers?: boolean;
   // When allFrames is false, just pixel coordinates for current layer
   affectedPixels: { x: number; y: number }[];
   // When allFrames is true, map of frameId -> layerId -> pixel coordinates

@@ -29,9 +29,14 @@
  * `memo`'d component with a stylesheet and a type re-export and holds no
  * store — W20 moved its anchor MATH out to `utils/variantHelpers` precisely
  * so the store would stop depending on a React component.
+ *
+ * The two size boxes are `NumberInput` (task 02) for its commit semantics —
+ * a keystroke is a draft, the value applies on blur or Enter — passed
+ * `unstyled` so `object-library__size-field input` keeps owning the look.
  */
 import { useState } from "react";
 import { AnchorGrid, type AnchorPosition } from "../../AnchorGrid/AnchorGrid";
+import { NumberInput } from "../../../primitives/NumberInput/NumberInput";
 import "../ObjectLibrary.css";
 
 export interface ObjectResizeDialogProps {
@@ -58,23 +63,25 @@ export function ObjectResizeDialog({
       <div className="object-library__size-inputs">
         <div className="object-library__size-field">
           <label>W</label>
-          <input
-            type="number"
-            min="1"
-            max="256"
+          <NumberInput
+            unstyled
+            label="W"
+            min={1}
+            max={256}
             value={width}
-            onChange={(e) => setWidth(parseInt(e.target.value) || 1)}
+            onChange={setWidth}
           />
         </div>
         <span className="object-library__size-separator">×</span>
         <div className="object-library__size-field">
           <label>H</label>
-          <input
-            type="number"
-            min="1"
-            max="256"
+          <NumberInput
+            unstyled
+            label="H"
+            min={1}
+            max={256}
             value={height}
-            onChange={(e) => setHeight(parseInt(e.target.value) || 1)}
+            onChange={setHeight}
           />
         </div>
       </div>

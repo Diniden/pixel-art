@@ -42,14 +42,16 @@
  * that it keeps passing.
  *
  * ── Purity ────────────────────────────────────────────────────────────────
- * Imports: `ReactNode` (a React TYPE only), the `Icon` primitive,
- * `lucide-react` glyphs, its sibling `TimelineGrid`, and the shared grid
- * types. No store, no MobX, no API, no domain type. The stylesheet is
+ * Imports: `ReactNode` / `CSSProperties` (React TYPES only), the `ui/`
+ * `classNames` helper, the `Icon` primitive, `lucide-react` glyphs, its
+ * sibling `TimelineGrid`, and the shared grid types. No store, no MobX, no
+ * API, no domain type. The stylesheet is
  * `FrameTimeline.css`, imported once by the `FrameTimeline` parent, because
  * the `timeline-view` block is declared there alongside its two sibling views
  * and this task may not restructure them.
  */
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { classNames } from "../../classNames";
 import { Icon } from "../../primitives/Icon/Icon";
 import { ChevronUp, ChevronDown, SquareIcon, Play, Zap } from "lucide-react";
 import { TimelineGrid } from "./TimelineGrid";
@@ -102,6 +104,18 @@ export interface TimelineViewProps {
 
   /** Slot: the optimized-preview modal. See the header. */
   previewModal?: ReactNode;
+
+  /**
+   * Floor the grid at this many row pitches even when fewer layers exist;
+   * `undefined` = content height. Opt-in: the pixel timeline passes nothing,
+   * the brush rail passes 5 so a one-layer brush does not collapse the rail
+   * (docs/11-brush-studio-followups task 01). Applied as the
+   * `timeline-view--min-rows` modifier plus the `--timeline-min-rows` custom
+   * property, which `FrameTimeline.css` turns into a `min-height` on the
+   * scroll area. jsdom does not lay out, so tests assert the class and the
+   * property, never pixels.
+   */
+  minRows?: number;
 }
 
 export function TimelineView({
@@ -133,9 +147,20 @@ export function TimelineView({
   renderCell,
   renderEmptyCell,
   previewModal,
+  minRows,
 }: TimelineViewProps) {
   return (
-    <div className="timeline-view">
+    <div
+      className={classNames(
+        "timeline-view",
+        minRows ? "timeline-view--min-rows" : undefined,
+      )}
+      style={
+        minRows
+          ? ({ "--timeline-min-rows": minRows } as CSSProperties)
+          : undefined
+      }
+    >
       {/* Action bar */}
       <div className="frame-timeline__header-row">
         {viewModeDropdown}

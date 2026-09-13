@@ -1,0 +1,182 @@
+/* brush-library — BEM block (Brush Studio plan, task 13; MASTER D24).
+
+   The rail's brush-file list. Panel chrome (`panel`, `panel__header`,
+   `panel__body`) comes from styles/blocks/panel.css; the form buttons are
+   blocks/btn.css modifiers (btn--ghost / btn--primary). The header `+` and
+   the row geometry follow ObjectLibrary.css's measured values so the two
+   rails read as one family. Tokens only. */
+
+.brush-library {
+  flex-shrink: 0;
+}
+
+/* elements, DOM order */
+
+.brush-library__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brush-library__status {
+  font-size: var(--text-70);
+  font-weight: var(--weight-medium);
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-muted);
+}
+
+.brush-library__header-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-primary);
+  border: none;
+  color: var(--white);
+  cursor: pointer;
+}
+
+.brush-library__new-form {
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.brush-library__label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+}
+
+.brush-library__name-input {
+  width: 100%;
+}
+
+.brush-library__size-inputs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brush-library__size-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+}
+
+.brush-library__size-input {
+  width: 60px;
+  padding: var(--space-1-5) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.brush-library__size-separator {
+  color: var(--text-muted);
+}
+
+.brush-library__error {
+  padding: var(--space-1-5) var(--space-2);
+  background: var(--accent-danger-10);
+  border: 1px solid var(--accent-danger-30);
+  border-radius: var(--radius-sm);
+  color: var(--accent-danger);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.brush-library__form-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.brush-library__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.brush-library__item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.brush-library__item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.brush-library__item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.brush-library__thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.brush-library__thumb-canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.brush-library__name {
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.brush-library__size {
+  font-size: var(--text-70);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.brush-library__empty {
+  padding: var(--space-4);
+}
+
+/* modifiers */
+
+.brush-library__header-btn--active {
+  background: var(--accent-hover);
+}
+
+.brush-library__item.brush-library__item--current {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-10);
+}
+
+.brush-library--loading .brush-library__list {
+  opacity: 0.7;
+}

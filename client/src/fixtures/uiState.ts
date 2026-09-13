@@ -30,6 +30,7 @@ export function makeUIState(overrides: Partial<UIState> = {}): UIState {
     selectionBehavior: "movePixels",
     focusMode: false,
     lightGridMode: false,
+    pencilOnly: false,
     brushSize: 1,
     bitDepth: 8,
     shapeMode: "both",
@@ -85,6 +86,19 @@ export const uiStateLighting: UIState = makeUIState({
   selectedTool: "normal-pencil",
   lightingDataLayerEditMode: "normals",
   heightScale: 140,
+});
+
+/**
+ * Brush studio (brush-studio task 03). `studioMode: "brush"` is persisted in
+ * the project's `uiState` exactly like `"lighting"`; the selected tool is the
+ * pixel default because the brush studio shares the pixel tool table.
+ */
+export const uiStateBrushMode: UIState = makeUIState({
+  selectedObjectId: "obj-hero",
+  selectedFrameId: "obj-hero-frame-1",
+  selectedLayerId: "obj-hero-frame-1-layer-2",
+  studioMode: "brush",
+  selectedTool: "pixel",
 });
 
 /** Focus mode on: side and bottom panels hidden. */

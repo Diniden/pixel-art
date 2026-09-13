@@ -33,10 +33,14 @@
   height: 10px;
   border-radius: var(--radius-full);
   background: var(--save-dot-color);
-  /* The glow has to follow the STATE colour, so it comes from the same
-     per-state variable rather than a fixed token — one `--glow-*` token
-     could only ever match one of the three states. */
-  box-shadow: var(--save-dot-glow);
+  /* ⚠️ NO GLOW, ON ANY PLATFORM. Each state used to add its own coloured halo
+     here (`box-shadow: var(--save-dot-glow)`, one `--glow-*` token per state,
+     since a single token could not track the dot's colour). Removed
+     2026-08-31: "I want to see the glow around the save color state to be
+     removed on all platforms."
+
+     The dot now communicates purely through `--save-dot-color`, which is what
+     the three state rules below set and the only thing they set. */
   transition: background var(--transition-fast);
 }
 
@@ -48,24 +52,42 @@
    header — the user is asking "is my work safe", and both answer yes. */
 .save-status-dot__dot--ok {
   --save-dot-color: var(--accent-success);
-  --save-dot-glow: var(--glow-success-6);
 }
 
 .save-status-dot__dot--busy {
   --save-dot-color: var(--accent-warning);
-  --save-dot-glow: var(--glow-warning-6);
 }
 
 .save-status-dot__dot--error {
   --save-dot-color: var(--accent-danger);
-  --save-dot-glow: var(--glow-danger-6);
 }
 
-/* Only the busy state animates — a resting header must be still. */
-.save-status-dot__dot--pulsing::after {
-  animation: app-pulse 1s ease-in-out infinite;
-}
+/* ⚠️ NOTHING HERE MAY ANIMATE — THE DOT CHANGES COLOUR AND NOTHING ELSE.
 
+   The busy state used to run `animation: app-pulse 1s infinite` on the
+   `::after`. Removed 2026-08-31 at the owner's request: "remove the animation
+   of the save dot and just make it change colors without a pulse."
+
+   It is worth knowing WHY this is more than a style preference, because the
+   obvious way to bring a pulse back would reintroduce a real bug. This was the
+   only infinite animation that could run while the pixel canvas was on screen,
+   and an uncontained infinite animation makes the browser re-evaluate
+   compositing document-wide — the canvas is 1:1 with the pixel data and
+   magnified up to 200x by a CSS transform, so it came back bilinearly smoothed
+   for exactly as long as a save was in flight. Two rounds of fixes chased that
+   (`will-change: opacity` on the pseudo element, then `contain: layout paint`
+   plus `isolation: isolate` on the button); both are gone with the animation
+   they existed to contain, since there is now nothing to isolate.
+
+   If an animation is ever wanted here again, it needs its own containment —
+   and the fix belongs on THIS element, never on the canvas. Pinning
+   `.canvas__layout` with `will-change: transform` is the intuitive move and is
+   WRONG: it makes the canvas rasterise once at 1:1 and GPU-upscale that
+   bitmap, blurring permanently and worse the further you zoom. See the comment
+   on `.canvas__layout` in `CanvasSurface.css`.
+
+   The colour transition below is a `background` transition on a 10px dot, not
+   an animation: it runs once per state change and then stops. */
 /* The detail panel. Opened by CLICK, never hover: a hover tooltip is
    unreachable on the iPad this editor also runs on. */
 .save-status-dot__popover {

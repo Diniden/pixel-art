@@ -33,6 +33,7 @@ import {
 import { Dropdown } from "../../primitives/Dropdown/Dropdown";
 import { SaveStatusDot } from "../SaveStatusDot/SaveStatusDot";
 import { Icon } from "../../primitives/Icon/Icon";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { THEMES, type ThemeId } from "../../theme/themes";
 import {
   Diamond,
@@ -40,17 +41,16 @@ import {
   FolderOpen,
   ExternalLink,
   PenLine,
+  // The Pencil-only toggle. `Pencil` is the stylus-shaped glyph — the request
+  // was specifically "a pencil icon".
+  Pencil as PencilIcon,
   LayoutDashboard as LayoutIcon,
 } from "lucide-react";
 import "./Header.css";
 
 /** Save-state indicator. Mirrors `SaveStatus` without importing the store. */
 export type HeaderSaveStatus =
-  | "idle"
-  | "pending"
-  | "saving"
-  | "saved"
-  | "error";
+  "idle" | "pending" | "saving" | "saved" | "error";
 
 /** The theme registry, shaped for the Dropdown primitive. */
 const THEME_OPTIONS = THEMES.map((t) => ({ value: t.id, label: t.label }));
@@ -66,10 +66,29 @@ export interface HeaderProps {
   aiServiceUrl: string | null;
   /** Current project name, shown and renamed inline. */
   projectName: string;
-  /** All project names — used to reject a duplicate rename. */
+  /**
+   * Overrides `projectName` in the title / inline-rename UI when the header
+   * is standing over a document that is NOT the project (brush-studio task
+   * 19, MASTER D21): in brush mode the container passes the brush's name.
+   * `projectName` stays what it is — the export still names the project.
+   */
+  documentName?: string;
+  /**
+   * Names used to reject a duplicate rename — the project list, or the brush
+   * list when `documentName` is a brush. The container picks the right one.
+   */
   projectList: string[];
-  /** Commits a rename. Resolves false when the server refuses. */
+  /**
+   * Commits a rename of whatever `documentName ?? projectName` names.
+   * Resolves false when the server refuses.
+   */
   onRenameProject: (name: string) => Promise<boolean>;
+  /**
+   * Label of the document-switcher button — `"Projects"` by default,
+   * `"Brushes"` in brush mode (MASTER D21), where `projectModal` is the brush
+   * chooser. The button itself is the same element either way.
+   */
+  projectButtonLabel?: string;
 
   /** AI health, polled by the container. */
   aiHealthStatus: AiHealthStatus;
@@ -90,6 +109,23 @@ export interface HeaderProps {
   onThemeChange: (theme: ThemeId) => void;
 
   /**
+   * Pencil-only input (2026-08-31) — only an Apple Pencil may edit pixels.
+   *
+   * ⚠️ `showPencilOnly` GATES THE WHOLE CONTROL, and is false on a mouse-only
+   * desktop. The owner asked for "a button in the top bar to the left of the
+   * AI button" on the iPad; on a machine with no stylus the button would be
+   * dead furniture, and worse, switching it on there would disable drawing
+   * entirely (no contact ever reports as a stylus). The container decides —
+   * see `ui/utils/pointerDevice.ts`.
+   *
+   * `pencilOnly` arrives already resolved against the device default, so this
+   * component never sees the stored tri-state.
+   */
+  showPencilOnly: boolean;
+  pencilOnly: boolean;
+  onTogglePencilOnly: () => void;
+
+  /**
    * Layout mode — the scrim over each rail with its move/resize controls.
    * The button is a toggle and reads as pressed while the mode is on, so it
    * is obvious how to get back out of it.
@@ -100,7 +136,10 @@ export interface HeaderProps {
   /** Runs the export. Resolves with the path and kebab name on success. */
   onExport: () => Promise<{ path: string; kebabName: string }>;
 
-  /** `ProjectSelectModalContainer`, rendered when open. */
+  /**
+   * `ProjectSelectModalContainer` (or `BrushSelectModalContainer` in brush
+   * mode), rendered when open.
+   */
   projectModal: (props: { onClose: () => void }) => ReactNode;
   /** `BrowseBackupsModalContainer`, rendered when open. */
   backupsModal: (props: { onClose: () => void }) => ReactNode;
@@ -118,14 +157,19 @@ export function Header({
   saveSuspended,
   aiServiceUrl,
   projectName,
+  documentName,
   projectList,
   onRenameProject,
+  projectButtonLabel = "Projects",
   aiHealthStatus,
   aiHealthDetail,
   serverDefaultUrl,
   onSaveAiServiceUrl,
   theme,
   onThemeChange,
+  showPencilOnly,
+  pencilOnly,
+  onTogglePencilOnly,
   layoutMode,
   onToggleLayoutMode,
   onExport,
@@ -133,8 +177,10 @@ export function Header({
   backupsModal,
   exportPreviewModal,
 }: HeaderProps) {
+  // What the title shows and the inline rename edits — see `documentName`.
+  const displayName = documentName ?? projectName;
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(projectName);
+  const [editValue, setEditValue] = useState(displayName);
   const [error, setError] = useState<string | null>(null);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [exportStatus, setExportStatus] = useState<
@@ -148,10 +194,10 @@ export function Header({
   const [aiUrlInput, setAiUrlInput] = useState(aiServiceUrl || "");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Update editValue when projectName changes
+  // Update editValue when the displayed name changes
   useEffect(() => {
-    setEditValue(projectName);
-  }, [projectName]);
+    setEditValue(displayName);
+  }, [displayName]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -190,13 +236,13 @@ export function Header({
 
   const handleStartEdit = () => {
     setIsEditing(true);
-    setEditValue(projectName);
+    setEditValue(displayName);
     setError(null);
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditValue(projectName);
+    setEditValue(displayName);
     setError(null);
   };
 
@@ -204,7 +250,7 @@ export function Header({
     const trimmedName = editValue.trim();
 
     if (!trimmedName) {
-      setError("Project name cannot be empty");
+      setError("Name cannot be empty");
       return;
     }
 
@@ -213,7 +259,7 @@ export function Header({
       return;
     }
 
-    if (trimmedName === projectName) {
+    if (trimmedName === displayName) {
       setIsEditing(false);
       return;
     }
@@ -266,7 +312,7 @@ export function Header({
                 }}
                 onBlur={handleSaveEdit}
                 onKeyDown={handleKeyDown}
-                placeholder="Project name..."
+                placeholder="Name..."
               />
               {error && <span className="header__edit-error">{error}</span>}
             </div>
@@ -274,9 +320,9 @@ export function Header({
             <button
               className="header__project-btn"
               onClick={handleStartEdit}
-              title="Click to rename project"
+              title="Click to rename"
             >
-              <span className="header__project-name">{projectName}</span>
+              <span className="header__project-name">{displayName}</span>
               <span className="header__edit-hint">
                 <Icon icon={PenLine} size={12} />
               </span>
@@ -295,6 +341,31 @@ export function Header({
       </div>
 
       <div className="header__right">
+        {/* ⚠️ FIRST in `header__right`, i.e. to the LEFT of the AI button —
+            the position the owner asked for. Rendered only where a stylus is
+            possible; see `showPencilOnly` on the props. */}
+        {showPencilOnly ? (
+          <Tooltip
+            content={
+              pencilOnly
+                ? "Pencil only — a finger pans and zooms but does not draw"
+                : "Touch drawing — a finger draws as well as the Pencil"
+            }
+          >
+            <button
+              className={`header__pencil-btn ${
+                pencilOnly ? "header__pencil-btn--active" : ""
+              }`}
+              onClick={onTogglePencilOnly}
+              aria-pressed={pencilOnly}
+              aria-label="Pencil-only input"
+            >
+              <span className="header__pencil-icon">
+                <Icon icon={PencilIcon} size={14} />
+              </span>
+            </button>
+          </Tooltip>
+        ) : null}
         <AiConfigPopover
           isOpen={showAiConfig}
           onOpenChange={(open) => {
@@ -350,15 +421,19 @@ export function Header({
           </span>
           Backups
         </button>
+        {/* Labelled by the container: "Projects" over the pixel project,
+            "Brushes" over a brush document (MASTER D21). Same button, same
+            class, same modal slot — only the label and the injected modal
+            differ. */}
         <button
           className="header__switch-btn"
           onClick={() => setShowProjectModal(true)}
-          title="Switch Projects"
+          title={`Switch ${projectButtonLabel}`}
         >
           <span className="header__folder-icon">
             <Icon icon={FolderOpen} size={14} />
           </span>
-          Projects
+          {projectButtonLabel}
         </button>
         <button
           className="header__export-btn"

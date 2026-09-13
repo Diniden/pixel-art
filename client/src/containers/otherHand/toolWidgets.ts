@@ -38,6 +38,7 @@ const TOOL_TITLES: Partial<Record<Tool, string>> = {
   "normal-pencil": "Normal Brush",
   "auto-normal": "Auto Normal",
   "height-map": "Height Map",
+  brush: "Brush",
 };
 
 /** Which tool section is showing, what to call it, and what to put on it. */
@@ -57,6 +58,8 @@ export interface ToolSectionPlan {
 export function planToolSection(app: ApplicationStore): ToolSectionPlan {
   const { ui, lightingUI, referenceUI, selectionUI } = app;
   const tool = ui.tool;
+  // Exact match on purpose: "brush" intentionally takes the pixel branch below
+  // (the brush studio shares the pixel tool set — brush-studio task 03).
   const isLighting = lightingUI.studioMode === "lighting";
   const editMode = lightingUI.lightingDataLayerEditMode ?? "normals";
 
@@ -158,6 +161,39 @@ export function planToolSection(app: ApplicationStore): ToolSectionPlan {
         onClick: () => tool.setPencilBrushMax(opt),
       })),
     });
+
+    /* ── the ERASER's own size and max (plan 09, task 09) ────────────────
+     *
+     * The rail must match the panel: before this, `case "eraser"` pushed the
+     * SAME `sizeSlider()` the pencil uses — the pencil's size, bounded by the
+     * pencil's max — and got no Max row at all. Both are the interlacing the
+     * user reported.
+     *
+     * `effectiveEraserSize` / `effectiveEraserMax` have already applied the
+     * `?? brushSize` / `?? pencilBrushMax ?? 16` fallbacks, so a project that
+     * predates this reads exactly the numbers it read before.
+     */
+    const eraserMax = tool.effectiveEraserMax;
+    const eraserSizeSlider = (): ThumbWidgetSpec => ({
+      kind: "slider",
+      id: "size",
+      label: "Size",
+      value: Math.min(tool.effectiveEraserSize, eraserMax),
+      min: 1,
+      max: eraserMax,
+      onChange: (v) => tool.setEraserBrushSize(v),
+    });
+    const eraserMaxButtons = (): ThumbWidgetSpec => ({
+      kind: "buttons",
+      id: "max",
+      label: "Max",
+      buttons: ([8, 16, 32, 64, 128] as const).map((opt) => ({
+        id: String(opt),
+        label: String(opt),
+        active: eraserMax === opt,
+        onClick: () => tool.setEraserBrushMax(opt),
+      })),
+    });
     const shapeModeButtons = (): ThumbWidgetSpec => ({
       kind: "buttons",
       id: "mode",
@@ -187,11 +223,15 @@ export function planToolSection(app: ApplicationStore): ToolSectionPlan {
         );
         break;
       case "eraser":
+        // Same widget set as `"pixel"` above, in the same order — the user
+        // asked for "the exact same controls … but distinct values" — bound
+        // to the eraser's own size and max.
         widgets.push(
-          sizeSlider(),
+          eraserSizeSlider(),
           shapeButtons("shape", tool.eraserShape, (s) =>
             tool.setEraserShape(s),
           ),
+          eraserMaxButtons(),
         );
         break;
       case "fill-square":

@@ -132,6 +132,98 @@ describe("toolFootprint", () => {
     });
   });
 
+  describe("class 4 — the `brush` tool's INJECTED footprint (plan 12, task 05)", () => {
+    // A 3×3 brush painted at (0,0), (2,0), (1,1) — origin (1,1).
+    const OFFSETS = [
+      { dx: -1, dy: -1 },
+      { dx: 1, dy: -1 },
+      { dx: 0, dy: 0 },
+    ];
+
+    it("⭐ translates the offsets to the cursor cell", () => {
+      const cells = toolFootprint(
+        { x: 5, y: 7 },
+        { ...BASE, tool: "brush", pixelBrushOffsets: OFFSETS },
+      );
+      expect(cells).toEqual([
+        { x: 4, y: 6 },
+        { x: 6, y: 6 },
+        { x: 5, y: 7 },
+      ]);
+    });
+
+    it("clips the translated cells at the grid edge, keeping the rest", () => {
+      // At (0,0) the two `dy: -1` cells fall off the top; the origin stays.
+      const cells = toolFootprint(
+        { x: 0, y: 0 },
+        { ...BASE, tool: "brush", pixelBrushOffsets: OFFSETS },
+      );
+      expect(cells).toEqual([{ x: 0, y: 0 }]);
+      // And at the far corner the `dx: +1` cell falls off the right.
+      const far = toolFootprint(
+        { x: 15, y: 15 },
+        { ...BASE, tool: "brush", pixelBrushOffsets: OFFSETS },
+      );
+      expect(far).toEqual([
+        { x: 14, y: 14 },
+        { x: 15, y: 15 },
+      ]);
+    });
+
+    it("⭐ is EMPTY — not one cell — with no brush loaded (null / undefined)", () => {
+      // With no document a stroke writes nothing, so the marker must promise
+      // nothing. Class 3's one-cell answer would be a lie here.
+      expect(
+        toolFootprint(
+          { x: 8, y: 8 },
+          { ...BASE, tool: "brush", pixelBrushOffsets: null },
+        ),
+      ).toEqual([]);
+      expect(toolFootprint({ x: 8, y: 8 }, { ...BASE, tool: "brush" })).toEqual(
+        [],
+      );
+    });
+
+    it("an empty offsets list is an empty footprint, not a single cell", () => {
+      expect(
+        toolFootprint(
+          { x: 8, y: 8 },
+          { ...BASE, tool: "brush", pixelBrushOffsets: [] },
+        ),
+      ).toEqual([]);
+    });
+
+    it("ignores `brushSize` entirely — the stamp does not scale", () => {
+      const one = toolFootprint(
+        { x: 8, y: 8 },
+        { ...BASE, tool: "brush", brushSize: 1, pixelBrushOffsets: OFFSETS },
+      );
+      const nine = toolFootprint(
+        { x: 8, y: 8 },
+        { ...BASE, tool: "brush", brushSize: 9, pixelBrushOffsets: OFFSETS },
+      );
+      expect(nine).toEqual(one);
+    });
+
+    it("does not make `brush` a member of isBrushTool", () => {
+      // The predicate means "scales with brushSize"; the stamp is a fourth
+      // class, not a size-scaled one (MASTER D8).
+      expect(isBrushTool("brush")).toBe(false);
+    });
+
+    it.each(["pixel", "eraser", "fill-square", "flood-fill", "eyedropper"])(
+      "%s ignores pixelBrushOffsets",
+      (tool) => {
+        const without = toolFootprint({ x: 8, y: 8 }, { ...BASE, tool });
+        const withOffsets = toolFootprint(
+          { x: 8, y: 8 },
+          { ...BASE, tool, pixelBrushOffsets: OFFSETS },
+        );
+        expect(key(withOffsets)).toEqual(key(without));
+      },
+    );
+  });
+
   describe("bounds", () => {
     it("clips a brush that overhangs the grid edge", () => {
       const cells = toolFootprint(

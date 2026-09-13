@@ -148,8 +148,11 @@ describe("useCanvasPointer — device parity and the touch subset", () => {
     expect(mouse.setPixels.mock.calls).toEqual(touch.setPixels.mock.calls);
   });
 
-  it("touch does NOT dispatch the four mouse-only tools", () => {
-    for (const t of ["eyedropper", "selection", "origin", "reference-trace"]) {
+  it("touch does NOT dispatch the three remaining mouse-only tools", () => {
+    // ⚠️ THREE, NOT FOUR. `"selection"` was the fourth until plan 09 task 08
+    // gave it the touch gesture design this comment used to say it needed —
+    // see `selectionTouch.dom.test.tsx`. These three still have none.
+    for (const t of ["eyedropper", "origin", "reference-trace"]) {
       expect(canDispatchTool(t, "mouse")).toBe(true);
       // Preserved asymmetry, not a bug: the legacy touch handlers never
       // implemented these, and extending them needs its own gesture design.
@@ -211,5 +214,37 @@ describe("useCanvasPointer — gesture gating", () => {
     });
     expect(linePreview).toHaveBeenCalledWith({ x: 1, y: 1 }, { x: 9, y: 9 });
     expect(setPreviewPixels).toHaveBeenCalled();
+  });
+
+  /* ⚠️ REGRESSION (2026-09-01): line/rectangle/ellipse did nothing at all.
+     `beginStroke` used to bail on `if (!handler?.onDown) return false` BEFORE
+     calling `startDrawing`. The shape tools define only `onMove` — they preview
+     on drag and commit on release — so the gesture never opened for them, and
+     `continueStroke`'s `if (!isDrawing)` then rejected every move.
+
+     The test above cannot catch that: it injects `isDrawing: true` and a
+     `drawStartPoint` by hand, which is precisely the state `beginStroke` was
+     failing to produce. These drive the DOWN path instead, which is the half
+     that broke. */
+  for (const tool of ["line", "rectangle", "ellipse"]) {
+    it(`${tool} OPENS the gesture on pointer-down despite having no onDown`, () => {
+      const h = mount({ currentTool: tool, isDrawing: false });
+      let handled = false;
+      act(() => {
+        handled = h.result.current.beginStroke(4, 5, "mouse");
+      });
+      expect(handled).toBe(true);
+      expect(h.startDrawing).toHaveBeenCalledWith({ x: 4, y: 5 });
+    });
+  }
+
+  it("an unhandled tool still does NOT open a gesture", () => {
+    const h = mount({ currentTool: "not-a-real-tool", isDrawing: false });
+    let handled = true;
+    act(() => {
+      handled = h.result.current.beginStroke(1, 1, "mouse");
+    });
+    expect(handled).toBe(false);
+    expect(h.startDrawing).not.toHaveBeenCalled();
   });
 });

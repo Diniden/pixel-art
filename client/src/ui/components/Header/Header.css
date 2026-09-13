@@ -32,7 +32,6 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 0 8px var(--accent-primary-40));
 }
 
 .header__logo-text {
@@ -148,6 +147,49 @@
   gap: var(--space-3);
   flex: 1;
   justify-content: flex-end;
+}
+
+/* The Pencil-only toggle (2026-08-31), first in `header__right` — i.e. to the
+   LEFT of the AI button, which is where the owner asked for it.
+
+   Skinned as `header__layout-btn`: it is the header's other stateful toggle,
+   and two controls that both mean "a mode is on" must not read differently.
+   Icon-only, because the header is already dense and the state is carried by
+   the active styling plus the tooltip.
+
+   ⚠️ It is only RENDERED on a touch device (see `Header.tsx`), so these rules
+   simply never match on a desktop. */
+.header__pencil-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.header__pencil-btn:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+/* ON — the default on an iPad. Reads as pressed, exactly as
+   `header__layout-btn--active` does, so the mode is obvious at a glance and
+   so is the way back out of it. */
+.header__pencil-btn--active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+
+.header__pencil-icon {
+  display: flex;
+  align-items: center;
 }
 
 /* Theme dropdown beside the AI button. The trigger shows the fixed word

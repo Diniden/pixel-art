@@ -120,6 +120,133 @@ history live on `SessionStore` specifically so they **survive a project switch**
 cross-document lifetime is load-bearing and easy to destroy by "tidying" them into
 `UIStore`, which is project-scoped.
 
+### Brush documents
+
+The brush studio (`studioMode === "brush"`, plan `docs/01-brush-studio/`) edits a
+**brush document** — a separate file type, entirely independent of the pixel project's
+wire format and its migrations. It reuses the pixel studio's toolbar, tool handlers,
+`CanvasSurface` and `TimelineView`, but nothing about its data touches the project.
+
+- **Store members** on `ApplicationStore`: `app.brushes` (`BrushStore` — owns the
+  document and its list/load/create/rename/delete lifecycle), `app.brushStructure`
+  (frame and layer ops), `app.brushPixels` (cell writes, move, flips), `app.brushUI`
+  (selected frame/layer, the two delta slots, zoom/pan, playback — in-memory, never
+  persisted), `app.brushViews` (a second `CanvasViewsUIStore`: which panes are open, the
+  Layer pane's camera, the keyboard owner) and `app.brushAutoSave`. The structure and
+  pixel stores are behaviour modules over `brushes.document`, the same way the domain
+  sub-stores are over `DomainStore`.
+- **Document shape** (`client/src/types/brush.ts`):
+  `BrushDocument { version: "brush-1"; width; height; frames; appliedGroups }`.
+  Every `BrushLayer` carries a
+  `channelType` (`hsl | rgb | normal | heightmap`) and a `pixels: BrushCell[][]` grid
+  indexed `[y][x]`, where a cell is `0` (unpainted) or a 4-tuple of signed deltas in
+  −255..255, rendered colourised with 127 = zero delta (`brushCellToRgba`). The
+  in-memory shape **is** the wire shape (plain `JSON.stringify`) — no compact codec, no
+  migration chain. The file carries no name: the filename stem is the identity, as for
+  projects.
+- **Where files live:** `server/src/data/brushes/<name>.json`, written atomically with
+  `safeWriteFile`; the previous version is copied to
+  `server/src/data/brushes/.prev/<name>.json` before each overwrite (one deep, no
+  rotation, not part of the project backup snapshots). Routes: `GET /api/brushes`,
+  `GET | POST | DELETE /api/brush?name=`, `POST /api/brush/create | rename`
+  (`server/src/routes/brush.ts`), called only through
+  `client/src/api/resources/brushApi.ts`. Names go through `isValidProjectName`.
+- **The uniform-layer invariant:** every frame has the same layer ids in the same order.
+  `BrushStructureStore` runs `assertUniformLayers` on every changed document before it
+  is recorded — layers can be swapped, never ordered per frame. A file that violates it
+  fails `normalizeBrushDocument` and does not load.
+- **`document` is `observable.ref`, always.** Every mutation replaces the document
+  immutably (spine copy, touched rows only) and bumps `domainVersion` and/or
+  `pixelVersion`; the canvas and thumbnails redraw from those counters, exactly as the
+  pixel grids do in §5. Never `observable`, never `observer` over grid contents.
+- **Separate history:** `BrushStore` owns its own `HistoryStore`. `app.activeHistory` is
+  `brushes.history` in brush mode and the project `history` otherwise; `app.undo()`,
+  `app.redo()` and the toolbar route through it, so ⌘Z in the brush studio never touches
+  the project's undo stack. Commands live in `stores/history/brushCommands.ts`:
+  whole-document snapshots for structural ops, `{x, y, before, after}` inverse patches
+  for pixel writes, strokes wrapped in one transaction.
+- **Separate autosave:** `app.brushAutoSave` is a second `AutoSaveController<BrushDocument>`
+  (the controller is generic over a structural `AutoSaveDocument<TDoc>`), triggered by
+  `[loadGeneration, domainVersion, pixelVersion]` of `BrushStore` and saving through
+  `brushApi.save`. It shares `SessionStore` with the project controller — one
+  `saveStatus` dot and one `saveSuspended` flag serve both. A brush undo/redo bumps the
+  counters during replay, so it schedules a save of the restored document (accepted and
+  pinned by a test; the pixel project does not do this).
+- **Camera and panes** (plan `docs/11-brush-studio-followups/`): the brush canvas runs on
+  the same `ui/hooks/useCanvasViewport` engine as the pixel and lighting canvases —
+  `containers/brush/useBrushCamera.ts` is a thin adapter over it, and
+  `canvasTouchFilter` arbitrates Pencil against resting fingers exactly as in
+  `CanvasContainer`. `brushUI` **`implements CanvasCamera`** (`viewZoom`,
+  `setViewZoom(z, floor)`, `resetView`) and is the **Full** pane's camera;
+  `app.brushViews.layerCamera` is the **Layer** pane's. `brushUI.zoom` (integer px/cell)
+  is shared by both panes and no gesture changes it any more — pinch and wheel move only
+  `viewZoom`, so `combinedScale = zoom * viewZoom` is computed once in the adapter and
+  the backing store stays 1:1 with the cells (the fix for the measured blur: fractional
+  px/cell after a pinch). `BrushStudioContainer` renders `CanvasSplit` over
+  `brushViews.openModes`, one `<BrushCanvasContainer renderMode>` per pane; Layer mode
+  renders only the selected layer (`brushPaneScene`), keys are handled by the pane that
+  is `brushViews.keyboardOwner`, and the pane compositor and view-control builder live in
+  `containers/brush/brushPanes.ts` (`useBrushPaneRender`, `brushPaneControls`).
+- **Edge/fill deltas:** `brushUI` holds two slots — `selectedDelta` (edge, the original
+  name) and `fillDelta` — with `deltaTarget: "edge" | "fill"`, the computed
+  `activeDelta`, `setActiveDelta` / `setActiveDeltaChannel` / `resetActiveDelta`, and
+  `swapDeltas` (bound to `X` in brush mode by `GlobalHotkeys`; `BrushDeltaPicker` shows
+  the colour picker's Edge/Fill tabs and swap button). Neither slot is persisted or
+  undoable. The tool handlers never see a delta: `containers/brush/brushToolContext.ts`
+  hands them two sentinel colours, `DUMMY_TOOL_COLOR` (edge, `a: 255`) and
+  `DUMMY_FILL_COLOR` (fill, `a: 254`). Pencil, eraser, line and shape outlines emit the
+  edge sentinel; flood and gaussian fills emit the fill sentinel; and
+  `mapWritesToBrushCells(writes, edge, fill)` routes each write to a delta by sentinel
+  identity or its `a` byte (`0` erases). A `"both"` shape is split per pixel with
+  `getShapeOutlineKeys` (`shapeCommitCells`), and the preview is colourised by the same
+  routine, so it cannot disagree with the commit.
+- **Timeline floor:** `TimelineView` takes an opt-in `minRows` (root modifier
+  `timeline-view--min-rows` + CSS var `--timeline-min-rows`); `BrushTimelineContainer`
+  passes 5 so the brush rail is five rows tall even with one layer. The pixel studio
+  does not pass it.
+- **Brush tool (pixel studio)** (plan `docs/12-pixel-brush-tool/`): the pixel studio's
+  `"brush"` `Tool` member (hotkey `B`, toolbar row after the Eraser, `Paintbrush` icon)
+  stamps the brush document open in the Brush Studio onto the pixel canvas. The pure
+  core is `ui/canvas/tools/pixelBrushStamp.ts`. The **footprint** is every painted cell
+  of every visible layer of the brush's current frame (`brushUI.selectedFrameIn(doc)`:
+  the selected frame, else `frames[0]`), as offsets from the origin
+  `(floor(w/2), floor(h/2))` — it is both the hover marker and the set of cells a press
+  writes, so the two cannot disagree. **Settling** starts from the selected edge colour
+  and applies every visible layer's signed delta bottom → top: `rgb` layers add in RGB
+  space, `hsl` layers shift hue / saturation / lightness in HSL space through
+  `ui/utils/colorMath` (±255 ↔ ±360° / ±100 %; the constants
+  `PIXEL_BRUSH_HUE_PER_DELTA` and `PIXEL_BRUSH_PERCENT_PER_DELTA` live only there),
+  both shift alpha, and `normal` / `heightmap` layers count for the footprint but not
+  the colour. Deltas are read raw (`cell[i]`), never through the display-only
+  `brushCellToRgba`, which halves them. A drag rasterises each segment with the
+  injected `LineFn` and stamps at every step, last write wins per cell, through the
+  same `actions.setPixels` funnel as every other tool (so the selection mask and
+  reflection mirroring apply for free), one undo entry per drag.
+  `containers/pixelBrush/usePixelBrush.ts` is the container-tier hook: it calls
+  `app.brushes.init()` from an effect while the tool is selected (a fresh pixel-mode
+  load never visits the Brush Studio), memoises the footprint on
+  `[document, selectedFrameId, pixelVersion, domainVersion]` and the stamp on the
+  footprint plus the four base-colour scalars, and reads the grids inside the memos —
+  never observed, and never at pointer rate, because `getToolContext` lists the stamp
+  as a dependency. The two seams are optional so `containers/brush/brushToolContext.ts`
+  compiles untouched: `ToolContext.pixelBrushStamp` (`toolHandlers.ts`) and
+  `FootprintOptions.pixelBrushOffsets` (`toolFootprint.ts`, a fourth footprint class —
+  injected cells; `isBrushTool` is unchanged). The rail's "Brush" section
+  (`PixelStudioPanel`'s grouped `pixelBrush?: PixelStudioBrushInfo` prop, fed by
+  `PixelStudioPanelContainer`) names the loaded brush, its size, frame and layer count,
+  or offers "Open Brush Studio"; the colour picker below it stays unconditional. In the
+  Brush Studio the tool is hidden (`BRUSH_HIDDEN_TOOLS`) and inert
+  (`BRUSH_INERT_TOOLS`) — a brush cannot stamp itself — and `setStudioMode` still
+  resets the tool to `"pixel"`. Nothing new is persisted: `selectedTool` already
+  round-trips as a string, and no codec, migration or export path was touched.
+- **Files:** pure UI in `ui/components/Brush{Library,LayerPanel,DeltaPicker,SelectModal}/`
+  and `ui/layouts/BrushStudioLayout/`; containers are `containers/Brush*Container.tsx`;
+  the canvas container's store-free helpers live in `containers/brush/`
+  (`brushToolContext` maps each `ToolPixelWrite` sentinel colour to the edge or fill
+  delta, `brushFill`, `brushSelection`, `brushPanes`, and the
+  `useBrush{PointerHandlers,Selection,Hover,Camera}` hooks lifted out to keep the
+  container under `max-lines`).
+
 ---
 
 ## 4. Server structure
@@ -254,3 +381,4 @@ done.
 | What exactly does task N do?                | `REFRESH/NN-*.md`                   |
 | Why was X decided that way?                 | `REFRESH/OPEN-QUESTIONS.md`         |
 | What was measured, and how?                 | `REFRESH-PREP/findings/` (8 audits) |
+| How does the brush studio work, and why?    | `docs/01-brush-studio/MASTER.md`    |

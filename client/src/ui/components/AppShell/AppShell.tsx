@@ -121,6 +121,40 @@ export interface AppShellProps {
     Record<"left" | "right" | "bottom" | "toolbar", ReactNode>
   >;
   /**
+   * The layout-mode scrim for the CANVAS AREA — the layout picker.
+   *
+   * ⚠️ Deliberately NOT a fifth entry in `railOverlays`. That record is keyed
+   * by RAIL, and the canvas is not a rail: it has no slot, no scale and no
+   * placement of its own. Widening the key union would let a caller write
+   * `railOverlays.canvas` and then find that `renderSide` and the footer have
+   * nothing to do with it — a key that is legal to set and silently ignored.
+   * A separate prop cannot be mis-set that way.
+   *
+   * Like the rail scrims, it is `position: absolute` against a region that is
+   * already positioned, so it tracks that region through every rail
+   * arrangement with no measurement.
+   *
+   * ⚠️ That region is `app__canvas-stack`, NOT `app__canvas-area`. The area
+   * also holds the toolbar dock; a scrim filling it would cover the toolbar
+   * and its layout overlay (owner, 2026-08-30). See the render site.
+   */
+  canvasOverlay?: ReactNode;
+  /**
+   * The dismiss (×) button for one rail, by rail NAME.
+   *
+   * Injected as elements for the same reason the scrims are: `AppShell` is
+   * `ui/` and cannot know whether a rail is dismissable or what pressing the
+   * button should do. Absent entries render nothing, which is how a build
+   * without the feature — and every story — is unaffected.
+   *
+   * ⚠️ Rendered as a SIBLING of the rail's panel viewport, and it takes over
+   * that rail's canvas-facing BORDER — the shell suppresses its own 1px rule
+   * on any edge that has one (`--has-handle`), or the two would stack into a
+   * double line. A rail that is not rendered gets no handle, which is
+   * correct: there is nothing to hide.
+   */
+  railDismiss?: Partial<Record<"left" | "right" | "bottom", ReactNode>>;
+  /**
    * Ref for the canvas area — `FloatingPanel` needs it as its drag bounds.
    *
    * `RefObject<HTMLElement | null>` rather than the spec's
@@ -141,6 +175,8 @@ export function AppShell({
   children,
   layout = DEFAULT_RAIL_LAYOUT,
   railOverlays,
+  canvasOverlay,
+  railDismiss,
   canvasAreaRef,
 }: AppShellProps) {
   /** The content each rail NAME carries. A missing entry is focus mode. */
@@ -168,6 +204,11 @@ export function AppShell({
             "app__side-panel--open",
             `app__side-panel--at-${side}`,
             `app__side-panel--scale-${layout[rail].scale}`,
+            // ⚠️ Suppresses this rail's own inner border, because the handle
+            // supplies a thicker one in its place. Keyed off the handle
+            // actually being rendered, so a caller that passes none keeps the
+            // historical border exactly.
+            railDismiss?.[rail] != null && "app__side-panel--has-handle",
           )}
         >
           {/* ⚠️ TWO elements, and the split is load-bearing (see the CSS).
@@ -180,6 +221,11 @@ export function AppShell({
           <div className="app__panel-viewport">
             <div className="app__panel-scroll">{content[rail]}</div>
           </div>
+          {/* ⚠️ OUTSIDE the viewport, and before the scrim. Outside, so the
+              scaled panel contents do not scale the button too; before, so
+              layout mode's overlay covers it — a rail must not be
+              dismissable from under its own layout scrim. */}
+          {railDismiss?.[rail]}
           {railOverlays?.[rail]}
         </aside>
       ));
@@ -190,6 +236,7 @@ export function AppShell({
         "app__bottom",
         `app__bottom--at-${layout.bottom.edge}`,
         `app__bottom--scale-${layout.bottom.scale}`,
+        railDismiss?.bottom != null && "app__bottom--has-handle",
       )}
     >
       {/* ⚠️ The scaled contents live in their OWN wrapper, so the transform
@@ -197,6 +244,7 @@ export function AppShell({
           would no longer cover the rail it is dimming. The side rails get
           this for free: their scrim is a sibling of the panel viewport. */}
       <div className="app__bottom-scale">{bottomPanel}</div>
+      {railDismiss?.bottom}
       {railOverlays?.bottom}
     </footer>
   ) : null;
@@ -252,7 +300,19 @@ export function AppShell({
               1280px and squeezed the canvas to ZERO width. The wrapper keeps
               them in their own column and lets only the dock share the
               canvas area's axis. */}
-          <div className="app__canvas-stack">{children}</div>
+          {/* ⚠️ The picker lives INSIDE the canvas stack, NOT beside it in
+              the canvas area. The area also contains the toolbar dock, so a
+              scrim spanning the area covers the TOOLBAR — including the
+              toolbar's own layout overlay, which is the one control layout
+              mode most needs reachable. The stack is precisely the canvas
+              area minus the dock, on every one of the four toolbar edges,
+              because the dock is the area's other flex child. */}
+          <div className="app__canvas-stack">
+            {children}
+            {/* Last child, so it stacks over the canvas and its floating
+                panels without either needing to know it exists. */}
+            {canvasOverlay}
+          </div>
         </main>
 
         {renderSide("right")}

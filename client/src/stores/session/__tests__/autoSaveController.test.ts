@@ -8,11 +8,18 @@
  * and the end-to-end zero-POST gate by `autoSaveGate.test.ts`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { observable, runInAction } from "mobx";
+import { makeObservable, observable, runInAction } from "mobx";
 
 import { ApiError } from "@/api";
-import { DomainStore, type ProjectHost } from "@/stores/domain/DomainStore";
-import { AutoSaveController } from "@/stores/session/AutoSaveController";
+import {
+  DomainStore,
+  type LoadState,
+  type ProjectHost,
+} from "@/stores/domain/DomainStore";
+import {
+  AutoSaveController,
+  type AutoSaveDocument,
+} from "@/stores/session/AutoSaveController";
 import { SessionStore } from "@/stores/session/SessionStore";
 import { tinyProject } from "@/store/__tests__/storeContract";
 import type { CompactProject, Project } from "@/types";
@@ -519,5 +526,104 @@ describe("dispose", () => {
     rig.controller.dispose();
     vi.advanceTimersByTime(10_000);
     expect(rig.save).not.toHaveBeenCalled();
+  });
+});
+
+/* ── generic document (brush-studio 05) ─────────────────────────────────── */
+
+/**
+ * The controller is generic over `AutoSaveDocument<TDoc>` so task 11 can run
+ * a SECOND instance over the brush store. Everything below is proven against
+ * a document that is NOT a `DomainStore`: the same gate, debounce and status
+ * writes, with the injected transport receiving the document's own payload
+ * and its `saveName`.
+ */
+describe("generic document", () => {
+  interface HelloDoc {
+    hello: string;
+  }
+
+  /** A minimal MobX document — the four observable counters and a payload. */
+  class FakeBrushDocument implements AutoSaveDocument<HelloDoc> {
+    loadState: LoadState;
+    loadGeneration = 1;
+    domainVersion = 0;
+    pixelVersion = 0;
+    saveName = "brush-name";
+    hello = "world";
+
+    constructor(loadState: LoadState) {
+      this.loadState = loadState;
+      makeObservable(this, {
+        loadState: observable,
+        loadGeneration: observable,
+        domainVersion: observable,
+        pixelVersion: observable,
+        saveName: observable,
+      });
+    }
+
+    serialize(): HelloDoc | null {
+      return { hello: this.hello };
+    }
+  }
+
+  function genericRig(loadState: LoadState = "loaded") {
+    const doc = new FakeBrushDocument(loadState);
+    const session = new SessionStore();
+    const save = vi.fn(async (payload: HelloDoc, name?: string) => ({
+      hello: payload.hello,
+      name,
+    }));
+    const controller = new AutoSaveController<HelloDoc>(doc, session, null, {
+      save,
+    });
+    return {
+      doc,
+      session,
+      save,
+      controller,
+      dispose: () => controller.dispose(),
+    };
+  }
+
+  it("saves a non-DomainStore document with its own payload and saveName", async () => {
+    const r = genericRig();
+    expect(r.save).not.toHaveBeenCalled();
+
+    runInAction(() => {
+      r.doc.pixelVersion += 1;
+    });
+    expect(r.session.saveStatus).toBe("pending"); // same status writes
+    vi.advanceTimersByTime(AutoSaveController.DEBOUNCE_MS);
+    expect(r.save).toHaveBeenCalledTimes(1);
+    expect(r.save).toHaveBeenCalledWith({ hello: "world" }, "brush-name");
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(r.session.saveStatus).toBe("saved");
+    r.dispose();
+  });
+
+  it("a `loading` document never saves, however the counters move", () => {
+    const r = genericRig("loading");
+    runInAction(() => {
+      r.doc.pixelVersion += 1;
+      r.doc.domainVersion += 1;
+    });
+    vi.advanceTimersByTime(60_000);
+    expect(r.save).not.toHaveBeenCalled();
+    expect(r.session.saveStatus).toBe("idle");
+    r.dispose();
+  });
+
+  it("an empty saveName is passed as undefined, like an unnamed project", () => {
+    const r = genericRig();
+    runInAction(() => {
+      r.doc.saveName = "";
+      r.doc.domainVersion += 1;
+    });
+    vi.advanceTimersByTime(AutoSaveController.DEBOUNCE_MS);
+    expect(r.save).toHaveBeenCalledWith({ hello: "world" }, undefined);
+    r.dispose();
   });
 });

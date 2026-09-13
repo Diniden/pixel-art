@@ -33,16 +33,47 @@ import type { ReactNode } from "react";
 import { classNames } from "../../classNames";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { Icon } from "../../primitives/Icon/Icon";
-import { Maximize2, Sun, Moon, Film, Palette, Lightbulb } from "lucide-react";
+import {
+  Maximize2,
+  Sun,
+  Moon,
+  Film,
+  Palette,
+  Lightbulb,
+  Brush,
+} from "lucide-react";
+import type { StudioMode } from "../../../types";
 import "./Toolbar.css";
 
+/**
+ * The three studio buttons, in display order. Each mode carries its own
+ * `--<mode>` modifier so the active tint is per-mode CSS, not an
+ * `[aria-label=…]` attribute selector (brush-studio task 03).
+ */
+const STUDIO_MODES: ReadonlyArray<{
+  id: StudioMode;
+  label: string;
+  icon: typeof Palette;
+}> = [
+  { id: "pixel", label: "Pixel Studio", icon: Palette },
+  { id: "lighting", label: "Lighting Studio", icon: Lightbulb },
+  { id: "brush", label: "Brush Studio", icon: Brush },
+];
+
 interface ToolbarProps {
-  /** `uiState.studioMode === "lighting"` */
-  isLightingMode: boolean;
+  /** `uiState.studioMode` — which of the three studios is showing. */
+  studioMode: StudioMode;
+  /**
+   * Whether the focus button reads as ENGAGED — i.e. anything is hidden.
+   *
+   * ⚠️ Not "focus mode is on": a rail dismissed by its own × engages it too
+   * (owner, 2026-08-30), because this button is the way rails come back. The
+   * container passes the derived `focusModeEngaged`.
+   */
   isFocusMode: boolean;
   isLightGrid: boolean;
   isFrameReferenceVisible: boolean;
-  onSetStudioMode: (mode: "pixel" | "lighting") => void;
+  onSetStudioMode: (mode: StudioMode) => void;
   onToggleFocusMode: () => void;
   onToggleLightGridMode: () => void;
   onToggleFrameReferencePanelVisible: () => void;
@@ -68,8 +99,32 @@ interface ToolbarProps {
   spread?: 1 | 2 | 3;
 }
 
+/**
+ * Which tool group a studio shows. Exhaustive on purpose: a fourth mode must
+ * be routed here explicitly rather than falling through to the pixel tools.
+ * `"brush"` shares the pixel tool table (MASTER §1 interpretation, D19).
+ */
+function toolsForStudio(
+  mode: StudioMode,
+  pixelStudioTools: ReactNode,
+  lightingStudioTools: ReactNode,
+): ReactNode {
+  switch (mode) {
+    case "pixel":
+      return pixelStudioTools;
+    case "lighting":
+      return lightingStudioTools;
+    case "brush":
+      return pixelStudioTools;
+    default: {
+      const _exhaustive: never = mode;
+      return _exhaustive;
+    }
+  }
+}
+
 export function Toolbar({
-  isLightingMode,
+  studioMode,
   isFocusMode,
   isLightGrid,
   isFrameReferenceVisible,
@@ -97,11 +152,18 @@ export function Toolbar({
       {/* Focus Mode Toggle */}
       <div className="toolbar__section toolbar__section--focus-mode">
         <div className="toolbar__group">
-          <Tooltip content="Focus Mode (`)">
+          {/* ⚠️ The label names what pressing it DOES, and the two are not
+              opposites: engaged, it restores every hidden rail (including
+              individually dismissed ones); un-engaged, it hides the two rails
+              focus mode has always hidden. */}
+          <Tooltip
+            content={isFocusMode ? "Show all panels (`)" : "Focus Mode (`)"}
+          >
             <button
               className={`toolbar__tool-btn ${isFocusMode ? "toolbar__tool-btn--active" : ""}`}
               onClick={onToggleFocusMode}
-              aria-label="Focus Mode"
+              aria-label={isFocusMode ? "Show all panels" : "Focus Mode"}
+              aria-pressed={isFocusMode}
             >
               <span className="toolbar__tool-icon">
                 <Icon icon={Maximize2} />
@@ -124,7 +186,9 @@ export function Toolbar({
               </span>
             </button>
           </Tooltip>
-          {!isLightingMode && (
+          {/* The frame-reference panel belongs to the PIXEL studio only —
+              exact match, so a new mode does not inherit it by accident. */}
+          {studioMode === "pixel" && (
             <Tooltip
               content={
                 isFrameReferenceVisible
@@ -151,35 +215,31 @@ export function Toolbar({
       {/* Studio Mode Toggle */}
       <div className="toolbar__section toolbar__section--studio-mode">
         <div className="toolbar__studio-mode-toggle">
-          <Tooltip content="Pixel Studio">
-            <button
-              className={`toolbar__studio-mode-btn ${!isLightingMode ? "toolbar__studio-mode-btn--active" : ""}`}
-              onClick={() => onSetStudioMode("pixel")}
-              aria-label="Pixel Studio"
-            >
-              <span className="toolbar__tool-icon">
-                <Icon icon={Palette} />
-              </span>
-            </button>
-          </Tooltip>
-          <Tooltip content="Lighting Studio">
-            <button
-              className={`toolbar__studio-mode-btn ${isLightingMode ? "toolbar__studio-mode-btn--active" : ""}`}
-              onClick={() => onSetStudioMode("lighting")}
-              aria-label="Lighting Studio"
-            >
-              <span className="toolbar__tool-icon">
-                <Icon icon={Lightbulb} />
-              </span>
-            </button>
-          </Tooltip>
+          {STUDIO_MODES.map(({ id, label, icon }) => (
+            <Tooltip key={id} content={label}>
+              <button
+                className={classNames(
+                  "toolbar__studio-mode-btn",
+                  `toolbar__studio-mode-btn--${id}`,
+                  studioMode === id && "toolbar__studio-mode-btn--active",
+                )}
+                onClick={() => onSetStudioMode(id)}
+                aria-label={label}
+                aria-pressed={studioMode === id}
+              >
+                <span className="toolbar__tool-icon">
+                  <Icon icon={icon} />
+                </span>
+              </button>
+            </Tooltip>
+          ))}
         </div>
       </div>
 
       <div className="toolbar__divider" />
 
       {/* Conditional Tools based on Studio Mode */}
-      {isLightingMode ? lightingStudioTools : pixelStudioTools}
+      {toolsForStudio(studioMode, pixelStudioTools, lightingStudioTools)}
     </div>
   );
 }

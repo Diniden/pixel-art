@@ -1,5 +1,5 @@
 /**
- * The tool dispatch table — one entry per member of the 16-tool union.
+ * The tool dispatch table — one entry per member of the 18-tool union.
  *
  * ## What this replaces
  *
@@ -32,9 +32,18 @@
  * sampler takes precedence over the selected tool entirely, which is why the
  * legacy handlers tested `isReferenceTraceActive` before reading `currentTool`.
  * `normal-pencil`, `auto-normal` and `height-map` belong to the lighting studio
- * (`LightingCanvas.tsx`) and never reach this surface. All four are present with
- * explicit no-op entries so the `Record<Tool, ...>` is exhaustive and adding a
- * 17th tool is a type error rather than a silent gap.
+ * (`LightingCanvas.tsx`) and never reach this surface.
+ *
+ * `origin`, `reflection` and `pose` are GESTURE tools: `CanvasContainer`
+ * arbitrates their pointer gestures ahead of this table, so a gesture never
+ * opens a history stroke or writes a pixel through a handler. `pose` in
+ * particular is a 3D reference overlay — its drag pans the model and its
+ * double-click stamps the rendered texels through a store action of its own
+ * (`docs/06-pose-tool/`), neither of which is a pointer-tool effect.
+ *
+ * All of them are present with explicit no-op entries so the
+ * `Record<Tool, ...>` is exhaustive and adding a 19th tool is a type error
+ * rather than a silent gap.
  */
 
 import { stampAt, stampSegment } from "./brushStamp";
@@ -44,6 +53,8 @@ import type {
   StampColor,
   StampPoint,
 } from "./brushStamp";
+import { stampPixelBrushSegment } from "./pixelBrushStamp";
+import type { PixelBrushStamp } from "./pixelBrushStamp";
 // Type-only: a string union, erased at build time. Used solely by the
 // exhaustiveness gate at the bottom of this file.
 import type { Tool as DomainTool } from "../../../types/domain";
@@ -83,6 +94,15 @@ export interface ToolContext {
   eraserShapeFn: BrushShapeFn;
   /** Line rasteriser used to bridge drag segments. */
   line: LineFn;
+  /**
+   * The pixel-studio Brush tool's resolved stamp (docs/12-pixel-brush-tool,
+   * task 05): the open brush document's footprint with a settled colour per
+   * cell for the current base colour. Resolved by the container once per
+   * (document, frame, base colour), never per event. `null` / absent = no
+   * brush loaded, and a `brush` stroke writes nothing. OPTIONAL so the brush
+   * studio's own `buildBrushToolContext` compiles untouched (MASTER D8).
+   */
+  pixelBrushStamp?: PixelBrushStamp | null;
 
   /* — shape-tool settings — */
   shapeMode: string;
@@ -254,6 +274,8 @@ export const toolHandlers = {
   origin: {},
   // arbitrated by `CanvasContainer`, like `origin` — see docs/03-reflection-tool/07
   reflection: {},
+  // arbitrated by `CanvasContainer`, like `reflection` — see docs/06-pose-tool/01
+  pose: {},
 
   // A mode, not a pointer tool — see the module comment.
   "reference-trace": {},
@@ -262,6 +284,38 @@ export const toolHandlers = {
   "normal-pencil": {},
   "auto-normal": {},
   "height-map": {},
+
+  // The pixel-studio Brush tool (docs/12-pixel-brush-tool, MASTER D7): the
+  // same press/drag shape as the pencil, but the cells and their colours come
+  // from the pre-resolved stamp rather than a shape generator. With no stamp
+  // the stroke still opens (one empty undo entry, exactly like a pencil that
+  // paints nothing) and writes nothing. `ctx` satisfies `StampBounds` through
+  // `gridWidth` / `gridHeight`.
+  brush: {
+    onDown: (e, ctx) => {
+      ctx.beginStroke();
+      const stamp = ctx.pixelBrushStamp ?? null;
+      if (stamp) {
+        const w = stampPixelBrushSegment(null, e.coords, ctx.line, stamp, ctx);
+        if (w.length > 0) ctx.setPixels(w);
+      }
+      ctx.setLastStrokePixel(e.coords);
+    },
+    onMove: (e, ctx) => {
+      const stamp = ctx.pixelBrushStamp ?? null;
+      if (stamp) {
+        const w = stampPixelBrushSegment(
+          ctx.lastStrokePixel,
+          e.coords,
+          ctx.line,
+          stamp,
+          ctx,
+        );
+        if (w.length > 0) ctx.setPixels(w);
+      }
+      ctx.setLastStrokePixel(e.coords);
+    },
+  },
 } satisfies Record<string, ToolHandler>;
 
 /** The tool names this table serves. */

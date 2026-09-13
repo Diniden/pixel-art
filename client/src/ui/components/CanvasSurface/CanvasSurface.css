@@ -50,6 +50,26 @@
     var(--bg-primary);
 }
 
+/* ⚠️ DO NOT ADD `will-change: transform` OR ANY OTHER LAYER-PROMOTION HINT HERE.
+
+   Tried 2026-08-30 to fix "everything blurs while saving", and it made the
+   blur PERMANENT and zoom-dependent. Recording why, because it is the
+   intuitive fix and someone will reach for it again.
+
+   This element carries `scale(combinedScale)`. Promoting it to its own
+   compositing layer makes the browser rasterise the whole subtree ONCE at
+   1:1 and then GPU-scale that single bitmap — bilinearly. The children's
+   `image-rendering: pixelated` never gets a say, because they no longer
+   rasterise themselves; they are texels in the parent's texture. The higher
+   the zoom, the more that one low-resolution bitmap is stretched, which is
+   why the symptom was "gets blurrier the more you zoom in".
+
+   Leaving this element unpromoted lets each `<canvas>` rasterise at its own
+   scale, where `image-rendering: pixelated` decides the filter. That is what
+   made the artwork sharp before any of this, and it is what keeps it sharp.
+
+   The save-time blur has the SAME root cause and is fixed on the save
+   indicator instead — see `SaveStatusDot.css`. */
 .canvas__layout {
   position: relative;
   transition: none;
@@ -62,18 +82,299 @@
   position: relative;
 }
 
+/* ⚠️ NO BORDER, NO RADIUS, NO SHADOW — AND NOTHING MAY COMPENSATE FOR ONE.
+
+   Reported 2026-08-31: "the edit area has bizarre weird borders around it. I
+   don't want borders or chrome on the edit area". This element used to carry
+   `border: 2px solid var(--border-accent)`, `border-radius: var(--radius-sm)`
+   and `box-shadow: var(--shadow-canvas)` — and that shadow is three effects,
+   not one: a 1px dark ring, a large drop shadow, and a 40px accent glow. Read
+   together around the artwork they are the "weird borders".
+
+   Removing them is a FIVE-ELEMENT change, not a one-line one. `.canvas__
+   background`, `.canvas__layers`, `.canvas__svg` and `.canvas__overlay` are
+   absolutely positioned at this element's border-box origin, and each used to
+   carry `border: 2px solid transparent` PURELY to step over the 2px border
+   that lived here. With this border gone, any surviving compensation offsets
+   that overlay by 2px — the artwork, the grid, the marching ants and the
+   hover marker each pointing at a different seam between pixels. All four
+   were removed in the same change. If a border is ever reintroduced here, it
+   is reintroduced there too, or the canvas silently goes out of register. */
+/* ⚠️ POSITIONED, AND THAT IS LOAD-BEARING — DO NOT MAKE THIS STATIC AGAIN.
+   This element was `position: static` with no z-index, while `.canvas__layers`
+   beside it is `position: absolute`. CSS paints positioned elements ABOVE
+   in-flow ones regardless of source order, so the layer canvases painted OVER
+   the pointer surface and buried everything `renderChrome` draws into it —
+   the in-flight shape preview most visibly, which read as rendering
+   underneath the artwork (owner report, 2026-09-01).
+
+   The stack comment in `CanvasSurface.tsx` says "DOM order IS z-order here".
+   That is true only AMONG THE POSITIONED SIBLINGS; this element was the one
+   exception and silently sat below them all. Giving it the same
+   `--z-canvas-overlay` its siblings carry puts it back in that single
+   comparison, where source order decides — above the layers, below the
+   overlays that follow it.
+
+   ⚠️ `relative`, NOT `absolute`. This canvas is the only IN-FLOW element in
+   `.canvas__frame`, and the frame has no size of its own — every sibling is
+   absolutely positioned at its origin, so it is THIS element's layout box that
+   gives the frame its width and height (and, through it, the pan/zoom
+   transform its extent). Taking it out of flow collapses the frame to 0×0 and
+   the whole editor with it. `relative` makes the element positioned — which is
+   all the z-index needs — while leaving its box in flow, and with no offsets
+   it does not move by a pixel, so the register with the layer canvases the
+   note below cares about is untouched. */
 .canvas__surface {
+  position: relative;
+  z-index: var(--z-canvas-overlay);
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border: 2px solid var(--border-accent);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-canvas);
   cursor: crosshair;
 }
 
 .canvas__surface:active {
   cursor: crosshair;
+}
+
+/* The checkerboard background (plan 05, task 06, decision D11).
+
+   ⚠️ WHAT THIS REPLACED. An offscreen `<canvas>` in `CanvasContainer` that
+   allocated a `cellWidth x cellHeight` `ImageData`, wrote the base colour to
+   EVERY pixel, then wrote each cell's block, cached the bitmap under a
+   `bgCacheKey`, and `drawImage`-blitted it into a layer canvas on every
+   repaint. It is now one compositor-drawn element with no raster of its own.
+
+   ── The checkerboard ──────────────────────────────────────────────────
+   A `conic-gradient` on a `2px 2px` tile, which is TWO CELLS square because
+   this element lives inside `.canvas__layout` and one CSS pixel here is one
+   grid cell (the same 1:1 model the layer canvases use).
+
+   The quadrant order is load-bearing. `conic-gradient` starts at 12 o'clock
+   and sweeps clockwise, so 0-25% is the top-RIGHT quadrant, 25-50% the
+   bottom-right, 50-75% the bottom-left and 75-100% the top-left. Writing
+   B, A, B, A therefore puts A at tile-local (0,0) and (1,1) and B at (1,0)
+   and (0,1) — i.e. A wherever `(x + y)` is EVEN, which is exactly the rule
+   `paintCheckerboard` used (`color1` on even parity).
+
+   `background-color` under it is the base fill `paintCheckerboard` wrote
+   across the whole buffer first. It shows only where the gradient does not
+   reach, which after the sizing below is nowhere — it is kept because the
+   raster version kept it, and because a fractional `cellWidth` would expose
+   a seam otherwise.
+
+   ── ⚠️ `image-rendering: pixelated` IS LOAD-BEARING ──────────────────────
+   The tile is 2px and the transform on `.canvas__layout` magnifies it by up
+   to 200x (`zoom` up to 50 times `viewZoom` up to 4). With default smoothing
+   a 2px pattern at 50x is a flat grey wash — the exact silent failure mode
+   the raster grid had. Both spellings are kept for the same reason the layer
+   canvases keep them: `crisp-edges` is Firefox's, and the later declaration
+   wins where both are understood. DO NOT REMOVE EITHER.
+
+   ── ⚠️ PARITY IS SET INLINE, NOT HERE ────────────────────────────────────
+   `background-position` comes from `CanvasSurface`'s `checkerParity` prop.
+   `paintCheckerboard` chose a square's colour from
+   `(offsetX + px + offsetY + py) % 2` — WORLD cells — so a variant view
+   scrolled an odd number of cells keeps its object-space phase. On a 2px
+   tile a 1px `background-position` shift IS that parity flip. There is no
+   default here on purpose: a value in this file would silently win over an
+   absent prop and invert every odd-offset variant.
+
+   ── z-index ──────────────────────────────────────────────────────────────
+   `var(--z-behind)` — the EXISTING token, documented in `tokens.css` for
+   "decorative ::before / bg grids", which is this exact slot. No new number:
+   a new z-index is both redundant and a stylelint error.
+
+   ── placement ────────────────────────────────────────────────────────────
+   The same absolute origin as `.canvas__layers` and `.canvas__overlay`, and
+   NO border. This element carried `2px solid transparent` until 2026-08-31,
+   purely to step over `.canvas__surface`'s visible 2px one; that border is
+   gone (see the `.canvas__surface` note above) and so is this compensation.
+   A 2px drift here puts the checker squares out of register with the artwork
+   sitting on top of them, and the misalignment reads as a rendering bug
+   rather than as a border. If a border ever returns to that surface, it
+   returns here too.
+
+   ⚠️ THE GRID IS NOT DRAWN HERE. It is SVG (`.canvas__svg-grid`), where
+   `vector-effect: non-scaling-stroke` keeps the hairline one SCREEN pixel at
+   every zoom. Adding grid lines to this element would draw it TWICE. */
+.canvas__background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: var(--z-behind);
+  background-color: var(--canvas-bg-base);
+  background-image: conic-gradient(
+    var(--canvas-bg-b) 0 25%,
+    var(--canvas-bg-a) 0 50%,
+    var(--canvas-bg-b) 0 75%,
+    var(--canvas-bg-a) 0
+  );
+  background-size: 2px 2px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* `lightGridMode` — the per-project toggle, NOT the UI theme.
+
+   It swaps the three checker colours and nothing else. Expressed as a
+   modifier class rather than a `data-` attribute so it composes with the
+   block above by the ordinary cascade, and so the JS `BackgroundTheme` never
+   has to cross the `ui/` boundary (D11).
+
+   ⚠️ Tri-state on the store side: `ViewportUIStore.lightGridMode` is
+   `boolean | undefined`, where `undefined` means "absent from the project
+   file". The container collapses it with `?? false` at the read site, as it
+   always has, and only the resulting boolean reaches this stylesheet. The
+   undefined is never persisted as `false`. */
+.canvas__background--light {
+  background-color: var(--canvas-bg-base-light);
+  background-image: conic-gradient(
+    var(--canvas-bg-b-light) 0 25%,
+    var(--canvas-bg-a-light) 0 50%,
+    var(--canvas-bg-b-light) 0 75%,
+    var(--canvas-bg-a-light) 0
+  );
+}
+
+/* The per-layer canvas stack (plan 05, task 04, decision D3).
+
+   One 1:1 `<canvas>` per layer lives in here, bottom → top in DOM order, and
+   the whole wrapper sits BELOW every overlay — again by source order, not by
+   z-index. `CanvasSurface` mounts it as the first child of `.canvas__frame`,
+   so it stacks under `.canvas__surface` (the pointer surface) and under all
+   the `.canvas__overlay` siblings that follow.
+
+   The placement is `.canvas__overlay`'s, and like it this element carries NO
+   border. It held `2px solid transparent` until 2026-08-31 to compensate for
+   `.canvas__surface`'s visible 2px one, which is now gone. That alignment is
+   not cosmetic: a 2px drift puts a layer's artwork out of register with the
+   pointer surface that maps clicks to cells, so strokes land on the seam
+   between the wrong pixels. If a border ever returns to that surface, it
+   returns here too.
+
+   No z-index. `.canvas__layers` has no `z-index` of its own on purpose — it
+   participates in normal source order beneath the overlays, which all share
+   `var(--z-canvas-overlay)`. Giving it a number would be redundant at best
+   and would invert the stack at worst.
+
+   ⚠️ The claim above that this "stacks under `.canvas__surface`" was FALSE
+   until 2026-09-01 and is only true now. This element is positioned and that
+   one was not, so paint order put the layers on top and hid the chrome drawn
+   into the pointer surface. `.canvas__surface` now carries
+   `position: relative` + `--z-canvas-overlay` for exactly that reason; see its
+   rule. If either changes, this sentence goes back to being a lie. */
+.canvas__layers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+/* One layer's 1:1 canvas.
+
+   Stacked on top of each other inside `.canvas__layers`, so each is absolutely
+   positioned at the wrapper's origin. Neither the wrapper nor `.canvas__
+   surface` has a border any more, so there is nothing to compensate for and
+   nothing to repeat here.
+
+   ⚠️ `image-rendering: pixelated` is LOAD-BEARING here, not belt-and-braces.
+   The backing store is `cellWidth x cellHeight` — one device pixel per sprite
+   pixel — and all magnification is the CSS transform on `.canvas__layout`.
+   Without this the browser bilinearly smooths a 24x32 bitmap up to 50x and
+   the artwork is a blur. Do not remove it. `crisp-edges` follows as the
+   Firefox spelling; the later declaration wins where both are understood. */
+.canvas__layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* The SVG chrome: grid, brush/hover outlines, lasso, marching ants, origin
+   cross and reflection guides (plan 05, decision D5).
+
+   Mounted LAST inside `.canvas__frame`, so it sits above every raster overlay
+   — source order again, and for the same reason the reflection canvas used
+   to: chrome that says where the next stroke lands is useless if a
+   semi-transparent onion skin can cover it.
+
+   Same absolute placement as `.canvas__overlay`, and like it no border — the
+   `2px solid transparent` both carried to clear `.canvas__surface`'s visible
+   one went with that border on 2026-08-31. Alignment matters here in the
+   sharper version of the usual way: these are VECTORS at one user unit per
+   cell, so a 2px offset points every grid line and every marching ant at the
+   wrong seam between pixels.
+
+   `pointer-events: none` is doubled with an inline style, exactly as the
+   overlay canvases do it — the editable surface is the only element that may
+   take input, and an SVG stacked above everything would otherwise swallow
+   every stroke.
+
+   ⚠️ The `z-index` is the EXISTING `var(--z-canvas-overlay)`, the same one
+   every `.canvas__overlay` carries — NOT a new or higher number. It has to be
+   present rather than absent: without it this element would sit below the
+   overlay canvases despite coming after them, because a positioned element
+   with no z-index loses to one with `20`. With the SAME value the later
+   sibling wins, which is exactly the rule the `--reflection` comment below
+   spells out. A HIGHER number here would be both redundant and a stylelint
+   error, and there is no new token.
+
+   No `image-rendering`: it is meaningless on vector content. The vector
+   equivalent is `shape-rendering`, set below.
+
+   ── ⚠️ `shape-rendering: crispEdges` — NO ANTIALIASING ON CELL-ALIGNED CHROME
+   Reported 2026-08-30: "blurry edges all the time ... these all should be
+   using no antialiasing and have smoothing turned off". SVG antialiases by
+   default, so the brush outline, hover outline, lasso and marching ants — all
+   axis-aligned rectangles sitting exactly on cell boundaries — were drawn with
+   soft grey half-covered pixels on every edge. On pixel art that reads as
+   blur, not as smoothing.
+
+   `crispEdges` turns antialiasing off and snaps edges to device pixels. The
+   grid already carried it as its own attribute; putting it on the parent
+   covers every cell-aligned overlay at once, including any added later.
+
+   Two children opt BACK IN below, deliberately — they are the only chrome that
+   is not cell-aligned. */
+.canvas__svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: var(--z-canvas-overlay);
+  shape-rendering: crispEdges;
+}
+
+/* ⚠️ THE TWO EXCEPTIONS — these MUST antialias.
+
+   `crispEdges` on a diagonal or counter-scaled shape does not sharpen it, it
+   makes it jagged: the renderer snaps each edge to whole device pixels, and a
+   line that is not axis-aligned becomes a visible staircase.
+
+   The origin cross lives inside a `1/combinedScale` group, so its arms and its
+   circle are sub-pixel geometry in the parent's space — a circle in particular
+   is nothing but curves. The reflection guides are drawn at arbitrary angles.
+   Neither sits on a cell boundary, so neither is what the "no antialiasing"
+   report was about; both want the default.
+
+   ⚠️ THE MARCHING ANTS JOINED THEM, and for the same reason as the cross even
+   though they ARE axis-aligned. Their stroke width is counter-scaled by
+   `1/combinedScale` (see `ScreenWidthPath`) to hold it at one SCREEN pixel, so
+   in this element's user space it is a FRACTION of a cell — sub-pixel geometry
+   exactly like the cross's arms. `crispEdges` snaps edges to whole device
+   pixels, which rounds that hairline to zero (invisible) or back up to a whole
+   cell (the bug it was counter-scaled to fix). The 2026-08-30 blur report was
+   about cell-WIDE chrome with soft edges; a deliberate one-screen-pixel line
+   is not that. */
+.canvas__svg-origin,
+.canvas__svg-guide,
+.canvas__svg-ants {
+  shape-rendering: geometricPrecision;
 }
 
 /* Reference trace overlay canvases */
@@ -84,8 +385,6 @@
   pointer-events: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border: 2px solid transparent;
-  border-radius: var(--radius-sm);
   z-index: var(--z-canvas-overlay);
 }
 
@@ -97,12 +396,58 @@
 
    The `canvas__overlay--hover` modifier deliberately carries NO declarations
    of its own, so there is no rule for it here. Every property the marker
-   needs — the absolute placement, the pixelated scaling, the z-index, and the
-   2px transparent border that compensates for `.canvas__surface`'s visible
-   2px one — comes from `.canvas__overlay` above, and must keep coming from
-   there: if that surface border ever changes, the marker has to move WITH the
-   trace overlays rather than drifting 2px away from them. The class exists to
-   identify the marker canvas in the DOM and in tests. */
+   needs — the absolute placement, the pixelated scaling and the z-index —
+   comes from `.canvas__overlay` above, and must keep coming from there: if a
+   border is ever reintroduced anywhere in this stack, the marker has to move
+   WITH the trace overlays rather than drifting 2px away from them. The class
+   exists to identify the marker canvas in the DOM and in tests. */
+
+/* The pose tool's 3D reference render (plan 06, D10).
+
+   Like `--hover` and `--reflection`, the `canvas__overlay--pose` modifier
+   carries NO declarations of its own, and deliberately so — there is no rule
+   for it here and there should not be one. Absolute placement, `pointer-events:
+   none`, the pixelated scaling and the z-index all come from `.canvas__overlay`
+   above, and they must keep coming from there. The class exists to identify the
+   canvas in the DOM and in tests.
+
+   ⚠️ `image-rendering: pixelated` is the load-bearing inherited property for
+   THIS overlay in particular. The whole feature is "render at the artwork's own
+   resolution and let the CSS transform magnify it": the offscreen WebGL target
+   is `cellWidth x cellHeight`, one texel per art pixel, and the blit is a
+   straight `putImageData`. If this canvas ever smoothed on the upscale the
+   reference would come out as a soft 3D render floating over hard-edged pixel
+   art — which is precisely the thing the pipeline was designed not to produce.
+   Do not add a local `image-rendering` to "make sure"; inherit it, so that a
+   change to the base rule can never leave this overlay behind.
+
+   ⚠️ It sits BELOW the reflection guides and the SVG chrome, and ABOVE every
+   layer and trace overlay, and that is SOURCE ORDER, not a z-index —
+   `CanvasSurface` mounts it immediately before the reflection canvas. All the
+   overlays share `var(--z-canvas-overlay)`, so the later sibling wins. Reaching
+   for a numeric z-index here would be both redundant and a stylelint error.
+
+   ⚠️ No `will-change: transform`, here or anywhere in this stack. Promotion
+   makes the subtree rasterise at 1:1 and then GPU-bilinear-scale, defeating
+   `pixelated` — a documented past regression (see the `.canvas__layout` note
+   above). A raster overlay repainted at pointer rate is exactly the element
+   someone will be tempted to promote. Do not. */
+
+/* The reflection tool's animated guide lines.
+
+   Like `--hover` above, the `canvas__overlay--reflection` modifier carries NO
+   declarations of its own, and DELIBERATELY so — there is no rule for it here
+   and there should not be one. Absolute placement, pixelated scaling and the
+   z-index all come from `.canvas__overlay`, and they must keep coming from
+   there: a guide that drifts 2px from the artwork points at the wrong seam
+   between pixels, which is the one thing this overlay exists to get right.
+
+   ⚠️ The guides sit above every other overlay, and that is SOURCE ORDER, not a
+   z-index. `CanvasSurface` mounts this canvas last inside `.canvas__frame`;
+   all the overlays share `var(--z-canvas-overlay)`, so the later sibling wins.
+   Reaching for a higher numeric z-index here would be both redundant and a
+   stylelint error. The class exists to identify the canvas in the DOM and in
+   tests. */
 
 /* Touch-friendly adjustments */
 @media (pointer: coarse) {

@@ -296,6 +296,7 @@ export function buildRichProject(): Project {
       selectionBehavior: "movePixels",
       focusMode: false,
       lightGridMode: true,
+      pencilOnly: true,
       brushSize: 3,
       bitDepth: 16,
       shapeMode: "outline",

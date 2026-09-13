@@ -8,12 +8,12 @@
  * It was 296 lines fusing five responsibilities. Where each went:
  *
  *   the shell markup       → `ui/components/AppShell`         (pure)
- *   the two studio pages   → `ui/layouts/{Pixel,Lighting}StudioLayout` (pure)
+ *   the studio pages       → `ui/layouts/{Pixel,Lighting,Brush}StudioLayout` (pure)
  *   the boot/error screen  → `ui/layouts/LoadingLayout`        (pure)
  *   the window hotkeys     → `containers/GlobalHotkeys`
  *   the reference-image
  *     cache + restore      → `containers/PixelStudioContainer`
- *   the region wiring      → `containers/{Pixel,Lighting}StudioContainer`
+ *   the region wiring      → `containers/{Pixel,Lighting,Brush}StudioContainer`
  *   the boot lifecycle     → **this file, all four lines of it**
  *
  * ══════════════════════════════════════════════════════════════════════════
@@ -64,7 +64,33 @@ import { LoadingLayout } from "../ui/layouts/LoadingLayout/LoadingLayout";
 import { GlobalHotkeys } from "./GlobalHotkeys";
 import { PixelStudioContainer } from "./PixelStudioContainer";
 import { LightingStudioContainer } from "./LightingStudioContainer";
+import { BrushStudioContainer } from "./BrushStudioContainer";
 import { useStores } from "../stores/context";
+import type { StudioMode } from "../types";
+
+/**
+ * Route the studio mode to its page. EXHAUSTIVE on purpose (brush-studio
+ * task 03): the previous `=== "lighting" ? … : …` ternary would have shown
+ * the pixel studio for any new mode without anyone noticing. The `never`
+ * guard makes a fourth mode a compile error here.
+ *
+ * `"brush"` is a real studio since task 19 (`BrushStudioContainer`); the
+ * placeholder task 03 left here, with its Back button, is gone.
+ */
+function renderStudio(mode: StudioMode) {
+  switch (mode) {
+    case "pixel":
+      return <PixelStudioContainer />;
+    case "lighting":
+      return <LightingStudioContainer />;
+    case "brush":
+      return <BrushStudioContainer />;
+    default: {
+      const _exhaustive: never = mode;
+      return _exhaustive;
+    }
+  }
+}
 
 export const AppContainer = observer(function AppContainer() {
   const { domain, lightingUI } = useStores();
@@ -100,11 +126,7 @@ export const AppContainer = observer(function AppContainer() {
   return (
     <>
       <GlobalHotkeys />
-      {lightingUI.studioMode === "lighting" ? (
-        <LightingStudioContainer />
-      ) : (
-        <PixelStudioContainer />
-      )}
+      {renderStudio(lightingUI.studioMode)}
     </>
   );
 });

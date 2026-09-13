@@ -112,8 +112,13 @@ import { LightingUIStore } from "./LightingUIStore";
 import { ToolUIStore } from "./ToolUIStore";
 import { ViewportUIStore } from "./ViewportUIStore";
 import { LayoutUIStore } from "./LayoutUIStore";
+import {
+  needsHiddenRailsKey,
+  serializeHiddenRails,
+} from "../../ui/layout/railVisibility";
 import type { SessionStore } from "../session/SessionStore";
 import type { ReferenceUIStore } from "./ReferenceUIStore";
+import type { PoseUIStore } from "./PoseUIStore";
 
 /**
  * The lighting/studio fields in their COMPACT (packed) form.
@@ -220,6 +225,21 @@ export interface UIStoreDeps {
    * lets `UIStore` construct it.
    */
   layout?: LayoutUIStore;
+  /**
+   * Plan 08 task 08: the pose store, injected for its **one persisted field**
+   * — `posePresets`.
+   *
+   * ⚠️ **Injected rather than constructed, and that is not the `layout`
+   * pattern.** `ApplicationStore` already owns an `app.pose` (it wires the
+   * `loadGeneration` → `clear()` reaction to it) and the whole app reads that
+   * one, so constructing a second here would give the builder a store nobody
+   * writes to and the presets would silently never be saved. It is OPTIONAL
+   * for the same reason `lighting` and `reference` are: the task-24 wire-format
+   * suites build a bare `UIStore`, and with none supplied the builder falls
+   * back to {@link UIStore.ownPosePresets} — which keeps those suites, the R3
+   * gate over the owner's 151 snapshots, byte-unmodified.
+   */
+  pose?: PoseUIStore;
 }
 
 export class UIStore {
@@ -287,6 +307,28 @@ export class UIStore {
   readonly referenceUI: ReferenceUIStore | null;
 
   /**
+   * Plan 08: the pose store, or `null` in the task-24 suites. Read by the
+   * builder for `posePresets` and by `hydrate` — nothing else here touches
+   * the pose, which stays session-only apart from that one field.
+   */
+  readonly poseUI: PoseUIStore | null;
+
+  /**
+   * The task-24-suite fallback for `posePresets`, mirroring
+   * {@link UIStore.lighting} and {@link UIStore.ownTraceNudgeAmount}.
+   *
+   * ⚠️ It exists so the R3 wire-format suites — the gate that reruns the
+   * owner's 151 real snapshots through this builder — can populate and read
+   * the field without constructing a `PoseUIStore` they otherwise have no use
+   * for. When a real pose store IS injected there is exactly one storage
+   * location (R6): the accessors below delegate and this stays untouched.
+   *
+   * `observableRef` and replaced wholesale, exactly like the store's own.
+   */
+  /** @internal Not `private`: MobX's `AnnotationsMap` cannot name a private field. */
+  ownPosePresets: import("../../types").PersistedPosePreset[] = [];
+
+  /**
    * Bumped by a reaction over every persisted field. `AutoSaveController`
    * adds it to its trigger tuple — **a missed bump is silent data loss**, so
    * `persistedUIVersion.test.ts` asserts both directions: every persisted
@@ -304,9 +346,11 @@ export class UIStore {
     this.lightingUI = deps.lighting ?? null;
     this.referenceUI = deps.reference ?? null;
     this.layout = deps.layout ?? new LayoutUIStore();
+    this.poseUI = deps.pose ?? null;
 
     makeObservable(this, {
       lighting: observableRef,
+      ownPosePresets: observableRef,
       ownTraceNudgeAmount: observable,
       persistedUIVersion: observable,
       persistedSignature: computedStruct,
@@ -425,10 +469,20 @@ export class UIStore {
     // `borderRadius` is conditional: only 26 of the corpus's 151 snapshots
     // carry the key, because `compactToProject` has no `?? default` for it.
     /* 32 */ assign(persisted, "borderRadius", tool.borderRadius);
+    /* 32a */ // `fillColor` is conditional for the same reason: the key does
+    // not exist in any project predating the edge/fill split, and emitting it
+    // unconditionally would add a key to all 151 corpus snapshots. It appears
+    // only once the user picks a fill colour.
+    assign(
+      persisted,
+      "fillColor",
+      tool.fillColor === undefined ? undefined : rgbaToHex(tool.fillColor),
+    );
     // `gaussianFill` is conditional: projects predating the bucket options
     // have no such key, and the legacy spread does not invent one.
     /* 33 */ assign(persisted, "gaussianFill", tool.gaussianFill);
     /* 34 */ assign(persisted, "lightGridMode", viewport.lightGridMode);
+    /* 34a */ assign(persisted, "pencilOnly", viewport.pencilOnly);
     /* 35 */ assign(
       persisted,
       "layerSelectionCounter",
@@ -497,6 +551,34 @@ export class UIStore {
       this.layout.toPersistedRailLayouts(),
     );
     /* 46 */ assign(persisted, "theme", this.layout.theme ?? undefined);
+    // Conditional for the same reason as the two above: `layoutPresets` is
+    // `{}` until the user saves a layout of their own, so an untouched
+    // project writes no such key and the corpus digests are unchanged.
+    /* 46b */ assign(
+      persisted,
+      "layoutPresets",
+      this.layout.toPersistedLayoutPresets(),
+    );
+    // ⚠️ CONDITIONAL, AND THIS ONE IS THE PLAN-08 DATA-SAFETY LINE (F13).
+    //
+    // `posePresets` is the pose store's ONE persisted field — everything else
+    // about the pose (mesh, rotation, scale, pan, light, outline) is
+    // deliberately session-only (MASTER D6). `toPersistedPosePresets()`
+    // returns `undefined` until the owner has actually saved a scene, so
+    // `assign` writes nothing and a project nobody has saved a pose preset in
+    // gains NO KEY — which is what leaves the owner's 151 backup snapshots
+    // byte-identical.
+    //
+    // ⚠️ NEVER write this as `posePresets: <expr>` in the unconditional block
+    // above, and never as `posePresets: undefined`. Measured while adding
+    // `fillColor`: the `key: undefined` form still adds the key — to
+    // `Object.keys()` and to the corpus digest — and changed all 11 digests.
+    // The conditional form left every snapshot byte-identical.
+    //
+    // No migration accompanies this key and none is needed (F14): absent is
+    // handled by `?? default` on read, and the wire type is optional in both
+    // directions.
+    /* 46c */ assign(persisted, "posePresets", this.toPersistedPosePresets());
     // Conditional for the same reason as the two above: a project that has
     // never been pinch/wheel-zoomed must not gain the key.
     /* 47 */ assign(persisted, "viewZoom", viewport.viewZoom);
@@ -505,10 +587,73 @@ export class UIStore {
     // field stays `undefined` until `setEyedropperMode` runs, so `assign`
     // writes nothing and the corpus digests are untouched.
     /* 48 */ assign(persisted, "eyedropperMode", tool.eyedropperMode);
+    // ── The eraser's own size and max (plan 09, task 09) ─────────────────
+    //
+    // ⚠️ CONDITIONAL, AND FOR THE SAME REASON AS SLOTS 45-46 AND 48, WHICH
+    // MUST NOT BE WEAKENED: neither key is emitted until the user changes
+    // something. Both store fields are `undefined` until `setEraserBrushSize`
+    // or `setEraserBrushMax` runs — nothing writes them incidentally, and in
+    // particular `setBrushSize` does not — so `assign` writes nothing for a
+    // project whose owner has never touched the eraser's controls, and the
+    // 151 corpus digests are unchanged. `eraserBrush.test.ts` asserts exactly
+    // that: an untouched store emits NEITHER key.
+    //
+    // ⚠️ NEVER move these into the unconditional 1-31 block, and never write
+    // them as `eraserBrushSize: <expr>`. The `key: undefined` form still adds
+    // the key — to `Object.keys()` and to the corpus digest — as was measured
+    // while adding `fillColor`, where it changed all 11 digests.
+    //
+    // `brushSize` (slot 9) stays UNCONDITIONAL and is NOT replaced by these:
+    // it is part of the frozen key set, and it now carries specifically the
+    // PENCIL's size. An existing project's saved `brushSize` is therefore the
+    // pencil's, and the eraser inherits it through
+    // `ToolUIStore.effectiveEraserSize` — the `?? brushSize` fallback IS the
+    // migration, so no migration accompanies these keys and none is needed.
+    /* 50 */ assign(persisted, "eraserBrushSize", tool.eraserBrushSize);
+    /* 51 */ assign(persisted, "eraserBrushMax", tool.eraserBrushMax);
+    // ⚠️ CONDITIONAL, AND THE CONDITION IS NOT "anything is hidden".
+    //
+    // MEASURED 2026-08-30, against the real corpus: `backup-02-08-2026.json
+    // ::Base Unit-15-16-07.json` carries `focusMode: true`. Hydrating that
+    // expands the legacy boolean into the two rails it has always meant, so
+    // "is anything hidden" is TRUE for a file the user has never touched with
+    // this feature — and emitting on that added `hiddenRails` to one of the
+    // owner's real snapshots. The corpus gate caught it.
+    //
+    // The key is therefore emitted only when the hidden set says something
+    // `focusMode` ALONE CANNOT: the right rail is hidden (focus mode never
+    // touches it), or exactly one of the two classic rails is. Whenever the
+    // set is precisely what `focusMode` already encodes — empty, or both
+    // classic rails — slot 8 carries the whole truth and this key stays out
+    // of the file.
+    //
+    // `focusMode` (slot 8) is still emitted UNCONDITIONALLY above and is NOT
+    // replaced by this: it is part of the frozen key set.
+    /* 49 */ assign(
+      persisted,
+      "hiddenRails",
+      needsHiddenRailsKey(viewport.hiddenRails)
+        ? serializeHiddenRails(viewport.hiddenRails)
+        : undefined,
+    );
 
     // See the TYPE-vs-REALITY note above: `borderRadius` is declared required
     // but is genuinely absent from most real projects.
     return persisted as CompactUIState;
+  }
+
+  /**
+   * `posePresets` for the builder — `undefined` until one is saved (F13).
+   *
+   * Delegates to the injected pose store when there is one, which is always
+   * in the app; the fallback field serves the task-24 suites only. Exactly
+   * the {@link UIStore.traceNudgeAmount} shape: one storage location at
+   * runtime, so the two can never disagree (R6).
+   */
+  private toPersistedPosePresets():
+    import("../../types").PersistedPosePreset[] | undefined {
+    if (this.poseUI) return this.poseUI.toPersistedPosePresets();
+    return this.ownPosePresets.length > 0 ? this.ownPosePresets : undefined;
   }
 
   /**
@@ -520,6 +665,16 @@ export class UIStore {
     this.tool.hydrate(ui);
     this.viewport.hydrate(ui);
     this.layout.hydrate(ui);
+    // Plan 08: the pose's ONE persisted field. Assigned UNCONDITIONALLY by
+    // `hydratePosePresets`, so "absent stays absent" survives a project
+    // switch and one project's presets can never be written into another's
+    // file. ⚠️ The live pose is NOT hydrated here and must not be — it stays
+    // session-only (MASTER D6).
+    if (this.poseUI) {
+      this.poseUI.hydratePosePresets(ui);
+    } else {
+      this.ownPosePresets = ui.posePresets ?? [];
+    }
     // Task 29: routes through the accessor into `ReferenceUIStore` when one is
     // injected, so a loaded project hydrates the single owner.
     this.traceNudgeAmount = ui.traceNudgeAmount ?? 10;
@@ -551,9 +706,20 @@ export class UIStore {
     this.lightingUI?.hydrate(ui);
   }
 
-  /** Storybook/Vitest teardown. */
+  /**
+   * Storybook/Vitest teardown.
+   *
+   * ⚠️ `this.layout.dispose()` is R10 (plan 09 task 10, applied in task 11).
+   * `LayoutUIStore` binds an orientation listener to the shared `window`; its
+   * disposer was built and tested but had NO caller, so under React 19
+   * StrictMode's double mount the first, discarded store's listener survived
+   * and the rotation handler double-fired. Task 10 owns `LayoutUIStore.ts`
+   * but not this file, so it recorded the missing line rather than editing
+   * here. This is that line.
+   */
   dispose(): void {
     this.disposeVersionReaction();
+    this.layout.dispose();
   }
 }
 

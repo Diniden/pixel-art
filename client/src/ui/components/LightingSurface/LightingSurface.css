@@ -20,8 +20,8 @@
    same reason.
 
    ⚠️ CONTROLS GO IN `__viewport`, NEVER IN `.lighting-canvas__surface` —
-   `__surface` carries the pan/zoom `transform` (`will-change: transform`
-   below), so anything inside it is panned and scaled with the sprite. A
+   `__surface` carries the pan/zoom `transform`, so anything inside it is
+   panned and scaled with the sprite. A
    control that rescues a lost view must not be draggable off-screen by the
    gesture that lost it. */
 
@@ -63,8 +63,21 @@
   touch-action: none;
 }
 
+/* ⚠️ DO NOT ADD `will-change: transform` OR ANY OTHER LAYER-PROMOTION HINT.
+
+   This element carries `scale(combinedScale)`. Promoting it to its own
+   compositing layer makes the browser rasterise the subtree ONCE at 1:1 and
+   then GPU-scale that single bitmap bilinearly — the child canvases'
+   `image-rendering: pixelated` never gets a say, because they stop
+   rasterising themselves and become texels in the parent's texture. The blur
+   then grows with zoom.
+
+   It DID carry `will-change: transform`, from before plan 05 — harmless when
+   this element was sized `viewCells * zoom` (the bitmap was already at final
+   resolution), but a permanent blur once task 08 made these canvases 1:1 and
+   moved magnification to the transform. Removed 2026-08-31 with the matching
+   one on `.canvas__layout`; see that file for the full diagnosis. */
 .lighting-canvas__surface {
-  will-change: transform;
   width: 100%;
   height: 100%;
 }
@@ -77,20 +90,96 @@
   min-height: 100%;
 }
 
+/* ⚠️ `image-rendering: pixelated` IS LOAD-BEARING, NOT DECORATIVE (task 08).
+   This canvas is 1:1 with the pixel data and is magnified by a CSS
+   `scale(zoom * viewZoom)` that reaches 200x. Without this declaration the
+   browser smooths the upscale and a crisp normal map becomes a blurry mess.
+   Never remove it. The `crisp-edges` line below is the Firefox fallback and
+   must stay paired with it. Same for `.lighting-canvas__overlay`. */
+/* ⚠️ NO BORDER, NO RADIUS, NO SHADOW — the same rule `.canvas__frame` carries
+   in `CanvasSurface.css`, and for the same reason.
+
+   Reported 2026-08-31 against the pixel studio: "the edit area has bizarre
+   weird borders around it. I don't want borders or chrome on the edit area".
+   That change stripped the border, radius and shadow from `.canvas__frame`
+   and the four compensating `2px solid transparent` borders beneath it — but
+   it never reached this sheet, so the lighting studio kept a rounded corner
+   and an inset ring around its artwork while the pixel studio had none.
+   Reported again 2026-09-08: the chrome must be the SAME across studio types,
+   which means absent in both.
+
+   Unlike `.canvas__frame` this is a one-element change: nothing in this sheet
+   ever carried a compensating border, because the radius and shadow here were
+   drawn INSIDE the element's box and displaced nothing. `.lighting-canvas__
+   overlay` and the SVG chrome are positioned at this element's border-box
+   origin and stay in register. If chrome is ever reintroduced here, it has to
+   be reintroduced in `CanvasSurface.css` too, or the two studios diverge
+   again. */
 .lighting-canvas__edit-canvas {
   display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border-radius: var(--radius-sm);
-  box-shadow: var(--inset-panel);
   cursor: crosshair;
 }
 
+/* The brush footprint's FILL. Also 1:1 and also magnified, so it needs the
+   same load-bearing `pixelated` the edit canvas does — without it a one-pixel
+   cyan cell at 50x smears into a soft blob instead of marking the cell the
+   next stroke lands in. It had no `image-rendering` before task 08 because it
+   was pre-scaled and there was nothing to interpolate. */
 .lighting-canvas__overlay {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* The SVG chrome: the pixel grid and the brush footprint's outline
+   (plan 05, decision D5, task 08).
+
+   ⚠️ WHAT THIS REPLACED, AND WHY IT HAD TO. Both were canvas strokes until
+   task 08 took the lighting canvases to 1:1 with the pixel data. Neither
+   survives that: `strokeGrid` places lines at `x * zoom + 0.5`, so at one
+   pixel per cell there is one line per pixel column and the grid becomes a
+   flat wash of colour over the whole canvas; `strokeBrushOutlines` sizes each
+   rect `zoom - 1`, so it strokes 0x0 rectangles and renders nothing at all.
+   Both fail SILENTLY — no error, no artifact — which is why they moved to
+   vector chrome rather than being left to be noticed later.
+
+   Mounted LAST inside `.lighting-canvas__stack`, so it sits above both
+   canvases by source order. It is inside `.lighting-canvas__surface`, so it
+   inherits `scale(zoom * viewZoom)`; `vector-effect: non-scaling-stroke`,
+   emitted per-path by `ui/canvas/svg/`, exempts the stroke WIDTHS from that
+   transform and gives back the screen-constant hairline both painters
+   documented as their intent.
+
+   No border. `CanvasSurface`'s `.canvas__svg` used to carry a 2px transparent
+   one to offset itself against `.canvas__surface`'s 2px accent border; both
+   borders were removed on 2026-08-31, so neither sheet compensates for
+   anything now. A border here would point every grid line at the wrong seam
+   between pixels.
+
+   `pointer-events: none`: the editable canvas is the only element that may
+   take input, and an SVG stacked above everything would otherwise swallow
+   every stroke. No `image-rendering` — it is meaningless on vector content. */
+/* ⚠️ `shape-rendering: crispEdges` — NO ANTIALIASING. Same reasoning as
+   `.canvas__svg`: SVG antialiases by default, so the grid and the brush
+   outline — both axis-aligned on cell boundaries — were drawn with soft grey
+   half-covered pixels on every edge, which on pixel art reads as blur.
+
+   Unlike the pixel editor's chrome this SVG holds only those two overlays,
+   both cell-aligned, so there is no counter-scaled or diagonal child that
+   needs to opt back in. If one is added, give it
+   `shape-rendering: geometricPrecision` as `.canvas__svg-origin` does. */
+.lighting-canvas__svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
+  shape-rendering: crispEdges;
 }
 
 .lighting-canvas__info {

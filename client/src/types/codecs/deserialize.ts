@@ -8,6 +8,7 @@ import {
 import type {
   CompactLayer,
   CompactProject,
+  CompactUIState,
   CompactVariantGroup,
 } from "./compactTypes";
 import { migrateLayerVariantOffset } from "./migrate";
@@ -84,6 +85,14 @@ function compactToVariantGroups(
 }
 
 // Convert compact format back to runtime Project
+/** The `fillColor`-free half of the compact spread — see `omitFillColor`. */
+function omitCompactFillColor(
+  ui: CompactUIState,
+): Omit<CompactUIState, "fillColor"> {
+  const { fillColor: _fillColor, ...rest } = ui;
+  return rest;
+}
+
 export function compactToProject(compact: CompactProject): Project {
   // Check if we need to migrate object-level variants to project-level
   const needsMigration =
@@ -179,7 +188,9 @@ export function compactToProject(compact: CompactProject): Project {
       colors: palette.colors.map((hex) => hexToRgba(hex)),
     })),
     uiState: {
-      ...compact.uiState,
+      /* `fillColor` is dropped from the spread and re-added below in decoded
+         form — see `projectToCompact`'s mirror of this. */
+      ...omitCompactFillColor(compact.uiState),
       selectedColor: hexToRgba(compact.uiState.selectedColor),
       selectionMode: compact.uiState.selectionMode ?? "rect",
       selectionBehavior: compact.uiState.selectionBehavior ?? "movePixels",
@@ -225,6 +236,14 @@ export function compactToProject(compact: CompactProject): Project {
         compact.uiState.originColor !== undefined
           ? hexToRgba(compact.uiState.originColor)
           : undefined,
+      /* ⚠️ A CONDITIONAL SPREAD, for the same reason as `projectToCompact`'s:
+         `fillColor: undefined` still ADDS THE KEY, and the round trip would
+         then carry it back out and change every corpus digest. Absent in every
+         project predating the edge/fill split; readers fall back to
+         `selectedColor`, so those keep their single-colour behaviour. */
+      ...(compact.uiState.fillColor !== undefined
+        ? { fillColor: hexToRgba(compact.uiState.fillColor) }
+        : {}),
     },
     variants: projectVariants,
     // Reference image (same format in compact)

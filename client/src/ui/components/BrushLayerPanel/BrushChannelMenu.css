@@ -1,0 +1,133 @@
+/* brush-layer-panel — the portalled channel menu (Brush Studio plan,
+   task 12). Same BEM block as BrushLayerPanel.css, split out only because
+   the block's stylesheet passed the ~300-line guideline; every class here is
+   a `brush-layer-panel__menu*` element or modifier, mirroring
+   EyedropperModeMenu.css.
+
+   ⚠️ `__menu` is `position: fixed` IN A `document.body` PORTAL. The panel
+   lives inside the rail's scroll container, and an absolutely-positioned
+   menu inside it is clipped away entirely. The offsets come from JS (the
+   component measures the badge and clamps to the viewport). `--z-dropdown`
+   is the token for "menus anchored to a control". */
+
+.brush-layer-panel__menu {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  min-width: 200px;
+  padding: var(--space-1-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  text-align: left;
+  cursor: default;
+}
+
+.brush-layer-panel__menu-title {
+  padding: var(--space-1) var(--space-2) var(--space-1-5);
+  font-size: var(--text-70);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.brush-layer-panel__menu-title + .brush-layer-panel__menu-title {
+  margin-top: var(--space-1);
+}
+
+.brush-layer-panel__menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1-5);
+  width: 100%;
+  padding: var(--space-1-5) var(--space-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.brush-layer-panel__menu-item:hover,
+.brush-layer-panel__menu-item:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+/* Fixed-width gutter so every row's text starts at the same x, ticked or not. */
+.brush-layer-panel__menu-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+  height: 14px;
+  margin-top: 1px;
+  color: var(--accent-primary);
+}
+
+.brush-layer-panel__menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-px);
+  min-width: 0;
+}
+
+.brush-layer-panel__menu-label {
+  font-size: var(--text-85);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+}
+
+.brush-layer-panel__menu-detail {
+  font-family: var(--font-mono);
+  font-size: var(--text-70);
+  color: var(--text-tertiary);
+  line-height: var(--leading-snug);
+}
+
+.brush-layer-panel__menu-new-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+}
+
+.brush-layer-panel__menu-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-0-5) var(--space-1-5);
+  font-size: var(--text-81);
+}
+
+.brush-layer-panel__menu-confirm {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-on-accent);
+  cursor: pointer;
+}
+
+.brush-layer-panel__menu-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* modifiers */
+
+.brush-layer-panel__menu-item--selected {
+  color: var(--text-primary);
+}

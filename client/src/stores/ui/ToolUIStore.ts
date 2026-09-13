@@ -45,8 +45,31 @@ export class ToolUIStore {
   /* ── persisted (14 of the 43) ─────────────────────────────────────────── */
 
   selectedTool: Tool = DEFAULT_UI_STATE.selectedTool;
-  /** `observableRef`: a colour is always replaced, never mutated in place. */
+  /**
+   * The EDGE colour. `observableRef`: a colour is always replaced, never
+   * mutated in place.
+   *
+   * ⚠️ Named `selectedColor` on the wire and everywhere else in the app — it
+   * is the original, unchanged single colour. Since 2026-09-01 it is one of a
+   * PAIR: the tools that draw an edge (pencil, eraser-as-colour, line, and a
+   * shape's outline) read this, and the tools that flood an area (the two
+   * fills, and a shape's interior) read {@link fillColor}. Renaming it would
+   * rewrite a key in every saved project for no user-visible gain.
+   */
   selectedColor: Color = DEFAULT_UI_STATE.selectedColor;
+
+  /**
+   * The FILL colour — bucket, gaussian fill, and a shape's interior.
+   *
+   * ⚠️ Tri-state, exactly like `borderRadius` and `eyedropperMode`:
+   * `undefined` means "absent from the project file", which is every project
+   * saved before this field existed. Seeding a default here would ADD a key to
+   * all 151 corpus snapshots and change their digests. Readers use
+   * {@link fillColorOrSelected}, which falls back to `selectedColor` so a
+   * project that predates the split behaves exactly as it did — one colour for
+   * both roles until the user picks a second.
+   */
+  fillColor: Color | undefined = undefined;
   brushSize: number = DEFAULT_UI_STATE.brushSize;
 
   /**
@@ -70,6 +93,37 @@ export class ToolUIStore {
   eraserShape: "circle" | "square" = "circle";
   pencilBrushShape: "circle" | "square" = "square";
   pencilBrushMax: 8 | 16 | 32 | 64 | 128 = 16;
+
+  /* ── the ERASER's own size and max (plan 09, task 09) ──────────────────
+   *
+   * The user's report: "the pencil and eraser have too many settings
+   * interlaced … they need to be distinct values from each other." Shape
+   * already was — `eraserShape` and `pencilBrushShape` are separate fields.
+   * Size and max were not: `brushSize` above is a single global that the
+   * pencil, the eraser, `fill-square`, the reference-trace brush, the
+   * lighting normal pencil, the hover footprint and the other-hand sliders
+   * all read, and `pencilBrushMax` — named for the pencil — bounded the
+   * eraser's slider too. These two fields end that for the eraser.
+   *
+   * ⚠️ TRI-STATE, exactly like `eyedropperMode`, `borderRadius`,
+   * `gaussianFill` and `fillColor`: `undefined` means "absent from the
+   * project file", and readers apply `?? brushSize` / `?? pencilBrushMax`.
+   * Seeding a number here would ADD A KEY TO ALL 151 CORPUS SNAPSHOTS the
+   * next time each was saved — the exact wire-format drift R3 exists to
+   * prevent. Both are emitted through `assign()` in
+   * `UIStore.toPersistedUIState()`, which writes nothing for `undefined`, and
+   * `eraserBrush.test.ts` asserts an untouched store emits NEITHER key.
+   *
+   * ⚠️ AND THE FALLBACK IS THE MIGRATION — there is no migration code and
+   * none is needed. `brushSize` keeps its slot, its unconditional emission
+   * and its meaning (now specifically THE PENCIL'S size), so an existing
+   * project's single saved `brushSize` becomes the pencil's and the eraser
+   * inherits the same number through `effectiveEraserSize` until the user
+   * actually moves the eraser's slider. Nothing an existing project does
+   * looks any different until then, which is the whole point.
+   */
+  eraserBrushSize: number | undefined = undefined;
+  eraserBrushMax: 8 | 16 | 32 | 64 | 128 | undefined = undefined;
   /** Gates `moveLayerPixels` — passed as an ARGUMENT, never read across. */
   moveAllLayers: boolean = DEFAULT_UI_STATE.moveAllLayers;
   selectionMode: SelectionMode = "rect";
@@ -102,6 +156,18 @@ export class ToolUIStore {
   /* ── NOT persisted (session-lifetime only) ────────────────────────────── */
 
   /**
+   * Which colour slot the picker is currently editing — `"edge"` writes
+   * `selectedColor`, `"fill"` writes `fillColor`.
+   *
+   * ⚠️ NOT PERSISTED, deliberately, and so absent from `toPersistedUIState()`.
+   * It is a view state of one panel, not a property of the artwork: a project
+   * reopened tomorrow should present the picker on its default tab rather than
+   * on whichever one happened to be open when it was last saved. Persisting it
+   * would also add a key to all 151 corpus snapshots for no benefit.
+   */
+  colorTarget: "edge" | "fill" = "edge";
+
+  /**
    * The eyedropper's revert target. An `EditorState` field today, NOT a
    * `uiState` one — so it is deliberately absent from
    * `toPersistedUIState()`.
@@ -119,17 +185,21 @@ export class ToolUIStore {
       selectedColor: observableRef,
       brushSize: observable,
       bitDepth: observable,
+      fillColor: observableRef,
       shapeMode: observable,
       borderRadius: observable,
       eraserShape: observable,
       pencilBrushShape: observable,
       pencilBrushMax: observable,
+      eraserBrushSize: observable,
+      eraserBrushMax: observable,
       moveAllLayers: observable,
       selectionMode: observable,
       selectionBehavior: observable,
       eyedropperMode: observable,
       originColor: observableRef,
       gaussianFill: observableRef,
+      colorTarget: observable,
       previousTool: observableRef,
       colorAdjustment: observableRef,
 
@@ -139,6 +209,9 @@ export class ToolUIStore {
       setAlternateTool: action,
       revertToPreviousTool: action,
       setColor: action,
+      setFillColor: action,
+      setColorTarget: action,
+      swapColors: action,
       setBrushSize: action,
       setBitDepth: action,
       setShapeMode: action,
@@ -146,6 +219,8 @@ export class ToolUIStore {
       setEraserShape: action,
       setPencilBrushShape: action,
       setPencilBrushMax: action,
+      setEraserBrushSize: action,
+      setEraserBrushMax: action,
       setMoveAllLayers: action,
       setSelectionMode: action,
       setSelectionBehavior: action,
@@ -265,6 +340,59 @@ export class ToolUIStore {
     this.selectedColor = color;
   }
 
+  setFillColor(color: Color): void {
+    this.fillColor = color;
+  }
+
+  setColorTarget(target: "edge" | "fill"): void {
+    this.colorTarget = target;
+  }
+
+  /**
+   * Exchange the EDGE and FILL colour slots.
+   *
+   * ⚠️ THE SUBTLE PART IS THE `undefined` FILL, and it is the reason this is
+   * an action on the store rather than two `set*` calls at a call site.
+   * {@link fillColor} is TRI-STATE — `undefined` means "absent from the
+   * project file" — while {@link selectedColor} is a NON-OPTIONAL `Color`. A
+   * naive `[edge, fill] = [fill, edge]` would therefore write `undefined`
+   * into `selectedColor` on every project that predates the edge/fill split,
+   * which is every project the owner has.
+   *
+   * So the swap reads the EFFECTIVE fill — {@link fillColorOrSelected}, which
+   * falls back to the edge colour — and writes both slots unconditionally.
+   * When `fillColor` was `undefined` the exchange is a no-op VALUE-wise (both
+   * slots already resolved to the same colour), but it deliberately still
+   * MATERIALISES `fillColor`, so that afterwards the two slots are
+   * independently editable instead of the fill silently tracking the edge.
+   * That materialisation is the point of the operation in that case, and it
+   * is the first write of the key for such a project — the same
+   * user-initiated, owner-approved extension `setEyedropperMode` performs.
+   *
+   * ⚠️ NOT UNDOABLE BY ITSELF. History is bracketed by the caller —
+   * {@link ApplicationStore.swapEdgeAndFillColors} snapshots once so the swap
+   * lands as exactly ONE undo step.
+   */
+  swapColors(): void {
+    const nextEdge = this.fillColorOrSelected;
+    const nextFill = this.selectedColor;
+    this.selectedColor = nextEdge;
+    this.fillColor = nextFill;
+  }
+
+  /**
+   * The fill colour, falling back to the edge colour.
+   *
+   * ⚠️ THE FALLBACK IS THE COMPATIBILITY STORY. Every project saved before the
+   * edge/fill split has no `fillColor` key, and must keep behaving as it did:
+   * one colour driving both roles. Returning `selectedColor` here means a
+   * bucket fill in such a project paints exactly what it painted before, and
+   * the key is written only once the user actually picks a fill colour.
+   */
+  get fillColorOrSelected(): Color {
+    return this.fillColor ?? this.selectedColor;
+  }
+
   setBrushSize(size: number): void {
     this.brushSize = size;
   }
@@ -300,6 +428,80 @@ export class ToolUIStore {
   setPencilBrushMax(max: 8 | 16 | 32 | 64 | 128): void {
     this.pencilBrushMax = max;
     this.brushSize = Math.min(this.brushSize, max);
+  }
+
+  /**
+   * Write the ERASER's own size — the first write of the key on a project
+   * that never had one.
+   *
+   * ⚠️ That is the intended, owner-approved extension, and it happens ONLY
+   * when the user actually moves the eraser's slider. Nothing writes this
+   * field incidentally — in particular {@link setBrushSize} does not, which
+   * is what keeps an untouched project byte-identical while still letting the
+   * eraser inherit the pencil's size through {@link effectiveEraserSize}.
+   */
+  setEraserBrushSize(size: number): void {
+    this.eraserBrushSize = size;
+  }
+
+  /**
+   * The eraser's equivalent of {@link setPencilBrushMax}, including its
+   * re-clamp.
+   *
+   * ⚠️ IT RE-CLAMPS THE ERASER'S SIZE, NEVER `brushSize`. `setPencilBrushMax`
+   * clamps `brushSize` because `brushSize` IS the pencil's size; the mirror
+   * of that here is `eraserBrushSize`. Clamping `brushSize` from this setter
+   * would re-introduce exactly the interlacing this task removes — lowering
+   * the eraser's max would shrink the pencil.
+   *
+   * The clamp reads {@link effectiveEraserSize}, not the raw field, so
+   * lowering the max on a project that has never set an eraser size still
+   * produces a correct in-range value (materialising the key, which is
+   * user-initiated and therefore fine) rather than leaving the eraser
+   * inheriting an out-of-range `brushSize`.
+   */
+  setEraserBrushMax(max: 8 | 16 | 32 | 64 | 128): void {
+    this.eraserBrushMax = max;
+    this.eraserBrushSize = Math.min(this.effectiveEraserSize, max);
+  }
+
+  /**
+   * The `?? brushSize` fallback every reader applies to the tri-state eraser
+   * size. See the field's header — this getter IS the migration.
+   */
+  get effectiveEraserSize(): number {
+    return this.eraserBrushSize ?? this.brushSize;
+  }
+
+  /**
+   * The eraser's max, falling back to the pencil's and then to 16 — which is
+   * precisely the bound the eraser's slider used before this task, so a
+   * project that has set neither behaves exactly as it did.
+   */
+  get effectiveEraserMax(): 8 | 16 | 32 | 64 | 128 {
+    return this.eraserBrushMax ?? this.pencilBrushMax ?? 16;
+  }
+
+  /**
+   * The brush size THE ACTIVE TOOL should draw and preview with.
+   *
+   * ⚠️ ADDED BUT NOT YET CONSUMED — a one-line follow-up in
+   * `CanvasContainer.tsx` is required to finish the job, and it is recorded
+   * in `HANDOFF.md` for W5. Task 09 is forbidden from editing that file
+   * (tasks 07 and 08 own it), so the getter lands here and the container
+   * adopts it later. Until then the eraser's PANEL and RAIL sliders are
+   * independent while its DRAW path and hover footprint still follow
+   * `brushSize`.
+   *
+   * ⚠️ ONLY `"eraser"` branches, deliberately. `fill-square` and the
+   * reference-trace brush keep reading `brushSize` (the pencil's) — the user
+   * asked to separate the pencil and the eraser, not to give every tool its
+   * own size, and inventing more fields would add more wire keys.
+   */
+  get activeToolBrushSize(): number {
+    return this.selectedTool === "eraser"
+      ? this.effectiveEraserSize
+      : this.brushSize;
   }
 
   setMoveAllLayers(moveAll: boolean): void {
@@ -394,6 +596,7 @@ export class ToolUIStore {
   hydrate(ui: {
     selectedTool?: Tool;
     selectedColor?: Color;
+    fillColor?: Color;
     brushSize?: number;
     bitDepth?: BitDepth;
     shapeMode?: ShapeMode;
@@ -401,6 +604,8 @@ export class ToolUIStore {
     eraserShape?: "circle" | "square";
     pencilBrushShape?: "circle" | "square";
     pencilBrushMax?: 8 | 16 | 32 | 64 | 128;
+    eraserBrushSize?: number;
+    eraserBrushMax?: 8 | 16 | 32 | 64 | 128;
     moveAllLayers?: boolean;
     selectionMode?: SelectionMode;
     selectionBehavior?: SelectionBehavior;
@@ -408,8 +613,20 @@ export class ToolUIStore {
     originColor?: Color;
     gaussianFill?: GaussianFill;
   }): void {
-    if (ui.selectedTool !== undefined) this.selectedTool = ui.selectedTool;
+    if (ui.selectedTool !== undefined) {
+      /* ⚠️ `fill-square` MIGRATES TO `pixel` ON THE WAY IN.
+         "Square Brush" was removed from the toolbar on 2026-09-01 as a
+         duplicate of the pencil's own square shape setting. The id stays in
+         the `Tool` union and its handler stays wired, because the owner's
+         saved projects persist `selectedTool` and a project last saved on that
+         tool must still open. Restoring it verbatim would select a tool with
+         no button — the toolbar would show nothing active while strokes still
+         painted. Mapping it to `pixel` lands on the tool that replaced it. */
+      this.selectedTool =
+        ui.selectedTool === "fill-square" ? "pixel" : ui.selectedTool;
+    }
     if (ui.selectedColor !== undefined) this.selectedColor = ui.selectedColor;
+    if (ui.fillColor !== undefined) this.fillColor = ui.fillColor;
     if (ui.brushSize !== undefined) this.brushSize = ui.brushSize;
     if (ui.bitDepth !== undefined) this.bitDepth = ui.bitDepth;
     if (ui.shapeMode !== undefined) this.shapeMode = ui.shapeMode;
@@ -422,6 +639,12 @@ export class ToolUIStore {
     if (ui.pencilBrushMax !== undefined) {
       this.pencilBrushMax = ui.pencilBrushMax;
     }
+    // Assigned unconditionally: absent must stay absent (see the field note).
+    // Anything else would let a project WITHOUT the key inherit the previous
+    // project's eraser size on a project switch, and then write that borrowed
+    // number into a file that never had one.
+    this.eraserBrushSize = ui.eraserBrushSize;
+    this.eraserBrushMax = ui.eraserBrushMax;
     if (ui.moveAllLayers !== undefined) this.moveAllLayers = ui.moveAllLayers;
     if (ui.selectionMode !== undefined) this.selectionMode = ui.selectionMode;
     if (ui.selectionBehavior !== undefined) {

@@ -12,10 +12,19 @@ import { AppContainer } from "./containers/AppContainer";
 import { ApplicationStore } from "./stores/ApplicationStore";
 import { StoreProvider } from "./stores/context";
 import { initTheme } from "./ui/theme/themes";
+import { bindBrowserZoomSuppression } from "./ui/hooks/useSuppressBrowserZoom";
 
 // Apply the stored theme preference (localStorage, a DEVICE preference —
 // never part of the project's frozen uiState) before the first paint.
 initTheme();
+
+// Kill iOS page zoom for the whole document, before the first touch can land.
+// Bound here rather than inside a component so it also holds during the boot
+// and error states — which is exactly where a stuck user taps hardest. This is
+// HALF the fix; `styles/reset.css`'s `touch-action: none` under
+// `@media (pointer: coarse)` is the other half, and neither works alone on
+// iOS. Never unbound: its lifetime is the document's.
+bindBrowserZoomSuppression();
 
 // The ONE ApplicationStore of the app, constructed here and passed in — never
 // a module-level singleton (task 14). Tests and Storybook build their own.

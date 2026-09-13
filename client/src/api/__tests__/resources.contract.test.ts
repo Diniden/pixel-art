@@ -12,14 +12,18 @@ import { server } from "@test/mswServer";
 import {
   aiApi,
   backupApi,
+  brushApi,
   configApi,
   exportApi,
   isKind,
   projectApi,
 } from "@/api";
 import {
+  FIXTURE_BRUSH_NAME,
   FIXTURE_PROJECT_NAME,
   fixtureBackups,
+  fixtureBrushDocument,
+  fixtureBrushList,
   fixtureCompactProject,
   fixtureExportResult,
   fixtureFramesJson,
@@ -96,6 +100,91 @@ describe("projectApi", () => {
     await expect(projectApi.rename("a", "b")).resolves.toBeUndefined();
     await expect(projectApi.remove("a")).resolves.toBeUndefined();
     await expect(projectApi.switchTo("b")).resolves.toBeUndefined();
+  });
+});
+
+describe("brushApi", () => {
+  it("list() unwraps {brushes}", async () => {
+    await expect(brushApi.list()).resolves.toEqual(fixtureBrushList);
+  });
+
+  it("get() returns the RAW document byte-for-byte — no normalisation", async () => {
+    await expect(brushApi.get(FIXTURE_BRUSH_NAME)).resolves.toEqual(
+      fixtureBrushDocument(),
+    );
+  });
+
+  it("get() encodes a space in the name as %20 (never '+')", async () => {
+    let url = "";
+    server.use(
+      http.get("*/api/brush", ({ request: req }) => {
+        url = req.url;
+        return HttpResponse.json(fixtureBrushDocument());
+      }),
+    );
+    await brushApi.get(FIXTURE_BRUSH_NAME);
+    expect(url).toContain("/api/brush?name=Soft%20Round");
+    expect(url).not.toContain("+");
+  });
+
+  it("get() throws kind 'notFound' for an unknown name — never an invented document", async () => {
+    const err = await brushApi.get("Missing").then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(isKind(err, "notFound")).toBe(true);
+  });
+
+  it("save() POSTs the document under ?name= and the body round-trips", async () => {
+    let url = "";
+    let body: unknown = null;
+    server.use(
+      http.post("*/api/brush", async ({ request: req }) => {
+        url = req.url;
+        body = await req.json();
+        return HttpResponse.json({ success: true });
+      }),
+    );
+    const doc = fixtureBrushDocument();
+    await expect(brushApi.save(doc, FIXTURE_BRUSH_NAME)).resolves.toEqual({
+      success: true,
+    });
+    expect(url).toContain("/api/brush?name=Soft%20Round");
+    expect(body).toEqual(doc);
+  });
+
+  it("create() returns the server-confirmed name; an existing name is kind 'conflict'", async () => {
+    await expect(brushApi.create("Fresh")).resolves.toEqual({
+      success: true,
+      name: "Fresh",
+    });
+    const err = await brushApi.create(FIXTURE_BRUSH_NAME).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(isKind(err, "conflict")).toBe(true);
+  });
+
+  it("create() sends brushData only when one is given", async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      http.post("*/api/brush/create", async ({ request: req }) => {
+        bodies.push(await req.json());
+        return HttpResponse.json({ success: true, name: "Fresh" });
+      }),
+    );
+    const doc = fixtureBrushDocument();
+    await brushApi.create("Fresh");
+    await brushApi.create("Fresh", doc);
+    expect(bodies).toEqual([
+      { name: "Fresh" },
+      { name: "Fresh", brushData: doc },
+    ]);
+  });
+
+  it("rename() and remove() resolve void on success", async () => {
+    await expect(brushApi.rename("a", "b")).resolves.toBeUndefined();
+    await expect(brushApi.remove("a")).resolves.toBeUndefined();
   });
 });
 

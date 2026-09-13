@@ -42,6 +42,13 @@
  * even while the caret is in a text field, and that is the legacy contract.
  * The duplication is transcribed, not tidied.
  *
+ * The `X` swap branch (plan 09 task 11) makes it three call sites of the same
+ * guard, for the same reason: typing an `x` into the colour picker's hex field
+ * or a layer-rename box must insert a character, not swap the colours. It is
+ * placed with the backquote branches, on the guarded side of that asymmetry.
+ * In brush mode the same branch swaps `brushUI`'s edge/fill DELTAS instead
+ * (brush follow-ups task 07, MASTER D11) — see the note on the branch.
+ *
  * ── Why the stores, not the bridge ────────────────────────────────────────
  *
  * `App.tsx` read all five members off the legacy Zustand hook. All five have MobX
@@ -70,7 +77,8 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export const GlobalHotkeys = observer(function GlobalHotkeys() {
-  const { ui, lightingUI } = useStores();
+  const app = useStores();
+  const { ui, lightingUI } = app;
   const { tool, viewport } = ui;
 
   // `colorAdjustment` is read during render so `observer()` tracks it and the
@@ -86,7 +94,10 @@ export const GlobalHotkeys = observer(function GlobalHotkeys() {
         tool.setColorAdjustment(null);
       }
 
-      // Shift + ` to cycle studio modes
+      // Shift + ` toggles pixel <-> lighting. Per brush-studio MASTER D22 the
+      // hotkey does NOT reach "brush" (that mode is entered only from the
+      // toolbar button); from brush it goes to PIXEL, never to lighting by
+      // accident — hence `=== "pixel"`, not `=== "lighting"`.
       if (
         e.code === "Backquote" &&
         e.shiftKey &&
@@ -97,9 +108,52 @@ export const GlobalHotkeys = observer(function GlobalHotkeys() {
         if (isTypingTarget(e.target)) return;
 
         e.preventDefault();
-        lightingUI.setStudioMode(
-          studioMode === "lighting" ? "pixel" : "lighting",
-        );
+        lightingUI.setStudioMode(studioMode === "pixel" ? "lighting" : "pixel");
+        return;
+      }
+
+      /* ── X swaps the edge and fill colours (plan 09 task 11) ────────────
+         `X` is the paint-application convention (Photoshop, Krita, Aseprite,
+         GIMP all bind it) and nothing else in the app claims it: it is absent
+         from `useCanvasKeyboard`'s `TOOL_HOTKEYS` and from both branches
+         below.
+
+         ⚠️ SUPPRESSED WHILE A TEXT FIELD HAS FOCUS, using this file's own
+         `isTypingTarget` guard — the same one both backquote branches use.
+         Without it, typing an `x` into the hex field or a layer-rename box
+         would swap the colours instead of inserting a character. The guard
+         deliberately does NOT extend to the Escape branch above; that
+         asymmetry is the transcribed legacy contract, documented in the
+         header.
+
+         ⚠️ Bare `x` only. A modified `X` is left alone so Cmd/Ctrl+X still
+         cuts and Alt+X reaches the browser. Shift is not tested, so a
+         capital `X` from Caps Lock or a held Shift also swaps — matching how
+         the tool hotkeys list `g`/`G`, `r`/`R` in both cases.
+
+         ⚠️ ONE undo step. `swapEdgeAndFillColors` snapshots once before it
+         mutates; do not bracket this with another `saveStateToHistory`.
+
+         ── Brush mode swaps the DELTAS instead (follow-ups task 07, D11) ──
+         The brush studio's twin of the edge/fill pair is `brushUI`'s
+         `selectedDelta` / `fillDelta`, and the pixel studio's colours are not
+         on screen there, so `X` exchanges the deltas and leaves `ui.tool`
+         alone. `swapDeltas` takes NO history snapshot — the deltas are UI
+         state, not undoable (brush-studio D17) — and must not be given one
+         here. The guard and `preventDefault` are shared by both branches;
+         only the store action differs. Lighting mode keeps the colour swap:
+         the colour picker is still the panel there. */
+      if (
+        (e.key === "x" || e.key === "X") &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey
+      ) {
+        if (isTypingTarget(e.target)) return;
+
+        e.preventDefault();
+        if (studioMode === "brush") app.brushUI.swapDeltas();
+        else app.swapEdgeAndFillColors();
         return;
       }
 
@@ -120,7 +174,7 @@ export const GlobalHotkeys = observer(function GlobalHotkeys() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [hasColorAdjustment, studioMode, tool, viewport, lightingUI]);
+  }, [hasColorAdjustment, studioMode, tool, viewport, lightingUI, app]);
 
   /**
    * The Apple Pencil double-tap, forwarded by the companion app.

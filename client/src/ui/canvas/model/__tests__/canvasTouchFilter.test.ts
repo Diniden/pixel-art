@@ -104,3 +104,54 @@ describe("isStylus — degradation on browsers without touchType", () => {
     expect(drawingTouch([{ target: CANVAS }])).not.toBeNull();
   });
 });
+
+/**
+ * Pencil-only input (2026-08-31).
+ *
+ * Requested: "In pencil mode, it will assume ALL drawing/edits to the pixel
+ * data can ONLY come from the pencil. Otherwise ... it will behave how it
+ * currently does with touch interactions working like normal."
+ */
+describe("⭐ pencilOnly — only the Pencil may paint", () => {
+  const finger = { target: null, touchType: "direct" };
+  const pencil = { target: null, touchType: "stylus" };
+
+  it("a lone finger draws NOTHING when it is on", () => {
+    expect(drawingTouch([finger], true)).toBeNull();
+  });
+
+  it("the Pencil still draws, through any number of resting fingers", () => {
+    // The hand on the glass is the whole reason this mode exists.
+    expect(drawingTouch([pencil], true)).toBe(pencil);
+    expect(drawingTouch([finger, pencil], true)).toBe(pencil);
+    expect(drawingTouch([finger, finger, pencil, finger], true)).toBe(pencil);
+  });
+
+  it("two fingers still draw nothing — that was already a pinch", () => {
+    expect(drawingTouch([finger, finger], true)).toBeNull();
+  });
+
+  it("⭐ OFF is the historical behaviour, verbatim", () => {
+    // The owner's "behave how it currently does" half. Every case must match
+    // what the function did before the parameter existed.
+    expect(drawingTouch([finger], false)).toBe(finger);
+    expect(drawingTouch([finger, pencil], false)).toBe(pencil);
+    expect(drawingTouch([finger, finger], false)).toBeNull();
+    expect(drawingTouch([], false)).toBeNull();
+  });
+
+  it("⭐ DEFAULTS to off, so no existing caller changes behaviour", () => {
+    // The parameter is opt-in: every call site that does not pass it — the
+    // pan and hover-marker lookups in `CanvasContainer` among them — keeps
+    // finger input exactly as it was.
+    expect(drawingTouch([finger])).toBe(finger);
+    expect(drawingTouch([finger, pencil])).toBe(pencil);
+  });
+
+  it("does NOT affect what counts as a pinch", () => {
+    // Pencil-only removes finger DRAWING and nothing else: panning and
+    // zooming go through `pinchTouches`, which never consulted this flag.
+    expect(pinchTouches([finger, finger])).toHaveLength(2);
+    expect(pinchTouches([finger, pencil])).toHaveLength(1);
+  });
+});

@@ -15,13 +15,16 @@
  * The complete import list of this file is:
  *
  *     import type { MouseEvent, RefObject, TouchEvent } from "react";
+ *     import type { SvgPathSpec } from "../../canvas/svg/gridOverlay";
  *     import "./LightingSurface.css";
  *
- * Two lines, one of them types-only and one a stylesheet. No store, no MobX, no
- * API, no `useContext`, no `observer()`, and — matching the bar `CanvasSurface`
- * set in W24 — not even a value import from React. That is what makes the
- * store-free stories next door **structurally guaranteed** rather than merely
- * asserted: there is no import through which a store could arrive.
+ * Three lines, two of them types-only and one a stylesheet. No store, no MobX,
+ * no API, no `useContext`, no `observer()`, and — matching the bar
+ * `CanvasSurface` set in W24 — not even a value import from React. That is what
+ * makes the store-free stories next door **structurally guaranteed** rather than
+ * merely asserted: there is no import through which a store could arrive.
+ * (`SvgPathSpec` is a type from `ui/canvas/svg/`, a sibling pure module with the
+ * same prohibition; it erases at compile time and carries no runtime edge.)
  *
  * ── ⚠️ NO PIXEL GRID CROSSES THIS BOUNDARY ────────────────────────────────
  *
@@ -33,15 +36,36 @@
  *
  * This component therefore receives REFS and paints nothing itself.
  *
- * ── The two canvases ──────────────────────────────────────────────────────
+ * ── The two canvases, and the SVG above them ──────────────────────────────
  *
  * 1. `editCanvasRef`     the normal/height visualisation — the only one that
  *                        takes pointer events.
- * 2. `overlayCanvasRef`  the cyan brush-hover overlay, `pointer-events: none`.
+ * 2. `overlayCanvasRef`  the cyan brush-hover overlay FILL, `pointer-events:
+ *                        none`.
+ * 3. the SVG chrome      the grid and the brush OUTLINE, as `<path>` data
+ *                        supplied by the container.
  *
- * Both are ALWAYS mounted, unlike `CanvasSurface`'s three conditional overlays:
- * `LightingCanvas` had no conditional overlay, and inventing one here would be a
- * behaviour change.
+ * Both canvases are ALWAYS mounted, unlike `CanvasSurface`'s three conditional
+ * overlays: `LightingCanvas` had no conditional overlay, and inventing one here
+ * would be a behaviour change.
+ *
+ * ── ⚠️ THE CANVASES ARE 1:1 WITH THE PIXEL DATA (plan 05, task 08) ─────────
+ *
+ * `cellWidth`/`cellHeight` are GRID CELLS, not device pixels: one sprite pixel
+ * is one canvas pixel, and ALL magnification is the single
+ * `scale(combinedScale)` on `.lighting-canvas__surface`, where `combinedScale`
+ * is `zoom * viewZoom`. That closed risk R7 — until task 08 this component took
+ * a pre-scaled `canvasWidth` and applied only `viewZoom`, so the shared
+ * `ViewportUIStore.zoom` meant "backing-store multiplier" here and "CSS scale
+ * factor" in `CanvasSurface`. Both engines now interpret it identically.
+ *
+ * The consequence for this file: `image-rendering: pixelated` in the stylesheet
+ * is LOAD-BEARING, not decorative. It is the only thing between a 1:1 canvas
+ * and a blurry mess at 50x. Never remove it.
+ *
+ * The SVG uses `viewBox="0 0 cellWidth cellHeight"`, so one user unit is one
+ * cell — the same coordinate model `CanvasSurface` uses, which is what lets the
+ * two share `ui/canvas/svg/`'s path emitters unchanged.
  *
  * ── The empty state is a prop, not a store read ───────────────────────────
  *
@@ -65,7 +89,13 @@
  */
 
 import type { MouseEvent, RefObject, TouchEvent } from "react";
+import type { SvgPathSpec } from "../../canvas/svg/gridOverlay";
 import "./LightingSurface.css";
+
+/** Nothing to draw. Rendering an empty `d` is legal but pointlessly noisy. */
+function hasPath(spec: SvgPathSpec | null | undefined): spec is SvgPathSpec {
+  return !!spec && spec.d.length > 0;
+}
 
 export interface LightingSurfaceProps {
   /* ── element refs (the imperative renderers' only handle) ──────────────── */
@@ -80,18 +110,24 @@ export interface LightingSurfaceProps {
    */
   containerRef: RefObject<HTMLDivElement | null>;
   /**
-   * The positioning context the floating preview panel lives inside. The
-   * container passes the same ref to `LightingPreviewPanel`, which is how the
-   * panel stays clamped to this component's bounds without this component
-   * knowing the panel exists.
+   * The component's outermost element. Kept as a separate ref from
+   * `containerRef` because that one is the gesture viewport INSIDE the layout;
+   * this one is the whole block, including the info bar.
    */
   rootRef: RefObject<HTMLDivElement | null>;
 
   /* ── dimensions ────────────────────────────────────────────────────────── */
-  /** Backing-store width in device pixels (`gridWidth * zoom`). */
-  canvasWidth: number;
-  /** Backing-store height in device pixels. */
-  canvasHeight: number;
+  /**
+   * Backing-store width in GRID CELLS — 1:1 with the pixel data.
+   *
+   * ⚠️ NOT `gridWidth * zoom`. This was `canvasWidth` and was pre-scaled until
+   * plan 05 task 08; the rename is deliberate, because a stale `* zoom` would
+   * have been invisible under the old name. `zoom` reaches the DOM only
+   * through `combinedScale`.
+   */
+  cellWidth: number;
+  /** Backing-store height in grid cells. See `cellWidth`. */
+  cellHeight: number;
 
   /* ── the view transform ────────────────────────────────────────────────── */
   /**
@@ -102,8 +138,36 @@ export interface LightingSurfaceProps {
    * so its pan died with the view. That difference is preserved.
    */
   viewPanOffset: { x: number; y: number };
-  /** View scale, applied as a `scale`. */
-  viewZoom: number;
+  /**
+   * The COMBINED scale, `zoom * viewZoom`, applied as one `scale()`.
+   *
+   * ⚠️ This was `viewZoom` alone. With the canvases 1:1 the shared pixel scale
+   * has nowhere else to be applied, so it multiplies in here — which is
+   * precisely how `CanvasSurface` has carried it since task 02, and why the
+   * two engines finally agree on what `ViewportUIStore.zoom` means (R7).
+   */
+  combinedScale: number;
+
+  /* ── the SVG chrome (plan 05, decision D5) ─────────────────────────────── */
+  /**
+   * The pixel grid, as one `<path>`.
+   *
+   * Vector rather than raster because at 1:1 `strokeGrid`'s lines land one per
+   * pixel column and the grid becomes a flat wash of colour over the whole
+   * canvas — a SILENT failure with no error and no artifact. Supplied by the
+   * container from `ui/canvas/svg/gridOverlay`; this component renders it and
+   * decides nothing about it.
+   */
+  grid?: SvgPathSpec | null;
+  /**
+   * The brush footprint's outline, as one `<path>`.
+   *
+   * Also vector, for the sharper version of the same reason: the raster
+   * painter sizes each rect `zoom - 1`, so at 1:1 it strokes 0x0 rectangles and
+   * renders NOTHING. The footprint's FILL is still a canvas overlay — cell
+   * fills are safe at 1:1; sub-cell strokes are not.
+   */
+  brushOutline?: SvgPathSpec | null;
 
   /* ── the info bar ──────────────────────────────────────────────────────── */
   /** `"height"` or `"normals"` — shown, not acted on. */
@@ -117,15 +181,6 @@ export interface LightingSurfaceProps {
   /* ── the empty state ───────────────────────────────────────────────────── */
   /** When true, renders only the placeholder. No canvas, no info bar. */
   empty?: boolean;
-
-  /* ── the floating preview panel, injected as a child ───────────────────── */
-  /**
-   * Rendered inside the root so it can position itself against it. The panel is
-   * a SIBLING component (`LightingPreviewPanel`) wired by its own container;
-   * passing it as a node keeps this component from importing anything that
-   * needs a store.
-   */
-  previewPanel?: React.ReactNode;
 
   /* ── the floating control cluster, injected as a child ─────────────────── */
   /**
@@ -151,16 +206,17 @@ export function LightingSurface({
   overlayCanvasRef,
   containerRef,
   rootRef,
-  canvasWidth,
-  canvasHeight,
+  cellWidth,
+  cellHeight,
   viewPanOffset,
-  viewZoom,
+  combinedScale,
+  grid,
+  brushOutline,
   editMode,
   gridWidth,
   gridHeight,
   zoom,
   empty = false,
-  previewPanel,
   viewControls,
   onMouseDown,
   onMouseMove,
@@ -191,7 +247,11 @@ export function LightingSurface({
           <div
             className="lighting-canvas__surface"
             style={{
-              transform: `translate(${viewPanOffset.x}px, ${viewPanOffset.y}px) scale(${viewZoom})`,
+              // ⚠️ `combinedScale` is `zoom * viewZoom` — the GPU does ALL the
+              // magnification now, because the canvases below are 1:1 with the
+              // pixel data. This one declaration is what replaced allocating a
+              // `zoom`-times-larger backing store per canvas.
+              transform: `translate(${viewPanOffset.x}px, ${viewPanOffset.y}px) scale(${combinedScale})`,
               // `0 0` so the transform anchors at the sprite's top-left; the
               // pinch/wheel maths in `useCanvasViewport` assumes this origin.
               transformOrigin: "0 0",
@@ -201,8 +261,8 @@ export function LightingSurface({
               <canvas
                 ref={editCanvasRef}
                 className="lighting-canvas__edit-canvas"
-                width={canvasWidth}
-                height={canvasHeight}
+                width={cellWidth}
+                height={cellHeight}
                 onMouseDown={onMouseDown}
                 onMouseMove={onMouseMove}
                 onMouseUp={onMouseUp}
@@ -216,9 +276,45 @@ export function LightingSurface({
               <canvas
                 ref={overlayCanvasRef}
                 className="lighting-canvas__overlay"
-                width={canvasWidth}
-                height={canvasHeight}
+                width={cellWidth}
+                height={cellHeight}
               />
+              {/*
+                ── the SVG chrome (D5) ───────────────────────────────────────
+                LAST in the stack, so it sits above both canvases by source
+                order. One user unit = one grid cell, matching the 1:1
+                canvases; the element inherits `.lighting-canvas__surface`'s
+                transform, and `vector-effect: non-scaling-stroke` (set
+                per-path by `ui/canvas/svg/`) exempts the stroke WIDTHS from
+                it. That pair is what gives the grid and the brush outline
+                back the screen-constant hairline their canvas painters
+                documented and which going 1:1 would otherwise have destroyed
+                silently.
+              */}
+              {(hasPath(grid) || hasPath(brushOutline)) && (
+                <svg
+                  className="lighting-canvas__svg"
+                  viewBox={`0 0 ${cellWidth} ${cellHeight}`}
+                  width={cellWidth}
+                  height={cellHeight}
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  {hasPath(grid) && (
+                    // The one path with a class of its own: it is the only
+                    // overlay a test or a devtools inspection needs to pick
+                    // out of the chrome by name.
+                    <path
+                      className="lighting-canvas__svg-grid"
+                      d={grid.d}
+                      {...grid.attrs}
+                    />
+                  )}
+                  {hasPath(brushOutline) && (
+                    <path d={brushOutline.d} {...brushOutline.attrs} />
+                  )}
+                </svg>
+              )}
             </div>
           </div>
           {/* Last child of the VIEWPORT, after `__surface`: paints above the
@@ -239,8 +335,6 @@ export function LightingSurface({
           Two-finger scroll to pan • Pinch to zoom • Shift = erase (height)
         </span>
       </div>
-
-      {previewPanel}
     </div>
   );
 }

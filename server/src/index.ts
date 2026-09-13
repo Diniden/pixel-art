@@ -10,6 +10,7 @@ import cors from "cors";
 import { projectRouter } from "./routes/project.js";
 import { exportRouter, DEFAULT_EXPORT_FOLDER } from "./export/exportRouter.js";
 import { aiRouter } from "./routes/ai.js";
+import { brushRouter } from "./routes/brush.js";
 import { debugLogRouter, isDebugLogEnabled } from "./routes/debugLog.js";
 import {
   DISCOVERY_VERSION,
@@ -39,6 +40,8 @@ app.use("/exports", express.static(exportsDir));
 app.use("/api", projectRouter);
 app.use("/api", exportRouter);
 app.use("/api", aiRouter);
+// Brush documents (`src/data/brushes/*.json`) — see `routes/brush.ts`.
+app.use("/api", brushRouter);
 // Diagnostic sink for on-device debugging — see `routes/debugLog.ts`.
 // ⚠️ DEVELOPMENT ONLY. The route is unauthenticated and accepts arbitrary
 // JSON, which is acceptable on a local dev server and nowhere else.

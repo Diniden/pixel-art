@@ -26,13 +26,24 @@
  * when the debounce callback changed. That structure is kept verbatim rather
  * than "modernised" — it is load-bearing for gesture smoothness.
  *
- * ## The zoom anchor lock, and why pinch does not clamp
+ * ## The zoom anchor lock
  *
  * Both copies locked the zoom focal point for `ZOOM_ANCHOR_MS` after each step.
  * Without it, per-event re-derivation of the anchor makes a pinch jitter and
- * drift. Both copies also deliberately skip `clampPanToViewport` while zooming
- * (the comment "clamping fights the anchor and causes jitter/drift" is theirs).
- * Both behaviours are preserved exactly.
+ * drift. Preserved exactly.
+ *
+ * ## ⚠️ Panning is UNRESTRICTED (2026-08-31)
+ *
+ * `clampPanToViewport` is still exported and still tested, but NOTHING CALLS
+ * IT any more — not the wheel handler here, and not the mouse or two-finger
+ * pans in `CanvasContainer`. The owner reported that panning "tries to lock the
+ * region into place and doesn't allow complete freedom", which was that clamp:
+ * it stopped the content's edges from travelling inside the viewport frame,
+ * and pinned pan entirely when the sprite was smaller than the viewport
+ * (min and max collapse to the same number there). Unrestricted panning was
+ * chosen over a keep-a-margin compromise, with Reset View as the recovery for
+ * a view pushed off-screen. Pinch never clamped in the first place — the
+ * original comment, "clamping fights the anchor and causes jitter/drift".
  *
  * ## Purity
  *
@@ -55,9 +66,38 @@ export interface ViewPoint {
 /** How long the zoom focal point stays locked after a zoom step, in ms. */
 export const ZOOM_ANCHOR_MS = 100;
 
-/** View-zoom limits. Both legacy copies used exactly this range. */
+/**
+ * View-zoom limits. Both legacy copies used exactly this range.
+ *
+ * ⚠️ `MIN_VIEW_ZOOM` is no longer the live floor for the gesture handlers —
+ * `viewZoomFloor()` below derives that from the content size. It remains the
+ * documented FALLBACK: the value used before the first measurement lands, and
+ * the default floor of both stores' `setViewZoom`.
+ */
 export const MIN_VIEW_ZOOM = 0.25;
 export const MAX_VIEW_ZOOM = 4;
+
+/** Smallest on-screen size, in CSS px, the canvas may be shrunk to. */
+export const MIN_CANVAS_SCREEN_PX = 50;
+
+/**
+ * The view-zoom floor for a given content size. Derived, not fixed: the old
+ * hard 0.25 stopped a 2560px composition at 640px, so a large sprite could
+ * never be seen whole. Clamped to <= 1 so 1:1 is always reachable, and
+ * falls back to the legacy 0.25 before the first measurement lands.
+ *
+ * ⚠️ Pure and dimension-only, deliberately. Stores may not read the DOM
+ * (`ViewportUIStore.setViewZoom`'s note), so the floor is computed here — at
+ * the layer that already has the measurement — and passed INTO them.
+ */
+export function viewZoomFloor(
+  contentWidth: number,
+  contentHeight: number,
+): number {
+  const longest = Math.max(contentWidth, contentHeight);
+  if (!(longest > 0)) return MIN_VIEW_ZOOM;
+  return Math.min(1, MIN_CANVAS_SCREEN_PX / longest);
+}
 
 /**
  * How long pan settles before being committed outward, in ms. Canvas debounced
@@ -77,9 +117,21 @@ const PINCH_EXPONENT = 1.15;
 export interface UseCanvasViewportOptions {
   /** The element the gesture is measured against and the wheel is bound to. */
   containerRef: React.RefObject<HTMLElement | null>;
-  /** Unscaled content size in px. Multiplied by view zoom to clamp panning. */
-  canvasWidth: number;
-  canvasHeight: number;
+  /**
+   * The content's on-screen CSS size AT VIEW ZOOM 1, in px — for the pixel
+   * canvas that is `cellWidth * zoom` (`useCanvasGeometry.contentWidth`).
+   * Multiplied by the live view zoom to clamp panning.
+   *
+   * ⚠️ NOT the `<canvas>` backing store (plan 05, task 02). Backing stores are
+   * 1:1 with pixel data now and all magnification is one CSS transform, so
+   * passing `cellWidth` here would tell the clamp the content is `zoom` times
+   * smaller than it renders — typically 10x — and a large sprite could not be
+   * panned at all. The parameter was called `canvasWidth` until 2026-08-30,
+   * when the two stopped being the same number; it was renamed precisely so
+   * that mistake cannot be made silently.
+   */
+  contentWidth: number;
+  contentHeight: number;
   /** Pan owned by the caller (typically persisted). Seeds and re-syncs local pan. */
   panOffset: ViewPoint;
   /**
@@ -139,8 +191,8 @@ export interface CanvasViewport {
 
 export function useCanvasViewport({
   containerRef,
-  canvasWidth,
-  canvasHeight,
+  contentWidth,
+  contentHeight,
   panOffset,
   onCommitPan,
   viewZoom: externalViewZoom,
@@ -277,8 +329,8 @@ export function useCanvasViewport({
 
   const wheelStateRef = useRef({
     viewPanOffset: { x: 0, y: 0 } as ViewPoint,
-    canvasWidth,
-    canvasHeight,
+    contentWidth,
+    contentHeight,
     viewZoom,
     clampPanToViewport,
   });
@@ -287,8 +339,8 @@ export function useCanvasViewport({
   /* eslint-disable react-hooks/refs */
   wheelStateRef.current = {
     viewPanOffset: viewPanRef.current,
-    canvasWidth,
-    canvasHeight,
+    contentWidth,
+    contentHeight,
     viewZoom,
     clampPanToViewport,
   };
@@ -320,8 +372,12 @@ export function useCanvasViewport({
         const anchor = zoomAnchorLockRef.current.anchor;
 
         const factor = Math.exp(-e.deltaY * WHEEL_ZOOM_RATE);
+        // Derived floor, not the flat `MIN_VIEW_ZOOM`: zoom out until the
+        // longest on-screen dimension is `MIN_CANVAS_SCREEN_PX`, whatever the
+        // sprite's size. `state.contentWidth/Height` are the live values kept
+        // fresh by the render-phase write above.
         const newViewZoom = Math.max(
-          MIN_VIEW_ZOOM,
+          viewZoomFloor(state.contentWidth, state.contentHeight),
           Math.min(MAX_VIEW_ZOOM, state.viewZoom * factor),
         );
         const ratio = newViewZoom / state.viewZoom;
@@ -336,16 +392,19 @@ export function useCanvasViewport({
         scheduleCommitPan();
       } else {
         e.preventDefault();
-        const displayedW = state.canvasWidth * state.viewZoom;
-        const displayedH = state.canvasHeight * state.viewZoom;
-        const next = state.clampPanToViewport(
-          {
-            x: state.viewPanOffset.x - e.deltaX,
-            y: state.viewPanOffset.y - e.deltaY,
-          },
-          displayedW,
-          displayedH,
-        );
+        // ⚠️ DELIBERATELY UNCLAMPED — DO NOT REINTRODUCE `clampPanToViewport`.
+        //
+        // This is the wheel/trackpad SCROLL path, and on a trackpad a
+        // two-finger scroll arrives here rather than in the touch handler —
+        // so it is half of the 2026-08-31 report that panning "tries to lock
+        // the region into place". Freed with the touch and mouse pans in
+        // `CanvasContainer`, where the full reasoning lives; the owner chose
+        // unrestricted panning over a keep-a-margin compromise, with Reset
+        // View as the recovery for a view pushed off-screen.
+        const next = {
+          x: state.viewPanOffset.x - e.deltaX,
+          y: state.viewPanOffset.y - e.deltaY,
+        };
         viewPanRef.current = next;
         setViewPanOffsetState(next);
         scheduleCommitPan();
@@ -434,8 +493,13 @@ export function useCanvasViewport({
       const anchor = zoomAnchorLockRef.current.anchor;
 
       const scale = Math.pow(dist / start.distance, PINCH_EXPONENT);
+      // Derived floor, not the flat `MIN_VIEW_ZOOM` — see the wheel handler.
+      // This is the path the iPad actually takes: pinching out now keeps
+      // shrinking a large sprite until its longest side is
+      // `MIN_CANVAS_SCREEN_PX`, instead of stopping a 2560px composition at
+      // 640px.
       const newViewZoom = Math.max(
-        MIN_VIEW_ZOOM,
+        viewZoomFloor(contentWidth, contentHeight),
         Math.min(MAX_VIEW_ZOOM, start.viewZoom * scale),
       );
       const zoomRatio = newViewZoom / start.viewZoom;
@@ -480,7 +544,13 @@ export function useCanvasViewport({
       };
       return true;
     },
-    [getTouchCenter, getTouchDistance, scheduleCommitPan],
+    [
+      contentWidth,
+      contentHeight,
+      getTouchCenter,
+      getTouchDistance,
+      scheduleCommitPan,
+    ],
   );
 
   const endPinch = useCallback(() => {

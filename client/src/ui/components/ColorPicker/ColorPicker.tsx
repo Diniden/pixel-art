@@ -17,18 +17,63 @@ import { useState, useEffect, useRef, useCallback } from "react";
  *     active, `onSetColor(color)` otherwise.
  *
  * That "write on release, not on every mousemove" behaviour is manual check 3.
+ *
+ * ── Pointer events, not mouse events (plan 09 task 03, 2026-09-06) ─────────
+ *
+ * The SV square and the hue bar were the LAST interactive colour surfaces in
+ * the app still bound to `onMouseDown/Move/Up/Leave`. On an iPad the Apple
+ * Pencil never produced a `mousedown` until the browser had decided the touch
+ * was not a scroll, so the picker needed a second tap and then dropped the
+ * drag the moment it left the swatch. They now use the house pattern —
+ * `onPointerDown/Move/Up/Cancel` + `setPointerCapture` — copied from
+ * `OtherHand/ThumbSlider.tsx:60-82`.
+ *
+ * ⚠️ THE FIX IS TWO-PART AND BOTH HALVES ARE REQUIRED. The handlers here are
+ * one half; `touch-action: none` on the canvases, the range inputs and the
+ * picker root in `ColorPicker.css` is the other. With only the handlers,
+ * iPadOS hands the first movement to the rail's scroll and the drag is never
+ * delivered; with only the CSS, a mouse-event picker still cannot see a
+ * Pencil press. Neither alone works on iOS.
+ *
+ * ⚠️ `setPointerCapture` is why there is NO `onMouseLeave`/`onPointerLeave`
+ * drag-end handler any more. Capture routes every subsequent move to the
+ * captured element even when the pointer is outside its bounds — that is the
+ * point, and it is what makes "drag off the edge of the square and back"
+ * keep tracking. A leave handler would kill exactly the drag capture exists
+ * to preserve.
+ *
+ * The presses also `preventDefault()` and `stopPropagation()`, and the root
+ * container absorbs `pointerdown` as well: a Pencil contact anywhere in the
+ * picker must never fall through to the canvas beneath and draw.
  */
 import { Color } from "../../../types";
 // Task 36: the HSL ⇄ RGB maths was module-private here; it now lives in
 // `ui/utils/colorMath.ts` (extracted verbatim — see that file's note on why
 // `prevHsl` must not be "simplified" away).
 import { hslToRgb, rgbToHsl } from "../../utils/colorMath";
+// ⚠️ The fix for the 2026-08-31 HSL drift/stuck report — see the comment
+// on `hsl` below, and the hook's own header for the measurements.
+import { useHslMirror } from "../../hooks/useHslMirror";
+import { ArrowLeftRight } from "lucide-react";
 import { OtherHandButton } from "../OtherHand/OtherHandButton";
 import "./ColorPicker.css";
 
+/** Which of the two global colour slots the picker is editing. */
+export type ColorTarget = "edge" | "fill";
+
 interface ColorPickerProps {
-  /** `uiState.selectedColor` — the colour the picker reflects. */
+  /** The colour the picker reflects — whichever slot `target` names. */
   selectedColor: Color;
+  /**
+   * The slot being edited (2026-09-01). `"edge"` is `selectedColor` — pencil,
+   * line, and a shape's outline; `"fill"` is `fillColor` — the bucket, the
+   * gaussian fill, and a shape's interior.
+   */
+  target: ColorTarget;
+  onTargetChange: (target: ColorTarget) => void;
+  /** The OTHER slot's colour, for the swatch on the inactive tab. */
+  edgeColor: Color;
+  fillColor: Color;
   /** Recently used colours, newest first. */
   colorHistory: Color[];
   /** Truthy while a colour-adjustment session is active. */
@@ -37,17 +82,37 @@ interface ColorPickerProps {
   onAdjustColor: (color: Color, trackHistory: boolean) => void;
   /** Label omitted on drag start, `"Adjust color"` on the debounced save. */
   onSaveStateToHistory: (label?: string) => void;
+  /**
+   * Exchange the edge and fill colours — ONE undo step (the store's
+   * `swapEdgeAndFillColors` snapshots before it mutates, so do not bracket
+   * this callback with a second history save).
+   *
+   * ⚠️ OPTIONAL, AND THAT IS LOAD-BEARING. The control renders only when a
+   * caller supplies this, so the component stays pure and the button cannot
+   * half-exist as a visible dead control. Task 07 shipped it unwired because
+   * `ColorPickerContainer` belonged to task 06 in the same wave; task 11
+   * passes it (`ColorPickerContainer`, alongside the `X` shortcut in
+   * `GlobalHotkeys`), which is what closes R8. The other-hand rail supplies
+   * it too (`OtherHandRailContainer`). Callers that legitimately have no
+   * swap — the ColorPicker tests, a story — simply omit it.
+   */
+  onSwapColors?: () => void;
   /** Hands the rail to the colour sliders in Other Hand Mode (tablets only). */
   onOtherHand?: () => void;
 }
 
 export function ColorPicker({
   selectedColor,
+  target,
+  onTargetChange,
+  edgeColor,
+  fillColor,
   colorHistory,
   colorAdjustment,
   onSetColor,
   onAdjustColor,
   onSaveStateToHistory,
+  onSwapColors,
   onOtherHand,
 }: ColorPickerProps) {
   const [localColor, setLocalColor] = useState<Color>({
@@ -56,29 +121,56 @@ export function ColorPicker({
     b: 0,
     a: 255,
   });
-  const [hsl, setHsl] = useState({ h: 0, s: 0, l: 0 });
-  const [isDraggingSV, setIsDraggingSV] = useState(false);
-  const [isDraggingHue, setIsDraggingHue] = useState(false);
+  /* ⚠️ HSL IS AUTHORITATIVE WHILE THE USER IS IN IT — see `useHslMirror`.
+     DO NOT re-derive `hsl` from `selectedColor` or from `localColor`.
+
+     Reported 2026-08-31: "I can slide an HSL metric back and forth and watch
+     the other values in H and L drift or move around. Things get really weird
+     if I zero out any of the values then it gets kind of stuck."
+
+     That was a `useEffect([selectedColor])` here which recomputed HSL from
+     RGB on EVERY store echo. Measured: dragging S at H=200 walked the hue
+     200 → 199 → 198 → 196, because at low saturation the RGB cube cannot
+     encode 360 distinct hues and each lossy echo fed the next. At S = 0 every
+     triple is a grey, a grey has no hue, and the blue came back as red —
+     unrecoverable, which is the "stuck".
+
+     The mirror keeps HSL as the source of truth and RGB as its OUTPUT, and
+     recognises the store's echo of its own colour so it never round-trips
+     through it. Other Hand Mode has always used this hook, which is exactly
+     why the owner reported those sliders "work great". */
+  const [hsl, setHsl] = useHslMirror(selectedColor ?? localColor);
+  /* Refs, not state: the drag flags are never rendered, so a `useState` here
+     bought a re-render of the whole picker on every pointer move and nothing
+     else. `ThumbSlider` uses a ref for the same reason. */
+  const isDraggingSVRef = useRef(false);
+  const isDraggingHueRef = useRef(false);
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const historySaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasSavedInitialStateRef = useRef<boolean>(false);
-  // Store last known H and S values to preserve them when L is 0 or 100
-  const lastValidHsRef = useRef<{ h: number; s: number } | null>(null);
+
+  /* The hex field's draft while the caret is in it, `null` otherwise — the
+     blur-commit semantics are documented at `commitHex` below. Declared up
+     here with the other UI state because the `selectedColor` mirror effect
+     resets it. */
+  const [hexDraft, setHexDraft] = useState<string | null>(null);
 
   const svCanvasRef = useRef<HTMLCanvasElement>(null);
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // `localColor` mirrors the store's colour for the RGB/hex readouts. The HSL
+  // half is NOT recomputed here — `useHslMirror` owns it, and re-deriving it
+  // from this echo is precisely the drift described above.
   useEffect(() => {
-    if (selectedColor) {
-      const c = selectedColor;
-      setLocalColor(c);
-      const newHsl = rgbToHsl(c.r, c.g, c.b, hsl);
-      setHsl(newHsl);
-      // Update last valid H and S if L is not 0 or 100
-      if (newHsl.l > 0 && newHsl.l < 100) {
-        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-      }
-    }
+    if (selectedColor) setLocalColor(selectedColor);
+    /* ⚠️ Folded in here rather than given its own effect (task 11). The hex
+       DRAFT must be dropped when the colour changes underneath the field —
+       an undo, a palette pick, a swap, a drag on the SV square — or a stale
+       draft keeps displaying over the new colour. It shares this effect's
+       dependency exactly, and a second `useEffect([selectedColor])` would
+       add a second `set-state-in-effect` warning to a lint baseline this
+       plan may not raise, for no behavioural difference. */
+    setHexDraft(null);
   }, [selectedColor]);
 
   // Draw the saturation/value gradient
@@ -183,9 +275,14 @@ export function ColorPicker({
     };
   }, []);
 
-  // Handle global mouse up to save final state if dragging
+  /* Handle a global release to save the final state if dragging.
+     `pointerup` is listened for alongside `mouseup` (plan 09 task 03): a
+     Pencil release on an `<input type="range">` fires `pointerup`, and the
+     synthetic `mouseup` iPadOS may or may not follow it with is not something
+     the 300 ms undo-grouping contract can depend on. Both are harmless
+     together — the handler is idempotent once `isDraggingSlider` is false. */
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
+    const handleGlobalPointerUp = () => {
       if (
         isDraggingSlider &&
         colorAdjustment &&
@@ -197,14 +294,23 @@ export function ColorPicker({
     };
 
     if (isDraggingSlider) {
-      window.addEventListener("mouseup", handleGlobalMouseUp);
+      window.addEventListener("mouseup", handleGlobalPointerUp);
+      window.addEventListener("pointerup", handleGlobalPointerUp);
+      window.addEventListener("pointercancel", handleGlobalPointerUp);
       return () => {
-        window.removeEventListener("mouseup", handleGlobalMouseUp);
+        window.removeEventListener("mouseup", handleGlobalPointerUp);
+        window.removeEventListener("pointerup", handleGlobalPointerUp);
+        window.removeEventListener("pointercancel", handleGlobalPointerUp);
       };
     }
   }, [isDraggingSlider, colorAdjustment, localColor, saveFinalStateToHistory]);
 
-  // Handle slider mouse down - start tracking drag
+  /* Handle a slider press — start tracking the drag.
+     Bound to BOTH `onMouseDown` and `onPointerDown` on every range input
+     (plan 09 task 03). The range input keeps its own native drag; all these
+     do is open and close the one-entry-per-drag undo group, and a Pencil
+     only ever produces the pointer half. Firing twice on a desktop mouse is
+     harmless: the body is idempotent. */
   const handleSliderMouseDown = useCallback(() => {
     setIsDraggingSlider(true);
     hasSavedInitialStateRef.current = false;
@@ -225,24 +331,42 @@ export function ColorPicker({
     }
   }, [colorAdjustment, localColor, saveFinalStateToHistory]);
 
-  const updateColorFromHSL = (newHsl: { h: number; s: number; l: number }) => {
-    // Preserve H and S when L is 0 or 100
-    let finalHsl = { ...newHsl };
-    if (newHsl.l === 0 || newHsl.l === 100) {
-      // Use last valid H and S if available, otherwise keep current values
-      if (lastValidHsRef.current) {
-        finalHsl = { ...lastValidHsRef.current, l: newHsl.l };
-      } else {
-        // If we don't have a last valid value, preserve current H and S
-        finalHsl = { h: hsl.h, s: hsl.s, l: newHsl.l };
-      }
-    } else {
-      // Update last valid H and S when L is not 0 or 100
-      lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
+  /* ── The undo-grouping contract, shared by both colour surfaces ──────────
+     One drag = ONE history entry. `beginSurfaceDrag` saves the pre-image
+     exactly once (the `hasSavedInitialStateRef` latch) and cancels any
+     pending debounced save from a previous drag; `endSurfaceDrag` schedules
+     the 300 ms debounced post-image. Identical to what the SV and hue
+     `onMouseDown`/`onMouseUp` handlers each did inline before — factored out
+     so the pointer rewrite could not drift the two copies apart. */
+  const beginSurfaceDrag = useCallback(() => {
+    setIsDraggingSlider(true);
+    hasSavedInitialStateRef.current = false;
+    if (historySaveTimeoutRef.current) {
+      clearTimeout(historySaveTimeoutRef.current);
+      historySaveTimeoutRef.current = null;
     }
+    saveInitialStateToHistory();
+  }, [saveInitialStateToHistory]);
 
-    setHsl(finalHsl);
-    const rgb = hslToRgb(finalHsl.h, finalHsl.s, finalHsl.l);
+  const endSurfaceDrag = useCallback(() => {
+    setIsDraggingSlider(false);
+    if (colorAdjustment && hasSavedInitialStateRef.current) {
+      saveFinalStateToHistory();
+    }
+  }, [colorAdjustment, saveFinalStateToHistory]);
+
+  /* The HSL the user asked for is used VERBATIM.
+
+     ⚠️ The old `lastValidHsRef` dance that used to live here — restoring H and
+     S from a remembered pair whenever L hit 0 or 100 — is GONE, and must not
+     come back. It was a patch over the resync that no longer exists: because
+     the mirror never re-derives HSL from RGB, H and S simply are not lost at
+     the singularities any more, and there is nothing to restore. It also only
+     ever covered L = 0/100, never S = 0, which is why zeroing saturation
+     trapped the hue at red. */
+  const updateColorFromHSL = (newHsl: { h: number; s: number; l: number }) => {
+    setHsl(newHsl);
+    const rgb = hslToRgb(newHsl.h, newHsl.s, newHsl.l);
     const newColor = { ...rgb, a: localColor.a };
     setLocalColor(newColor);
     // Only track history if not dragging a slider (for direct input changes)
@@ -256,17 +380,15 @@ export function ColorPicker({
     // Only track history if not dragging a slider (for direct input changes)
     applyColor(newColor, !isDraggingSlider);
     if (channel !== "a") {
-      const newHsl = rgbToHsl(newColor.r, newColor.g, newColor.b, hsl);
-      setHsl(newHsl);
-      // Update last valid H and S if L is not 0 or 100
-      if (newHsl.l > 0 && newHsl.l < 100) {
-        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-      }
+      // The user is editing RGB directly, so HSL follows it — with the current
+      // HSL as `prevHsl` so black and white keep their hue. This direction is
+      // not lossy in the same way: RGB is the input the user actually chose.
+      setHsl(rgbToHsl(newColor.r, newColor.g, newColor.b, hsl));
     }
   };
 
   const handleSVCanvasInteraction = (
-    e: React.MouseEvent<HTMLCanvasElement>,
+    e: React.PointerEvent<HTMLCanvasElement>,
   ) => {
     const canvas = svCanvasRef.current;
     if (!canvas) return;
@@ -285,19 +407,27 @@ export function ColorPicker({
     const sHSL = l === 0 || l === 1 ? 0 : (v / 100 - l) / Math.min(l, 1 - l);
 
     const lPercent = Math.round(l * 100);
-    let finalHsl = { h: hsl.h, s: Math.round(sHSL * 100), l: lPercent };
 
-    // Preserve H and S when L is 0 or 100
-    if (lPercent === 0 || lPercent === 100) {
-      if (lastValidHsRef.current) {
-        finalHsl = { ...lastValidHsRef.current, l: lPercent };
-      } else {
-        finalHsl = { h: hsl.h, s: hsl.s, l: lPercent };
-      }
-    } else {
-      // Update last valid H and S when L is not 0 or 100
-      lastValidHsRef.current = { h: finalHsl.h, s: finalHsl.s };
-    }
+    /* ⚠️ AT THE SQUARE'S TOP AND BOTTOM EDGES, SATURATION IS HELD.
+       Hue already survives — it is never recomputed from RGB here, it is
+       carried straight through from `hsl.h`.
+
+       Saturation is different, and this is deliberate rather than an
+       oversight: at L = 0 (the black edge) and L = 100 (the white edge) the
+       HSV→HSL conversion above drives `sHSL` to 0 for EVERY x, so a drag along
+       either edge would silently reset the saturation the user had, and the
+       cursor would snap to the left of the square on the way back. Holding the
+       current S across those two rows keeps the cursor where the finger is.
+
+       This replaces a `lastValidHsRef` that remembered the last good H and S
+       pair. The ref is gone: with `useHslMirror` owning HSL, `hsl` IS the last
+       good value — nothing has overwritten it in between. */
+    const atExtreme = lPercent === 0 || lPercent === 100;
+    const finalHsl = {
+      h: hsl.h,
+      s: atExtreme ? hsl.s : Math.round(sHSL * 100),
+      l: lPercent,
+    };
 
     setHsl(finalHsl);
     const rgb = hslToRgb(finalHsl.h, finalHsl.s, finalHsl.l);
@@ -308,7 +438,7 @@ export function ColorPicker({
   };
 
   const handleHueCanvasInteraction = (
-    e: React.MouseEvent<HTMLCanvasElement>,
+    e: React.PointerEvent<HTMLCanvasElement>,
   ) => {
     const canvas = hueCanvasRef.current;
     if (!canvas) return;
@@ -326,24 +456,131 @@ export function ColorPicker({
     applyColor(newColor, false);
   };
 
-  const handleHexChange = (hex: string) => {
-    const match = hex.match(
-      /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i,
-    );
-    if (match) {
-      const r = parseInt(match[1], 16);
-      const g = parseInt(match[2], 16);
-      const b = parseInt(match[3], 16);
-      const a = match[4] ? parseInt(match[4], 16) : 255;
-      const newColor = { r, g, b, a };
-      setLocalColor(newColor);
-      applyColor(newColor);
-      const newHsl = rgbToHsl(r, g, b, hsl);
-      setHsl(newHsl);
-      // Update last valid H and S if L is not 0 or 100
-      if (newHsl.l > 0 && newHsl.l < 100) {
-        lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-      }
+  /* ── The pointer handlers for the two colour surfaces ────────────────────
+     Shape copied verbatim from `OtherHand/ThumbSlider.tsx:60-82`:
+       down   → primary-button guard, absorb, capture, flag, act IMMEDIATELY
+       move   → act while the flag is set (capture delivers moves outside the
+                element, which is why there is no leave handler)
+       end    → clear the flag, release the capture, close the undo group
+
+     `preventDefault()` on the press stops the browser synthesising the
+     mouse/scroll/selection gestures that were eating the Pencil's first
+     contact; `stopPropagation()` stops that contact reaching the drawing
+     canvas underneath. Acting on the press itself is what makes the colour
+     change on contact rather than on a second tap. */
+  const handleSVPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // The primary button only: a two-finger tap must not start a drag.
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDraggingSVRef.current = true;
+    beginSurfaceDrag();
+    handleSVCanvasInteraction(e);
+  };
+
+  const handleSVPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDraggingSVRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    handleSVCanvasInteraction(e);
+  };
+
+  const handleSVPointerEnd = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDraggingSVRef.current) return;
+    isDraggingSVRef.current = false;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    endSurfaceDrag();
+  };
+
+  const handleHuePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDraggingHueRef.current = true;
+    beginSurfaceDrag();
+    handleHueCanvasInteraction(e);
+  };
+
+  const handleHuePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDraggingHueRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    handleHueCanvasInteraction(e);
+  };
+
+  const handleHuePointerEnd = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDraggingHueRef.current) return;
+    isDraggingHueRef.current = false;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    endSurfaceDrag();
+  };
+
+  /**
+   * Parse a hex draft, or `null` if it is not a complete colour.
+   *
+   * The regex is the ORIGINAL one, unchanged: `#` optional, 6 or 8 hex
+   * digits, the alpha pair defaulting to opaque. What changed is only WHEN it
+   * runs — see `commitHex`.
+   */
+  const parseHex = (hex: string): Color | null => {
+    const match = hex
+      .trim()
+      .match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i);
+    if (!match) return null;
+    return {
+      r: parseInt(match[1], 16),
+      g: parseInt(match[2], 16),
+      b: parseInt(match[3], 16),
+      a: match[4] ? parseInt(match[4], 16) : 255,
+    };
+  };
+
+  /* ── The hex field commits on BLUR, not on every keystroke ───────────────
+     Plan 09 task 11, the last input in the app to be converted. Task 02 swept
+     every other field onto draft-plus-blur semantics but explicitly excluded
+     this file, whose pointer handling task 03 was rewriting in the same wave.
+
+     Shape copied from `PosePanel/CameraAdvanced.tsx:258-269`: a local draft
+     while the caret is in the box, commit on blur AND on Enter, revert on
+     Escape, and a `useEffect` resync so an external colour change (a palette
+     click, an undo, a swap) is not masked by a stale draft.
+
+     ⚠️ THE HEX FIELD HAS A WRINKLE THE NUMBER FIELDS DO NOT: a partially
+     typed value is not merely out of range, it is not a colour at all. `#ab`
+     parses to nothing, and the OLD live-`onChange` code silently ignored it —
+     which read as the field being ignored while the user was three keystrokes
+     in. Now the draft is shown verbatim while typing and, on blur, an
+     unparseable draft REVERTS to the current colour rather than writing
+     garbage or leaving a dead value on screen.
+
+     Blur/Enter: write the draft if it is a colour, otherwise discard it. */
+  const commitHex = () => {
+    if (hexDraft === null) return;
+    const parsed = parseHex(hexDraft);
+    setHexDraft(null);
+    if (!parsed) return; // invalid → revert; `getHexColor()` redisplays.
+    setLocalColor(parsed);
+    applyColor(parsed);
+    setHsl(rgbToHsl(parsed.r, parsed.g, parsed.b, hsl));
+  };
+
+  const handleHexKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitHex();
+      e.currentTarget.blur();
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setHexDraft(null);
+      e.currentTarget.blur();
     }
   };
 
@@ -376,16 +613,20 @@ export function ColorPicker({
   const handleHistoryColorClick = (color: Color) => {
     setLocalColor(color);
     applyColor(color);
-    const newHsl = rgbToHsl(color.r, color.g, color.b, hsl);
-    setHsl(newHsl);
-    // Update last valid H and S if L is not 0 or 100
-    if (newHsl.l > 0 && newHsl.l < 100) {
-      lastValidHsRef.current = { h: newHsl.h, s: newHsl.s };
-    }
+    setHsl(rgbToHsl(color.r, color.g, color.b, hsl));
+  };
+
+  /* The root absorbs the press so a Pencil contact ANYWHERE in the picker —
+     the gaps between sliders, the section labels, the preview swatch — cannot
+     bubble out to the drawing canvas beneath and paint a pixel. It only stops
+     propagation; it does NOT `preventDefault`, because the buttons, the range
+     inputs and the hex field all need their own default behaviour. */
+  const handleRootPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
   };
 
   return (
-    <div className="panel color-picker">
+    <div className="panel color-picker" onPointerDown={handleRootPointerDown}>
       <div className="panel__header">
         <span className="panel__title">Color</span>
         {onOtherHand ? (
@@ -393,6 +634,59 @@ export function ColorPicker({
         ) : null}
       </div>
       <div className="panel__body">
+        {/* ── Which slot is being edited ───────────────────────────────────
+            Two GLOBAL colours, not a shape-tool option: the pencil and the
+            line draw with the edge colour, the bucket and the gaussian fill
+            use the fill colour, and a rectangle/ellipse in "both" mode uses
+            each for the part it names. The swatch on each tab is that slot's
+            current colour, so the pair is readable without switching. */}
+        <div className="color-picker__target-row">
+          <div className="color-picker__targets" role="tablist">
+            {(
+            [
+                ["edge", "Edge", edgeColor],
+                ["fill", "Fill", fillColor],
+              ] as const
+            ).map(([id, label, swatch]) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={target === id}
+                className={`color-picker__target${
+                  target === id ? " color-picker__target--active" : ""
+                }`}
+                onClick={() => onTargetChange(id)}
+              >
+                <span
+                  className="color-picker__target-swatch"
+                  style={{
+                    backgroundColor: `rgba(${swatch.r}, ${swatch.g}, ${swatch.b}, ${swatch.a / 255})`,
+                  }}
+                />
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* ── Swap, beside the tabs it exchanges ─────────────────────────
+              Next to the segmented group rather than inside it: the tablist
+              describes exactly two tabs, and a third child that is not a tab
+              would make a screen reader announce "3 tabs". Adjacency still
+              carries the meaning — the thing it swaps is the pair to its
+              left. Rendered only when a caller supplies `onSwapColors`; see
+              that prop's note on why the prop is optional. */}
+          {onSwapColors ? (
+            <button
+              type="button"
+              className="color-picker__swap"
+              title="Swap edge and fill colors"
+              aria-label="Swap edge and fill colors"
+              onClick={onSwapColors}
+            >
+              <ArrowLeftRight size={14} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+
         {/* Color History */}
         {colorHistory.length > 0 && (
           <div className="color-picker__history">
@@ -418,32 +712,10 @@ export function ColorPicker({
               width={180}
               height={120}
               className="color-picker__sv-canvas"
-              onMouseDown={(e) => {
-                setIsDraggingSV(true);
-                setIsDraggingSlider(true);
-                hasSavedInitialStateRef.current = false;
-                if (historySaveTimeoutRef.current) {
-                  clearTimeout(historySaveTimeoutRef.current);
-                  historySaveTimeoutRef.current = null;
-                }
-                saveInitialStateToHistory();
-                handleSVCanvasInteraction(e);
-              }}
-              onMouseMove={(e) => isDraggingSV && handleSVCanvasInteraction(e)}
-              onMouseUp={() => {
-                setIsDraggingSV(false);
-                setIsDraggingSlider(false);
-                if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory();
-                }
-              }}
-              onMouseLeave={() => {
-                setIsDraggingSV(false);
-                setIsDraggingSlider(false);
-                if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory();
-                }
-              }}
+              onPointerDown={handleSVPointerDown}
+              onPointerMove={handleSVPointerMove}
+              onPointerUp={handleSVPointerEnd}
+              onPointerCancel={handleSVPointerEnd}
             />
             <div
               className="color-picker__sv-handle"
@@ -457,34 +729,10 @@ export function ColorPicker({
               width={180}
               height={12}
               className="color-picker__hue-canvas"
-              onMouseDown={(e) => {
-                setIsDraggingHue(true);
-                setIsDraggingSlider(true);
-                hasSavedInitialStateRef.current = false;
-                if (historySaveTimeoutRef.current) {
-                  clearTimeout(historySaveTimeoutRef.current);
-                  historySaveTimeoutRef.current = null;
-                }
-                saveInitialStateToHistory();
-                handleHueCanvasInteraction(e);
-              }}
-              onMouseMove={(e) =>
-                isDraggingHue && handleHueCanvasInteraction(e)
-              }
-              onMouseUp={() => {
-                setIsDraggingHue(false);
-                setIsDraggingSlider(false);
-                if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory();
-                }
-              }}
-              onMouseLeave={() => {
-                setIsDraggingHue(false);
-                setIsDraggingSlider(false);
-                if (colorAdjustment && hasSavedInitialStateRef.current) {
-                  saveFinalStateToHistory();
-                }
-              }}
+              onPointerDown={handleHuePointerDown}
+              onPointerMove={handleHuePointerMove}
+              onPointerUp={handleHuePointerEnd}
+              onPointerCancel={handleHuePointerEnd}
             />
             <div
               className="color-picker__hue-handle"
@@ -504,8 +752,14 @@ export function ColorPicker({
           <input
             type="text"
             className="color-picker__hex-input"
-            value={getHexColor()}
-            onChange={(e) => handleHexChange(e.target.value)}
+            aria-label="Hex color"
+            /* The draft while one exists, the live colour otherwise — so a
+               half-typed value stays on screen for correction instead of
+               snapping back under the caret. */
+            value={hexDraft ?? getHexColor()}
+            onChange={(e) => setHexDraft(e.target.value)}
+            onBlur={commitHex}
+            onKeyDown={handleHexKeyDown}
             placeholder="#000000"
           />
         </div>
@@ -523,6 +777,9 @@ export function ColorPicker({
               value={hsl.h}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
+              onPointerDown={handleSliderMouseDown}
+              onPointerUp={handleSliderMouseUp}
+              onPointerCancel={handleSliderMouseUp}
               onChange={(e) =>
                 updateColorFromHSL({ ...hsl, h: parseInt(e.target.value) })
               }
@@ -548,6 +805,9 @@ export function ColorPicker({
               value={hsl.s}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
+              onPointerDown={handleSliderMouseDown}
+              onPointerUp={handleSliderMouseUp}
+              onPointerCancel={handleSliderMouseUp}
               onChange={(e) =>
                 updateColorFromHSL({ ...hsl, s: parseInt(e.target.value) })
               }
@@ -578,6 +838,9 @@ export function ColorPicker({
               value={hsl.l}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
+              onPointerDown={handleSliderMouseDown}
+              onPointerUp={handleSliderMouseUp}
+              onPointerCancel={handleSliderMouseUp}
               onChange={(e) =>
                 updateColorFromHSL({ ...hsl, l: parseInt(e.target.value) })
               }
@@ -619,6 +882,9 @@ export function ColorPicker({
                 value={localColor[channel]}
                 onMouseDown={handleSliderMouseDown}
                 onMouseUp={handleSliderMouseUp}
+                onPointerDown={handleSliderMouseDown}
+                onPointerUp={handleSliderMouseUp}
+                onPointerCancel={handleSliderMouseUp}
                 onChange={(e) =>
                   updateColorFromRGB(channel, parseInt(e.target.value))
                 }
@@ -649,6 +915,9 @@ export function ColorPicker({
               value={localColor.a}
               onMouseDown={handleSliderMouseDown}
               onMouseUp={handleSliderMouseUp}
+              onPointerDown={handleSliderMouseDown}
+              onPointerUp={handleSliderMouseUp}
+              onPointerCancel={handleSliderMouseUp}
               onChange={(e) =>
                 updateColorFromRGB("a", parseInt(e.target.value))
               }

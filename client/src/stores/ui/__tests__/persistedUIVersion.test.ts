@@ -56,6 +56,7 @@ const PERSISTED_EDITS: [name: string, edit: (ui: UIStore) => void][] = [
   ["panOffset", (ui) => ui.viewport.setPanOffset({ x: 5, y: 6 })],
   ["focusMode", (ui) => ui.viewport.toggleFocusMode()],
   ["lightGridMode", (ui) => ui.viewport.toggleLightGridMode()],
+  ["pencilOnly", (ui) => ui.viewport.setPencilOnly(true)],
   ["canvasInfoHidden", (ui) => ui.viewport.setCanvasInfoHidden(true)],
   [
     "objectLibraryViewMode",
@@ -155,7 +156,8 @@ describe("persistedUIVersion — every persisted field bumps it", () => {
     // +2 (2026-08-25): `railLayouts` and `theme`.
     // +1 (2026-08-28): `viewZoom`.
     // +1 (2026-08-28): `eyedropperMode`.
-    expect(PERSISTED_EDITS).toHaveLength(35);
+    // 36 after `pencilOnly` joined the wire format on 2026-08-31.
+    expect(PERSISTED_EDITS).toHaveLength(36);
   });
 });
 

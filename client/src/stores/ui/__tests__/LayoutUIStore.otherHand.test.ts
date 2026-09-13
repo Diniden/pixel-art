@@ -61,20 +61,25 @@ describe("⭐ the wire format", () => {
   });
 
   it("emits `otherHand` once something is arranged, and reads it back", () => {
-    const store = new LayoutUIStore("tablet");
+    // ⚠️ Orientation pinned, and the key is composite (plan 09, task 10): a
+    // tablet stores under `tablet:<orientation>` so portrait and landscape
+    // hold separate arrangements. See `orientationLayout.test.ts`.
+    const store = new LayoutUIStore("tablet", "landscape");
     runInAction(() => {
       store.setOtherHandWidgetPosition("tool:pixel", "size", { x: 60, y: 10 });
       store.setOtherHandColorModel("color", "rgb");
       store.setOtherHandIncludeAlpha("color", true);
     });
-    const persisted = store.toPersistedRailLayouts()!.tablet;
+    const persisted = store.toPersistedRailLayouts()!["tablet:landscape"];
     expect(persisted.otherHand).toEqual({
       "tool:pixel": { positions: { size: { x: 60, y: 10 } } },
       color: { positions: {}, colorModel: "rgb", includeAlpha: true },
     });
 
-    const reloaded = new LayoutUIStore("tablet");
-    runInAction(() => reloaded.hydrate({ railLayouts: { tablet: persisted } }));
+    const reloaded = new LayoutUIStore("tablet", "landscape");
+    runInAction(() =>
+      reloaded.hydrate({ railLayouts: { "tablet:landscape": persisted } }),
+    );
     expect(reloaded.otherHandLayoutFor("tool:pixel").positions.size).toEqual({
       x: 60,
       y: 10,
@@ -114,14 +119,16 @@ describe("⭐ the wire format", () => {
   });
 
   it("other devices' records are untouched by a tablet arranging its rail", () => {
-    const store = new LayoutUIStore("tablet");
+    const store = new LayoutUIStore("tablet", "landscape");
     runInAction(() => {
       store.hydrate({ railLayouts: { desktop: legacyLayout } });
       store.setOtherHandWidgetPosition("color", "h", { x: 1, y: 1 });
     });
     const persisted = store.toPersistedRailLayouts()!;
     expect(persisted.desktop).toEqual(legacyLayout);
-    expect(persisted.tablet.otherHand?.color.positions.h).toEqual({
+    expect(
+      persisted["tablet:landscape"].otherHand?.color.positions.h,
+    ).toEqual({
       x: 1,
       y: 1,
     });

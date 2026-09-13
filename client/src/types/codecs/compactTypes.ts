@@ -1,6 +1,8 @@
 import type {
   BitDepth,
   EyedropperMode,
+  PersistedLayoutPreset,
+  PersistedPosePreset,
   PersistedRailLayout,
   SelectionBehavior,
   SelectionMode,
@@ -86,10 +88,25 @@ export interface CompactUIState {
   selectedLayerId: string | null;
   selectedTool: Tool;
   selectedColor: number; // hex number
+  /**
+   * The FILL colour, as a hex number (2026-09-01).
+   *
+   * ⚠️ Conditional, like `hiddenRails` above: absent until the user picks a
+   * fill colour distinct from the edge colour, so an untouched project's key
+   * set — and therefore its corpus digest — is unchanged. Readers fall back to
+   * `selectedColor` (`ToolUIStore.fillColorOrSelected`).
+   */
+  fillColor?: number;
   selectionMode?: SelectionMode;
   selectionBehavior?: SelectionBehavior;
   focusMode?: boolean;
+  /**
+   * Dismissed rails (2026-08-30). Conditional: absent until a rail is
+   * hidden, so an untouched project's key set is unchanged.
+   */
+  hiddenRails?: string[];
   lightGridMode?: boolean;
+  pencilOnly?: boolean;
   brushSize: number;
   bitDepth: BitDepth;
   shapeMode: ShapeMode;
@@ -100,6 +117,18 @@ export interface CompactUIState {
   eraserShape?: "circle" | "square"; // Optional for backward compatibility
   pencilBrushShape?: "circle" | "square"; // Optional for backward compatibility
   pencilBrushMax?: 8 | 16 | 32 | 64 | 128; // Optional for backward compatibility
+  /**
+   * The ERASER's own size and max (plan 09).
+   *
+   * ⚠️ Conditional, like `fillColor` above: absent until the user actually
+   * moves the eraser's slider or picks its max, so an untouched project's key
+   * set — and therefore its corpus digest — is unchanged. `brushSize` above
+   * stays unconditional and now means specifically the PENCIL's size; the
+   * eraser falls back to it (`ToolUIStore.effectiveEraserSize`), which is the
+   * whole migration.
+   */
+  eraserBrushSize?: number;
+  eraserBrushMax?: 8 | 16 | 32 | 64 | 128;
   traceNudgeAmount?: 10 | 20 | 25 | 50 | 100; // Optional for backward compatibility
   normalBrushShape?: "circle" | "square"; // Optional for backward compatibility
   variantFrameIndices?: { [variantGroupId: string]: number };
@@ -141,6 +170,21 @@ export interface CompactUIState {
   // changes something, so an untouched project's key set is unchanged (R3).
   // `railLayouts` is keyed by device class; `theme` is one per project.
   railLayouts?: { [deviceClass: string]: PersistedRailLayout };
+  /**
+   * The user's own saved layouts, keyed by device class (2026-08-30).
+   * Conditional for the same reason as `railLayouts`: absent until the user
+   * saves one, so an untouched project's key set is unchanged.
+   */
+  layoutPresets?: { [deviceClass: string]: PersistedLayoutPreset[] };
+  /**
+   * The user's saved POSE SCENE presets (plan 08, 2026-09-04). Conditional
+   * for exactly the same reason as `layoutPresets`, and the reason is the
+   * owner's 151 backup snapshots: `PoseUIStore.toPersistedPosePresets()`
+   * returns `undefined` until one is saved and the builder emits it through
+   * `assign()`, so an untouched project gains no key and no digest moves
+   * (**F13**). ⚠️ Only the PRESETS persist — the live pose is session-only.
+   */
+  posePresets?: PersistedPosePreset[];
   theme?: string;
   /** Canvas view-transform scale. Conditional: absent until the user zooms. */
   viewZoom?: number;

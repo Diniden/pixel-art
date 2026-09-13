@@ -73,3 +73,70 @@ export function detectDeviceClass(): DeviceClass {
   if (shortEdge <= TABLET_MAX_SHORT_EDGE) return "tablet";
   return "desktop";
 }
+
+/* ── Orientation: the SECOND dimension of the layout key ──────────────────
+ *
+ * An iPad held in portrait and the same iPad held in landscape want
+ * genuinely different rail arrangements — a rail that reads as a comfortable
+ * side column at 1024 px wide is half the screen at 768 px. Before this,
+ * both orientations shared ONE saved record, so arranging the rails in
+ * landscape destroyed the portrait arrangement and vice versa.
+ *
+ * ⚠️ This is deliberately NOT folded into `detectDeviceClass` above.
+ * Rotating an iPad must not move it between device classes — that is the
+ * whole reason the classification measures the SHORT edge — so orientation
+ * is added as a separate dimension of the layout key rather than as a
+ * redefinition of the first. `detectDeviceClass` is unchanged.
+ */
+
+/** Which way round the device is being held. */
+export type Orientation = "portrait" | "landscape";
+
+/** The media query the store listens to. Exported so the two agree. */
+export const PORTRAIT_QUERY = "(orientation: portrait)";
+
+/**
+ * Which way round the viewport currently is.
+ *
+ * `matchMedia` first, because it is the value the CSS media queries in
+ * `OtherHand.css`, `CanvasSplit.css` and `Header.css` already act on — the
+ * layout key and the stylesheet must never disagree about the orientation.
+ * `innerWidth`/`innerHeight` is the fallback for jsdom and other non-browser
+ * contexts where `matchMedia` is absent, and a square or unmeasurable
+ * viewport answers "landscape", the historical single-record orientation.
+ */
+export function detectOrientation(): Orientation {
+  if (typeof window === "undefined") return "landscape";
+  if (typeof window.matchMedia === "function") {
+    return window.matchMedia(PORTRAIT_QUERY).matches ? "portrait" : "landscape";
+  }
+  const w = window.innerWidth || 0;
+  const h = window.innerHeight || 0;
+  return h > w ? "portrait" : "landscape";
+}
+
+/**
+ * The `railLayouts` / key under which THIS device's arrangement is stored.
+ *
+ * ⚠️ DESKTOP KEEPS ITS BARE `"desktop"` KEY, and that asymmetry is the
+ * point. A desktop window is freely resizable and "portrait" means nothing
+ * there — dragging a window taller than it is wide would otherwise swap the
+ * user's whole layout out from under them. Keeping `"desktop"` unchanged
+ * also means no desktop user's already-saved layout moves to a new key.
+ *
+ * Tablets and phones get `` `${deviceClass}:${orientation}` `` — a device
+ * whose orientation is a physical fact about how it is being held, and whose
+ * two orientations really are two different screens.
+ *
+ * No new WIRE key: `railLayouts` has always been `{ [key: string]: … }`, so
+ * this enriches the map's keys and changes nothing about the format's shape.
+ * An untouched project still has `railLayouts === {}` and still emits no key
+ * at all.
+ */
+export function layoutKey(
+  deviceClass: DeviceClass,
+  orientation: Orientation,
+): string {
+  if (deviceClass === "desktop") return deviceClass;
+  return `${deviceClass}:${orientation}`;
+}

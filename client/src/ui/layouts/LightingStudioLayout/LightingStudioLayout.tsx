@@ -16,32 +16,28 @@
  * off `App.tsx:190-216` rather than assumed. Lighting mode renders:
  *
  *   - **no `CanvasInfo`**          (`App.tsx:273`, gated `!isLightingMode`)
- *   - **no `LayerColors`**         (`App.tsx:274`, same gate)
+ *   - (`LayerColors` was a fourth, and is now retired everywhere — its
+ *     swatches are `PaletteManager`'s "Current Palette" row, so the PIXEL
+ *     layout has no such region either.)
  *   - **no `FrameReferencePanel`** (inside the `!isLightingMode` fragment)
  *   - **no `ReferenceImagePanel`** (same fragment)
  *
- * Four of the pixel layout's twelve regions are absent, and one region exists
- * ONLY here: `previewPanel`, the floating lit-composite thumbnail extracted by
- * task 33.
+ * Four of the pixel layout's twelve regions are absent.
  *
- * A merged layout would carry five props that are dead in one of its two modes
+ * A merged layout would carry four props that are dead in one of its two modes
  * and a `mode` discriminant to say which — i.e. it would reconstruct
  * `App.tsx`'s runtime branch inside a component whose entire purpose was to
  * dissolve it. Two layouts make the difference a TYPE error instead: passing
  * `canvasInfo` here does not compile.
  *
- * ── `previewPanel` is optional, and usually absent ─────────────────────────
+ * ── 🏁 THE `previewPanel` SLOT IS GONE (2026-08-29, MASTER D7) ─────────────
  *
- * ⚠️ In the running app this prop is **not** how the preview panel mounts.
- * `LightingPreviewPanelContainer` needs the thumbnail canvas ref and the
- * float-bounds ref, both of which live inside `LightingCanvasContainer`, so it
- * is rendered THERE (`LightingCanvasContainer.tsx:668`) — inside the `canvas`
- * region this layout receives as one opaque node.
- *
- * The prop exists so a story can place a stub panel in the canvas area without
- * standing up the whole canvas container, and so the arrangement is
- * expressible if the ref plumbing is ever hoisted. It is deliberately NOT
- * wired by `LightingStudioContainer`: doing so would mount the panel twice.
+ * This layout used to carry an optional `previewPanel` region for the floating
+ * 200 px lit-composite thumbnail. That panel was retired when the lit
+ * composite became a real workspace pane: `LightingStudioContainer` now passes
+ * a `CanvasSplit` of `LightingCanvasContainer`s as `canvas`, and the preview
+ * is one of them. There is no floating panel left to slot in, so the layout is
+ * back to a single canvas region.
  */
 import type { ReactNode, RefObject } from "react";
 import { AppShell } from "../../components/AppShell/AppShell";
@@ -56,8 +52,6 @@ export interface LightingStudioLayoutProps {
   studioPanel: ReactNode;
   timeline: ReactNode;
   canvas: ReactNode;
-  /** The floating lit-composite thumbnail. See the header note — story-only. */
-  previewPanel?: ReactNode;
 
   /**
    * Rail placement + sizes, and the layout-mode scrims. Both are passed
@@ -67,8 +61,27 @@ export interface LightingStudioLayoutProps {
    */
   layout?: AppShellProps["layout"];
   railOverlays?: AppShellProps["railOverlays"];
-  /** `App.tsx:229` — hides the left sidebar AND the bottom timeline. */
-  focusMode: boolean;
+  /**
+   * The layout-mode picker over the canvas. Passed straight through like the
+   * two above — the layout neither reads it nor knows what it contains.
+   */
+  canvasOverlay?: AppShellProps["canvasOverlay"];
+  /** The per-rail × buttons, passed straight through to `AppShell`. */
+  railDismiss?: AppShellProps["railDismiss"];
+  /**
+   * Which rails are hidden, by rail NAME (2026-08-30).
+   *
+   * ⚠️ THIS REPLACED THE `focusMode` BOOLEAN, and the widening is the point.
+   * Focus mode used to be the only way a rail could be missing, so one flag
+   * covered it; now a rail can also be dismissed on its own, and the layout
+   * must not care which of the two happened. It asks one question per rail —
+   * "is this hidden" — and focus mode becomes just one of the callers that
+   * can answer yes.
+   *
+   * Absence still expresses hiding to `AppShell` (it has no `focusMode` prop
+   * and never learned one); this prop only decides which regions are passed.
+   */
+  hiddenRails?: ReadonlySet<"left" | "right" | "bottom">;
   canvasAreaRef?: RefObject<HTMLElement | null>;
 }
 
@@ -81,21 +94,24 @@ export function LightingStudioLayout({
   studioPanel,
   timeline,
   canvas,
-  previewPanel,
   layout,
   railOverlays,
-  focusMode,
+  canvasOverlay,
+  railDismiss,
+  hiddenRails,
   canvasAreaRef,
 }: LightingStudioLayoutProps) {
   return (
     <AppShell
       layout={layout}
       railOverlays={railOverlays}
+      canvasOverlay={canvasOverlay}
+      railDismiss={railDismiss}
       header={header}
       toolbar={toolbar}
       canvasAreaRef={canvasAreaRef}
       leftPanel={
-        focusMode ? undefined : (
+        hiddenRails?.has("left") ? undefined : (
           <>
             {objectLibrary}
             {layerPanel}
@@ -103,15 +119,19 @@ export function LightingStudioLayout({
         )
       }
       rightPanel={
-        <>
-          {rightControls}
-          {studioPanel}
-        </>
+        /* ⚠️ `rightPanel` is REQUIRED by `AppShell` (the shell has always had
+           one), so hiding it passes `null` rather than omitting the prop —
+           `renderSide` filters on `!= null` and treats both the same. */
+        hiddenRails?.has("right") ? null : (
+          <>
+            {rightControls}
+            {studioPanel}
+          </>
+        )
       }
-      bottomPanel={focusMode ? undefined : timeline}
+      bottomPanel={hiddenRails?.has("bottom") ? undefined : timeline}
     >
       {canvas}
-      {previewPanel}
     </AppShell>
   );
 }
