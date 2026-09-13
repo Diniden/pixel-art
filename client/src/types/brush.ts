@@ -36,6 +36,22 @@ export const BRUSH_CHANNEL_BADGE: Record<BrushChannelType, string> = {
   normal: "NRM",
   heightmap: "HGT",
 };
+/** Where the pixel-studio Brush tool takes the colour a layer's deltas operate on. */
+export type BrushColorSource = "selected" | "target";
+export const BRUSH_COLOR_SOURCES: readonly BrushColorSource[] = [
+  "selected",
+  "target",
+];
+export const BRUSH_COLOR_SOURCE_LABEL: Record<BrushColorSource, string> = {
+  selected: "Selected colour",
+  target: "Target pixel",
+};
+export const BRUSH_COLOR_SOURCE_BADGE: Record<BrushColorSource, string> = {
+  selected: "SEL",
+  target: "TGT",
+};
+/** The default when the key is absent — every pre-existing brush file. */
+export const DEFAULT_BRUSH_COLOR_SOURCE: BrushColorSource = "selected";
 export const BRUSH_DELTA_MIN = -255;
 export const BRUSH_DELTA_MAX = 255;
 /** Four signed deltas in −255..255. Unused slots (normal: index 3; heightmap: 1–3) are 0. */
@@ -52,6 +68,13 @@ export interface BrushLayer {
   channelType: BrushChannelType;
   visible: boolean;
   appliedGroupId?: string;
+  /**
+   * Where the pixel-studio Brush tool seeds this layer's deltas. Absent means
+   * `"selected"` (the picked colour); the key is present only when `"target"`
+   * (the pixel already on the canvas). Optional and additive — old brush files
+   * never carry it (plan 13 D1).
+   */
+  colorSource?: BrushColorSource;
   pixels: BrushCell[][] /* [y][x] */;
 }
 export interface BrushFrame {
@@ -66,6 +89,16 @@ export interface BrushDocument {
   height: number;
   frames: BrushFrame[];
   appliedGroups: BrushAppliedGroup[];
+}
+
+/**
+ * Resolve a layer's colour source, treating an absent key as `"selected"`.
+ * Structural parameter so `ui/` scene layers can pass through it.
+ */
+export function brushLayerColorSource(layer: {
+  colorSource?: BrushColorSource;
+}): BrushColorSource {
+  return layer.colorSource ?? DEFAULT_BRUSH_COLOR_SOURCE;
 }
 
 // ============================================
@@ -141,14 +174,19 @@ export function createBrushLayer(
   width: number,
   height: number,
   channelType: BrushChannelType = "rgb",
+  colorSource: BrushColorSource = "selected",
 ): BrushLayer {
-  return {
+  const layer: BrushLayer = {
     id,
     name,
     channelType,
     visible: true,
     pixels: createEmptyBrushGrid(width, height),
   };
+  // The key is present only for `"target"` so the default output stays
+  // byte-identical to a pre-plan-13 layer.
+  if (colorSource === "target") layer.colorSource = "target";
+  return layer;
 }
 
 export function createBrushFrame(
@@ -229,6 +267,13 @@ function isChannelType(v: unknown): v is BrushChannelType {
   );
 }
 
+export function isColorSource(v: unknown): v is BrushColorSource {
+  return (
+    typeof v === "string" &&
+    (BRUSH_COLOR_SOURCES as readonly string[]).includes(v)
+  );
+}
+
 function normalizeCell(raw: unknown): BrushCell {
   if (!Array.isArray(raw)) return 0;
   const n = (i: number): number =>
@@ -269,6 +314,8 @@ function normalizeLayer(
   if (typeof r.appliedGroupId === "string" && r.appliedGroupId.length > 0) {
     layer.appliedGroupId = r.appliedGroupId;
   }
+  // Absent, `"selected"` or garbage all leave the key absent (the default).
+  if (r.colorSource === "target") layer.colorSource = "target";
   return layer;
 }
 
