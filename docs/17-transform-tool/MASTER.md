@@ -1,14 +1,17 @@
 # Transform tool — MASTER plan
 
-Planned 2026-09-27 against `main @ 96e0284` (clean tree; application source identical to `9007990`,
-the plan-13 merge — every commit since is docs-only). Executed by `/plan-go`, one fresh agent per
+Planned 2026-09-27. Measured on `main @ 96e0284` (application source identical to `9007990`, the
+plan-13 merge); **published on `main @ 9d94103`, whose parent `8eb365c` is the plan-14 merge.** The
+drift between the two was re-checked before publishing: of every file this plan cites, only
+`client/src/stores/ApplicationStore.ts` changed (+26 lines — `undo()` is now at `:1924`, the
+pose / reaction anchors at `:620-627` are unchanged). Executed by `/plan-go`, one fresh agent per
 task. **Read this file, `CLAUDE.md`, and your task file. Nothing else is required; nothing else is
 assumed.**
 
-> **Ordering note.** Plans 14 (`docs/14-multi-brush-projects/`) and 15 (`docs/15-brush-application-mapping/`)
-> are written and unexecuted; an untracked, in-progress `docs/16-studio-aware-tool-config/` exists on
-> the owner's machine. This plan has **no dependency** on any of them, but it edits three files they
-> also edit (`toolHandlers.ts`, `PixelStore.ts`, `CanvasContainer.tsx` — additive in every case).
+> **Ordering note.** Plan 14 (`docs/14-multi-brush-projects/`) is **merged**. Plan 15
+> (`docs/15-brush-application-mapping/`) and plan 16 (`docs/16-studio-aware-tool-config/`) are
+> written and unexecuted. This plan has **no dependency** on either, but it edits three files plan 15
+> also edits (`toolHandlers.ts`, `PixelStore.ts`, `CanvasContainer.tsx` — additive in every case).
 > Run plans **sequentially**, never two at once on the same base, and re-read the lines cited here on
 > the branch you cut: line numbers were measured on `96e0284`, symbols are the anchor.
 
@@ -164,8 +167,8 @@ export interface TransformGesture { pointerDown(clientX, clientY, mods: Transfor
 ## 4. Ground truth (measured 2026-09-27 on `main @ 96e0284`)
 
 ### Repo state
-- Refresh complete; no `REFRESH/`. Every file here is MobX + BEM + `ui/`/`containers/`. Plans 14/15 unexecuted; `docs/16-*` untracked WIP (see the ordering note).
-- Baseline gate (unchanged since `9007990`): `bun run verify` exit 0 — tsc clean, eslint **0 errors / 66 warnings**, vitest **200 files / 4361 tests**, build OK; stylelint 2 pre-existing errors (`OtherHand.css:338,359`); storybook OK; boundaries 5/5; server 4 files / 102 tests; no lockfile.
+- Refresh complete; no `REFRESH/`. Every file here is MobX + BEM + `ui/`/`containers/`. Plan 14 merged (`8eb365c`); plans 15/16 unexecuted (see the ordering note).
+- Baseline gate **after the plan-14 merge** (its ledger, `docs/14-multi-brush-projects/HANDOFF.md`): `bun run verify` exit 0 — tsc clean, eslint **0 errors / 66 warnings**, vitest **201 files / 4529 tests**, build OK; stylelint 2 pre-existing errors (`OtherHand.css:338,359`) / 69 warnings; storybook OK; boundaries 5/5; server 5 files / 109 tests; no lockfile. (Pre-merge, on `96e0284`: 200 files / 4361 tests; the other numbers identical.)
 - ⚠️ `client/src/test/__fixtures__/corpus/*.json` (11 files) is gitignored and absent in a fresh worktree; copy from the launch checkout before the first gate (`corpusFiles()` throws on an empty dir).
 - `lucide-react@0.575.0` exports `Scaling`. `TOOL_HOTKEYS` has no `t`/`T`.
 
@@ -176,7 +179,7 @@ export interface TransformGesture { pointerDown(clientX, clientY, mods: Transfor
 - `CanvasContainer.tsx` (6193): selection gesture closures `beginSelectionAt :4567-4627` (inside-mask test `:4568-4574`, branch order drag-existing → editMask swallow → rect → flood → colour → lasso), `updateSelectionAt :4643-4688`, `commitSelection(commit) :4705-4738`; in-flight `useState` `:555-567` (`selectionDragMode`, `pixelDragOffset`); `actions` memo `:841+` (`setPixels :881`, `moveSelectedPixels :923-926` two-step order, `setPixelCells :3546`); keyboard wiring `:4148-4194`; `isGestureTool :388-397` (`move | selection | eyedropper | origin | reflection | pose`); mouse down `:4777+`, move `:4941+`, window mouseup + blur `:5269-5281`, window mousemove forwarder gated on `shapeDragOpenRef` `:5248-5267`; touch start `:5321`, canvasTouches `:5315`, pinch `:5362-5367`, the gesture-tool bails documented `:5378-5420`; cursor IIFE `:5761-5774` → `CanvasSurface cursor` prop `:6151`; `renderChrome :1885-2160` (mask fill `:2036-2052`, move-pixels preview `:2056-2094`, `SELECTION_FILL_CELL_LIMIT` 20000); SVG chrome props `:5936-6007` (`marchingAnts :5958`, `originCross :5989`); `poseScreenToCellDelta :3213-3225` (the only float mapper, a delta); hover marker suppression for reflection `:2277`; overlay schedulers: main `:4016`, hover `:2359`, pose `:2732-2738` via `invalidatePoseRef`; `getCornerCoords :1219-1231` (the wrapper shape to copy); `coordGeomRef` from `useCanvasGeometry`.
 - `ui/canvas/model/coords.ts` (193): `SnapMode :80` = `"pixel" | "pixel-unbounded" | "origin" | "corner"`; `screenToPixel :88-193` (`pixel-unbounded :121-143`, `corner :145-169`); rect rule header `:9-15`. Test `__tests__/coords.test.ts` (393).
 - `ui/hooks/useCanvasPointer.ts` (183): `MOUSE_ONLY_TOOLS :64`; integer coords only. `ui/hooks/useCanvasKeyboard.ts` (362): `HotkeyTool :46-60`, `TOOL_HOTKEYS :74-94`, `CanvasKeyboardOptions :118-157`, `handleCanvasKeyDown :181-325` (Delete `:205-218`, hotkeys clear selection when leaving `"selection"` `:221-230`, arrows `:276-287`, Escape `:291-316`), window capture `:339-344`. Test (455) pins the 14-tool count `:353-380`.
-- `GlobalHotkeys.tsx` (191): Escape only for colour adjustment `:92`; precedence matrix `:9-45`. `ApplicationStore.undo :1904`, `redo :1914`; reflection/pose `loadGeneration` reactions `:606-627`; fields `reflection :461`, `pose :482`; `isEditingVariant :1350`, `editableGrid :1385`, `selectionDims :1416`, `currentObject/Frame/Layer :1259-1278`.
+- `GlobalHotkeys.tsx` (191): Escape only for colour adjustment `:92`; precedence matrix `:9-45`. `ApplicationStore.undo :1924`, `redo :1934` (post-plan-14; `:1904/:1914` before it); reflection/pose `loadGeneration` reactions `:606-627`; fields `reflection :461`, `pose :482`; `isEditingVariant :1350`, `editableGrid :1385`, `selectionDims :1416`, `currentObject/Frame/Layer :1259-1278`.
 
 ### Overlay / chrome machinery
 - `ui/components/CanvasSurface/CanvasSurface.tsx` (976 raw, **≈400 code lines — at the `src/ui/**` `max-lines` error limit**): DOM = z-order inside `.canvas__frame` `:663-975`: background → layers → `.canvas__surface` (pointer surface, `style={{ cursor }}` `:760`) → hover → reference → onion → frame trace → **pose canvas `:837-843`** → **reflection canvas `:852-858`** → `.canvas__svg :871-969` (`viewBox 0 0 cellWidth cellHeight`; `marchingAnts` via `ScreenWidthPath :890-913`, `originCross` counter-scaled group `:945-967`, `inverseScale :651`, `hasSvgChrome :653-661`). `ScreenWidthPath :548-568` documents that `vector-effect: non-scaling-stroke` does **not** work under the CSS `scale()` — counter-scale instead. Props: `poseCanvasRef`, `reflectionCanvasRef?`, `combinedScale :341`, `cursor :376`, chrome `:392-434`. Test (1078) pins cursor `:177` and layer-ref pooling; stories (832): `SvgChrome :696`, `PoseReference :779`.

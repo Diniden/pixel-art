@@ -38,8 +38,9 @@ Every gate column carries: tsc result · eslint errors/warnings (≤ 66) · vite
 (none yet)
 
 ## Notes for the next session
-- Baseline on `main @ 96e0284` (source identical to `9007990`): tsc clean · eslint 0e/66w · vitest 200 files / 4361 tests · build OK · stylelint 2 pre-existing errors (`OtherHand.css:338,359`) · storybook OK · boundaries 5/5 · server 4 files / 102 tests · no lockfile.
+- Baseline after the plan-14 merge (`8eb365c`, per plan 14's ledger): tsc clean · eslint 0e/66w · vitest 201 files / 4529 tests · build OK · stylelint 2 pre-existing errors (`OtherHand.css:338,359`) / 69 warnings · storybook OK · boundaries 5/5 · server 5 files / 109 tests · no lockfile. Re-measure on the cut branch anyway.
+- Plan 14 landed between this plan's measurement (`96e0284`) and its publication (`9d94103`). Drift among cited files: only `ApplicationStore.ts` (+26 lines; `undo()` now `:1924`). Everything else cited is byte-identical.
 - ⚠️ The Bash hook inspects command **text**: a heredoc that merely quotes `vitest -u` or the frozen-lockfile flag is blocked. Write docs with the Write tool.
 - Owner-facing decision to confirm (MASTER §1): **Escape commits the pending transform and clears the selection** (the request ties the retained original to the selection's existence). ⌘Z resets a pending transform; ⌘Z after committing restores the original pixels.
 - Open items carried out of scope: normal-map vectors are copied, not rotated; a panel section with W×H / angle readouts and Apply / Reset buttons; the brush studio has no transform tool; Other Hand Mode has only the title.
-- Plans 14, 15 (unexecuted) and the untracked plan 16 edit `toolHandlers.ts`, `PixelStore.ts` and `CanvasContainer.tsx` additively as well — run plans one at a time.
+- Plan 15 (unexecuted) edits `toolHandlers.ts`, `PixelStore.ts` and `CanvasContainer.tsx` additively as well; plan 16 (unexecuted) touches the right-sidebar tool config — run plans one at a time.

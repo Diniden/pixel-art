@@ -14,8 +14,8 @@ following the result, and nudged by the arrow keys. All of it is pinned by a wir
 - `client/src/stores/ApplicationStore.ts` (≈911 code lines, already over the `max-lines` warning —
   keep additions compact): fields `reflection :461`, `pose :482`; construction + `loadGeneration`
   reactions `:606-627` (the pattern: `reaction(() => this.domain.loadGeneration, () => this.pose.clear())`,
-  disposer fields documented `:464-491`, disposed in `dispose()`); `undo :1904-1912` (project path
-  through `historyOps`, brush path direct), `redo :1914`; `selectionUI`, `pixels`, `ui.tool.selectedTool`,
+  disposer fields documented `:464-491`, disposed in `dispose()`); `undo :1924-1932` (project path
+  through `historyOps`, brush path direct), `redo :1934` (measured after the plan-14 merge); `selectionUI`, `pixels`, `ui.tool.selectedTool`,
   `ui.timeline.selectedObjectId/FrameId/LayerId` all reachable.
 - From task 06: `TransformUIStore` (`@/stores/ui/TransformUIStore`). From task 04:
   `pixels.setPixelCellsAt(target, cells, options, label)`. From task 02: `transformCommitWrites`.
