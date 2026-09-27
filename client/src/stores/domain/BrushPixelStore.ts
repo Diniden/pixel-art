@@ -1,6 +1,8 @@
 /**
  * BrushPixelStore — cell writes on the selected brush layer (Brush Studio
- * plan, `docs/01-brush-studio`, task 09; MASTER D3 / D8 / D9).
+ * plan, `docs/01-brush-studio`, task 09; multi-brush projects,
+ * `docs/14-multi-brush-projects`, task 10; MASTER D3 / D8 / D9, multi-brush
+ * D6).
  *
  * The brush twin of `./PixelStore.ts`'s write engine, stripped to what a
  * delta grid needs: `setCells` / `clearCells` (bounds + optional edit mask,
@@ -9,8 +11,10 @@
  *
  *   1. copies ONLY the touched rows of the target grid into a NEW grid
  *      (`writeCells`), then rebuilds the document spine down to that layer
- *      (`replaceLayerGrid`) — every other frame, layer and row keeps its
- *      identity, and nothing is ever `structuredClone`d;
+ *      (`replaceLayerGrid`) — brush → frame → layer: `doc.brushes`, the
+ *      touched brush, its `frames`, the touched frame, its `layers` and the
+ *      touched layer are fresh objects; every OTHER brush, frame, layer and
+ *      row keeps its identity, and nothing is ever `structuredClone`d;
  *   2. installs the new document through `brush.adoptDocument` and bumps
  *      `brush.pixelVersion` — NEVER `domainVersion`. `pixelVersion` is what
  *      the brush canvas redraws from and what wakes auto-save (D8/D11); a
@@ -18,6 +22,18 @@
  *   3. records ONE inverse-patch `BrushPixelCommand` into `brush.history`
  *      (the brush's OWN stack, never the shared editor history) when
  *      `trackHistory !== false` and the history is not replaying.
+ *
+ * ── The target is brush → frame → layer, resolved STRICTLY ────────────────
+ * A project holds many brushes, each with its OWN `width × height`, and
+ * frame / layer ids are unique only WITHIN a brush (every brush's first
+ * frame is `frame-1`). So every target carries `brushId` first, bounds and
+ * the mask size come from the SELECTED BRUSH, and a `null` or stale brush id
+ * is "nowhere to write" — exactly the rule a `null` frame id already
+ * follows, never brush 0. (`BrushUIStore` guarantees a brush id whenever a
+ * document is installed; a `null` here is the same stale state as a `null`
+ * frame id.) A write in one brush must leave every other brush's object
+ * identity untouched — a retained history snapshot aliasing the live brush
+ * is how undo corrupts (multi-brush R3).
  *
  * ── `applyPatch` writes the cells IN THE ORDER GIVEN ──────────────────────
  * This store is the `BrushPatchHost` of every command it records.
@@ -37,8 +53,8 @@
  * ── Boundaries ─────────────────────────────────────────────────────────────
  * `stores/domain/**` never imports `stores/ui/**`. The selection is an
  * injected {@link BrushSelectionSource}; `ApplicationStore` (task 11) passes
- * `brushUI`, whose `selectedFrameId` / `selectedLayerId` satisfy it
- * structurally.
+ * `brushUI`, whose `selectedBrushId` / `selectedFrameId` / `selectedLayerId`
+ * satisfy it structurally.
  */
 import { action, makeObservable } from "mobx";
 import {
@@ -57,6 +73,7 @@ import type { BrushStore } from "./BrushStore";
 
 /** The UI selection this store writes into. `BrushUIStore` satisfies it. */
 export interface BrushSelectionSource {
+  readonly selectedBrushId: string | null;
   readonly selectedFrameId: string | null;
   readonly selectedLayerId: string | null;
 }
@@ -76,9 +93,10 @@ export interface BrushWriteOptions {
   /** An edit mask — packed `y * width + x`. Absent = every cell allowed. */
   mask?: ReadonlySet<number>;
   /**
-   * The mask's grid dimensions. A mismatch with the target grid DISABLES
-   * masking (the rule `PixelStore.allows` pins): a stale mask from another
-   * size never silently blocks a stroke.
+   * The mask's grid dimensions. A mismatch with the target grid (the
+   * SELECTED BRUSH's size) DISABLES masking (the rule `PixelStore.allows`
+   * pins): a stale mask from another size — or another brush — never
+   * silently blocks a stroke.
    */
   maskSize?: { width: number; height: number };
   /** `false` suppresses the history entry. Default `true`. */
@@ -99,9 +117,11 @@ export interface BrushPixelStoreDeps {
 /** Everything a write needs to know about where it lands. */
 export interface ResolvedBrushTarget {
   target: BrushPixelTarget;
+  brushIndex: number;
   frameIndex: number;
   layerIndex: number;
   layer: BrushLayer;
+  /** The selected BRUSH's size — brushes in one project differ in size. */
   width: number;
   height: number;
 }
@@ -152,21 +172,26 @@ function writeCells(
 }
 
 /**
- * Rebuild the document spine down to ONE layer with a new grid. Every other
- * frame and layer object is reused by reference.
+ * Rebuild the document spine down to ONE layer with a new grid — through
+ * `doc.brushes` as well as the brush's `frames` (multi-brush D6). Every
+ * other brush, frame and layer object is reused by reference.
  */
 function replaceLayerGrid(
   doc: BrushDocument,
+  brushIndex: number,
   frameIndex: number,
   layerIndex: number,
   pixels: BrushCell[][],
 ): BrushDocument {
-  const frame = doc.frames[frameIndex];
+  const brush = doc.brushes[brushIndex];
+  const frame = brush.frames[frameIndex];
   const layers = [...frame.layers];
   layers[layerIndex] = { ...frame.layers[layerIndex], pixels };
-  const frames = [...doc.frames];
+  const frames = [...brush.frames];
   frames[frameIndex] = { ...frame, layers };
-  return { ...doc, frames };
+  const brushes = [...doc.brushes];
+  brushes[brushIndex] = { ...brush, frames };
+  return { ...doc, brushes };
 }
 
 /* ── the store ───────────────────────────────────────────────────────────── */
@@ -194,27 +219,44 @@ export class BrushPixelStore implements BrushPatchHost {
   /* ── resolution ───────────────────────────────────────────────────────── */
 
   /**
-   * The selected frame and layer in the LIVE document, or `null` when there
-   * is no document or either id is unselected / stale. Ids are looked up
-   * strictly — a `null` selection is "nowhere to write", not frame 0.
+   * The selected brush, frame and layer in the LIVE document, or `null` when
+   * there is no document or any of the three ids is unselected / stale. Ids
+   * are looked up strictly — a `null` selection is "nowhere to write", not
+   * brush 0 / frame 0. `width` / `height` are the selected brush's own.
    */
   resolveTarget(): ResolvedBrushTarget | null {
     const doc = this.brush.document;
     if (!doc) return null;
-    const { selectedFrameId, selectedLayerId } = this.source;
-    if (selectedFrameId === null || selectedLayerId === null) return null;
-    const frameIndex = doc.frames.findIndex((f) => f.id === selectedFrameId);
+    const { selectedBrushId, selectedFrameId, selectedLayerId } = this.source;
+    if (
+      selectedBrushId === null ||
+      selectedFrameId === null ||
+      selectedLayerId === null
+    ) {
+      return null;
+    }
+    const brushIndex = doc.brushes.findIndex((b) => b.id === selectedBrushId);
+    if (brushIndex < 0) return null;
+    const selectedBrush = doc.brushes[brushIndex];
+    const frameIndex = selectedBrush.frames.findIndex(
+      (f) => f.id === selectedFrameId,
+    );
     if (frameIndex < 0) return null;
-    const frame = doc.frames[frameIndex];
+    const frame = selectedBrush.frames[frameIndex];
     const layerIndex = frame.layers.findIndex((l) => l.id === selectedLayerId);
     if (layerIndex < 0) return null;
     return {
-      target: { frameId: selectedFrameId, layerId: selectedLayerId },
+      target: {
+        brushId: selectedBrushId,
+        frameId: selectedFrameId,
+        layerId: selectedLayerId,
+      },
+      brushIndex,
       frameIndex,
       layerIndex,
       layer: frame.layers[layerIndex],
-      width: doc.width,
-      height: doc.height,
+      width: selectedBrush.width,
+      height: selectedBrush.height,
     };
   }
 
@@ -228,11 +270,12 @@ export class BrushPixelStore implements BrushPatchHost {
   /* ── writes ───────────────────────────────────────────────────────────── */
 
   /**
-   * Write many cells as ONE history entry. Out-of-bounds cells are skipped
-   * (not clamped); masked-out cells are skipped; a repeated cell keeps ONE
-   * patch whose `after` is the LAST value written and whose `before` is the
-   * true pre-write value; a cell whose final value equals what the grid
-   * already holds is dropped. An empty result writes and records nothing.
+   * Write many cells as ONE history entry. Out-of-bounds cells (by the
+   * selected brush's size) are skipped (not clamped); masked-out cells are
+   * skipped; a repeated cell keeps ONE patch whose `after` is the LAST value
+   * written and whose `before` is the true pre-write value; a cell whose
+   * final value equals what the grid already holds is dropped. An empty
+   * result writes and records nothing.
    */
   setCells(
     writes: readonly BrushCellWrite[],
@@ -240,7 +283,8 @@ export class BrushPixelStore implements BrushPatchHost {
   ): void {
     const resolved = this.resolveTarget();
     if (!resolved) return;
-    const { target, frameIndex, layerIndex, layer, width, height } = resolved;
+    const { target, brushIndex, frameIndex, layerIndex, layer, width, height } =
+      resolved;
     const mask = this.effectiveMask(width, height, options);
 
     // Insertion-ordered so the first touch of a cell fixes its position and
@@ -266,6 +310,7 @@ export class BrushPixelStore implements BrushPatchHost {
 
     this.commitCells(
       target,
+      brushIndex,
       frameIndex,
       layerIndex,
       layer,
@@ -294,7 +339,8 @@ export class BrushPixelStore implements BrushPatchHost {
   moveLayerCells(dx: number, dy: number, options: BrushMoveOptions = {}): void {
     const resolved = this.resolveTarget();
     if (!resolved) return;
-    const { target, frameIndex, layerIndex, layer, width, height } = resolved;
+    const { target, brushIndex, frameIndex, layerIndex, layer, width, height } =
+      resolved;
     if (!Number.isInteger(dx) || !Number.isInteger(dy)) return;
     if (dx === 0 && dy === 0) return;
 
@@ -317,6 +363,7 @@ export class BrushPixelStore implements BrushPatchHost {
 
     this.commitCells(
       target,
+      brushIndex,
       frameIndex,
       layerIndex,
       layer,
@@ -350,11 +397,17 @@ export class BrushPixelStore implements BrushPatchHost {
   ): void {
     const resolved = this.resolveTarget();
     if (!resolved) return;
-    const { frameIndex, layerIndex, layer } = resolved;
+    const { brushIndex, frameIndex, layerIndex, layer } = resolved;
     this.brush.commit(
       label,
       (doc) =>
-        replaceLayerGrid(doc, frameIndex, layerIndex, flip(layer.pixels)),
+        replaceLayerGrid(
+          doc,
+          brushIndex,
+          frameIndex,
+          layerIndex,
+          flip(layer.pixels),
+        ),
       { bumpPixels: true },
     );
   }
@@ -363,10 +416,13 @@ export class BrushPixelStore implements BrushPatchHost {
 
   /**
    * Undo/redo re-entry. Re-resolves the target by id from the LIVE document
-   * (the command holds ids, never a grid reference), writes the recorded
-   * side of each cell back IN THE ORDER GIVEN — the command has already
-   * reversed them for `"undo"` — and bumps `pixelVersion` so the canvas
-   * repaints. Never records: a replay is not an edit.
+   * — brush first, then frame, then layer WITHIN that brush (the command
+   * holds ids, never a grid reference, and never the selection: a write in
+   * one brush undoes into that brush whichever brush is selected now) — and
+   * no-ops when any of the three is gone. Writes the recorded side of each
+   * cell back IN THE ORDER GIVEN — the command has already reversed them for
+   * `"undo"` — and bumps `pixelVersion` so the canvas repaints. Never
+   * records: a replay is not an edit.
    */
   applyPatch(
     target: BrushPixelTarget,
@@ -375,13 +431,16 @@ export class BrushPixelStore implements BrushPatchHost {
   ): void {
     const doc = this.brush.document;
     if (!doc) return;
-    const frameIndex = doc.frames.findIndex((f) => f.id === target.frameId);
+    const brushIndex = doc.brushes.findIndex((b) => b.id === target.brushId);
+    if (brushIndex < 0) return;
+    const { frames } = doc.brushes[brushIndex];
+    const frameIndex = frames.findIndex((f) => f.id === target.frameId);
     if (frameIndex < 0) return;
-    const layerIndex = doc.frames[frameIndex].layers.findIndex(
+    const layerIndex = frames[frameIndex].layers.findIndex(
       (l) => l.id === target.layerId,
     );
     if (layerIndex < 0) return;
-    const layer = doc.frames[frameIndex].layers[layerIndex];
+    const layer = frames[frameIndex].layers[layerIndex];
 
     const next = writeCells(
       layer.pixels,
@@ -392,7 +451,7 @@ export class BrushPixelStore implements BrushPatchHost {
       })),
     );
     this.brush.adoptDocument(
-      replaceLayerGrid(doc, frameIndex, layerIndex, next),
+      replaceLayerGrid(doc, brushIndex, frameIndex, layerIndex, next),
     );
     this.brush.bumpPixelVersion();
   }
@@ -421,6 +480,7 @@ export class BrushPixelStore implements BrushPatchHost {
    */
   private commitCells(
     target: BrushPixelTarget,
+    brushIndex: number,
     frameIndex: number,
     layerIndex: number,
     layer: BrushLayer,
@@ -437,7 +497,7 @@ export class BrushPixelStore implements BrushPatchHost {
       patches.map((p) => ({ x: p.x, y: p.y, value: p.after })),
     );
     this.brush.adoptDocument(
-      replaceLayerGrid(doc, frameIndex, layerIndex, next),
+      replaceLayerGrid(doc, brushIndex, frameIndex, layerIndex, next),
     );
 
     if (trackHistory && !this.brush.history.isReplaying) {

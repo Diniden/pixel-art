@@ -10,8 +10,8 @@
  * open with an error, and the store has already `console.error`ed why.
  *
  * `onRenameBrush` and `onDeleteBrush` act on the CURRENT brush — the store's
- * flows take no name for the same reason (`renameBrush(newName)`,
- * `deleteBrush()`), so nothing is resolved here.
+ * flows take no name for the same reason (`renameProject(newName)`,
+ * `deleteProject()`), so nothing is resolved here.
  *
  * `HeaderContainer` mounts this as the Header's `projectModal` in brush mode
  * (task 19). The component's `container?` portal target is left at its
@@ -37,17 +37,17 @@ export const BrushSelectModalContainer = observer(
     return (
       <BrushSelectModal
         onClose={onClose}
-        // `brushName` is `""` until a brush is loaded; the modal wants `null`
+        // `projectName` is `""` until a brush project is loaded; the modal wants `null`
         // for "none", which is what gates its Rename row and Delete button.
-        brushName={brushes.hasBrush ? brushes.brushName : null}
-        // `brushList` is `observable.shallow`; hand over a plain array.
-        brushList={brushes.brushList.slice()}
-        onSwitchBrush={(name) => flowResult(brushes.switchBrush(name))}
+        brushName={brushes.hasProject ? brushes.projectName : null}
+        // `projectList` is `observable.shallow`; hand over a plain array.
+        brushList={brushes.projectList.slice()}
+        onSwitchBrush={(name) => flowResult(brushes.switchProject(name))}
         onCreateBrush={(name, width, height) =>
-          flowResult(brushes.createBrush(name, width, height))
+          flowResult(brushes.createProject(name, width, height))
         }
-        onRenameBrush={(newName) => flowResult(brushes.renameBrush(newName))}
-        onDeleteBrush={() => flowResult(brushes.deleteBrush())}
+        onRenameBrush={(newName) => flowResult(brushes.renameProject(newName))}
+        onDeleteBrush={() => flowResult(brushes.deleteProject())}
         onRefreshBrushList={() => flowResult(brushes.refreshList())}
       />
     );

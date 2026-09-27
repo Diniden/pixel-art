@@ -12,9 +12,21 @@
  * already at the containers `max-lines` warning (D14) — the count must not
  * rise. `planToolSection` spreads the result into its `case "brush"`.
  *
+ * ── The Brush stack (multi-brush plan 14, task 14; MASTER D13) ──────────────
+ *
+ * A brush PROJECT holds many brushes. When it holds two or more, one
+ * `buttons` widget — `B1`, `B2`, … in array order, the brush's name as the
+ * title, the selected one active — is PREPENDED so the thumb can switch
+ * brushes without leaving Other Hand Mode. A tap goes through
+ * `brushUI.selectBrush(id, document)` WITH the document (§8 mistake 3). Every
+ * other widget's native size is the SELECTED brush's, resolved through
+ * `brushUI.selectedBrushIn(doc)` — the same rule the stamp uses, never
+ * `brushes[0]`. Same spec shape as the `scale` stack; no new widget kind.
+ *
  * ⚠️ Called from inside an `observer()` render. It reads the brush document
- * at the SCALAR level only (`width` / `height`) — never a frame, layer or
- * grid, which are behind `observable.ref` and must not be observed here.
+ * at the SCALAR level only (each brush's `id` / `name` / `width` / `height`)
+ * — never a frame, layer or grid, which are behind `observable.ref` and must
+ * not be observed here.
  */
 import type {
   ThumbButtonsSpec,
@@ -29,21 +41,42 @@ import type { PixelBrushAxis } from "../../stores/ui/PixelBrushUIStore";
 const formatCells = (v: number): string => `${v} px`;
 
 /**
- * Build the Brush tool's widgets, in order: Width, Ratio (lock toggle), Height,
- * Scale (one stack while locked; "Scale X" + "Scale Y" unlocked), Size (the
- * `Native` action). With no brush document loaded there is nothing to size,
- * so the list is empty and the surface shows its empty message.
+ * Build the Brush tool's widgets, in order: Brush (only with ≥ 2 brushes in
+ * the project), Width, Ratio (lock toggle), Height, Scale (one stack while
+ * locked; "Scale X" + "Scale Y" unlocked), Size (the `Native` action). With
+ * no brush document loaded there is nothing to size, so the list is empty and
+ * the surface shows its empty message.
  */
 export function pixelBrushWidgets(app: ApplicationStore): ThumbWidgetSpec[] {
   const doc = app.brushes.document;
-  if (!doc) return [];
+  const brush = app.brushUI.selectedBrushIn(doc);
+  if (!doc || !brush) return [];
 
   const store = app.ui.pixelBrush;
-  // Scalars only — see the header.
-  const native = { width: doc.width, height: doc.height };
+  // Scalars only, and the SELECTED brush's — see the header.
+  const native = { width: brush.width, height: brush.height };
   const max = pixelBrushSliderMax(native);
   const size = store.effectiveSize(native);
   const locked = store.lockRatio;
+
+  const brushStack: ThumbWidgetSpec[] =
+    doc.brushes.length >= 2
+      ? [
+          {
+            kind: "buttons",
+            id: "brush",
+            label: "Brush",
+            buttons: doc.brushes.map((b, i) => ({
+              id: b.id,
+              label: `B${i + 1}`,
+              title: b.name,
+              active: b.id === brush.id,
+              onClick: () =>
+                app.brushUI.selectBrush(b.id, app.brushes.document),
+            })),
+          },
+        ]
+      : [];
 
   const scaleStack = (
     id: string,
@@ -71,6 +104,7 @@ export function pixelBrushWidgets(app: ApplicationStore): ThumbWidgetSpec[] {
       ];
 
   return [
+    ...brushStack,
     {
       kind: "slider",
       id: "width",

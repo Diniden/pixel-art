@@ -5,14 +5,16 @@
  * Executors have no browser, so this is the automatable slice of the task's
  * manual checks: with `studioMode: "brush"` the app root renders
  * `BrushStudioContainer` and every container it composes — header, toolbar,
- * brush library, layer panel, right controls, studio panel, timeline, canvas —
+ * brush list, layer panel, right controls, studio panel, timeline, canvas —
  * without throwing, and under React 19 StrictMode the mount effect's
  * double-fire produces ONE `GET /api/brushes` (manual check 8).
  *
  * The `dom` vitest lane runs without MSW (only `setup.dom.ts`), so `fetch` is
- * stubbed here: `/api/brushes` answers an empty list (the library's empty
- * state), everything else (the header's AI config/health polls) answers `{}`.
- * `setup.dom.ts` calls `vi.unstubAllGlobals()` after each test.
+ * stubbed here: `/api/brushes` answers an empty list (no project → no
+ * document → the left rail's brush list and layer panel render nothing;
+ * multi-brush plan task 13), everything else (the header's AI config/health
+ * polls) answers `{}`. `setup.dom.ts` calls `vi.unstubAllGlobals()` after
+ * each test.
  *
  * jsdom has no canvas: `getContext("2d")` returns `null` and every painter
  * early-returns, so the canvas and thumbnails mount as empty elements. That is
@@ -95,10 +97,12 @@ describe("AppContainer in brush mode", () => {
     expect(container.querySelector(".app__placeholder")).toBeNull();
     expect(screen.queryByText("Back to Pixel Studio")).toBeNull();
 
-    // The brush studio's own regions — the ones the pixel studio does not
-    // have — are on screen: the brush library (left rail) and the delta
-    // picker's host panel (right rail). Their BEM blocks are the contract.
-    expect(container.querySelector(".brush-library")).not.toBeNull();
+    // With no brush project on disk there is no document, and the left
+    // rail's brush list renders nothing (`BrushListContainer` returns
+    // `null`, as the layer panel does) — the rail has no "+" that could only
+    // be a dead button. The list itself is pinned in the block below.
+    expect(container.querySelector(".brush-list")).toBeNull();
+    expect(container.querySelector(".brush-layer-panel")).toBeNull();
     // Shared chrome is mounted too.
     expect(container.querySelector(".header")).not.toBeNull();
     expect(container.querySelector(".toolbar")).not.toBeNull();
@@ -155,7 +159,7 @@ describe("the canvas region: Full and Layer panes (follow-ups task 09)", () => {
   /** A 4×4 brush installed straight into the store — no fetch, no init load. */
   function installBrush(): void {
     runInAction(() => {
-      app.brushes.brushName = "test-brush";
+      app.brushes.projectName = "test-brush";
       app.brushes.installDocument(createBrushDocument(4, 4));
       app.brushes.loadState = "loaded";
     });
@@ -169,6 +173,32 @@ describe("the canvas region: Full and Layer panes (follow-ups task 09)", () => {
     Array.from(root.querySelectorAll<HTMLElement>(".canvas"));
   const paneButton = (pane: Element, label: string) =>
     pane.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
+  it("the left rail's top panel is the BRUSH LIST of the installed project (multi-brush task 13)", async () => {
+    installBrush();
+    const { container } = render(
+      <StoreProvider store={app}>
+        <AppContainer />
+      </StoreProvider>,
+    );
+    await settle();
+
+    // The BEM block is the contract: `brush-list`, never the deleted
+    // `brush-library`. One row — the document's single "Brush 1", 4×4 —
+    // selected, with the "+" that adds a brush to THIS project.
+    const list = container.querySelector(".brush-list");
+    expect(list).not.toBeNull();
+    expect(container.querySelector(".brush-library")).toBeNull();
+    expect(list!.querySelector(".panel__title")!.textContent).toBe("Brushes");
+    const listRows = list!.querySelectorAll(".brush-list__row");
+    expect(listRows).toHaveLength(1);
+    expect(listRows[0]).toHaveTextContent("Brush 1");
+    expect(listRows[0]).toHaveTextContent("4×4");
+    expect(listRows[0]).toHaveClass("brush-list__row--selected");
+    expect(screen.getByRole("button", { name: "New brush" })).not.toBeNull();
+    // The layer panel sits below it in the same rail.
+    expect(container.querySelector(".brush-layer-panel")).not.toBeNull();
+  });
 
   it("⭐ one Full pane by default, with 'Open Layer view' and no close button", async () => {
     installBrush();

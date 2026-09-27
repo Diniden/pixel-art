@@ -21,6 +21,11 @@
  *     a strategy change re-resolves; a brush with different native
  *     dimensions resets the size to native; `size` reports the effective
  *     size. At native size the stability case above holds unchanged.
+ *   - The selected brush (plan 14, task 14; MASTER D12): a project holds
+ *     many brushes and the hook stamps the SELECTED one; switching to a
+ *     brush of another size resets the stamp size, to one of the same size
+ *     keeps it, and a `pixelVersion` bump (a cell write, which replaces the
+ *     `observable.ref` document) never resets — R4.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
@@ -29,7 +34,7 @@ import { observer } from "mobx-react-lite";
 import { runInAction } from "mobx";
 
 import { ApplicationStore } from "@/stores/ApplicationStore";
-import { createBrushDocument, createBrushLayer } from "@/types";
+import { createBrush, createBrushDocument, createBrushLayer } from "@/types";
 import type { BrushDocument } from "@/types";
 import { scalePixelBrushLayers } from "@/ui/canvas/tools/pixelBrushScale";
 import {
@@ -56,7 +61,7 @@ function threeByThree(): BrushDocument {
   rgb.pixels[1]![2] = [0, 0, 40, 0];
   const hsl = createBrushLayer("hsl-1", "hsl", 3, 3, "hsl");
   hsl.pixels[1]![2] = [0, 0, 60, 0];
-  doc.frames = [
+  doc.brushes[0]!.frames = [
     { id: "frame-1", name: "Frame 1", layers: [rgb, hsl] },
     {
       id: "frame-2",
@@ -97,7 +102,7 @@ afterEach(() => {
 
 function installLoaded(doc: BrushDocument | null): void {
   runInAction(() => {
-    app.brushes.brushName = doc ? "test-brush" : "";
+    app.brushes.projectName = doc ? "test-brush" : "";
     app.brushes.installDocument(doc);
     app.brushes.loadState = doc ? "loaded" : "idle";
   });
@@ -167,9 +172,9 @@ describe("usePixelBrush — footprint and stamp", () => {
     const doc = threeByThree();
     installLoaded(doc);
     const h = mount(true, RED);
-    const { footprint, stamp, loadState, brushName } = h.latest();
+    const { footprint, stamp, loadState, projectName } = h.latest();
 
-    const frame = doc.frames[0]!;
+    const frame = doc.brushes[0]!.frames[0]!;
     expect(footprint).toEqual(pixelBrushFootprint(frame.layers, 3, 3));
     expect(footprint?.offsets).toEqual([
       { dx: -1, dy: -1 },
@@ -183,7 +188,7 @@ describe("usePixelBrush — footprint and stamp", () => {
     expect(stamp?.cells[1]!.color).not.toEqual({ r: 255, g: 0, b: 40, a: 255 });
     expect(stamp?.cells[1]!.color.g).toBeGreaterThan(0);
     expect(loadState).toBe("loaded");
-    expect(brushName).toBe("test-brush");
+    expect(projectName).toBe("test-brush");
   });
 
   it("⭐ the SAME stamp reference survives a re-render with an EQUAL base colour", () => {
@@ -208,7 +213,12 @@ describe("usePixelBrush — footprint and stamp", () => {
     const blue = h.latest().stamp!;
     expect(blue).not.toBe(red);
     expect(blue).toEqual(
-      resolvePixelBrushStamp(threeByThree().frames[0]!.layers, 3, 3, BLUE),
+      resolvePixelBrushStamp(
+        threeByThree().brushes[0]!.frames[0]!.layers,
+        3,
+        3,
+        BLUE,
+      ),
     );
     expect(blue.cells[0]!.color).toEqual({ r: 10, g: 0, b: 255, a: 255 });
     // The footprint does not depend on the colour, so it is untouched.
@@ -241,7 +251,7 @@ describe("usePixelBrush — footprint and stamp", () => {
     // A pixel write through the store bumps `pixelVersion`.
     act(() => {
       const next = structuredClone(doc);
-      next.frames[0]!.layers[0]!.pixels[2]![0] = [1, 0, 0, 0];
+      next.brushes[0]!.frames[0]!.layers[0]!.pixels[2]![0] = [1, 0, 0, 0];
       app.brushes.replaceDocument(next, { bumpPixels: true });
     });
     const afterWrite = h.latest().footprint;
@@ -251,7 +261,7 @@ describe("usePixelBrush — footprint and stamp", () => {
     // Hiding a layer bumps `domainVersion` (no pixel change).
     act(() => {
       const next = structuredClone(app.brushes.document!);
-      next.frames[0]!.layers[0]!.visible = false;
+      next.brushes[0]!.frames[0]!.layers[0]!.visible = false;
       app.brushes.replaceDocument(next);
     });
     const afterHide = h.latest().footprint;
@@ -260,12 +270,12 @@ describe("usePixelBrush — footprint and stamp", () => {
     expect(afterHide?.offsets).toEqual([{ dx: 1, dy: 0 }]);
   });
 
-  it("⭐ document === null → footprint and stamp are both null, brushName null", () => {
+  it("⭐ document === null → footprint and stamp are both null, projectName null", () => {
     installLoaded(null);
     const h = mount(true, RED);
     expect(h.latest().footprint).toBeNull();
     expect(h.latest().stamp).toBeNull();
-    expect(h.latest().brushName).toBeNull();
+    expect(h.latest().projectName).toBeNull();
     expect(h.latest().loadState).toBe("idle");
   });
 
@@ -286,7 +296,7 @@ describe("usePixelBrush — footprint and stamp", () => {
 /** A 4×4 brush painted at (1,1) only — a different native size from `threeByThree`. */
 function fourByFour(): BrushDocument {
   const doc = createBrushDocument(4, 4);
-  doc.frames[0]!.layers[0]!.pixels[1]![1] = [5, 0, 0, 0];
+  doc.brushes[0]!.frames[0]!.layers[0]!.pixels[1]![1] = [5, 0, 0, 0];
   return doc;
 }
 
@@ -303,7 +313,7 @@ describe("usePixelBrush — scaling from ui.pixelBrush", () => {
     // own layers at the native size (the stability case above is the
     // reference-equality half of this guarantee).
     expect(h.latest().footprint).toEqual(
-      pixelBrushFootprint(doc.frames[0]!.layers, 3, 3),
+      pixelBrushFootprint(doc.brushes[0]!.frames[0]!.layers, 3, 3),
     );
   });
 
@@ -339,14 +349,17 @@ describe("usePixelBrush — scaling from ui.pixelBrush", () => {
     ]);
 
     // And both equal the pure pipeline fed the same request.
-    const scaledLayers = scalePixelBrushLayers(doc.frames[0]!.layers, {
-      srcW: 3,
-      srcH: 3,
-      dstW: 6,
-      dstH: 6,
-      x: "nearest",
-      y: "nearest",
-    });
+    const scaledLayers = scalePixelBrushLayers(
+      doc.brushes[0]!.frames[0]!.layers,
+      {
+        srcW: 3,
+        srcH: 3,
+        dstW: 6,
+        dstH: 6,
+        x: "nearest",
+        y: "nearest",
+      },
+    );
     expect(footprint).toEqual(pixelBrushFootprint(scaledLayers, 6, 6));
     expect(stamp).not.toBe(nativeStamp);
     expect(stamp).toEqual(resolvePixelBrushStamp(scaledLayers, 6, 6, RED));
@@ -392,14 +405,17 @@ describe("usePixelBrush — scaling from ui.pixelBrush", () => {
     const { footprint, stamp } = h.latest();
     expect(footprint).not.toBe(nearestFootprint);
     expect(stamp).not.toBe(nearestStamp);
-    const scaledLayers = scalePixelBrushLayers(doc.frames[0]!.layers, {
-      srcW: 3,
-      srcH: 3,
-      dstW: 6,
-      dstH: 6,
-      x: "bilinear",
-      y: "bilinear",
-    });
+    const scaledLayers = scalePixelBrushLayers(
+      doc.brushes[0]!.frames[0]!.layers,
+      {
+        srcW: 3,
+        srcH: 3,
+        dstW: 6,
+        dstH: 6,
+        x: "bilinear",
+        y: "bilinear",
+      },
+    );
     expect(footprint).toEqual(pixelBrushFootprint(scaledLayers, 6, 6));
     expect(stamp).toEqual(resolvePixelBrushStamp(scaledLayers, 6, 6, RED));
   });
@@ -453,5 +469,137 @@ describe("usePixelBrush — scaling from ui.pixelBrush", () => {
     expect(h.latest().size).toBeNull();
     h.rerender({ enabled: true });
     expect(h.latest().size).toEqual({ width: 3, height: 3 });
+  });
+});
+
+/* ── the selected brush (plan 14, task 14; MASTER D12) ─────────────────────── */
+
+/**
+ * `threeByThree` plus a second brush, "Dot": 4×4, painted at (1,1) only — a
+ * DIFFERENT native size, so a switch to it must reset the stamp size.
+ */
+function twoBrushes(): BrushDocument {
+  const doc = threeByThree();
+  const dot = createBrush("brush-2", "Dot", 4, 4);
+  dot.frames[0]!.layers[0]!.pixels[1]![1] = [5, 0, 0, 0];
+  doc.brushes.push(dot);
+  return doc;
+}
+
+/**
+ * `threeByThree` plus "Twin": also 3×3, painted at (2,2) only — the SAME
+ * native size, so a switch to it must keep a chosen stamp size.
+ */
+function twoSameSize(): BrushDocument {
+  const doc = threeByThree();
+  const twin = createBrush("brush-2", "Twin", 3, 3);
+  twin.frames[0]!.layers[0]!.pixels[2]![2] = [5, 0, 0, 0];
+  doc.brushes.push(twin);
+  return doc;
+}
+
+describe("usePixelBrush — the selected brush of the project", () => {
+  it("⭐ stamps the SELECTED brush, not brushes[0]: selectBrush('brush-2') → brush 2's footprint", () => {
+    const doc = twoBrushes();
+    installLoaded(doc);
+    const h = mount(true, RED);
+    expect(app.brushUI.selectedBrushId).toBe("brush-1");
+    const before = h.latest();
+    expect(before.footprint?.offsets).toEqual([
+      { dx: -1, dy: -1 },
+      { dx: 1, dy: 0 },
+    ]);
+
+    act(() => {
+      app.brushUI.selectBrush("brush-2", app.brushes.document);
+    });
+
+    expect(app.brushUI.selectedBrushId).toBe("brush-2");
+    const after = h.latest();
+    const layers = doc.brushes[1]!.frames[0]!.layers;
+    expect(after.size).toEqual({ width: 4, height: 4 });
+    expect(after.footprint).not.toBe(before.footprint);
+    expect(after.footprint).toEqual(pixelBrushFootprint(layers, 4, 4));
+    // Brush 2 at ITS native size: origin (2,2), one cell at (1,1).
+    expect(after.footprint?.offsets).toEqual([{ dx: -1, dy: -1 }]);
+    expect(after.stamp).toEqual(resolvePixelBrushStamp(layers, 4, 4, RED));
+  });
+
+  it("⭐ switching to a brush of ANOTHER size resets width/height to null (strategies kept)", () => {
+    installLoaded(twoBrushes());
+    const h = mount(true, RED);
+    act(() => {
+      app.ui.pixelBrush.setWidth(6, NATIVE_3);
+      app.ui.pixelBrush.setScale("x", "bilinear");
+    });
+    expect(app.ui.pixelBrush.width).toBe(6);
+    expect(h.latest().size).toEqual({ width: 6, height: 6 });
+
+    act(() => {
+      app.brushUI.selectBrush("brush-2", app.brushes.document);
+    });
+
+    // `resetSize` ran: exactly what installing a different file does.
+    expect(app.ui.pixelBrush.width).toBeNull();
+    expect(app.ui.pixelBrush.height).toBeNull();
+    expect(app.ui.pixelBrush.lockedRatio).toBeNull();
+    expect(app.ui.pixelBrush.scaleX).toBe("bilinear");
+    expect(h.latest().size).toEqual({ width: 4, height: 4 });
+    expect(h.latest().footprint?.offsets).toEqual([{ dx: -1, dy: -1 }]);
+  });
+
+  it("switching to a brush of the SAME size keeps the chosen size, at brush 2's cells", () => {
+    installLoaded(twoSameSize());
+    const h = mount(true, RED);
+    act(() => {
+      app.ui.pixelBrush.setWidth(6, NATIVE_3);
+    });
+    const before = h.latest().footprint;
+
+    act(() => {
+      app.brushUI.selectBrush("brush-2", app.brushes.document);
+    });
+
+    expect(app.brushUI.selectedBrushId).toBe("brush-2");
+    expect(app.ui.pixelBrush.width).toBe(6);
+    expect(app.ui.pixelBrush.height).toBe(6);
+    expect(h.latest().size).toEqual({ width: 6, height: 6 });
+    // Brush 2's (2,2) at 2× nearest: x 4..5, y 4..5 of a 6×6, origin (3,3).
+    expect(h.latest().footprint).not.toBe(before);
+    expect(h.latest().footprint?.offsets).toEqual([
+      { dx: 1, dy: 1 },
+      { dx: 2, dy: 1 },
+      { dx: 1, dy: 2 },
+      { dx: 2, dy: 2 },
+    ]);
+  });
+
+  it("⭐ a pixelVersion bump (a cell write replacing the document) does NOT reset the size", () => {
+    installLoaded(twoBrushes());
+    const h = mount(true, RED);
+    act(() => {
+      app.ui.pixelBrush.setWidth(6, NATIVE_3);
+    });
+    expect(app.ui.pixelBrush.width).toBe(6);
+
+    // The write path: a NEW document object, same brush dimensions. An effect
+    // keyed on `doc` identity would reset here (§8 mistake 5).
+    act(() => {
+      const next = structuredClone(app.brushes.document!);
+      next.brushes[0]!.frames[0]!.layers[0]!.pixels[2]![0] = [1, 0, 0, 0];
+      app.brushes.replaceDocument(next, { bumpPixels: true });
+    });
+    expect(app.ui.pixelBrush.width).toBe(6);
+    expect(app.ui.pixelBrush.height).toBe(6);
+    // The write itself still refreshed the footprint, at the chosen size:
+    // source (0,2) at 2× nearest → x 0..1, y 4..5, origin (3,3).
+    expect(h.latest().size).toEqual({ width: 6, height: 6 });
+    expect(h.latest().footprint?.offsets).toContainEqual({ dx: -3, dy: 1 });
+
+    // A bare counter bump (no document swap) leaves it alone as well.
+    act(() => {
+      app.brushes.bumpPixelVersion();
+    });
+    expect(app.ui.pixelBrush.width).toBe(6);
   });
 });

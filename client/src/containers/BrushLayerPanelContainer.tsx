@@ -3,9 +3,20 @@
  * task 17; MASTER D6 / D16).
  *
  * The brush counterpart of `LayerPanelContainer`: projects the selected
- * frame's layers into `BrushLayerRowModel`s for the pure `BrushLayerPanel`
+ * frame's layers — of the SELECTED BRUSH (multi-brush projects, plan 14
+ * task 12) — into `BrushLayerRowModel`s for the pure `BrushLayerPanel`
  * (task 12), and maps every callback onto ONE `BrushStructureStore` method
  * (task 08) — or, for selection, onto `BrushUIStore` (task 10).
+ *
+ * ── Which brush, which frame: the UI store decides ────────────────────────
+ *
+ * `brushUI.selectedBrushIn(doc)` is the brush (the id named, else the first —
+ * `brushIn`, MASTER D4, never re-implemented here) and
+ * `brushUI.selectedFrameIn(doc)` the frame WITHIN it (the id named, else
+ * that brush's `frames[0]`). Both rules live in `BrushUIStore` so the rows,
+ * the canvas panes and the timeline agree on what is "current"; this
+ * container reads them and never re-derives them. Every structural op below
+ * goes to `brushStructure`, which acts on the selected brush itself.
  *
  * ── Every structural callback goes to `brushStructure`, verbatim ──────────
  *
@@ -35,18 +46,21 @@
  * means "toward the array end", i.e. toward the top of the displayed list —
  * the row's up arrow maps to it directly with no inversion.
  *
- * ── Why the panel is not rendered without a document ──────────────────────
+ * ── Why the panel is not rendered without a brush ─────────────────────────
  *
- * With no brush loaded every structural op is a silent no-op, so the header's
- * "+" would be a dead button. Returning `null` — `PixelStudioPanelContainer`'s
- * `if (!domain.hasProject) return null` — is the honest state; the library
- * above it already shows the "create one to start" prompt.
+ * With no project loaded every structural op is a silent no-op, so the
+ * header's "+" would be a dead button. Returning `null` —
+ * `PixelStudioPanelContainer`'s `if (!domain.hasProject) return null` — is the
+ * honest state; the brush list above it already shows the "create one to
+ * start" prompt. (A loaded project always has ≥ 1 brush, so `brush` is null
+ * exactly when `doc` is.)
  *
  * No pixel grid crosses this boundary: the row model is ids, a name, two
  * flags, a channel type and a colour source (plan 13 D1: resolved here with
  * `brushLayerColorSource`, so the row never sees the optional key).
  * `document` is `observable.ref` (D8), so the reads below track its
- * identity only.
+ * identity only — plus `selectedBrushId`, read inside `selectedBrushIn`, so a
+ * brush switch re-renders the rows.
  *
  * `observer()` lives here and only here (ESLint, task 05).
  */
@@ -61,16 +75,14 @@ export const BrushLayerPanelContainer = observer(
     const { brushes, brushStructure, brushUI } = useStores();
 
     const doc = brushes.document;
-    if (!doc) return null;
+    const brush = brushUI.selectedBrushIn(doc);
+    if (!brush) return null;
 
-    // The frame the selection names, else the first — the same fallback
-    // `BrushUIStore.selectedLayerIn` applies, so the rows and the canvas
-    // agree on which frame is "current".
-    const frame =
-      doc.frames.find((f) => f.id === brushUI.selectedFrameId) ?? doc.frames[0];
+    // The selected frame WITHIN the selected brush (see the header).
+    const frame = brushUI.selectedFrameIn(doc);
     const storedLayers = frame ? frame.layers : [];
 
-    const appliedGroups = doc.appliedGroups;
+    const appliedGroups = brush.appliedGroups;
     const groupNameById = new Map(appliedGroups.map((g) => [g.id, g.name]));
 
     // Reversed: top of the stack first (see the header). `slice()` first so
@@ -104,10 +116,11 @@ export const BrushLayerPanelContainer = observer(
         appliedGroups={appliedGroups}
         // The panel picks the colour source and the channel from its menu
         // (plan 13 D3); the name follows the pixel studio's "Layer N"
-        // convention, counted against frame 0 (the layer list — uniform
-        // across frames, D6).
+        // convention, counted against the selected brush's frame 0 (the
+        // layer list — uniform across frames, D6). The store adds to the
+        // selected brush only.
         onAddLayer={(channelType, colorSource) => {
-          const count = brushes.document?.frames[0]?.layers.length ?? 0;
+          const count = brush.frames[0]?.layers.length ?? 0;
           brushStructure.addLayer(
             `Layer ${count + 1}`,
             channelType,

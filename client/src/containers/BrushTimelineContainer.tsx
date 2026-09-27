@@ -3,7 +3,9 @@
  * `docs/01-brush-studio`, task 18; MASTER D6 / D8 / D20).
  *
  * Feeds the existing PURE `TimelineView` (frames × layers grid with per-cell
- * thumbnails) from the brush document. There is exactly one view mode here —
+ * thumbnails) from the SELECTED BRUSH of the brush document
+ * (`brushUI.selectedBrushIn(doc)` — multi-brush projects, plan 14 task 12;
+ * never `brushes[0]`). There is exactly one view mode here —
  * no `FramesView`, no `VariantView`, no per-frame layer drag — so this
  * container is `TimelineViewContainer` with its four non-presentation
  * responsibilities cut down to the two that apply (thumbnail painting and
@@ -46,12 +48,15 @@
  * mutation replaces the document (D8), so a structural edit mid-playback
  * re-arms the loop against the new frame list rather than ticking over a
  * stale one. The tick reads the CURRENT document and selection off the
- * stores, never a closure, and advances `brushUI.selectFrame` modulo the
- * frame count.
+ * stores, never a closure — it resolves the selected brush itself
+ * (`brushIn(brushes.document, brushUI.selectedBrushId)`), so play loops
+ * within whichever brush is selected at that tick — and advances
+ * `brushUI.selectFrame` modulo that brush's frame count.
  *
  * ── Thumbnails: `draw` + `revision`, not the cache ────────────────────────
  *
- * Cells repaint from `brushes.pixelVersion` (D8), never by observing a grid.
+ * Cells repaint from `brushes.pixelVersion` (D8), never by observing a grid;
+ * each thumbnail is `brush.width × brush.height`, the selected brush's size.
  * `TimelineCell` exposes no `cacheKey`, so the shared thumbnail LRU is not
  * used here — and could not be keyed by layer id alone anyway, because a
  * brush layer id is the SAME in every frame (D6). This container reads the
@@ -76,7 +81,7 @@ import type {
 import { generateLayerColors } from "./hooks/timelineLayerColors";
 import { makeBrushCellThumbnailDraw } from "./hooks/brushCellThumbnail";
 import { useStores } from "../stores/context";
-import { brushLayerColorSource } from "../types";
+import { brushIn, brushLayerColorSource } from "../types";
 import type { BrushFrame, BrushLayer } from "../types";
 
 /** MASTER §1: "Local 200 ms interval, same as `FrameTimeline.tsx`." */
@@ -95,7 +100,10 @@ export const BrushTimelineContainer = observer(
     const { brushes, brushStructure, brushUI } = useStores();
 
     const doc = brushes.document;
-    const frames = doc?.frames ?? NO_FRAMES;
+    // Reading `selectedBrushId` inside `selectedBrushIn` subscribes this
+    // observer to the selection; `document` is `observable.ref`.
+    const brush = brushUI.selectedBrushIn(doc);
+    const frames = brush?.frames ?? NO_FRAMES;
     // D6: frame 0's layers ARE the layer list.
     const layers = frames[0]?.layers ?? NO_LAYERS;
     // The revision, never the grid — see the header.
@@ -179,7 +187,8 @@ export const BrushTimelineContainer = observer(
         return;
       }
       const id = window.setInterval(() => {
-        const current = brushes.document;
+        // The LIVE selected brush, resolved inside the tick (task 12).
+        const current = brushIn(brushes.document, brushUI.selectedBrushId);
         if (!current || current.frames.length === 0) return;
         const index = current.frames.findIndex(
           (f) => f.id === brushUI.selectedFrameId,
@@ -369,12 +378,12 @@ export const BrushTimelineContainer = observer(
 
     const renderCell = useCallback(
       (cell: TimelineCellData) => {
-        const layer = doc?.frames[cell.frameIndex]?.layers.find(
+        const layer = brush?.frames[cell.frameIndex]?.layers.find(
           (l) => l.id === cell.layerId,
         );
         const draw =
-          showThumbnails && doc && layer
-            ? makeBrushCellThumbnailDraw(layer, doc.width, doc.height)
+          showThumbnails && brush && layer
+            ? makeBrushCellThumbnailDraw(layer, brush.width, brush.height)
             : undefined;
         return (
           <TimelineCell
@@ -401,7 +410,7 @@ export const BrushTimelineContainer = observer(
         );
       },
       [
-        doc,
+        brush,
         showThumbnails,
         selectedFrameId,
         selectedLayerId,

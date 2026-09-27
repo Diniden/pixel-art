@@ -1,22 +1,37 @@
 /**
  * BrushUIStore — brush-studio SESSION state (Brush Studio plan,
  * `docs/01-brush-studio`, task 10; MASTER D7 / D17. Brush follow-ups
- * `docs/11-brush-studio-followups`, task 03; MASTER D2 / D8).
+ * `docs/11-brush-studio-followups`, task 03; MASTER D2 / D8. Multi-brush
+ * projects `docs/14-multi-brush-projects`, task 08; MASTER D4).
  *
- * Which frame and layer are selected, the two delta vectors the tools will
- * paint (the brush studio's stand-in for the colour picker's edge/fill pair),
- * the brush canvas's zoom/pan/view-zoom, and the timeline's play flag. All of
- * it is in-memory only: NONE of these fields is persisted (MASTER §1 —
+ * Which brush, frame and layer are selected, the two delta vectors the tools
+ * will paint (the brush studio's stand-in for the colour picker's edge/fill
+ * pair), the brush canvas's zoom/pan/view-zoom, and the timeline's play flag.
+ * All of it is in-memory only: NONE of these fields is persisted (MASTER §1 —
  * brush-studio UI state is not saved in v1), so there is no `hydrate` and
  * `UIStore.toPersistedUIState()` does not know this store exists.
+ *
+ * ── Selection is brush → frame → layer ─────────────────────────────────────
+ *
+ * A brush PROJECT (one file, `BrushDocument`) holds many brushes; frame and
+ * layer ids are unique only WITHIN a brush (`createBrush` gives every brush a
+ * `frame-1` / `layer-1`). So the selection is a path: `selectedBrushId` picks
+ * the brush, `selectedFrameId` a frame of THAT brush, `selectedLayerId` a
+ * layer of THAT frame. Every resolver (`selectedFrameIn`, `selectedLayerIn`,
+ * `channelTypeIn`) goes through `selectedBrushIn` first — never through
+ * `brushes[0]` — which is what makes two brushes with the same frame id
+ * resolve to different frame objects.
  *
  * ── Why the document is passed IN rather than held ─────────────────────────
  *
  * `stores/ui/**` never imports `stores/domain/**`. The brush document lives on
  * `BrushStore` (domain); this store holds only IDS into it, and the methods
- * that need the document (`adoptDocument`, `selectedFrameIn`, `selectedLayerIn`,
- * `channelTypeIn`) take it as an argument. Containers own the wiring — typically a `reaction` on
- * `brushes.document` that calls `adoptDocument`.
+ * that need the document (`selectBrush`, `adoptDocument`, `selectedBrushIn`,
+ * `selectedFrameIn`, `selectedLayerIn`, `channelTypeIn`) take it as an
+ * argument. Containers own the wiring — typically a `reaction` on
+ * `brushes.document` that calls `adoptDocument`. `selectBrush` takes the
+ * document for the same reason: without it the frame/layer ids would stay
+ * `null` until the next document change and every tool would write nowhere.
  *
  * ── Observable kinds ───────────────────────────────────────────────────────
  *
@@ -57,13 +72,14 @@ import {
   observableRef,
 } from "mobx";
 import type {
+  Brush,
   BrushChannelType,
   BrushDelta,
   BrushDocument,
   BrushFrame,
   BrushLayer,
 } from "../../types";
-import { clampDelta } from "../../types";
+import { brushIn, clampDelta } from "../../types";
 import type { CanvasCamera } from "./CanvasCameraStore";
 
 export const BRUSH_ZOOM_MIN = 1;
@@ -87,18 +103,27 @@ function clampedCopy(delta: BrushDelta): BrushDelta {
   ];
 }
 
-/** The frame `selectedFrameId` names, else the document's first frame. */
+/**
+ * The frame `frameId` names in `brush`, else the brush's first frame, else
+ * `null` (no brush, or a brush with no frames). The brush twin of `brushIn`.
+ */
 function frameIn(
-  doc: BrushDocument,
+  brush: Brush | null,
   frameId: string | null,
-): BrushDocument["frames"][number] | null {
+): BrushFrame | null {
+  if (brush === null) return null;
   return (
-    doc.frames.find((f) => f.id === frameId) ??
-    (doc.frames.length > 0 ? doc.frames[0] : null)
+    brush.frames.find((f) => f.id === frameId) ??
+    (brush.frames.length > 0 ? brush.frames[0] : null)
   );
 }
 
 export class BrushUIStore implements CanvasCamera {
+  /**
+   * The brush of the open project the studio and the pixel-studio Brush tool
+   * work on (one selection for both — MASTER §1). `null` = no document.
+   */
+  selectedBrushId: string | null = null;
   /** The frame the timeline / canvas show. `null` = no document or no frames. */
   selectedFrameId: string | null = null;
   /** The layer the tools paint into. `null` = no document or no layers. */
@@ -137,6 +162,7 @@ export class BrushUIStore implements CanvasCamera {
 
   constructor() {
     makeObservable(this, {
+      selectedBrushId: observable,
       selectedFrameId: observable,
       selectedLayerId: observable,
       // Replaced wholesale, never mutated in place.
@@ -149,6 +175,7 @@ export class BrushUIStore implements CanvasCamera {
       viewZoom: observable,
       isPlaying: observable,
 
+      selectBrush: action,
       selectFrame: action,
       selectLayer: action,
       setDeltaChannel: action,
@@ -173,6 +200,23 @@ export class BrushUIStore implements CanvasCamera {
 
   /* ══ Selection ═══════════════════════════════════════════════════════════ */
 
+  /**
+   * Switch to brush `id` of `doc` and re-seat the frame/layer selection inside
+   * it: the frame and layer ids are CLEARED first (they named a frame/layer of
+   * the previous brush — the same string may exist in the new one and mean a
+   * different object), then `adoptDocument` clamps, so the new brush's first
+   * frame and top layer end up selected. An `id` not in `doc` falls back to
+   * `brushes[0]` and THAT id is stored — the store never keeps an id the
+   * document does not have, exactly as for frames. A `null` doc clears all
+   * three ids (MASTER D4).
+   */
+  selectBrush(id: string, doc: BrushDocument | null): void {
+    this.selectedBrushId = id;
+    this.selectedFrameId = null;
+    this.selectedLayerId = null;
+    this.adoptDocument(doc);
+  }
+
   selectFrame(id: string | null): void {
     this.selectedFrameId = id;
   }
@@ -183,24 +227,32 @@ export class BrushUIStore implements CanvasCamera {
 
   /**
    * Re-seat the selection against a document that was just installed or
-   * replaced. Ids that still exist are kept; a stale frame id falls back to
-   * `frames[0]`, a stale layer id to the TOP layer — the LAST element of
-   * `frame.layers`, matching the project convention that the array end is
-   * the top of the stack (`LayerStore`). `null` clears both.
+   * replaced — brush first, then frame, then layer WITHIN that brush. Ids that
+   * still exist are kept; a stale brush id falls back to `brushes[0]`, a stale
+   * frame id to the brush's `frames[0]`, a stale layer id to the TOP layer —
+   * the LAST element of `frame.layers`, matching the project convention that
+   * the array end is the top of the stack (`LayerStore`). `null` clears all
+   * three, as does a document with no brushes (impossible after
+   * `normalizeBrushDocument`, but handled rather than assumed).
    *
-   * Layer ids are uniform across frames (MASTER D6), so the layer lookup is
-   * done against the frame that ends up selected.
+   * Layer ids are uniform across a brush's frames (MASTER D6), so the layer
+   * lookup is done against the frame that ends up selected.
    *
-   * Touches ONLY the two ids: the deltas and the camera survive a document
+   * Touches ONLY the three ids: the deltas and the camera survive a document
    * swap untouched (they are the user's tool settings, not the document's).
    */
   adoptDocument(doc: BrushDocument | null): void {
     if (doc === null) {
-      this.selectedFrameId = null;
-      this.selectedLayerId = null;
+      this.clearSelection();
       return;
     }
-    const frame = frameIn(doc, this.selectedFrameId);
+    const brush = brushIn(doc, this.selectedBrushId);
+    if (brush === null) {
+      this.clearSelection();
+      return;
+    }
+    this.selectedBrushId = brush.id;
+    const frame = frameIn(brush, this.selectedFrameId);
     if (frame === null) {
       this.selectedFrameId = null;
       this.selectedLayerId = null;
@@ -214,21 +266,40 @@ export class BrushUIStore implements CanvasCamera {
     }
   }
 
-  /**
-   * The frame the studio treats as "current" in `doc`: the one `selectedFrameId`
-   * names, else `doc.frames[0]`, else `null` — the same fallback `adoptDocument`
-   * and `selectedLayerIn` apply, exported so callers outside the brush studio
-   * (the pixel studio's brush tool — docs/12-pixel-brush-tool task 05/06) do
-   * not re-implement it. Returns the frame object from `doc` itself, not a copy.
-   */
-  selectedFrameIn(doc: BrushDocument | null): BrushFrame | null {
-    return doc === null ? null : frameIn(doc, this.selectedFrameId);
+  /** All three ids to `null`. Only ever called from inside an action. */
+  private clearSelection(): void {
+    this.selectedBrushId = null;
+    this.selectedFrameId = null;
+    this.selectedLayerId = null;
   }
 
-  /** The selected layer as it appears in `doc`, or `null`. */
+  /**
+   * The brush the studio treats as "current" in `doc`: the one
+   * `selectedBrushId` names, else `doc.brushes[0]`, else `null` — `brushIn`
+   * from `types/brush.ts`, the ONE selected-brush rule (MASTER D4) shared with
+   * containers and the pane compositor. Returns the brush object from `doc`
+   * itself, not a copy.
+   */
+  selectedBrushIn(doc: BrushDocument | null): Brush | null {
+    return brushIn(doc, this.selectedBrushId);
+  }
+
+  /**
+   * The frame the studio treats as "current" in `doc`: the one `selectedFrameId`
+   * names IN THE SELECTED BRUSH, else that brush's `frames[0]`, else `null` —
+   * the same fallback `adoptDocument` and `selectedLayerIn` apply, exported so
+   * callers outside the brush studio (the pixel studio's brush tool —
+   * docs/12-pixel-brush-tool task 05/06) do not re-implement it. Returns the
+   * frame object from `doc` itself, not a copy.
+   */
+  selectedFrameIn(doc: BrushDocument | null): BrushFrame | null {
+    return frameIn(this.selectedBrushIn(doc), this.selectedFrameId);
+  }
+
+  /** The selected layer as it appears in the selected brush of `doc`, or `null`. */
   selectedLayerIn(doc: BrushDocument | null): BrushLayer | null {
-    if (doc === null || this.selectedLayerId === null) return null;
-    const frame = frameIn(doc, this.selectedFrameId);
+    if (this.selectedLayerId === null) return null;
+    const frame = this.selectedFrameIn(doc);
     if (frame === null) return null;
     return frame.layers.find((l) => l.id === this.selectedLayerId) ?? null;
   }

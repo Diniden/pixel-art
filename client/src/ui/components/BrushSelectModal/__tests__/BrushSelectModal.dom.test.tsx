@@ -224,3 +224,19 @@ describe("BrushSelectModal — switch and rename", () => {
     expect(props.onRenameBrush).not.toHaveBeenCalled();
   });
 });
+
+describe("BrushSelectModal — copy (multi-brush plan, MASTER D9)", () => {
+  it("the intro says a project holds a SET of brushes, and the modal manages files", () => {
+    renderModal();
+    // The `Modal` primitive portals into `host`, not the render container.
+    const intro = host.querySelector(".brush-select-modal__intro");
+    expect(intro).not.toBeNull();
+    expect(intro!.textContent!.replace(/\s+/g, " ").trim()).toBe(
+      "Each brush project is one file holding a set of brushes — each with " +
+        "its own size, layers and frames. Switch, create, rename or delete " +
+        "brush project files here.",
+    );
+    // The pre-plan sentence ("a whole brush") is gone.
+    expect(intro!.textContent).not.toMatch(/whole brush/);
+  });
+});

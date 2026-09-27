@@ -43,11 +43,11 @@ beforeEach(() => {
     app.adoptProject(tinyProject());
     app.domain.loadState = "loaded";
     app.lightingUI.setStudioMode("brush");
-    // Install a brush as if `loadBrush` had just succeeded. `installDocument`
+    // Install a brush as if `loadProject` had just succeeded. `installDocument`
     // fires `brushUI.adoptDocument`, which selects frame-1 / layer-1, so the
     // picker has a channel type (the default layer is `rgb`) and shows
     // sliders. `loadState = "loaded"` keeps `isLoading` false.
-    app.brushes.brushName = "panel-brush";
+    app.brushes.projectName = "panel-brush";
     app.brushes.installDocument(createBrushDocument(4, 4));
     app.brushes.loadState = "loaded";
     app.brushUI.setDelta(EDGE);

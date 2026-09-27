@@ -27,6 +27,16 @@
  *    `"x"`; the store applies it to both. A disabled separator item precedes
  *    the first 2-D option so the two families read as groups.
  *  - "Native size" is disabled when the stamp already IS native.
+ *
+ * ## The Brush picker (`brushes?` / `selectedBrushId?` / `onSelectBrush?`)
+ *
+ * Plan 14 (multi-brush projects, MASTER D11): a project holds many brushes,
+ * and the FIRST row of the loaded `<dl>` is a "Brush" `Dropdown` listing
+ * them as `name (W×H)`. All three members are optional so this section can
+ * land before the container follows the selected brush (plan 14 task 14 —
+ * the `size?` precedent): the row renders only when the document is loaded,
+ * `brushes` has at least one entry AND `onSelectBrush` is supplied. The
+ * selection falls back to `brushes[0]` when `selectedBrushId` is absent.
  */
 import { Link, Unlink } from "lucide-react";
 import { OtherHandButton } from "../OtherHand/OtherHandButton";
@@ -75,6 +85,17 @@ export interface PixelStudioBrushSizeControls {
  * will stamp, and the frame/layers it stamps (pixel-brush task 04). Supplied
  * by `PixelStudioPanelContainer` (task 06) from `BrushStore` / `BrushUIStore`.
  */
+/**
+ * One brush of the open project, as the "Brush" picker lists it (plan 14
+ * D11). `width`/`height` are the brush's NATIVE size, shown in the label.
+ */
+export interface PixelStudioBrushOption {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+}
+
 export interface PixelStudioBrushInfo {
   loadState: PixelStudioBrushLoadState;
   /** Filename stem of the loaded brush project, or null when none is loaded. */
@@ -89,6 +110,12 @@ export interface PixelStudioBrushInfo {
   onOpenBrushStudio: () => void;
   /** The stamp-size controls (task 13); absent until a document is loaded. */
   size?: PixelStudioBrushSizeControls;
+  /** The brushes in the open project (plan 14). Absent or empty = no picker row. */
+  brushes?: ReadonlyArray<PixelStudioBrushOption>;
+  /** The selected brush; absent or null shows `brushes[0]`. */
+  selectedBrushId?: string | null;
+  /** Reports a pick from the "Brush" row. Absent = no picker row. */
+  onSelectBrush?: (brushId: string) => void;
 }
 
 export interface PixelStudioBrushSectionProps {
@@ -150,6 +177,43 @@ function ScalePicker({ label, axis, value, onScaleChange }: ScalePickerProps) {
           if (next !== SCALE_SEPARATOR) onScaleChange(axis, next);
         }}
       />
+    </div>
+  );
+}
+
+interface BrushPickerProps {
+  brushes: ReadonlyArray<PixelStudioBrushOption>;
+  selectedBrushId: string | null | undefined;
+  onSelectBrush: (brushId: string) => void;
+}
+
+/**
+ * The "Brush" row: a `<dl>` row like Project / Size / Frame / Layers, with a
+ * `Dropdown` in the `dd`. The caller guarantees `brushes` is non-empty, so
+ * `brushes[0]` is a safe fallback for an absent / unknown selection.
+ */
+function BrushPicker({
+  brushes,
+  selectedBrushId,
+  onSelectBrush,
+}: BrushPickerProps) {
+  const options: DropdownOption<string>[] = brushes.map((brush) => ({
+    value: brush.id,
+    label: `${brush.name} (${brush.width}×${brush.height})`,
+  }));
+  const value = selectedBrushId ?? brushes[0]!.id;
+  return (
+    <div className="pixel-studio-panel__brush-row">
+      <dt className="pixel-studio-panel__brush-label">Brush</dt>
+      <dd className="pixel-studio-panel__brush-picker">
+        <Dropdown<string>
+          triggerClassName="pixel-studio-panel__brush-picker-trigger"
+          label="Brush"
+          options={options}
+          value={value}
+          onChange={onSelectBrush}
+        />
+      </dd>
     </div>
   );
 }
@@ -251,6 +315,11 @@ export function PixelStudioBrushSection({
   onOtherHand,
 }: PixelStudioBrushSectionProps) {
   const loaded = pixelBrush.loadState === "loaded" && !!pixelBrush.brushName;
+  // The render rule (plan 14 D11): loaded, ≥ 1 brush, and a pick handler.
+  // Destructured so the guard narrows both for the JSX below.
+  const { brushes, onSelectBrush } = pixelBrush;
+  const showPicker =
+    loaded && !!brushes && brushes.length > 0 && !!onSelectBrush;
 
   return (
     <div className="panel pixel-studio-panel__section">
@@ -264,6 +333,13 @@ export function PixelStudioBrushSection({
         <div className="pixel-studio-panel__brush">
           {loaded ? (
             <dl className="pixel-studio-panel__brush-rows">
+              {showPicker ? (
+                <BrushPicker
+                  brushes={brushes}
+                  selectedBrushId={pixelBrush.selectedBrushId}
+                  onSelectBrush={onSelectBrush}
+                />
+              ) : null}
               <div className="pixel-studio-panel__brush-row">
                 <dt className="pixel-studio-panel__brush-label">Project</dt>
                 <dd className="pixel-studio-panel__brush-value">
@@ -312,7 +388,7 @@ export function PixelStudioBrushSection({
             Open Brush Studio
           </Button>
           <p className="pixel-studio-panel__brush-hint">
-            Stamps the current frame of the open brush project with the selected
+            Stamps the selected brush&apos;s current frame with the selected
             colour.
           </p>
         </div>

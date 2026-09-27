@@ -1,13 +1,14 @@
 /**
  * `usePixelBrush` — the pixel-studio Brush tool's state (plan 12, task 05;
- * MASTER D6, D9; plan 13, task 12: MASTER D12).
+ * MASTER D6, D9; plan 13, task 12: MASTER D12; plan 14, task 14: MASTER D12).
  *
  * What `CanvasContainer` needs from the brush stores, reduced to three memos:
  *
- *  - `scaled` — the open brush document's current frame, with every layer's
- *    grid resampled to the size and strategies in `ui.pixelBrush`. Computed
- *    once per (document, frame, versions, size, strategies), never at
- *    pointer rate.
+ *  - `scaled` — the SELECTED BRUSH's current frame (plan 14: a project holds
+ *    many brushes; `brushUI.selectedBrushIn(doc)` picks one, never
+ *    `brushes[0]`), with every layer's grid resampled to the size and
+ *    strategies in `ui.pixelBrush`. Computed once per (document, selected
+ *    brush id, frame, versions, size, strategies), never at pointer rate.
  *  - `footprint` — the painted cells of the scaled frame, relative to the
  *    origin. Feeds the hover marker (`toolFootprint`'s class 4) so the marker
  *    is exactly what a press writes.
@@ -48,12 +49,13 @@
  * ## Grids are read, never observed
  *
  * `brushes.document` is `observable.ref`; the reads here that subscribe are
- * the document REFERENCE, the selected frame id, the two version counters
- * (`pixelVersion` for cell writes, `domainVersion` for layer visibility /
- * structure) and the four `ui.pixelBrush` scalars. The frame's layer grids
- * are plain arrays read INSIDE the memos, at compute time, never in the
- * render body — the "read grids at compute time, never observe them" rule
- * (`containers/brush/brushPanes.ts`, `CLAUDE.md`).
+ * the document REFERENCE, the selected brush id, the selected frame id, the
+ * two version counters (`pixelVersion` for cell writes, `domainVersion` for
+ * layer visibility / structure) and the four `ui.pixelBrush` scalars. The
+ * selected brush's `width` / `height` are scalars read off that plain object;
+ * the frame's layer grids are plain arrays read INSIDE the memos, at compute
+ * time, never in the render body — the "read grids at compute time, never
+ * observe them" rule (`containers/brush/brushPanes.ts`, `CLAUDE.md`).
  *
  * ## `init()` runs from an effect
  *
@@ -62,16 +64,24 @@
  * and forgotten from an effect keyed on `[app, enabled]` — exactly as
  * `BrushStudioContainer`'s mount effect does. Never from a render.
  *
- * ## The native-size reset runs from an effect (D12)
+ * ## The native-size reset runs from an effect (plan 13 D12, plan 14 D12)
  *
  * A brush with different native dimensions resets the stamp size to native:
- * `ui.pixelBrush.resetSize()` from an effect keyed on the document's
- * `width` / `height`. It also fires on mount and when the document arrives
- * (`undefined → n`), which is a no-op at the defaults (`null → null`; MobX
- * does not even notify on an equal primitive). Under StrictMode the mount
- * effect runs twice; `resetSize` is idempotent (nulls to nulls, `lockedRatio`
- * to `null`), so the second run changes nothing and nothing observes a
- * transient. The strategies are kept (D11) — only the size follows the brush.
+ * `ui.pixelBrush.resetSize()` from an effect keyed on the SELECTED BRUSH's
+ * `width` / `height` — `[app, brush?.width, brush?.height]`, never the
+ * document's identity. Keying on `doc` would reset the size on every pixel
+ * write (each write replaces the `observable.ref` document — plan 14 §8
+ * mistake 5); keying on the brush's dimensions means switching to a brush of
+ * another size resets, switching to one of the same size keeps the chosen
+ * size, and a cell write, a frame switch or a layer toggle never touches it —
+ * exactly plan 13's rule for loading a different file, carried over to
+ * picking a different brush. It also fires on mount and when the document
+ * arrives (`undefined → n`), which is a no-op at the defaults (`null → null`;
+ * MobX does not even notify on an equal primitive). Under StrictMode the
+ * mount effect runs twice; `resetSize` is idempotent (nulls to nulls,
+ * `lockedRatio` to `null`), so the second run changes nothing and nothing
+ * observes a transient. The strategies are kept (D11) — only the size follows
+ * the brush.
  *
  * Container tier: takes the `ApplicationStore`, so it may not live in `ui/`.
  * The caller must be an `observer` for the store reads to subscribe.
@@ -105,8 +115,8 @@ export interface PixelBrushState {
   size: PixelBrushSize | null;
   /** `brushes.loadState` — for the rail's loading / failed states. */
   loadState: LoadState;
-  /** `brushes.brushName`, or `null` when no document is loaded. */
-  brushName: string | null;
+  /** `brushes.projectName`, or `null` when no document is loaded. */
+  projectName: string | null;
 }
 
 /** The base colour, structurally — the domain `Color` has this shape. */
@@ -135,45 +145,63 @@ export function usePixelBrush(
   }, [app, enabled]);
 
   // The subscribing reads. `doc` is the reference only — its grids are read
-  // inside the memos below.
+  // inside the memos below. `brush` is the selected brush of the project
+  // (plan 14 D12): resolved through `selectedBrushIn`, never `brushes[0]`,
+  // and derived from `(doc, brushId)` — which is why `brushId` is a memo key.
   const doc = app.brushes.document;
+  const brushId = app.brushUI.selectedBrushId;
+  const brush = app.brushUI.selectedBrushIn(doc);
   const frameId = app.brushUI.selectedFrameId;
   const pv = app.brushes.pixelVersion;
   const dv = app.brushes.domainVersion;
   const loadState = app.brushes.loadState;
-  const brushName = app.brushes.brushName;
+  const projectName = app.brushes.projectName;
   // Slider-rate, never pointer-rate: the size and strategy scalars.
   const { width, height, scaleX, scaleY } = app.ui.pixelBrush;
 
   // See the header ("The native-size reset runs from an effect"): a no-op at
   // the defaults and on the StrictMode double-run; a real reset only when the
-  // brush's own dimensions change.
-  const nativeWidth = doc?.width;
-  const nativeHeight = doc?.height;
+  // SELECTED BRUSH's own dimensions change — never on `doc` identity.
+  const nativeWidth = brush?.width;
+  const nativeHeight = brush?.height;
   useEffect(() => {
     app.ui.pixelBrush.resetSize();
   }, [app, nativeWidth, nativeHeight]);
 
   const scaled = useMemo((): ScaledFrame | null => {
-    if (!enabled || !doc) return null;
+    if (!enabled || !doc || !brush) return null;
+    // `selectedFrameIn` already resolves through the selected brush.
     const frame = app.brushUI.selectedFrameIn(doc);
     if (!frame) return null;
-    const native = { width: doc.width, height: doc.height };
+    const native = { width: brush.width, height: brush.height };
     const size = app.ui.pixelBrush.effectiveSize(native);
     const layers = scalePixelBrushLayers(frame.layers, {
-      srcW: doc.width,
-      srcH: doc.height,
+      srcW: brush.width,
+      srcH: brush.height,
       dstW: size.width,
       dstH: size.height,
       x: scaleX,
       y: scaleY,
     });
     return { layers, width: size.width, height: size.height };
-    // `frameId`, `pv` and `dv` are the invalidation keys for the grids read
-    // through `doc`, and `width` / `height` for the size `effectiveSize`
+    // `brushId`, `frameId`, `pv` and `dv` are the invalidation keys for the
+    // brush and grids read through `doc` (`brush` itself is derived from
+    // `doc` + `brushId`), and `width` / `height` for the size `effectiveSize`
     // reads from the store — none is read in the body by design.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app, enabled, doc, frameId, pv, dv, width, height, scaleX, scaleY]);
+  }, [
+    app,
+    enabled,
+    doc,
+    brushId,
+    frameId,
+    pv,
+    dv,
+    width,
+    height,
+    scaleX,
+    scaleY,
+  ]);
 
   const footprint = useMemo(() => {
     if (!enabled || !scaled) return null;
@@ -202,6 +230,6 @@ export function usePixelBrush(
     stamp,
     size,
     loadState,
-    brushName: doc ? brushName : null,
+    projectName: doc ? projectName : null,
   };
 }

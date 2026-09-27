@@ -210,7 +210,7 @@ describe("PixelStudioPanel — Brush section states", () => {
       expect(
         container.querySelector(".pixel-studio-panel__brush-hint")?.textContent,
       ).toBe(
-        "Stamps the current frame of the open brush project with the selected colour.",
+        "Stamps the selected brush's current frame with the selected colour.",
       );
       unmount();
     }

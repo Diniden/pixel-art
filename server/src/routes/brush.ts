@@ -12,6 +12,10 @@
  * minus the config, backup and sync concerns, which brushes do not have
  * (MASTER D12: no rotation, no cross-tab broadcast).
  *
+ * `create` without `brushData` writes `emptyBrushDocument()` — a valid brush-2
+ * project (multi-brush plan 14, D14), the same shape the client factory
+ * builds — so a project created through the raw API is loadable.
+ *
  * Every handler is wrapped in try/catch and answers 500 `{ error }` on an
  * unexpected failure. No request ever returns 200 with an error payload.
  */
@@ -29,18 +33,55 @@ import { isValidProjectName } from "../validation.js";
 
 export const brushRouter = Router();
 
+/** Size of the single brush a `create` without `brushData` starts with. */
+const DEFAULT_BRUSH_SIZE = 16;
+
 /**
- * Document written by `create` when the caller sends no `brushData`. The
- * server does not know the brush type; the client normalises on load. Shape
- * per MASTER D2.
+ * Document written by `create` when the caller sends no `brushData`: a valid
+ * brush-2 project (multi-brush plan 14, D14) — one 16×16 brush named "Brush 1"
+ * holding one frame with one empty rgb layer. Mirrors the client factory
+ * `createBrushDocument()` (`client/src/types/brush.ts`) exactly, so a
+ * server-created and a client-created project are identical after
+ * normalisation. This is the only place the server knows the document shape;
+ * `brushFiles.ts` treats documents as opaque JSON.
+ *
+ * Builds a fresh object — fresh grid arrays — on every call, so two creates
+ * never share a grid.
  */
-const EMPTY_BRUSH_DOCUMENT = {
-  version: "brush-1",
-  width: 16,
-  height: 16,
-  frames: [],
-  appliedGroups: [],
-} as const;
+export function emptyBrushDocument() {
+  const width = DEFAULT_BRUSH_SIZE;
+  const height = DEFAULT_BRUSH_SIZE;
+  const pixels = Array.from({ length: height }, () =>
+    Array.from({ length: width }, () => 0),
+  );
+  return {
+    version: "brush-2",
+    brushes: [
+      {
+        id: "brush-1",
+        name: "Brush 1",
+        width,
+        height,
+        frames: [
+          {
+            id: "frame-1",
+            name: "Frame 1",
+            layers: [
+              {
+                id: "layer-1",
+                name: "Layer 1",
+                channelType: "rgb",
+                visible: true,
+                pixels,
+              },
+            ],
+          },
+        ],
+        appliedGroups: [],
+      },
+    ],
+  };
+}
 
 const INVALID_NAME = { error: "Invalid brush name" } as const;
 
@@ -147,7 +188,7 @@ brushRouter.post("/brush/create", async (req: Request, res: Response) => {
       return;
     }
 
-    await writeBrush(name, brushData ?? EMPTY_BRUSH_DOCUMENT);
+    await writeBrush(name, brushData ?? emptyBrushDocument());
     res.json({ success: true, name });
   } catch (error) {
     sendError(res, error, "creating brush", "Failed to create brush");

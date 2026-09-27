@@ -12,8 +12,9 @@
  *
  * Open this beside `Layouts/PixelStudioLayout` and `Layouts/LightingStudioLayout`:
  * the arrangement is identical — same shell, same rails, same timeline slot —
- * but the left rail's top section reads **BrushLibrary** rather than
- * `ObjectLibrary`, and the two reference panels are absent. That is the
+ * but the left rail's top section reads **BrushList** (the brushes inside
+ * the open project) rather than `ObjectLibrary`, and the two reference
+ * panels are absent. That is the
  * whole point of a third layout: the difference is a TYPE error (there is no
  * `objectLibrary` prop to pass) rather than a `mode` branch at runtime.
  *
@@ -45,7 +46,7 @@ function regions(density: Density) {
   return {
     header: <StubRegion label="Header" height={48} />,
     toolbar: <StubRegion label="Toolbar" height={44} />,
-    brushLibrary: <StubList label="BrushLibrary" density={density} />,
+    brushList: <StubList label="BrushList" density={density} />,
     layerPanel: <StubList label="BrushLayerPanel" density={density} grow />,
     rightControls: <StubRegion label="RightSidebarTopControls" height={64} />,
     studioPanel: <StubList label="BrushDeltaPicker" density={density} grow />,
@@ -79,7 +80,7 @@ export const Dense: Story = {
 /**
  * ⭐ Focus mode — `` ` `` in the running app.
  *
- * Compare against `Typical`: the left sidebar (brush library + layer panel)
+ * Compare against `Typical`: the left sidebar (brush list + layer panel)
  * and the bottom timeline are gone; the right rail and the canvas stay.
  */
 export const FocusMode: Story = {

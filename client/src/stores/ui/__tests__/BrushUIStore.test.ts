@@ -7,13 +7,19 @@
  * the `observableRef` contract — `selectedDelta`, `fillDelta` and `panOffset`
  * are never MobX proxies and every write produces a NEW identity — and the
  * adoption rule: valid ids survive a document swap, stale ones fall back to
- * `frames[0]` / the TOP (last) layer, and `adoptDocument(null)` clears both.
+ * `brushes[0]` / `frames[0]` / the TOP (last) layer, and `adoptDocument(null)`
+ * clears all three.
  *
  * Follow-ups D2/D8: the store satisfies `CanvasCamera` (`viewZoom`,
  * `setViewZoom(z, floor)`, `resetView`) with the `ViewportUIStore` clamp, and
  * holds an edge slot (`selectedDelta`) and a fill slot (`fillDelta`) behind a
  * `deltaTarget` flag — `activeDelta` and the `*Active*` setters follow the
  * flag; the pre-split `setDelta*` API keeps writing the edge slot.
+ *
+ * Multi-brush D4: the selection is brush → frame → layer. `selectBrush(id,
+ * doc)` clears the frame/layer ids and re-clamps inside the new brush; every
+ * resolver goes through the SELECTED brush, so two brushes sharing a frame id
+ * (every `createBrush` has `frame-1`) resolve to different objects.
  */
 import { describe, expect, it } from "vitest";
 import { isObservable, isObservableProp } from "mobx";
@@ -26,11 +32,24 @@ import {
 } from "@/stores/ui/BrushUIStore";
 import type { CanvasCamera } from "@/stores/ui/CanvasCameraStore";
 import {
+  BRUSH_DOCUMENT_VERSION,
+  createBrush,
   createBrushDocument,
   createBrushFrame,
   createBrushLayer,
   type BrushDocument,
+  type BrushFrame,
 } from "@/types";
+
+/** A one-brush (`brush-1`) document whose brush holds exactly `frames`. */
+function docWithFrames(
+  frames: BrushFrame[],
+  width = 4,
+  height = 4,
+): BrushDocument {
+  const base = createBrushDocument(width, height);
+  return { ...base, brushes: [{ ...base.brushes[0], frames }] };
+}
 
 /** Two frames, each with layers `bottom` (index 0) and `top` (index 1). */
 function twoByTwo(): BrushDocument {
@@ -39,15 +58,28 @@ function twoByTwo(): BrushDocument {
       createBrushLayer("bottom", "Bottom", 4, 4, "rgb"),
       createBrushLayer("top", "Top", 4, 4, "normal"),
     ]);
+  return docWithFrames([mk("f1", "Frame 1"), mk("f2", "Frame 2")]);
+}
+
+/**
+ * Two brushes straight from `createBrush`, so BOTH carry `frame-1` /
+ * `layer-1` — the collision the brush level of the selection exists for.
+ * Brush 2 is 8×8 and its layer is `normal` so a resolver that quietly lands
+ * in brush 1 is caught by value as well as by identity.
+ */
+function twoBrushDoc(): BrushDocument {
+  const b2 = createBrush("brush-2", "Brush 2", 8, 8);
+  b2.frames[0].layers[0].channelType = "normal";
   return {
-    ...createBrushDocument(4, 4),
-    frames: [mk("f1", "Frame 1"), mk("f2", "Frame 2")],
+    version: BRUSH_DOCUMENT_VERSION,
+    brushes: [createBrush("brush-1", "Brush 1", 4, 4), b2],
   };
 }
 
 describe("BrushUIStore — defaults", () => {
   it("starts unselected, zero delta, zoom 16, origin pan, not playing", () => {
     const s = new BrushUIStore();
+    expect(s.selectedBrushId).toBeNull();
     expect(s.selectedFrameId).toBeNull();
     expect(s.selectedLayerId).toBeNull();
     expect(s.selectedDelta).toEqual([0, 0, 0, 0]);
@@ -68,6 +100,7 @@ describe("BrushUIStore — defaults", () => {
   it("declares every field observable and keeps the ref fields un-proxied", () => {
     const s = new BrushUIStore();
     for (const key of [
+      "selectedBrushId",
       "selectedFrameId",
       "selectedLayerId",
       "selectedDelta",
@@ -107,9 +140,10 @@ describe("BrushUIStore — selection", () => {
     expect(s.selectedLayerId).toBeNull();
   });
 
-  it("adoptDocument on a fresh store picks frames[0] and the TOP (last) layer", () => {
+  it("adoptDocument on a fresh store picks brushes[0], frames[0] and the TOP (last) layer", () => {
     const s = new BrushUIStore();
     s.adoptDocument(twoByTwo());
+    expect(s.selectedBrushId).toBe("brush-1");
     expect(s.selectedFrameId).toBe("f1");
     expect(s.selectedLayerId).toBe("top");
   });
@@ -141,29 +175,41 @@ describe("BrushUIStore — selection", () => {
     expect(s.selectedLayerId).toBe("top");
   });
 
-  it("adoptDocument(null) clears both ids", () => {
+  it("adoptDocument(null) clears all three ids", () => {
     const s = new BrushUIStore();
     s.adoptDocument(twoByTwo());
+    expect(s.selectedBrushId).toBe("brush-1");
     s.adoptDocument(null);
+    expect(s.selectedBrushId).toBeNull();
     expect(s.selectedFrameId).toBeNull();
     expect(s.selectedLayerId).toBeNull();
   });
 
-  it("adoptDocument with no frames / no layers clears the missing half", () => {
+  it("adoptDocument with no frames / no layers clears the missing half and keeps the brush", () => {
     const s = new BrushUIStore();
     s.selectFrame("f1");
     s.selectLayer("top");
-    s.adoptDocument({ ...createBrushDocument(2, 2), frames: [] });
+    s.adoptDocument(docWithFrames([], 2, 2));
+    expect(s.selectedBrushId).toBe("brush-1");
     expect(s.selectedFrameId).toBeNull();
     expect(s.selectedLayerId).toBeNull();
 
     s.selectFrame("f1");
     s.selectLayer("top");
-    s.adoptDocument({
-      ...createBrushDocument(2, 2),
-      frames: [createBrushFrame("f1", "Frame 1", [])],
-    });
+    s.adoptDocument(
+      docWithFrames([createBrushFrame("f1", "Frame 1", [])], 2, 2),
+    );
+    expect(s.selectedBrushId).toBe("brush-1");
     expect(s.selectedFrameId).toBe("f1");
+    expect(s.selectedLayerId).toBeNull();
+  });
+
+  it("adoptDocument with no brushes (impossible after normalisation) clears all three ids", () => {
+    const s = new BrushUIStore();
+    s.adoptDocument(twoByTwo());
+    s.adoptDocument({ version: BRUSH_DOCUMENT_VERSION, brushes: [] });
+    expect(s.selectedBrushId).toBeNull();
+    expect(s.selectedFrameId).toBeNull();
     expect(s.selectedLayerId).toBeNull();
   });
 
@@ -205,7 +251,7 @@ describe("BrushUIStore — selection", () => {
     const doc = twoByTwo();
     s.selectFrame("f2");
     const frame = s.selectedFrameIn(doc);
-    expect(frame).toBe(doc.frames[1]);
+    expect(frame).toBe(doc.brushes[0].frames[1]);
     expect(frame?.id).toBe("f2");
   });
 
@@ -213,30 +259,25 @@ describe("BrushUIStore — selection", () => {
     const s = new BrushUIStore();
     const doc = twoByTwo();
     s.selectFrame("gone");
-    expect(s.selectedFrameIn(doc)).toBe(doc.frames[0]);
+    expect(s.selectedFrameIn(doc)).toBe(doc.brushes[0].frames[0]);
   });
 
   it("selectedFrameIn falls back to frames[0] when nothing is selected", () => {
     const s = new BrushUIStore();
     const doc = twoByTwo();
     expect(s.selectedFrameId).toBeNull();
-    expect(s.selectedFrameIn(doc)).toBe(doc.frames[0]);
+    expect(s.selectedFrameIn(doc)).toBe(doc.brushes[0].frames[0]);
   });
 
   it("selectedFrameIn falls back to frames[0] once the selected frame is removed, and to null with no frames", () => {
     const s = new BrushUIStore();
     s.adoptDocument(twoByTwo());
     s.selectFrame("f2");
-    const withoutF2: BrushDocument = {
-      ...createBrushDocument(4, 4),
-      frames: [createBrushFrame("f1", "Frame 1", [])],
-    };
-    expect(s.selectedFrameIn(withoutF2)).toBe(withoutF2.frames[0]);
+    const withoutF2 = docWithFrames([createBrushFrame("f1", "Frame 1", [])]);
+    expect(s.selectedFrameIn(withoutF2)).toBe(withoutF2.brushes[0].frames[0]);
     // The selection itself is left alone — this is a read, not an adoption.
     expect(s.selectedFrameId).toBe("f2");
-    expect(
-      s.selectedFrameIn({ ...createBrushDocument(2, 2), frames: [] }),
-    ).toBeNull();
+    expect(s.selectedFrameIn(docWithFrames([], 2, 2))).toBeNull();
   });
 
   it("adoptDocument touches only the ids — deltas, target and camera survive a swap", () => {
@@ -252,7 +293,7 @@ describe("BrushUIStore — selection", () => {
     const fill = s.fillDelta;
 
     s.adoptDocument(twoByTwo());
-    s.adoptDocument({ ...createBrushDocument(2, 2), frames: [] });
+    s.adoptDocument(docWithFrames([], 2, 2));
     s.adoptDocument(null);
 
     expect(s.selectedDelta).toBe(edge);
@@ -261,6 +302,172 @@ describe("BrushUIStore — selection", () => {
     expect(s.zoom).toBe(24);
     expect(s.panOffset).toBe(pan);
     expect(s.viewZoom).toBe(2);
+  });
+});
+
+describe("BrushUIStore — brush selection (D4)", () => {
+  it("adoptDocument with no brush id selects brushes[0] and its first frame / top layer", () => {
+    const s = new BrushUIStore();
+    const doc = twoBrushDoc();
+    s.adoptDocument(doc);
+    expect(s.selectedBrushId).toBe("brush-1");
+    expect(s.selectedFrameId).toBe("frame-1");
+    expect(s.selectedLayerId).toBe("layer-1");
+    expect(s.selectedBrushIn(doc)).toBe(doc.brushes[0]);
+    expect(s.selectedLayerIn(doc)).toBe(doc.brushes[0].frames[0].layers[0]);
+  });
+
+  it("adoptDocument replaces a stale brush id with brushes[0] and stores that id", () => {
+    const s = new BrushUIStore();
+    const doc = twoBrushDoc();
+    s.selectBrush("brush-2", doc);
+    expect(s.selectedBrushId).toBe("brush-2");
+    // Brush 2 is gone from the next document: fall back to brushes[0].
+    s.adoptDocument({ ...doc, brushes: [doc.brushes[0]] });
+    expect(s.selectedBrushId).toBe("brush-1");
+    expect(s.selectedFrameId).toBe("frame-1");
+    expect(s.selectedLayerId).toBe("layer-1");
+  });
+
+  it("adoptDocument keeps a brush id that still exists, and its frame and layer", () => {
+    const s = new BrushUIStore();
+    const two = twoByTwo();
+    const doc: BrushDocument = {
+      ...two,
+      brushes: [
+        createBrush("brush-1", "Brush 1", 4, 4),
+        { ...two.brushes[0], id: "brush-2", name: "Brush 2" },
+      ],
+    };
+    s.selectBrush("brush-2", doc);
+    s.selectFrame("f2");
+    s.selectLayer("bottom");
+    s.adoptDocument(doc);
+    expect(s.selectedBrushId).toBe("brush-2");
+    expect(s.selectedFrameId).toBe("f2");
+    expect(s.selectedLayerId).toBe("bottom");
+    expect(s.selectedFrameIn(doc)).toBe(doc.brushes[1].frames[1]);
+  });
+
+  it("selectBrush selects the new brush's first frame and top layer even when the frame id matches brush 1's", () => {
+    const s = new BrushUIStore();
+    const doc = twoBrushDoc();
+    s.adoptDocument(doc);
+    expect(s.selectedLayerIn(doc)).toBe(doc.brushes[0].frames[0].layers[0]);
+
+    s.selectBrush("brush-2", doc);
+    expect(s.selectedBrushId).toBe("brush-2");
+    // Same strings as brush 1 …
+    expect(s.selectedFrameId).toBe("frame-1");
+    expect(s.selectedLayerId).toBe("layer-1");
+    // … but resolved in brush 2, by identity.
+    expect(s.selectedBrushIn(doc)).toBe(doc.brushes[1]);
+    expect(s.selectedFrameIn(doc)).toBe(doc.brushes[1].frames[0]);
+    expect(s.selectedLayerIn(doc)).toBe(doc.brushes[1].frames[0].layers[0]);
+    expect(s.selectedLayerIn(doc)).not.toBe(doc.brushes[0].frames[0].layers[0]);
+    expect(s.channelTypeIn(doc)).toBe("normal");
+  });
+
+  it("selectBrush clears a frame / layer selection that only existed in the previous brush", () => {
+    const s = new BrushUIStore();
+    const two = twoByTwo();
+    const doc: BrushDocument = {
+      ...two,
+      brushes: [two.brushes[0], createBrush("brush-2", "Brush 2", 8, 8)],
+    };
+    s.adoptDocument(doc);
+    s.selectFrame("f2");
+    s.selectLayer("bottom");
+    s.selectBrush("brush-2", doc);
+    expect(s.selectedFrameId).toBe("frame-1");
+    expect(s.selectedLayerId).toBe("layer-1");
+    expect(s.selectedLayerIn(doc)).toBe(doc.brushes[1].frames[0].layers[0]);
+  });
+
+  it("selectBrush with an id not in the document falls back to brushes[0] and stores that id", () => {
+    const s = new BrushUIStore();
+    const doc = twoBrushDoc();
+    s.selectBrush("brush-2", doc);
+    s.selectBrush("nope", doc);
+    expect(s.selectedBrushId).toBe("brush-1");
+    expect(s.selectedFrameId).toBe("frame-1");
+    expect(s.selectedLayerId).toBe("layer-1");
+    expect(s.selectedBrushIn(doc)).toBe(doc.brushes[0]);
+  });
+
+  it("selectBrush with a null document clears all three ids", () => {
+    const s = new BrushUIStore();
+    s.adoptDocument(twoBrushDoc());
+    s.selectBrush("brush-2", null);
+    expect(s.selectedBrushId).toBeNull();
+    expect(s.selectedFrameId).toBeNull();
+    expect(s.selectedLayerId).toBeNull();
+  });
+
+  it("selectedBrushIn(null) is null; otherwise it is brushIn(doc, selectedBrushId) by reference", () => {
+    const s = new BrushUIStore();
+    expect(s.selectedBrushIn(null)).toBeNull();
+    const doc = twoBrushDoc();
+    // Nothing selected → brushes[0]; the selection itself is untouched.
+    expect(s.selectedBrushIn(doc)).toBe(doc.brushes[0]);
+    expect(s.selectedBrushId).toBeNull();
+    s.selectBrush("brush-2", doc);
+    expect(s.selectedBrushIn(doc)).toBe(doc.brushes[1]);
+    expect(s.selectedBrushIn(null)).toBeNull();
+    // A read against a document without the brush falls back, without adopting.
+    expect(s.selectedBrushIn({ ...doc, brushes: [doc.brushes[0]] })).toBe(
+      doc.brushes[0],
+    );
+    expect(s.selectedBrushId).toBe("brush-2");
+  });
+
+  it("selectedFrameIn / selectedLayerIn / channelTypeIn are null when the selected brush has no frames or the layer is gone", () => {
+    const s = new BrushUIStore();
+    const doc: BrushDocument = {
+      version: BRUSH_DOCUMENT_VERSION,
+      brushes: [
+        createBrush("brush-1", "Brush 1", 4, 4),
+        { ...createBrush("brush-2", "Brush 2", 4, 4), frames: [] },
+      ],
+    };
+    s.selectBrush("brush-2", doc);
+    expect(s.selectedBrushId).toBe("brush-2");
+    expect(s.selectedFrameIn(doc)).toBeNull();
+    expect(s.selectedLayerIn(doc)).toBeNull();
+    expect(s.channelTypeIn(doc)).toBeNull();
+
+    s.selectBrush("brush-1", doc);
+    s.selectLayer("gone");
+    expect(s.selectedFrameIn(doc)).toBe(doc.brushes[0].frames[0]);
+    expect(s.selectedLayerIn(doc)).toBeNull();
+    expect(s.channelTypeIn(doc)).toBeNull();
+  });
+
+  it("selectBrush touches only the ids — deltas, target and camera survive a switch", () => {
+    const s = new BrushUIStore();
+    s.setDelta([1, 2, 3, 4]);
+    s.setFillDelta([5, 6, 7, 8]);
+    s.setDeltaTarget("fill");
+    s.setZoom(24);
+    const pan = { x: 7, y: -3 };
+    s.setPanOffset(pan);
+    s.setViewZoom(2);
+    s.setPlaying(true);
+    const edge = s.selectedDelta;
+    const fill = s.fillDelta;
+
+    const doc = twoBrushDoc();
+    s.selectBrush("brush-2", doc);
+    s.selectBrush("nope", doc);
+    s.selectBrush("brush-1", null);
+
+    expect(s.selectedDelta).toBe(edge);
+    expect(s.fillDelta).toBe(fill);
+    expect(s.deltaTarget).toBe("fill");
+    expect(s.zoom).toBe(24);
+    expect(s.panOffset).toBe(pan);
+    expect(s.viewZoom).toBe(2);
+    expect(s.isPlaying).toBe(true);
   });
 });
 

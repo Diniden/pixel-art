@@ -18,11 +18,21 @@
  *       with `colorSource: "target"` in every frame, i.e. the container
  *       forwards BOTH `onAddLayer` arguments to `addLayer`.
  *
+ * Multi-brush projects (plan 14 `docs/14-multi-brush-projects`, task 12):
+ * the document is brush-2 — one brush, `brush-1`, holding the two frames —
+ * and every read goes through the SELECTED brush (`brush()` below). The last
+ * describe installs a TWO-brush document and pins that
+ *   (d) ⭐ `brushUI.selectBrush("brush-2", doc)` re-renders the rows to
+ *       brush 2's layers, and
+ *   (e) ⭐ "+" adds to brush 2 ONLY — brush 1's brush and frame objects keep
+ *       their identity in the new document (the spine copy stops at the
+ *       touched brush, MASTER §8 mistake 2).
+ *
  * The menu is a portal, so `screen` queries against `document.body`. jsdom
  * reports zero-size rects; the menu only uses them to position itself.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { runInAction } from "mobx";
 
 import { tinyProject } from "@/store/__tests__/storeContract";
@@ -34,19 +44,20 @@ import {
   createBrushFrame,
   createBrushLayer,
 } from "@/types";
-import type { BrushDocument, BrushLayer } from "@/types";
+import type { Brush, BrushDocument, BrushLayer } from "@/types";
 
 const W = 4;
 const H = 4;
 
 /** Two frames × two layers: `layer-1` (rgb, no key) and `layer-2` (hsl, target). */
-function twoLayerDocument(): BrushDocument {
+function twoLayerBrush(): Brush {
   const layers = (): BrushLayer[] => [
     createBrushLayer("layer-1", "Layer 1", W, H, "rgb"),
     createBrushLayer("layer-2", "Layer 2", W, H, "hsl", "target"),
   ];
   return {
-    version: BRUSH_DOCUMENT_VERSION,
+    id: "brush-1",
+    name: "Brush 1",
     width: W,
     height: H,
     frames: [
@@ -57,6 +68,32 @@ function twoLayerDocument(): BrushDocument {
   };
 }
 
+/** brush-2: the one two-layer brush. */
+function twoLayerDocument(): BrushDocument {
+  return { version: BRUSH_DOCUMENT_VERSION, brushes: [twoLayerBrush()] };
+}
+
+/**
+ * Two brushes: the two-layer 4×4 one, then a 2×2 "Dot" with ONE frame and
+ * one layer whose name no row of brush 1 shares. Its ids repeat brush 1's
+ * (`frame-1`, `layer-1`) — ids are unique within a brush only.
+ */
+function twoBrushDocument(): BrushDocument {
+  const dot: Brush = {
+    id: "brush-2",
+    name: "Dot",
+    width: 2,
+    height: 2,
+    frames: [
+      createBrushFrame("frame-1", "Frame 1", [
+        createBrushLayer("layer-1", "Dot layer", 2, 2, "normal"),
+      ]),
+    ],
+    appliedGroups: [],
+  };
+  return { version: BRUSH_DOCUMENT_VERSION, brushes: [twoLayerBrush(), dot] };
+}
+
 let app: ApplicationStore;
 
 beforeEach(() => {
@@ -64,10 +101,10 @@ beforeEach(() => {
   runInAction(() => {
     app.adoptProject(tinyProject());
     app.domain.loadState = "loaded";
-    // Install the brush as if `loadBrush` had just succeeded.
+    // Install the brush as if `loadProject` had just succeeded.
     // `installDocument` clears the brush's own history and fires
     // `brushUI.adoptDocument`, which selects frame-1 / the top layer.
-    app.brushes.brushName = "panel-brush";
+    app.brushes.projectName = "panel-brush";
     app.brushes.installDocument(twoLayerDocument());
     app.brushes.loadState = "loaded";
   });
@@ -92,9 +129,16 @@ function doc(): BrushDocument {
   return d;
 }
 
-/** `layer` as each frame holds it, in frame order. */
+/** The SELECTED brush of the live document — what the panel projects. */
+function brush(): Brush {
+  const b = app.brushUI.selectedBrushIn(doc());
+  if (!b) throw new Error("no brush selected");
+  return b;
+}
+
+/** `layer` as each frame of the selected brush holds it, in frame order. */
 function copiesOf(layerId: string): BrushLayer[] {
-  return doc().frames.map((f) => {
+  return brush().frames.map((f) => {
     const l = f.layers.find((x) => x.id === layerId);
     if (!l) throw new Error(`${layerId} missing from ${f.id}`);
     return l;
@@ -175,13 +219,13 @@ describe("BrushLayerPanelContainer — colour source", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add layer" }));
     fireEvent.click(radio(/^Target pixel/));
     // Sticky tick, still open, nothing created yet (D3).
-    expect(doc().frames[0].layers).toHaveLength(2);
+    expect(brush().frames[0].layers).toHaveLength(2);
     expect(radio(/^Target pixel/)).toHaveAttribute("aria-checked", "true");
 
     fireEvent.click(radio(/^RGB/));
 
     // Both `onAddLayer` arguments reached `addLayer(name, channel, source)`.
-    const frames = doc().frames;
+    const frames = brush().frames;
     expect(frames.map((f) => f.layers.length)).toEqual([3, 3]);
     const added = frames.map((f) => f.layers[f.layers.length - 1]);
     expect(added.map((l) => l.name)).toEqual(["Layer 3", "Layer 3"]);
@@ -202,9 +246,80 @@ describe("BrushLayerPanelContainer — colour source", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add layer" }));
     fireEvent.click(radio(/^Normal/));
 
-    const added = doc().frames.map((f) => f.layers[f.layers.length - 1]);
+    const added = brush().frames.map((f) => f.layers[f.layers.length - 1]);
     expect(added.map((l) => l.channelType)).toEqual(["normal", "normal"]);
     expect(added.every((l) => !("colorSource" in l))).toBe(true);
     expect(screen.getAllByLabelText("Colour source: SEL")).toHaveLength(2);
+  });
+});
+
+/** The row names in DISPLAY order (top of the stack first). */
+function rowNames(container: HTMLElement): string[] {
+  return Array.from(
+    container.querySelectorAll(".brush-layer-panel__name"),
+    (el) => el.textContent ?? "",
+  );
+}
+
+describe("BrushLayerPanelContainer — the selected brush (plan 14 task 12)", () => {
+  beforeEach(() => {
+    runInAction(() => {
+      app.brushes.installDocument(twoBrushDocument());
+    });
+  });
+
+  it("⭐ selectBrush('brush-2', doc) re-renders the rows to brush 2's layers", () => {
+    const { container } = mount();
+    // `adoptDocument` kept brush-1 (first) selected: its two layers, top first.
+    expect(app.brushUI.selectedBrushId).toBe("brush-1");
+    expect(rowNames(container)).toEqual(["Layer 2", "Layer 1"]);
+
+    act(() => {
+      app.brushUI.selectBrush("brush-2", app.brushes.document);
+    });
+
+    expect(app.brushUI.selectedBrushId).toBe("brush-2");
+    expect(rowNames(container)).toEqual(["Dot layer"]);
+    // Brush 2's top layer is selected and its badge is the one shown.
+    expect(app.brushUI.selectedLayerId).toBe("layer-1");
+    expect(screen.getByLabelText("Channel: NRM")).not.toBeNull();
+    // Nothing recorded by switching.
+    expect(app.brushes.history.entries).toHaveLength(0);
+
+    act(() => {
+      app.brushUI.selectBrush("brush-1", app.brushes.document);
+    });
+    expect(rowNames(container)).toEqual(["Layer 2", "Layer 1"]);
+  });
+
+  it("⭐ '+' adds a layer to brush 2 ONLY: brush 1's brush and frame objects keep their identity", () => {
+    const { container } = mount();
+    act(() => {
+      app.brushUI.selectBrush("brush-2", app.brushes.document);
+    });
+    const before = doc();
+    const roundBefore = before.brushes[0];
+
+    fireEvent.click(screen.getByRole("button", { name: "Add layer" }));
+    fireEvent.click(radio(/^RGB/));
+
+    const after = doc();
+    expect(after).not.toBe(before);
+    // Brush 1 is the SAME object, frames included — untouched by reference.
+    expect(after.brushes[0]).toBe(roundBefore);
+    expect(after.brushes[0].frames[0]).toBe(roundBefore.frames[0]);
+    expect(after.brushes[0].frames[1]).toBe(roundBefore.frames[1]);
+    expect(after.brushes[0].frames.map((f) => f.layers.length)).toEqual([2, 2]);
+    // Brush 2 gained "Layer 2" (counted against ITS frame 0), in every frame.
+    expect(after.brushes[1]).not.toBe(before.brushes[1]);
+    expect(
+      after.brushes[1].frames.map((f) => f.layers.map((l) => l.name)),
+    ).toEqual([["Dot layer", "Layer 2"]]);
+    expect(app.brushes.history.entries).toHaveLength(1);
+    // The rows follow: brush 2's two layers, new one on top and selected.
+    expect(rowNames(container)).toEqual(["Layer 2", "Dot layer"]);
+    expect(app.brushUI.selectedLayerId).toBe(
+      after.brushes[1].frames[0].layers[1].id,
+    );
   });
 });

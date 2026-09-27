@@ -1,21 +1,28 @@
 /**
- * BrushPixelStore unit suite (Brush Studio task 09).
+ * BrushPixelStore unit suite (Brush Studio task 09; multi-brush task 10).
  *
  * Drives the store over a real `BrushStore` (bare `SessionStore`, an API stub
  * that is never reached — documents are installed directly) and a plain
  * mutable selection object standing in for `BrushUIStore`. No
  * ApplicationStore, no MSW, no network.
+ *
+ * Every rig is a TWO-brush project (brush-2 document) whose second brush is
+ * a different size, so a write path that reads a document-level size,
+ * resolves brush 0 instead of the selected id, or forgets to spine-copy
+ * `doc.brushes` (multi-brush R3) fails here rather than in the studio.
  */
 import { describe, expect, it } from "vitest";
 import { isObservable, isObservableArray, isObservableObject } from "mobx";
 
 import { BrushPixelStore } from "@/stores/domain/BrushPixelStore";
 import { BrushStore, type BrushApiLike } from "@/stores/domain/BrushStore";
+import { isBrushPixelCommand } from "@/stores/history/brushCommands";
 import { SessionStore } from "@/stores/session/SessionStore";
 import {
-  createBrushDocument,
+  BRUSH_DOCUMENT_VERSION,
   createBrushFrame,
   createBrushLayer,
+  type Brush,
   type BrushCell,
   type BrushDelta,
   type BrushDocument,
@@ -33,13 +40,15 @@ const unreachableApi: BrushApiLike = {
   remove: () => Promise.reject(new Error("api.remove must not be called")),
 };
 
-/** `width × height`, `frameCount` frames, each with layers `layer-1..N`. */
-function mkDocument(
-  width = 8,
-  height = 8,
-  frameCount = 1,
-  layerCount = 1,
-): BrushDocument {
+/** One brush: `width × height`, `frameCount` frames, each with layers `layer-1..N`. */
+function mkBrush(
+  id: string,
+  name: string,
+  width: number,
+  height: number,
+  frameCount: number,
+  layerCount: number,
+): Brush {
   const frames = Array.from({ length: frameCount }, (_, fi) =>
     createBrushFrame(
       `frame-${fi + 1}`,
@@ -49,7 +58,37 @@ function mkDocument(
       ),
     ),
   );
-  return { ...createBrushDocument(width, height), frames };
+  return { id, name, width, height, frames, appliedGroups: [] };
+}
+
+/**
+ * A two-brush project. Brush 1 (`brush-1`) is `width × height`; brush 2
+ * (`brush-2`) is `second` — 4×4 by default, a DIFFERENT size from the 8×8
+ * default. Both have `frameCount` frames of `layerCount` layers with the
+ * SAME frame / layer ids (`frame-1`, `layer-1`, …): ids are unique only
+ * within a brush, which is exactly why the brush id must resolve first.
+ */
+function mkDocument(
+  width = 8,
+  height = 8,
+  frameCount = 1,
+  layerCount = 1,
+  second: { width: number; height: number } = { width: 4, height: 4 },
+): BrushDocument {
+  return {
+    version: BRUSH_DOCUMENT_VERSION,
+    brushes: [
+      mkBrush("brush-1", "Brush 1", width, height, frameCount, layerCount),
+      mkBrush(
+        "brush-2",
+        "Brush 2",
+        second.width,
+        second.height,
+        frameCount,
+        layerCount,
+      ),
+    ],
+  };
 }
 
 function makeRig(doc: BrushDocument = mkDocument()) {
@@ -58,9 +97,11 @@ function makeRig(doc: BrushDocument = mkDocument()) {
     api: unreachableApi,
   });
   brush.installDocument(doc);
+  const first = doc.brushes[0];
   const source = {
-    selectedFrameId: doc.frames[0].id as string | null,
-    selectedLayerId: doc.frames[0].layers[0].id as string | null,
+    selectedBrushId: first.id as string | null,
+    selectedFrameId: first.frames[0].id as string | null,
+    selectedLayerId: first.frames[0].layers[0].id as string | null,
   };
   const pixels = new BrushPixelStore({ brush, source });
   return { brush, pixels, source, history: brush.history };
@@ -70,23 +111,31 @@ const RED: BrushDelta = [100, 0, 0, 0];
 const GREEN: BrushDelta = [0, 100, 0, 0];
 const BLUE: BrushDelta = [0, 0, 100, 0];
 
-function gridOf(brush: BrushStore, frame = 0, layer = 0): BrushCell[][] {
-  return brush.document!.frames[frame].layers[layer].pixels;
+/** The live grid of `brushIndex` → `frame` → `layer` (brush 0 by default). */
+function gridOf(
+  brush: BrushStore,
+  frame = 0,
+  layer = 0,
+  brushIndex = 0,
+): BrushCell[][] {
+  return brush.document!.brushes[brushIndex].frames[frame].layers[layer].pixels;
 }
 
 /* ── resolution ──────────────────────────────────────────────────────────── */
 
 describe("resolveTarget / cellAt", () => {
-  it("resolves the selected frame and layer by id with their indices", () => {
+  it("resolves the selected brush, frame and layer by id with their indices", () => {
     const { pixels, source } = makeRig(mkDocument(4, 3, 2, 2));
     source.selectedFrameId = "frame-2";
     source.selectedLayerId = "layer-2";
     const resolved = pixels.resolveTarget();
     expect(resolved).not.toBeNull();
     expect(resolved!.target).toEqual({
+      brushId: "brush-1",
       frameId: "frame-2",
       layerId: "layer-2",
     });
+    expect(resolved!.brushIndex).toBe(0);
     expect(resolved!.frameIndex).toBe(1);
     expect(resolved!.layerIndex).toBe(1);
     expect(resolved!.layer.id).toBe("layer-2");
@@ -94,7 +143,23 @@ describe("resolveTarget / cellAt", () => {
     expect(resolved!.height).toBe(3);
   });
 
-  it("is null with no document, a null selection or a stale id", () => {
+  it("width/height come from the SELECTED brush, not the first one", () => {
+    const { brush, pixels, source } = makeRig(
+      mkDocument(8, 8, 1, 1, { width: 5, height: 3 }),
+    );
+    source.selectedBrushId = "brush-2";
+    const resolved = pixels.resolveTarget();
+    expect(resolved).not.toBeNull();
+    expect(resolved!.brushIndex).toBe(1);
+    expect(resolved!.target.brushId).toBe("brush-2");
+    expect(resolved!.width).toBe(5);
+    expect(resolved!.height).toBe(3);
+    expect(resolved!.layer).toBe(
+      brush.document!.brushes[1].frames[0].layers[0],
+    );
+  });
+
+  it("is null with no document, a null selection or a stale id — brush included", () => {
     const { brush, pixels, source } = makeRig();
     source.selectedLayerId = "ghost";
     expect(pixels.resolveTarget()).toBeNull();
@@ -102,6 +167,13 @@ describe("resolveTarget / cellAt", () => {
     source.selectedFrameId = null;
     expect(pixels.resolveTarget()).toBeNull();
     source.selectedFrameId = "frame-1";
+    expect(pixels.resolveTarget()).not.toBeNull();
+    // A null brush id is "nowhere", never brush 0 (multi-brush D6).
+    source.selectedBrushId = null;
+    expect(pixels.resolveTarget()).toBeNull();
+    source.selectedBrushId = "ghost";
+    expect(pixels.resolveTarget()).toBeNull();
+    source.selectedBrushId = "brush-1";
     expect(pixels.resolveTarget()).not.toBeNull();
     brush.installDocument(null);
     expect(pixels.resolveTarget()).toBeNull();
@@ -137,13 +209,13 @@ describe("setCells", () => {
     expect(brush.document).not.toBe(before);
     expect(gridOf(brush)[3][2]).toEqual(RED);
     // The previous document is untouched — it was a spine copy.
-    expect(before.frames[0].layers[0].pixels[3][2]).toBe(0);
+    expect(before.brushes[0].frames[0].layers[0].pixels[3][2]).toBe(0);
   });
 
   it("copies ONLY the touched rows — untouched rows keep their reference identity", () => {
     const { brush, pixels } = makeRig(mkDocument(8, 8, 2, 2));
     const before = brush.document!;
-    const beforeGrid = before.frames[0].layers[0].pixels;
+    const beforeGrid = before.brushes[0].frames[0].layers[0].pixels;
 
     pixels.setCells([
       { x: 1, y: 2, value: RED },
@@ -152,7 +224,7 @@ describe("setCells", () => {
     ]);
 
     const after = brush.document!;
-    const afterGrid = after.frames[0].layers[0].pixels;
+    const afterGrid = after.brushes[0].frames[0].layers[0].pixels;
     expect(afterGrid).not.toBe(beforeGrid);
     for (let y = 0; y < 8; y++) {
       if (y === 2 || y === 6) {
@@ -161,13 +233,23 @@ describe("setCells", () => {
         expect(afterGrid[y]).toBe(beforeGrid[y]);
       }
     }
-    // The spine: the other layer, the other frame and the applied groups are
-    // the very same objects.
-    expect(after.frames[0].layers[1]).toBe(before.frames[0].layers[1]);
-    expect(after.frames[1]).toBe(before.frames[1]);
-    expect(after.appliedGroups).toBe(before.appliedGroups);
-    expect(after.frames[0]).not.toBe(before.frames[0]);
-    expect(after.frames[0].layers[0]).not.toBe(before.frames[0].layers[0]);
+    // The spine: the other layer, the other frame, the applied groups and
+    // the OTHER BRUSH are the very same objects; the touched brush, frame
+    // and layer are fresh.
+    expect(after.brushes[0].frames[0].layers[1]).toBe(
+      before.brushes[0].frames[0].layers[1],
+    );
+    expect(after.brushes[0].frames[1]).toBe(before.brushes[0].frames[1]);
+    expect(after.brushes[0].appliedGroups).toBe(
+      before.brushes[0].appliedGroups,
+    );
+    expect(after.brushes[1]).toBe(before.brushes[1]);
+    expect(after.brushes).not.toBe(before.brushes);
+    expect(after.brushes[0]).not.toBe(before.brushes[0]);
+    expect(after.brushes[0].frames[0]).not.toBe(before.brushes[0].frames[0]);
+    expect(after.brushes[0].frames[0].layers[0]).not.toBe(
+      before.brushes[0].frames[0].layers[0],
+    );
   });
 
   it("the document and its grids stay RAW after a write and after an undo", () => {
@@ -177,8 +259,12 @@ describe("setCells", () => {
       const doc = brush.document!;
       expect(isObservableObject(doc)).toBe(false);
       expect(isObservable(doc)).toBe(false);
-      expect(isObservableArray(doc.frames)).toBe(false);
-      expect(isObservableObject(doc.frames[0].layers[0])).toBe(false);
+      expect(isObservableArray(doc.brushes)).toBe(false);
+      expect(isObservableObject(doc.brushes[0])).toBe(false);
+      expect(isObservableArray(doc.brushes[0].frames)).toBe(false);
+      expect(isObservableObject(doc.brushes[0].frames[0].layers[0])).toBe(
+        false,
+      );
       const grid = gridOf(brush);
       expect(isObservableArray(grid)).toBe(false);
       expect(isObservableArray(grid[0])).toBe(false);
@@ -302,6 +388,205 @@ describe("setCells", () => {
     expect(gridOf(brush, 0, 0)[1][1]).toBe(0);
     expect(gridOf(brush, 0, 1)[1][1]).toBe(0);
     expect(gridOf(brush, 1, 0)[1][1]).toBe(0);
+  });
+});
+
+/* ── brush scope (multi-brush D6 / R3) ───────────────────────────────────── */
+
+describe("brush scope", () => {
+  it("with brush 2 selected, setCells writes brush 2's grid and brush 1 keeps its identity (R3)", () => {
+    const { brush, pixels, source, history } = makeRig();
+    source.selectedBrushId = "brush-2";
+    const before = brush.document!;
+
+    pixels.setCells([{ x: 1, y: 1, value: RED }]);
+
+    const after = brush.document!;
+    expect(gridOf(brush, 0, 0, 1)[1][1]).toEqual(RED);
+    expect(gridOf(brush, 0, 0, 0)[1][1]).toBe(0);
+    expect(after).not.toBe(before);
+    expect(after.brushes).not.toBe(before.brushes);
+    expect(after.brushes[1]).not.toBe(before.brushes[1]);
+    expect(after.brushes[0]).toBe(before.brushes[0]);
+    // The retained pre-write document still holds an unpainted brush 2.
+    expect(before.brushes[1].frames[0].layers[0].pixels[1][1]).toBe(0);
+    // The command is addressed to brush 2.
+    const entry = history.entries[0];
+    expect(isBrushPixelCommand(entry)).toBe(true);
+    if (isBrushPixelCommand(entry)) {
+      expect(entry.target).toEqual({
+        brushId: "brush-2",
+        frameId: "frame-1",
+        layerId: "layer-1",
+      });
+    }
+  });
+
+  it("with brush 1 selected, brush 2 keeps its identity (R3)", () => {
+    const { brush, pixels } = makeRig();
+    const before = brush.document!;
+    pixels.setCells([{ x: 1, y: 1, value: RED }]);
+    const after = brush.document!;
+    expect(after.brushes[0]).not.toBe(before.brushes[0]);
+    expect(after.brushes[1]).toBe(before.brushes[1]);
+    expect(gridOf(brush, 0, 0, 1)[1][1]).toBe(0);
+  });
+
+  it("a null brush id writes nothing and records nothing", () => {
+    const { brush, pixels, source, history } = makeRig();
+    source.selectedBrushId = null;
+    const doc = brush.document;
+    pixels.setCells([{ x: 0, y: 0, value: RED }]);
+    pixels.clearCells([{ x: 0, y: 0 }]);
+    pixels.moveLayerCells(1, 0);
+    pixels.flipHorizontal();
+    expect(history.entries).toHaveLength(0);
+    expect(brush.pixelVersion).toBe(0);
+    expect(brush.domainVersion).toBe(0);
+    expect(brush.document).toBe(doc);
+    expect(gridOf(brush, 0, 0, 0)[0][0]).toBe(0);
+    expect(gridOf(brush, 0, 0, 1)[0][0]).toBe(0);
+  });
+
+  it("a stale brush id writes nothing and records nothing", () => {
+    const { brush, pixels, source, history } = makeRig();
+    source.selectedBrushId = "ghost";
+    const doc = brush.document;
+    pixels.setCells([{ x: 0, y: 0, value: RED }]);
+    expect(history.entries).toHaveLength(0);
+    expect(brush.pixelVersion).toBe(0);
+    expect(brush.document).toBe(doc);
+  });
+
+  it("bounds come from the selected brush: 4×4 brush 2 rejects x: 5 although brush 1 is 8×8", () => {
+    const { brush, pixels, source, history } = makeRig();
+    source.selectedBrushId = "brush-2";
+    pixels.setCells([
+      { x: 5, y: 0, value: RED },
+      { x: 0, y: 5, value: RED },
+      { x: 4, y: 4, value: RED },
+    ]);
+    expect(history.entries).toHaveLength(0);
+    expect(brush.pixelVersion).toBe(0);
+    // The same coordinates land in brush 1.
+    source.selectedBrushId = "brush-1";
+    pixels.setCells([{ x: 5, y: 0, value: RED }]);
+    expect(gridOf(brush, 0, 0, 0)[0][5]).toEqual(RED);
+    expect(history.entries).toHaveLength(1);
+    // And an in-bounds cell of brush 2 is accepted.
+    source.selectedBrushId = "brush-2";
+    pixels.setCells([{ x: 3, y: 3, value: GREEN }]);
+    expect(gridOf(brush, 0, 0, 1)[3][3]).toEqual(GREEN);
+    expect(history.entries).toHaveLength(2);
+  });
+
+  it("the mask size is checked against the selected brush's size", () => {
+    const { brush, pixels, source } = makeRig();
+    const mask = new Set([0]); // only (0,0)
+    // Brush 2 is 4×4: a 4×4 mask applies and blocks (2,2).
+    source.selectedBrushId = "brush-2";
+    pixels.setCells([{ x: 2, y: 2, value: RED }], {
+      mask,
+      maskSize: { width: 4, height: 4 },
+    });
+    expect(gridOf(brush, 0, 0, 1)[2][2]).toBe(0);
+    // Brush 1 is 8×8: the same 4×4 mask mismatches and is DISABLED.
+    source.selectedBrushId = "brush-1";
+    pixels.setCells([{ x: 2, y: 2, value: RED }], {
+      mask,
+      maskSize: { width: 4, height: 4 },
+    });
+    expect(gridOf(brush, 0, 0, 0)[2][2]).toEqual(RED);
+  });
+
+  it("undo of a write in brush 2 after selecting brush 1 still restores brush 2 (commands hold ids, not the selection)", () => {
+    const { brush, pixels, source, history } = makeRig();
+    source.selectedBrushId = "brush-2";
+    pixels.setCells([{ x: 1, y: 1, value: RED }]);
+    source.selectedBrushId = "brush-1";
+    pixels.setCells([{ x: 1, y: 1, value: GREEN }]);
+    expect(history.entries).toHaveLength(2);
+
+    // Brush 1 is selected for both undos; the first undoes brush 1's own
+    // write, the second reaches back into brush 2.
+    history.undo();
+    expect(gridOf(brush, 0, 0, 0)[1][1]).toBe(0);
+    expect(gridOf(brush, 0, 0, 1)[1][1]).toEqual(RED);
+    const beforeCrossUndo = brush.document!;
+    history.undo();
+    expect(gridOf(brush, 0, 0, 1)[1][1]).toBe(0);
+    expect(gridOf(brush, 0, 0, 0)[1][1]).toBe(0);
+    // The replay spine-copied brush 2 and left brush 1 alone (R3).
+    expect(brush.document!.brushes[0]).toBe(beforeCrossUndo.brushes[0]);
+    expect(brush.document!.brushes[1]).not.toBe(beforeCrossUndo.brushes[1]);
+
+    history.redo();
+    expect(gridOf(brush, 0, 0, 1)[1][1]).toEqual(RED);
+    expect(gridOf(brush, 0, 0, 0)[1][1]).toBe(0);
+    history.redo();
+    expect(gridOf(brush, 0, 0, 0)[1][1]).toEqual(GREEN);
+    expect(history.entries).toHaveLength(2);
+  });
+
+  it("applyPatch resolves brush → frame → layer: the same frame/layer ids in another brush are a different grid", () => {
+    const { brush, pixels } = makeRig();
+    pixels.applyPatch(
+      { brushId: "brush-2", frameId: "frame-1", layerId: "layer-1" },
+      [{ x: 0, y: 0, before: 0, after: RED }],
+      "redo",
+    );
+    expect(gridOf(brush, 0, 0, 1)[0][0]).toEqual(RED);
+    expect(gridOf(brush, 0, 0, 0)[0][0]).toBe(0);
+  });
+
+  it("applyPatch with a brushId not in the document is a no-op", () => {
+    const { brush, pixels, history } = makeRig();
+    const doc = brush.document;
+    pixels.applyPatch(
+      { brushId: "ghost", frameId: "frame-1", layerId: "layer-1" },
+      [{ x: 0, y: 0, before: 0, after: RED }],
+      "redo",
+    );
+    expect(brush.document).toBe(doc);
+    expect(brush.pixelVersion).toBe(0);
+    expect(history.entries).toHaveLength(0);
+  });
+
+  it("moveLayerCells and the flips act on the selected brush only", () => {
+    const { brush, pixels, source, history } = makeRig();
+    source.selectedBrushId = "brush-2";
+    pixels.setCells([{ x: 0, y: 0, value: RED }]);
+    const before = brush.document!;
+
+    pixels.moveLayerCells(1, 0);
+    expect(gridOf(brush, 0, 0, 1)[0]).toEqual([0, RED, 0, 0]);
+    expect(brush.document!.brushes[0]).toBe(before.brushes[0]);
+
+    pixels.flipHorizontal();
+    expect(gridOf(brush, 0, 0, 1)[0]).toEqual([0, 0, RED, 0]);
+    expect(brush.document!.brushes[0]).toBe(before.brushes[0]);
+
+    pixels.flipVertical();
+    expect(gridOf(brush, 0, 0, 1)[3]).toEqual([0, 0, RED, 0]);
+    expect(gridOf(brush, 0, 0, 1)[0]).toEqual([0, 0, 0, 0]);
+    expect(brush.document!.brushes[0]).toBe(before.brushes[0]);
+    // Brush 1 never saw a cell.
+    expect(
+      gridOf(brush, 0, 0, 0).every((row) => row.every((c) => c === 0)),
+    ).toBe(true);
+    expect(history.entries.map((e) => e.label)).toEqual([
+      "Draw",
+      "Move layer",
+      "Flip horizontal",
+      "Flip vertical",
+    ]);
+
+    // Undoing the two flips — snapshot restores — brings back the moved
+    // document by reference, brush 1 still the same object.
+    history.undo();
+    history.undo();
+    expect(gridOf(brush, 0, 0, 1)[0]).toEqual([0, RED, 0, 0]);
+    expect(brush.document!.brushes[0]).toBe(before.brushes[0]);
   });
 });
 
@@ -442,7 +727,11 @@ describe("undo / redo", () => {
 
   it("applyPatch writes the cells IN THE ORDER GIVEN and never records", () => {
     const { brush, pixels, history } = makeRig();
-    const target = { frameId: "frame-1", layerId: "layer-1" };
+    const target = {
+      brushId: "brush-1",
+      frameId: "frame-1",
+      layerId: "layer-1",
+    };
     pixels.applyPatch(
       target,
       [
@@ -470,12 +759,12 @@ describe("undo / redo", () => {
     const { brush, pixels } = makeRig();
     const doc = brush.document;
     pixels.applyPatch(
-      { frameId: "frame-1", layerId: "ghost" },
+      { brushId: "brush-1", frameId: "frame-1", layerId: "ghost" },
       [{ x: 0, y: 0, before: 0, after: RED }],
       "redo",
     );
     pixels.applyPatch(
-      { frameId: "ghost", layerId: "layer-1" },
+      { brushId: "brush-1", frameId: "ghost", layerId: "layer-1" },
       [{ x: 0, y: 0, before: 0, after: RED }],
       "redo",
     );
@@ -596,7 +885,7 @@ describe("moveLayerCells", () => {
 /* ── flips: the snapshot family ──────────────────────────────────────────── */
 
 describe("flipHorizontal / flipVertical", () => {
-  it("each is ONE entry that undoes; the other frames and layers keep identity", () => {
+  it("each is ONE entry that undoes; the other brush, frames and layers keep identity", () => {
     const { brush, pixels, history } = makeRig(mkDocument(3, 2, 2, 2));
     pixels.setCells([
       { x: 0, y: 0, value: RED },
@@ -613,9 +902,12 @@ describe("flipHorizontal / flipVertical", () => {
     expect(history.entries).toHaveLength(2);
     expect(history.entries[1].label).toBe("Flip horizontal");
     expect(brush.pixelVersion).toBe(pixelV + 1);
-    expect(brush.document!.frames[1]).toBe(before.frames[1]);
-    expect(brush.document!.frames[0].layers[1]).toBe(
-      before.frames[0].layers[1],
+    expect(brush.document!.brushes[1]).toBe(before.brushes[1]);
+    expect(brush.document!.brushes[0].frames[1]).toBe(
+      before.brushes[0].frames[1],
+    );
+    expect(brush.document!.brushes[0].frames[0].layers[1]).toBe(
+      before.brushes[0].frames[0].layers[1],
     );
 
     pixels.flipVertical();

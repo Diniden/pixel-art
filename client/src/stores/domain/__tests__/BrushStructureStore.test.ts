@@ -1,13 +1,15 @@
 /**
- * BrushStructureStore unit suite (Brush Studio task 08).
+ * BrushStructureStore unit suite (Brush Studio task 08; multi-brush projects
+ * task 09).
  *
  * Drives the store over a real `BrushStore` loaded through the same fake
  * in-memory `BrushApiLike` rig as `BrushStore.test.ts`, with a fake selection
  * that is both the source and the sink. After EVERY mutation the suite calls
- * `assertUniformLayers(brush.document!)` — the D6 invariant is the whole
- * point of this store — and checks the reference-identity contract: one
- * history entry per op, untouched grids shared, undo restoring the exact
- * previous document reference.
+ * `assertUniformLayers(brush)` on the selected brush — the D6 invariant is
+ * the whole point of this store — and checks the reference-identity
+ * contract: one history entry per op, untouched grids shared, every OTHER
+ * brush shared (MASTER R3), undo restoring the exact previous document
+ * reference.
  */
 import { describe, expect, it, vi } from "vitest";
 import { flowResult } from "mobx";
@@ -21,10 +23,15 @@ import {
 } from "@/stores/domain/BrushStructureStore";
 import { SessionStore } from "@/stores/session/SessionStore";
 import {
+  assertBrushDocument,
   assertUniformLayers,
+  BRUSH_DOCUMENT_VERSION,
+  brushIn,
+  createBrush,
   createBrushDocument,
   createBrushFrame,
   createBrushLayer,
+  type Brush,
   type BrushCell,
   type BrushDocument,
   type BrushLayer,
@@ -33,8 +40,12 @@ import {
 /* ── rig ─────────────────────────────────────────────────────────────────── */
 
 class FakeSelection implements BrushSelectionSource, BrushSelectionSink {
+  selectedBrushId: string | null = null;
   selectedFrameId: string | null = null;
   selectedLayerId: string | null = null;
+  readonly selectBrush = vi.fn((id: string) => {
+    this.selectedBrushId = id;
+  });
   readonly selectFrame = vi.fn((id: string | null) => {
     this.selectedFrameId = id;
   });
@@ -77,23 +88,24 @@ function makeFakeApi(files: Record<string, unknown>): BrushApiLike {
  * grid is painted with a frame/layer-specific delta so a copy can be told
  * from its source and a crop can be checked cell by cell.
  */
-function twoByTwoDoc(): BrushDocument {
+function twoByTwoBrush(id = "brush-1", name = "Brush 1"): Brush {
   const W = 3;
   const H = 2;
   const layer = (
-    id: string,
+    layerId: string,
     frameNo: number,
     channelType: BrushLayer["channelType"],
   ): BrushLayer => {
-    const l = createBrushLayer(id, id, W, H, channelType);
-    const mark = id === "top" ? 100 : -100;
+    const l = createBrushLayer(layerId, layerId, W, H, channelType);
+    const mark = layerId === "top" ? 100 : -100;
     l.pixels[0][1] = [mark, frameNo, 1, 2];
     l.pixels[1][2] = [mark, frameNo, 3, 4];
-    if (id === "top") l.appliedGroupId = "g1";
+    if (layerId === "top") l.appliedGroupId = "g1";
     return l;
   };
   return {
-    version: "brush-1",
+    id,
+    name,
     width: W,
     height: H,
     frames: [
@@ -110,6 +122,24 @@ function twoByTwoDoc(): BrushDocument {
   };
 }
 
+/** A one-brush project holding `twoByTwoBrush()` as `brush-1`. */
+function twoByTwoDoc(): BrushDocument {
+  return { version: BRUSH_DOCUMENT_VERSION, brushes: [twoByTwoBrush()] };
+}
+
+/**
+ * A two-brush project: `brush-1` is `twoByTwoBrush()`, `brush-2` is a second
+ * 3×2 brush with the SAME frame/layer ids (they are brush-scoped), so an op
+ * aimed at the wrong brush would still "succeed" — the aliasing checks are
+ * what tell the two apart.
+ */
+function twoBrushDoc(): BrushDocument {
+  return {
+    version: BRUSH_DOCUMENT_VERSION,
+    brushes: [twoByTwoBrush(), twoByTwoBrush("brush-2", "Brush 2")],
+  };
+}
+
 interface Rig {
   brush: BrushStore;
   structure: BrushStructureStore;
@@ -121,10 +151,12 @@ async function makeRig(doc: BrushDocument = twoByTwoDoc()): Promise<Rig> {
     session: new SessionStore(),
     api: makeFakeApi({ a: doc }),
   });
-  await flowResult(brush.loadBrush("a"));
+  await flowResult(brush.loadProject("a"));
   const selection = new FakeSelection();
+  selection.selectedBrushId = "brush-1";
   selection.selectedFrameId = "f1";
   selection.selectedLayerId = "top";
+  selection.selectBrush.mockClear();
   selection.selectFrame.mockClear();
   selection.selectLayer.mockClear();
   const structure = new BrushStructureStore({
@@ -155,27 +187,34 @@ const doc = (rig: Rig): BrushDocument => {
   if (!d) throw new Error("no document");
   return d;
 };
-const layerIds = (d: BrushDocument): string[][] =>
-  d.frames.map((f) => f.layers.map((l) => l.id));
-const frameIds = (d: BrushDocument): string[] => d.frames.map((f) => f.id);
-const layerIn = (d: BrushDocument, frame: number, id: string): BrushLayer => {
-  const l = d.frames[frame].layers.find((x) => x.id === id);
+/** The SELECTED brush of the live document (the `brushIn` rule). */
+const sel = (rig: Rig): Brush => {
+  const b = brushIn(doc(rig), rig.selection.selectedBrushId);
+  if (!b) throw new Error("no selected brush");
+  return b;
+};
+const layerIds = (b: Brush): string[][] =>
+  b.frames.map((f) => f.layers.map((l) => l.id));
+const frameIds = (b: Brush): string[] => b.frames.map((f) => f.id);
+const layerIn = (b: Brush, frame: number, id: string): BrushLayer => {
+  const l = b.frames[frame].layers.find((x) => x.id === id);
   if (!l) throw new Error(`no layer ${id} in frame ${frame}`);
   return l;
 };
 const isAllZero = (grid: BrushCell[][]): boolean =>
   grid.every((row) => row.every((c) => c === 0));
+const brushIds = (d: BrushDocument): string[] => d.brushes.map((b) => b.id);
 
 /* ── frames ──────────────────────────────────────────────────────────────── */
 
 describe("addFrame", () => {
   it("inserts after the selected frame with the same layer ids/order and EMPTY grids, and selects it", async () => {
     const rig = await makeRig();
-    const before = doc(rig);
+    const before = sel(rig);
 
     const id = rig.structure.addFrame("New");
 
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(id).not.toBe("");
     expect(frameIds(after)).toEqual(["f1", id, "f2"]);
@@ -203,7 +242,7 @@ describe("addFrame", () => {
 
     const id = rig.structure.addFrame(undefined, true);
 
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(frameIds(after)).toEqual(["f1", "f2", id]);
     expect(after.frames[2].name).toBe("Frame 3");
@@ -228,7 +267,7 @@ describe("addFrame", () => {
     const rig = await makeRig();
     rig.selection.selectedFrameId = null;
     const id = rig.structure.addFrame();
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(frameIds(after)).toEqual(["f1", "f2", id]);
   });
@@ -245,7 +284,7 @@ describe("duplicateFrame", () => {
   it("inserts a deep copy named '<name> Copy' after the source and selects it", async () => {
     const rig = await makeRig();
     rig.structure.duplicateFrame("f1");
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(after.frames).toHaveLength(3);
     const copy = after.frames[1];
@@ -284,7 +323,7 @@ describe("deleteFrame", () => {
 
     rig.structure.deleteFrame(f3);
 
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(frameIds(after)).toEqual(["f1", "f2"]);
     expect(rig.selection.selectFrame).toHaveBeenCalledWith("f1");
@@ -293,7 +332,7 @@ describe("deleteFrame", () => {
   it("deleting the FIRST selected frame selects the new first", async () => {
     const rig = await makeRig();
     rig.structure.deleteFrame("f1");
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(frameIds(after)).toEqual(["f2"]);
     expect(rig.selection.selectFrame).toHaveBeenCalledWith("f2");
@@ -302,8 +341,8 @@ describe("deleteFrame", () => {
   it("deleting an UNSELECTED frame leaves the selection alone", async () => {
     const rig = await makeRig();
     rig.structure.deleteFrame("f2");
-    assertUniformLayers(doc(rig));
-    expect(frameIds(doc(rig))).toEqual(["f1"]);
+    assertUniformLayers(sel(rig));
+    expect(frameIds(sel(rig))).toEqual(["f1"]);
     expect(rig.selection.selectFrame).not.toHaveBeenCalled();
     expect(rig.selection.selectedFrameId).toBe("f1");
   });
@@ -314,19 +353,19 @@ describe("deleteFrame", () => {
     const only = doc(rig);
     rig.structure.deleteFrame("f1");
     expect(doc(rig)).toBe(only);
-    expect(frameIds(doc(rig))).toEqual(["f1"]);
+    expect(frameIds(sel(rig))).toEqual(["f1"]);
     expect(rig.brush.history.entries).toHaveLength(1);
-    assertUniformLayers(doc(rig));
+    assertUniformLayers(sel(rig));
   });
 });
 
 describe("renameFrame / moveFrame / reorderFrame", () => {
   it("renameFrame relabels ONE frame, shares the rest, does not bump pixels", async () => {
     const rig = await makeRig();
-    const before = doc(rig);
+    const before = sel(rig);
     const pixelV = rig.brush.pixelVersion;
     rig.structure.renameFrame("f2", "Two");
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(after.frames[1].name).toBe("Two");
     expect(after.frames[1].layers).toBe(before.frames[1].layers);
@@ -349,11 +388,11 @@ describe("renameFrame / moveFrame / reorderFrame", () => {
     expect(rig.brush.history.entries).toHaveLength(0);
 
     rig.structure.moveFrame("f1", "right");
-    assertUniformLayers(doc(rig));
-    expect(frameIds(doc(rig))).toEqual(["f2", "f1"]);
+    assertUniformLayers(sel(rig));
+    expect(frameIds(sel(rig))).toEqual(["f2", "f1"]);
     rig.structure.moveFrame("f1", "left");
-    assertUniformLayers(doc(rig));
-    expect(frameIds(doc(rig))).toEqual(["f1", "f2"]);
+    assertUniformLayers(sel(rig));
+    expect(frameIds(sel(rig))).toEqual(["f1", "f2"]);
     expect(rig.brush.history.entries).toHaveLength(2);
   });
 
@@ -362,19 +401,19 @@ describe("renameFrame / moveFrame / reorderFrame", () => {
     const f3 = rig.structure.addFrame("3"); // f1, f3, f2
     rig.selection.selectedFrameId = f3;
     const f4 = rig.structure.addFrame("4"); // f1, f3, f4, f2
-    expect(frameIds(doc(rig))).toEqual(["f1", f3, f4, "f2"]);
+    expect(frameIds(sel(rig))).toEqual(["f1", f3, f4, "f2"]);
 
     rig.structure.reorderFrame("f1", 4); // append
-    assertUniformLayers(doc(rig));
-    expect(frameIds(doc(rig))).toEqual([f3, f4, "f2", "f1"]);
+    assertUniformLayers(sel(rig));
+    expect(frameIds(sel(rig))).toEqual([f3, f4, "f2", "f1"]);
 
     rig.structure.reorderFrame("f2", 0);
-    assertUniformLayers(doc(rig));
-    expect(frameIds(doc(rig))).toEqual(["f2", f3, f4, "f1"]);
+    assertUniformLayers(sel(rig));
+    expect(frameIds(sel(rig))).toEqual(["f2", f3, f4, "f1"]);
 
     rig.structure.reorderFrame(f3, 3); // rightwards: lands at index 2
-    assertUniformLayers(doc(rig));
-    expect(frameIds(doc(rig))).toEqual(["f2", f4, f3, "f1"]);
+    assertUniformLayers(sel(rig));
+    expect(frameIds(sel(rig))).toEqual(["f2", f4, f3, "f1"]);
   });
 
   it("reorderFrame ignores same-place, out-of-range and non-integer targets", async () => {
@@ -386,7 +425,7 @@ describe("renameFrame / moveFrame / reorderFrame", () => {
     rig.structure.reorderFrame("f1", 1.5);
     rig.structure.reorderFrame("ghost", 0);
     expect(rig.brush.history.entries).toHaveLength(0);
-    expect(frameIds(doc(rig))).toEqual(["f1", "f2"]);
+    expect(frameIds(sel(rig))).toEqual(["f1", "f2"]);
   });
 });
 
@@ -395,11 +434,11 @@ describe("renameFrame / moveFrame / reorderFrame", () => {
 describe("addLayer", () => {
   it("appends the same id on TOP of every frame with a fresh grid, and selects it", async () => {
     const rig = await makeRig();
-    const before = doc(rig);
+    const before = sel(rig);
 
     const id = rig.structure.addLayer("Normals", "normal");
 
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(id).not.toBe("");
     expect(layerIds(after)).toEqual([
@@ -428,14 +467,14 @@ describe("addLayer", () => {
     expect(rig.brush.history.entries).toHaveLength(1);
   });
 
-  it("births the colorSource key in every frame for \"target\"; the default two-arg call leaves it absent", async () => {
+  it('births the colorSource key in every frame for "target"; the default two-arg call leaves it absent', async () => {
     const rig = await makeRig();
 
     const target = rig.structure.addLayer("Burn", "hsl", "target");
     const plain = rig.structure.addLayer("Plain", "rgb");
     const explicit = rig.structure.addLayer("Explicit", "rgb", "selected");
 
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     for (let f = 0; f < 2; f++) {
       expect(layerIn(after, f, target).colorSource).toBe("target");
@@ -457,7 +496,7 @@ describe("deleteLayer", () => {
   it("removes the id from EVERY frame; deleting the selected layer selects the one below", async () => {
     const rig = await makeRig();
     rig.structure.deleteLayer("top");
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(layerIds(after)).toEqual([["bottom"], ["bottom"]]);
     expect(rig.selection.selectLayer).toHaveBeenCalledWith("bottom");
@@ -467,16 +506,16 @@ describe("deleteLayer", () => {
     const rig = await makeRig();
     rig.selection.selectedLayerId = "bottom";
     rig.structure.deleteLayer("bottom");
-    assertUniformLayers(doc(rig));
-    expect(layerIds(doc(rig))).toEqual([["top"], ["top"]]);
+    assertUniformLayers(sel(rig));
+    expect(layerIds(sel(rig))).toEqual([["top"], ["top"]]);
     expect(rig.selection.selectLayer).toHaveBeenCalledWith("top");
   });
 
   it("deleting an UNSELECTED layer leaves the selection alone", async () => {
     const rig = await makeRig();
     rig.structure.deleteLayer("bottom");
-    assertUniformLayers(doc(rig));
-    expect(layerIds(doc(rig))).toEqual([["top"], ["top"]]);
+    assertUniformLayers(sel(rig));
+    expect(layerIds(sel(rig))).toEqual([["top"], ["top"]]);
     expect(rig.selection.selectLayer).not.toHaveBeenCalled();
   });
 
@@ -487,7 +526,7 @@ describe("deleteLayer", () => {
     rig.structure.deleteLayer("bottom");
     expect(doc(rig)).toBe(only);
     expect(rig.brush.history.entries).toHaveLength(1);
-    assertUniformLayers(doc(rig));
+    assertUniformLayers(sel(rig));
   });
 
   it("is a no-op for an unknown id", async () => {
@@ -500,10 +539,10 @@ describe("deleteLayer", () => {
 describe("moveLayer", () => {
   it("'up' swaps with the layer above in EVERY frame; 'down' swaps back", async () => {
     const rig = await makeRig();
-    const before = doc(rig);
+    const before = sel(rig);
 
     rig.structure.moveLayer("bottom", "up");
-    let after = doc(rig);
+    let after = sel(rig);
     assertUniformLayers(after);
     expect(layerIds(after)).toEqual([
       ["top", "bottom"],
@@ -514,7 +553,7 @@ describe("moveLayer", () => {
     expect(after.frames[1].layers[0]).toBe(before.frames[1].layers[1]);
 
     rig.structure.moveLayer("bottom", "down");
-    after = doc(rig);
+    after = sel(rig);
     assertUniformLayers(after);
     expect(layerIds(after)).toEqual([
       ["bottom", "top"],
@@ -537,14 +576,14 @@ describe("moveLayer", () => {
     const rig = await makeRig();
     const mid = rig.structure.addLayer("mid", "heightmap");
     rig.structure.moveLayer(mid, "down");
-    assertUniformLayers(doc(rig));
-    expect(layerIds(doc(rig))).toEqual([
+    assertUniformLayers(sel(rig));
+    expect(layerIds(sel(rig))).toEqual([
       ["bottom", mid, "top"],
       ["bottom", mid, "top"],
     ]);
     rig.structure.moveLayer(mid, "down");
-    assertUniformLayers(doc(rig));
-    expect(layerIds(doc(rig))).toEqual([
+    assertUniformLayers(sel(rig));
+    expect(layerIds(sel(rig))).toEqual([
       [mid, "bottom", "top"],
       [mid, "bottom", "top"],
     ]);
@@ -555,7 +594,7 @@ describe("duplicateLayer", () => {
   it("inserts a deep copy directly above the source in every frame and selects it", async () => {
     const rig = await makeRig();
     const id = rig.structure.duplicateLayer("bottom");
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(id).not.toBe("");
     expect(layerIds(after)).toEqual([
@@ -580,16 +619,16 @@ describe("duplicateLayer", () => {
   it("carries the applied group and returns '' for an unknown id", async () => {
     const rig = await makeRig();
     const id = rig.structure.duplicateLayer("top");
-    expect(layerIn(doc(rig), 1, id).appliedGroupId).toBe("g1");
+    expect(layerIn(sel(rig), 1, id).appliedGroupId).toBe("g1");
     expect(rig.structure.duplicateLayer("ghost")).toBe("");
     expect(rig.brush.history.entries).toHaveLength(1);
   });
 
-  it("carries a \"target\" colour source into the copy in every frame", async () => {
+  it('carries a "target" colour source into the copy in every frame', async () => {
     const rig = await makeRig();
     rig.structure.setLayerColorSource("top", "target");
     const id = rig.structure.duplicateLayer("top");
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     for (let f = 0; f < 2; f++) {
       expect(layerIn(after, f, id).colorSource).toBe("target");
@@ -602,10 +641,10 @@ describe("duplicateLayer", () => {
 describe("renameLayer / toggleLayerVisibility", () => {
   it("renameLayer relabels in every frame, keeps grids shared, no pixel bump", async () => {
     const rig = await makeRig();
-    const before = doc(rig);
+    const before = sel(rig);
     const pixelV = rig.brush.pixelVersion;
     rig.structure.renameLayer("top", "Highlights");
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     for (let f = 0; f < 2; f++) {
       expect(layerIn(after, f, "top").name).toBe("Highlights");
@@ -622,16 +661,16 @@ describe("renameLayer / toggleLayerVisibility", () => {
     const rig = await makeRig();
     const pixelV = rig.brush.pixelVersion;
     rig.structure.toggleLayerVisibility("top");
-    assertUniformLayers(doc(rig));
-    expect(layerIn(doc(rig), 0, "top").visible).toBe(false);
-    expect(layerIn(doc(rig), 1, "top").visible).toBe(false);
-    expect(layerIn(doc(rig), 0, "bottom").visible).toBe(true);
+    assertUniformLayers(sel(rig));
+    expect(layerIn(sel(rig), 0, "top").visible).toBe(false);
+    expect(layerIn(sel(rig), 1, "top").visible).toBe(false);
+    expect(layerIn(sel(rig), 0, "bottom").visible).toBe(true);
     expect(rig.brush.pixelVersion).toBe(pixelV + 1);
     expect(rig.brush.history.entries[0].label).toBe("Hide layer");
 
     rig.structure.toggleLayerVisibility("top");
-    expect(layerIn(doc(rig), 0, "top").visible).toBe(true);
-    expect(layerIn(doc(rig), 1, "top").visible).toBe(true);
+    expect(layerIn(sel(rig), 0, "top").visible).toBe(true);
+    expect(layerIn(sel(rig), 1, "top").visible).toBe(true);
     expect(rig.brush.history.entries[1].label).toBe("Show layer");
   });
 
@@ -646,12 +685,12 @@ describe("renameLayer / toggleLayerVisibility", () => {
 describe("setLayerChannelType", () => {
   it("relabels in every frame and leaves every cell value — and the grid reference — untouched", async () => {
     const rig = await makeRig();
-    const before = doc(rig);
+    const before = sel(rig);
     const pixelV = rig.brush.pixelVersion;
 
     rig.structure.setLayerChannelType("top", "heightmap");
 
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     for (let f = 0; f < 2; f++) {
       const l = layerIn(after, f, "top");
@@ -676,13 +715,13 @@ describe("setLayerChannelType", () => {
 describe("setLayerColorSource", () => {
   it("relabels in every frame, leaves every cell value — and the grid reference — untouched, and does NOT bump pixels", async () => {
     const rig = await makeRig();
-    const before = doc(rig);
+    const before = sel(rig);
     const pixelV = rig.brush.pixelVersion;
     const domainV = rig.brush.domainVersion;
 
     rig.structure.setLayerColorSource("top", "target");
 
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     for (let f = 0; f < 2; f++) {
       const l = layerIn(after, f, "top");
@@ -702,14 +741,15 @@ describe("setLayerColorSource", () => {
     expect(rig.brush.history.entries[0].label).toBe("Change colour source");
   });
 
-  it("\"selected\" REMOVES the key rather than writing it, in every frame", async () => {
+  it('"selected" REMOVES the key rather than writing it, in every frame', async () => {
     const rig = await makeRig();
     rig.structure.setLayerColorSource("top", "target");
-    const before = doc(rig);
+    const beforeDoc = doc(rig);
+    const before = sel(rig);
 
     rig.structure.setLayerColorSource("top", "selected");
 
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     for (let f = 0; f < 2; f++) {
       const l = layerIn(after, f, "top");
@@ -726,11 +766,11 @@ describe("setLayerColorSource", () => {
     expect(rig.brush.history.entries).toHaveLength(2);
 
     rig.brush.history.undo();
-    expect(rig.brush.document).toBe(before);
-    expect(layerIn(doc(rig), 0, "top").colorSource).toBe("target");
+    expect(rig.brush.document).toBe(beforeDoc);
+    expect(layerIn(sel(rig), 0, "top").colorSource).toBe("target");
   });
 
-  it("is a no-op when the source is unchanged (absent === \"selected\"), the id unknown, or there is no document", async () => {
+  it('is a no-op when the source is unchanged (absent === "selected"), the id unknown, or there is no document', async () => {
     const rig = await makeRig();
     rig.structure.setLayerColorSource("top", "selected");
     rig.structure.setLayerColorSource("ghost", "target");
@@ -753,14 +793,14 @@ describe("applied groups", () => {
   it("addAppliedGroup appends and returns the id; renameAppliedGroup relabels", async () => {
     const rig = await makeRig();
     const id = rig.structure.addAppliedGroup("Shadow");
-    assertUniformLayers(doc(rig));
-    expect(doc(rig).appliedGroups).toEqual([
+    assertUniformLayers(sel(rig));
+    expect(sel(rig).appliedGroups).toEqual([
       { id: "g1", name: "Group 1" },
       { id, name: "Shadow" },
     ]);
     rig.structure.renameAppliedGroup(id, "Shade");
-    assertUniformLayers(doc(rig));
-    expect(doc(rig).appliedGroups[1]).toEqual({ id, name: "Shade" });
+    assertUniformLayers(sel(rig));
+    expect(sel(rig).appliedGroups[1]).toEqual({ id, name: "Shade" });
     rig.structure.renameAppliedGroup("ghost", "x");
     expect(rig.brush.history.entries).toHaveLength(2);
     expect(emptyRig().structure.addAppliedGroup("x")).toBe("");
@@ -768,22 +808,22 @@ describe("applied groups", () => {
 
   it("setLayerAppliedGroup assigns in every frame, clears with null, rejects unknown groups", async () => {
     const rig = await makeRig();
-    const before = doc(rig);
+    const before = sel(rig);
     const pixelV = rig.brush.pixelVersion;
 
     rig.structure.setLayerAppliedGroup("bottom", "g1");
-    assertUniformLayers(doc(rig));
-    expect(layerIn(doc(rig), 0, "bottom").appliedGroupId).toBe("g1");
-    expect(layerIn(doc(rig), 1, "bottom").appliedGroupId).toBe("g1");
-    expect(layerIn(doc(rig), 0, "bottom").pixels).toBe(
+    assertUniformLayers(sel(rig));
+    expect(layerIn(sel(rig), 0, "bottom").appliedGroupId).toBe("g1");
+    expect(layerIn(sel(rig), 1, "bottom").appliedGroupId).toBe("g1");
+    expect(layerIn(sel(rig), 0, "bottom").pixels).toBe(
       layerIn(before, 0, "bottom").pixels,
     );
     expect(layerIn(before, 0, "bottom").appliedGroupId).toBeUndefined();
 
     rig.structure.setLayerAppliedGroup("top", null);
-    assertUniformLayers(doc(rig));
-    expect("appliedGroupId" in layerIn(doc(rig), 0, "top")).toBe(false);
-    expect("appliedGroupId" in layerIn(doc(rig), 1, "top")).toBe(false);
+    assertUniformLayers(sel(rig));
+    expect("appliedGroupId" in layerIn(sel(rig), 0, "top")).toBe(false);
+    expect("appliedGroupId" in layerIn(sel(rig), 1, "top")).toBe(false);
 
     rig.structure.setLayerAppliedGroup("top", "nope");
     rig.structure.setLayerAppliedGroup("top", null); // already clear
@@ -796,11 +836,11 @@ describe("applied groups", () => {
   it("deleteAppliedGroup removes the group and clears every layer that used it, in every frame", async () => {
     const rig = await makeRig();
     rig.structure.setLayerAppliedGroup("bottom", "g1");
-    const before = doc(rig);
+    const before = sel(rig);
 
     rig.structure.deleteAppliedGroup("g1");
 
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(after.appliedGroups).toEqual([]);
     for (let f = 0; f < 2; f++) {
@@ -823,7 +863,7 @@ describe("resizeBrush", () => {
     const rig = await makeRig(); // 3×2, painted at (1,0) and (2,1)
     const pixelV = rig.brush.pixelVersion;
     rig.structure.resizeBrush(2, 1);
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(after.width).toBe(2);
     expect(after.height).toBe(1);
@@ -847,9 +887,9 @@ describe("resizeBrush", () => {
 
   it("pads with unpainted cells and never shares tuples with the source", async () => {
     const rig = await makeRig();
-    const before = doc(rig);
+    const before = sel(rig);
     rig.structure.resizeBrush(4, 3);
-    const after = doc(rig);
+    const after = sel(rig);
     assertUniformLayers(after);
     expect(after.width).toBe(4);
     expect(after.height).toBe(3);
@@ -860,7 +900,7 @@ describe("resizeBrush", () => {
       [0, 0, 0, 0],
     ]);
     expect(l.pixels[0][1]).not.toBe(layerIn(before, 1, "top").pixels[0][1]);
-    // The source document is byte-for-byte what it was.
+    // The source brush is byte-for-byte what it was.
     expect(before.width).toBe(3);
     expect(layerIn(before, 1, "top").pixels).toHaveLength(2);
   });
@@ -875,6 +915,468 @@ describe("resizeBrush", () => {
     rig.structure.resizeBrush(Number.NaN, 2);
     expect(doc(rig)).toBe(before);
     expect(rig.brush.history.entries).toHaveLength(0);
+  });
+});
+
+/* ── brush scoping — every op acts on the SELECTED brush only (R3) ───────── */
+
+describe("every structural op is scoped to the selected brush", () => {
+  const scoped: Array<{ name: string; run: (rig: Rig) => void }> = [
+    { name: "addFrame", run: (r) => r.structure.addFrame("x") },
+    { name: "duplicateFrame", run: (r) => r.structure.duplicateFrame("f1") },
+    { name: "deleteFrame", run: (r) => r.structure.deleteFrame("f1") },
+    { name: "renameFrame", run: (r) => r.structure.renameFrame("f1", "x") },
+    { name: "moveFrame", run: (r) => r.structure.moveFrame("f1", "right") },
+    { name: "reorderFrame", run: (r) => r.structure.reorderFrame("f2", 0) },
+    { name: "addLayer", run: (r) => r.structure.addLayer("x", "rgb") },
+    { name: "deleteLayer", run: (r) => r.structure.deleteLayer("top") },
+    { name: "renameLayer", run: (r) => r.structure.renameLayer("top", "x") },
+    {
+      name: "toggleLayerVisibility",
+      run: (r) => r.structure.toggleLayerVisibility("top"),
+    },
+    { name: "moveLayer", run: (r) => r.structure.moveLayer("top", "down") },
+    {
+      name: "duplicateLayer",
+      run: (r) => r.structure.duplicateLayer("top"),
+    },
+    {
+      name: "setLayerChannelType",
+      run: (r) => r.structure.setLayerChannelType("top", "normal"),
+    },
+    {
+      name: "setLayerColorSource",
+      run: (r) => r.structure.setLayerColorSource("top", "target"),
+    },
+    {
+      name: "setLayerAppliedGroup",
+      run: (r) => r.structure.setLayerAppliedGroup("bottom", "g1"),
+    },
+    {
+      name: "addAppliedGroup",
+      run: (r) => r.structure.addAppliedGroup("x"),
+    },
+    {
+      name: "renameAppliedGroup",
+      run: (r) => r.structure.renameAppliedGroup("g1", "x"),
+    },
+    {
+      name: "deleteAppliedGroup",
+      run: (r) => r.structure.deleteAppliedGroup("g1"),
+    },
+    { name: "resizeBrush", run: (r) => r.structure.resizeBrush(5, 5) },
+  ];
+
+  it.each(scoped)(
+    "$name with brush-1 selected: brush-1 is replaced, brush-2 is shared by reference",
+    async ({ run }) => {
+      const rig = await makeRig(twoBrushDoc());
+      const before = doc(rig);
+      const otherJson = JSON.stringify(before.brushes[1]);
+
+      run(rig);
+
+      const after = doc(rig);
+      assertBrushDocument(after);
+      expect(after).not.toBe(before);
+      expect(after.brushes).not.toBe(before.brushes);
+      expect(after.brushes).toHaveLength(2);
+      // R3: the touched brush is a new object, every other brush is the SAME object.
+      expect(after.brushes[0]).not.toBe(before.brushes[0]);
+      expect(after.brushes[1]).toBe(before.brushes[1]);
+      expect(JSON.stringify(after.brushes[1])).toBe(otherJson);
+      expect(brushIds(after)).toEqual(["brush-1", "brush-2"]);
+      expect(rig.brush.history.entries).toHaveLength(1);
+      rig.brush.history.undo();
+      expect(rig.brush.document).toBe(before);
+    },
+  );
+
+  it.each(scoped)(
+    "$name with brush-2 selected: brush-2 is replaced, brush-1 is shared by reference",
+    async ({ run }) => {
+      const rig = await makeRig(twoBrushDoc());
+      rig.selection.selectedBrushId = "brush-2";
+      const before = doc(rig);
+
+      run(rig);
+
+      const after = doc(rig);
+      assertBrushDocument(after);
+      expect(after.brushes[1]).not.toBe(before.brushes[1]);
+      expect(after.brushes[0]).toBe(before.brushes[0]);
+      expect(brushIds(after)).toEqual(["brush-1", "brush-2"]);
+      expect(rig.brush.history.entries).toHaveLength(1);
+    },
+  );
+
+  it("addFrame edits brush 2 when brush 2 is selected and leaves brush 1's frames alone", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    rig.selection.selectedBrushId = "brush-2";
+    const before = doc(rig);
+
+    const id = rig.structure.addFrame("Only in two");
+
+    const after = doc(rig);
+    expect(frameIds(after.brushes[1])).toEqual(["f1", id, "f2"]);
+    expect(frameIds(after.brushes[0])).toEqual(["f1", "f2"]);
+    expect(after.brushes[0]).toBe(before.brushes[0]);
+    expect(sel(rig)).toBe(after.brushes[1]);
+  });
+
+  it("addLayer / resizeBrush / addAppliedGroup with brush 2 selected change only brush 2", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    rig.selection.selectedBrushId = "brush-2";
+    const before = doc(rig);
+
+    const layerId = rig.structure.addLayer("Two only", "normal");
+    rig.structure.resizeBrush(5, 4);
+    const groupId = rig.structure.addAppliedGroup("Two's group");
+
+    const after = doc(rig);
+    assertBrushDocument(after);
+    const two = after.brushes[1];
+    expect(layerIds(two)).toEqual([
+      ["bottom", "top", layerId],
+      ["bottom", "top", layerId],
+    ]);
+    expect(two.width).toBe(5);
+    expect(two.height).toBe(4);
+    expect(two.appliedGroups.map((g) => g.id)).toEqual(["g1", groupId]);
+    // Brush 1: identical object across all three commits.
+    expect(after.brushes[0]).toBe(before.brushes[0]);
+    expect(after.brushes[0].width).toBe(3);
+    expect(layerIds(after.brushes[0])).toEqual([
+      ["bottom", "top"],
+      ["bottom", "top"],
+    ]);
+    expect(rig.brush.history.entries).toHaveLength(3);
+  });
+
+  it("falls back to brush 0 when nothing is selected or the selected id is unknown", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    rig.selection.selectedBrushId = null;
+    rig.structure.renameFrame("f1", "From null");
+    expect(doc(rig).brushes[0].frames[0].name).toBe("From null");
+    expect(doc(rig).brushes[1].frames[0].name).toBe("Frame 1");
+
+    rig.selection.selectedBrushId = "ghost";
+    rig.structure.renameFrame("f1", "From ghost");
+    expect(doc(rig).brushes[0].frames[0].name).toBe("From ghost");
+    expect(doc(rig).brushes[1].frames[0].name).toBe("Frame 1");
+    expect(rig.brush.history.entries).toHaveLength(2);
+  });
+
+  it("resizeBrush's early-out compares against the SELECTED brush's size", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    rig.selection.selectedBrushId = "brush-2";
+    rig.structure.resizeBrush(6, 6); // brush-2 → 6×6
+    expect(doc(rig).brushes[1].width).toBe(6);
+    expect(doc(rig).brushes[0].width).toBe(3);
+
+    rig.structure.resizeBrush(6, 6); // brush-2 already 6×6 → no-op
+    expect(rig.brush.history.entries).toHaveLength(1);
+
+    rig.selection.selectedBrushId = "brush-1";
+    rig.structure.resizeBrush(6, 6); // brush-1 is 3×2 → real change
+    expect(doc(rig).brushes[0].width).toBe(6);
+    expect(rig.brush.history.entries).toHaveLength(2);
+  });
+});
+
+/* ── brushes ─────────────────────────────────────────────────────────────── */
+
+describe("addBrush", () => {
+  it("appends a fresh brush, selects it, one history entry, bumps pixels", async () => {
+    const rig = await makeRig();
+    const before = doc(rig);
+    const pixelV = rig.brush.pixelVersion;
+
+    const id = rig.structure.addBrush("Second", 4, 5);
+
+    const after = doc(rig);
+    assertBrushDocument(after);
+    expect(id).not.toBe("");
+    expect(brushIds(after)).toEqual(["brush-1", id]);
+    const added = after.brushes[1];
+    expect(added.name).toBe("Second");
+    expect(added.width).toBe(4);
+    expect(added.height).toBe(5);
+    expect(frameIds(added)).toEqual(["frame-1"]);
+    expect(layerIds(added)).toEqual([["layer-1"]]);
+    expect(added.frames[0].layers[0].pixels).toHaveLength(5);
+    expect(added.frames[0].layers[0].pixels[0]).toHaveLength(4);
+    expect(isAllZero(added.frames[0].layers[0].pixels)).toBe(true);
+    // The existing brush is shared by reference — a spine copy only.
+    expect(after.brushes[0]).toBe(before.brushes[0]);
+    expect(rig.selection.selectBrush).toHaveBeenCalledTimes(1);
+    expect(rig.selection.selectBrush).toHaveBeenCalledWith(id);
+    expect(rig.selection.selectedBrushId).toBe(id);
+    expect(sel(rig)).toBe(added);
+    expect(rig.brush.history.entries).toHaveLength(1);
+    expect(rig.brush.history.entries[0].label).toBe("Add brush");
+    expect(rig.brush.pixelVersion).toBe(pixelV + 1);
+  });
+
+  it("defaults to 16×16", async () => {
+    const rig = await makeRig();
+    const id = rig.structure.addBrush("Default");
+    const added = brushIn(doc(rig), id)!;
+    expect(added.width).toBe(16);
+    expect(added.height).toBe(16);
+    expect(added.frames[0].layers[0].pixels).toHaveLength(16);
+    expect(added.frames[0].layers[0].pixels[0]).toHaveLength(16);
+  });
+
+  it("⌘Z removes the brush and restores the previous document reference; a stale selection then falls back to brush 0", async () => {
+    const rig = await makeRig();
+    const before = doc(rig);
+    const id = rig.structure.addBrush("Second");
+    expect(rig.selection.selectBrush).toHaveBeenCalledTimes(1);
+
+    rig.brush.history.undo();
+
+    expect(rig.brush.document).toBe(before);
+    expect(brushIds(doc(rig))).toEqual(["brush-1"]);
+    // The sink is only written by the op itself; `adoptDocument` in the UI
+    // store re-seats the id on undo. Here the fake still holds the stale id,
+    // and every op resolves through the `brushIn` fallback to brush 0.
+    expect(rig.selection.selectBrush).toHaveBeenCalledTimes(1);
+    expect(rig.selection.selectedBrushId).toBe(id);
+    rig.structure.renameFrame("f1", "After undo");
+    expect(doc(rig).brushes[0].frames[0].name).toBe("After undo");
+    expect(brushIds(doc(rig))).toEqual(["brush-1"]);
+  });
+
+  it("returns '' and records nothing with no document, and ignores bad dimensions", async () => {
+    const empty = emptyRig();
+    expect(empty.structure.addBrush("x")).toBe("");
+    expect(empty.brush.history.entries).toHaveLength(0);
+    expect(empty.selection.selectBrush).not.toHaveBeenCalled();
+
+    const rig = await makeRig();
+    expect(rig.structure.addBrush("x", 0, 4)).toBe("");
+    expect(rig.structure.addBrush("x", 4, 2.5)).toBe("");
+    expect(rig.structure.addBrush("x", Number.NaN, 4)).toBe("");
+    expect(rig.brush.history.entries).toHaveLength(0);
+    expect(rig.selection.selectBrush).not.toHaveBeenCalled();
+  });
+});
+
+describe("duplicateBrush", () => {
+  it("inserts a deep copy named '<name> Copy' after the source, keeps frame/layer ids, selects it", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    const before = doc(rig);
+    const pixelV = rig.brush.pixelVersion;
+
+    const id = rig.structure.duplicateBrush("brush-1");
+
+    const after = doc(rig);
+    assertBrushDocument(after);
+    expect(id).not.toBe("");
+    expect(id).not.toBe("brush-1");
+    expect(brushIds(after)).toEqual(["brush-1", id, "brush-2"]);
+    const source = after.brushes[0];
+    const copy = after.brushes[1];
+    expect(copy.name).toBe("Brush 1 Copy");
+    expect(copy.width).toBe(3);
+    expect(copy.height).toBe(2);
+    // Frame and layer ids are brush-scoped and KEPT.
+    expect(frameIds(copy)).toEqual(["f1", "f2"]);
+    expect(layerIds(copy)).toEqual([
+      ["bottom", "top"],
+      ["bottom", "top"],
+    ]);
+    expect(copy.appliedGroups).toEqual([{ id: "g1", name: "Group 1" }]);
+    expect(copy.appliedGroups).not.toBe(source.appliedGroups);
+    expect(layerIn(copy, 1, "top").appliedGroupId).toBe("g1");
+    expect(layerIn(copy, 1, "top").channelType).toBe("hsl");
+    // Every grid is a deep copy: equal content, no shared row or cell.
+    for (let f = 0; f < 2; f++) {
+      for (const lid of ["bottom", "top"]) {
+        const s = layerIn(source, f, lid);
+        const c = layerIn(copy, f, lid);
+        expect(c).not.toBe(s);
+        expect(c.pixels).toEqual(s.pixels);
+        expect(c.pixels).not.toBe(s.pixels);
+        for (let y = 0; y < s.pixels.length; y++) {
+          expect(c.pixels[y]).not.toBe(s.pixels[y]);
+          for (let x = 0; x < s.pixels[y].length; x++) {
+            const sc = s.pixels[y][x];
+            if (sc !== 0) expect(c.pixels[y][x]).not.toBe(sc);
+          }
+        }
+      }
+    }
+    // Scribble on the copy — the source is untouched.
+    const cell = layerIn(copy, 0, "top").pixels[0][1];
+    if (cell === 0) throw new Error("expected a painted cell");
+    cell[0] = 7;
+    expect(layerIn(source, 0, "top").pixels[0][1]).toEqual([100, 1, 1, 2]);
+    // The other brushes are shared by reference.
+    expect(after.brushes[0]).toBe(before.brushes[0]);
+    expect(after.brushes[2]).toBe(before.brushes[1]);
+    expect(rig.selection.selectBrush).toHaveBeenCalledTimes(1);
+    expect(rig.selection.selectBrush).toHaveBeenCalledWith(id);
+    expect(sel(rig)).toBe(copy);
+    expect(rig.brush.history.entries).toHaveLength(1);
+    expect(rig.brush.history.entries[0].label).toBe("Duplicate brush");
+    expect(rig.brush.pixelVersion).toBe(pixelV + 1);
+
+    rig.brush.history.undo();
+    expect(rig.brush.document).toBe(before);
+  });
+
+  it("returns '' for an unknown id or no document", async () => {
+    const rig = await makeRig();
+    const before = doc(rig);
+    expect(rig.structure.duplicateBrush("ghost")).toBe("");
+    expect(doc(rig)).toBe(before);
+    expect(rig.brush.history.entries).toHaveLength(0);
+    expect(rig.selection.selectBrush).not.toHaveBeenCalled();
+
+    const empty = emptyRig();
+    expect(empty.structure.duplicateBrush("brush-1")).toBe("");
+    expect(empty.selection.selectBrush).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteBrush", () => {
+  it("removes the brush; deleting the SELECTED brush selects the previous one", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    const third = rig.structure.addBrush("Third"); // brush-1, brush-2, third — selected = third
+    rig.selection.selectBrush.mockClear();
+    const before = doc(rig);
+    const pixelV = rig.brush.pixelVersion;
+
+    rig.structure.deleteBrush(third);
+
+    const after = doc(rig);
+    assertBrushDocument(after);
+    expect(brushIds(after)).toEqual(["brush-1", "brush-2"]);
+    expect(after.brushes[0]).toBe(before.brushes[0]);
+    expect(after.brushes[1]).toBe(before.brushes[1]);
+    expect(rig.selection.selectBrush).toHaveBeenCalledTimes(1);
+    expect(rig.selection.selectBrush).toHaveBeenCalledWith("brush-2");
+    expect(rig.brush.history.entries).toHaveLength(2);
+    expect(rig.brush.history.entries[1].label).toBe("Delete brush");
+    expect(rig.brush.pixelVersion).toBe(pixelV + 1);
+  });
+
+  it("deleting the FIRST selected brush selects the new first", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    rig.structure.deleteBrush("brush-1");
+    expect(brushIds(doc(rig))).toEqual(["brush-2"]);
+    expect(rig.selection.selectBrush).toHaveBeenCalledWith("brush-2");
+  });
+
+  it("deleting an UNSELECTED brush leaves the selection alone", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    rig.structure.deleteBrush("brush-2");
+    expect(brushIds(doc(rig))).toEqual(["brush-1"]);
+    expect(rig.selection.selectBrush).not.toHaveBeenCalled();
+    expect(rig.selection.selectedBrushId).toBe("brush-1");
+  });
+
+  it("with NOTHING selected, re-seats the selection on the survivor", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    rig.selection.selectedBrushId = null;
+    rig.structure.deleteBrush("brush-2");
+    expect(rig.selection.selectBrush).toHaveBeenCalledWith("brush-1");
+  });
+
+  it("REFUSES to delete the last brush (no-op, nothing recorded)", async () => {
+    const rig = await makeRig();
+    const only = doc(rig);
+    rig.structure.deleteBrush("brush-1");
+    expect(doc(rig)).toBe(only);
+    expect(brushIds(doc(rig))).toEqual(["brush-1"]);
+    expect(rig.brush.history.entries).toHaveLength(0);
+    expect(rig.selection.selectBrush).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op for an unknown id", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    const before = doc(rig);
+    rig.structure.deleteBrush("ghost");
+    expect(doc(rig)).toBe(before);
+    expect(rig.brush.history.entries).toHaveLength(0);
+    expect(rig.selection.selectBrush).not.toHaveBeenCalled();
+  });
+});
+
+describe("renameBrush", () => {
+  it("relabels ONE brush, shares the rest (frames included), does not bump pixels", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    const before = doc(rig);
+    const pixelV = rig.brush.pixelVersion;
+    const domainV = rig.brush.domainVersion;
+
+    rig.structure.renameBrush("brush-2", "Renamed");
+
+    const after = doc(rig);
+    assertBrushDocument(after);
+    expect(after.brushes[1].name).toBe("Renamed");
+    expect(after.brushes[1]).not.toBe(before.brushes[1]);
+    expect(after.brushes[1].frames).toBe(before.brushes[1].frames);
+    expect(after.brushes[0]).toBe(before.brushes[0]);
+    expect(before.brushes[1].name).toBe("Brush 2");
+    expect(rig.brush.pixelVersion).toBe(pixelV);
+    expect(rig.brush.domainVersion).toBe(domainV + 1);
+    expect(rig.brush.history.entries).toHaveLength(1);
+    expect(rig.brush.history.entries[0].label).toBe("Rename brush");
+    expect(rig.selection.selectBrush).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op for an unknown id", async () => {
+    const rig = await makeRig();
+    rig.structure.renameBrush("ghost", "x");
+    expect(rig.brush.history.entries).toHaveLength(0);
+  });
+});
+
+describe("moveBrush", () => {
+  it("'up' moves toward index 0, 'down' toward the end; brush objects are shared", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    const before = doc(rig);
+    const pixelV = rig.brush.pixelVersion;
+
+    rig.structure.moveBrush("brush-2", "up");
+    let after = doc(rig);
+    assertBrushDocument(after);
+    expect(brushIds(after)).toEqual(["brush-2", "brush-1"]);
+    expect(after.brushes[0]).toBe(before.brushes[1]);
+    expect(after.brushes[1]).toBe(before.brushes[0]);
+
+    rig.structure.moveBrush("brush-2", "down");
+    after = doc(rig);
+    assertBrushDocument(after);
+    expect(brushIds(after)).toEqual(["brush-1", "brush-2"]);
+    expect(rig.brush.history.entries).toHaveLength(2);
+    expect(rig.brush.history.entries[0].label).toBe("Move brush");
+    expect(rig.brush.pixelVersion).toBe(pixelV);
+    expect(rig.selection.selectBrush).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op at the ends and for an unknown id", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    const before = doc(rig);
+    rig.structure.moveBrush("brush-1", "up");
+    rig.structure.moveBrush("brush-2", "down");
+    rig.structure.moveBrush("ghost", "up");
+    expect(doc(rig)).toBe(before);
+    expect(rig.brush.history.entries).toHaveLength(0);
+  });
+
+  it("the selected brush keeps its identity across a move", async () => {
+    const rig = await makeRig(twoBrushDoc());
+    const selected = sel(rig);
+    rig.structure.moveBrush("brush-1", "down");
+    expect(brushIds(doc(rig))).toEqual(["brush-2", "brush-1"]);
+    expect(sel(rig)).toBe(selected);
+    rig.structure.renameFrame("f1", "still brush-1");
+    expect(doc(rig).brushes[1].frames[0].name).toBe("still brush-1");
+    expect(doc(rig).brushes[0].frames[0].name).toBe("Frame 1");
   });
 });
 
@@ -987,10 +1489,35 @@ describe("every op is exactly one history entry whose undo restores the previous
       run: (r) => r.structure.resizeBrush(5, 5),
       bumpsPixels: true,
     },
+    {
+      name: "addBrush",
+      run: (r) => r.structure.addBrush("x"),
+      bumpsPixels: true,
+    },
+    {
+      name: "duplicateBrush",
+      run: (r) => r.structure.duplicateBrush("brush-1"),
+      bumpsPixels: true,
+    },
+    {
+      name: "deleteBrush",
+      run: (r) => r.structure.deleteBrush("brush-2"),
+      bumpsPixels: true,
+    },
+    {
+      name: "renameBrush",
+      run: (r) => r.structure.renameBrush("brush-1", "x"),
+      bumpsPixels: false,
+    },
+    {
+      name: "moveBrush",
+      run: (r) => r.structure.moveBrush("brush-1", "down"),
+      bumpsPixels: false,
+    },
   ];
 
   it.each(ops)("$name", async ({ run, bumpsPixels }) => {
-    const rig = await makeRig();
+    const rig = await makeRig(twoBrushDoc());
     const before = doc(rig);
     const beforeJson = JSON.stringify(before);
     const domainV = rig.brush.domainVersion;
@@ -999,21 +1526,22 @@ describe("every op is exactly one history entry whose undo restores the previous
     run(rig);
 
     const after = doc(rig);
-    assertUniformLayers(after);
+    assertBrushDocument(after);
     expect(after).not.toBe(before);
+    expect(after.brushes).not.toBe(before.brushes);
     expect(rig.brush.history.entries).toHaveLength(1);
     expect(rig.brush.domainVersion).toBe(domainV + 1);
     expect(rig.brush.pixelVersion).toBe(bumpsPixels ? pixelV + 1 : pixelV);
     // The previous document was never mutated in place.
     expect(JSON.stringify(before)).toBe(beforeJson);
-    assertUniformLayers(before);
+    assertBrushDocument(before);
 
     rig.brush.history.undo();
     expect(rig.brush.document).toBe(before);
-    assertUniformLayers(doc(rig));
+    assertBrushDocument(doc(rig));
     rig.brush.history.redo();
     expect(rig.brush.document).toBe(after);
-    assertUniformLayers(doc(rig));
+    assertBrushDocument(doc(rig));
     expect(rig.brush.history.entries).toHaveLength(1);
   });
 
@@ -1022,6 +1550,7 @@ describe("every op is exactly one history entry whose undo restores the previous
     for (const op of ops) op.run(rig);
     expect(rig.brush.history.entries).toHaveLength(0);
     expect(rig.brush.document).toBeNull();
+    expect(rig.selection.selectBrush).not.toHaveBeenCalled();
     expect(rig.selection.selectFrame).not.toHaveBeenCalled();
     expect(rig.selection.selectLayer).not.toHaveBeenCalled();
   });
@@ -1030,21 +1559,50 @@ describe("every op is exactly one history entry whose undo restores the previous
 /* ── the invariant guard ─────────────────────────────────────────────────── */
 
 describe("assertUniformLayers is enforced on every commit", () => {
-  it("a document whose frames disagree cannot get a layer added — the throw leaves the live document intact", async () => {
-    // Bypass the store's own guards to install a non-uniform document, the
-    // way a hand-edited file might arrive if the normaliser were skipped.
+  it("a brush whose frames disagree cannot get a layer added — the throw leaves the live document intact", async () => {
+    // Bypass the store's own guards to install a non-uniform brush, the way
+    // a hand-edited file might arrive if the normaliser were skipped.
     const broken = twoByTwoDoc();
-    broken.frames[1] = {
-      ...broken.frames[1],
-      layers: [broken.frames[1].layers[0]],
+    const brokenBrush = broken.brushes[0];
+    brokenBrush.frames[1] = {
+      ...brokenBrush.frames[1],
+      layers: [brokenBrush.frames[1].layers[0]],
     };
     const rig = await makeRig(createBrushDocument(3, 2));
     rig.brush.installDocument(broken);
-    expect(() => assertUniformLayers(broken)).toThrow();
+    expect(() => assertUniformLayers(brokenBrush)).toThrow();
 
     expect(() => rig.structure.addLayer("x", "rgb")).toThrow(/differ/);
     expect(rig.brush.document).toBe(broken);
     expect(rig.brush.history.entries).toHaveLength(0);
     expect(rig.selection.selectLayer).not.toHaveBeenCalled();
+  });
+
+  it("a healthy brush beside a broken one can still be edited — only the selected brush is asserted", async () => {
+    const broken: BrushDocument = {
+      version: BRUSH_DOCUMENT_VERSION,
+      brushes: [twoByTwoBrush(), createBrush("brush-2", "Brush 2", 2, 2)],
+    };
+    broken.brushes[1].frames[0] = {
+      ...broken.brushes[1].frames[0],
+      layers: [],
+    };
+    broken.brushes[1].frames.push(
+      createBrushFrame("frame-2", "Frame 2", [
+        createBrushLayer("layer-1", "Layer 1", 2, 2),
+      ]),
+    );
+    const rig = await makeRig(createBrushDocument(3, 2));
+    rig.brush.installDocument(broken);
+    expect(() => assertUniformLayers(broken.brushes[1])).toThrow();
+
+    rig.structure.addLayer("x", "rgb"); // brush-1 selected, healthy
+    expect(rig.brush.history.entries).toHaveLength(1);
+    expect(layerIds(doc(rig).brushes[0])[0]).toHaveLength(3);
+    expect(doc(rig).brushes[1]).toBe(broken.brushes[1]);
+
+    rig.selection.selectedBrushId = "brush-2";
+    expect(() => rig.structure.addLayer("y", "rgb")).toThrow(/differ/);
+    expect(rig.brush.history.entries).toHaveLength(1);
   });
 });

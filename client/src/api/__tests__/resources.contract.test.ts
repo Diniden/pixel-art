@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { HttpResponse, http } from "msw";
 
 import { server } from "@test/mswServer";
+import type { BrushDocument } from "@/types";
 import {
   aiApi,
   backupApi,
@@ -19,6 +20,7 @@ import {
   projectApi,
 } from "@/api";
 import {
+  FIXTURE_BRUSH_IDS,
   FIXTURE_BRUSH_NAME,
   FIXTURE_PROJECT_NAME,
   fixtureBackups,
@@ -112,6 +114,13 @@ describe("brushApi", () => {
     await expect(brushApi.get(FIXTURE_BRUSH_NAME)).resolves.toEqual(
       fixtureBrushDocument(),
     );
+  });
+
+  it("get() returns the whole brush PROJECT — a brush-2 body holding two brushes", async () => {
+    // `get()` hands back the RAW payload as `unknown`; the test knows the shape.
+    const doc = (await brushApi.get(FIXTURE_BRUSH_NAME)) as BrushDocument;
+    expect(doc.brushes.length).toBe(2);
+    expect(doc.brushes.map((b) => b.id)).toEqual([...FIXTURE_BRUSH_IDS]);
   });
 
   it("get() encodes a space in the name as %20 (never '+')", async () => {
