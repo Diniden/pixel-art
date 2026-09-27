@@ -123,21 +123,38 @@ cross-document lifetime is load-bearing and easy to destroy by "tidying" them in
 ### Brush documents
 
 The brush studio (`studioMode === "brush"`, plan `docs/01-brush-studio/`) edits a
-**brush document** — a separate file type, entirely independent of the pixel project's
-wire format and its migrations. It reuses the pixel studio's toolbar, tool handlers,
-`CanvasSurface` and `TimelineView`, but nothing about its data touches the project.
+**brush project** — one file holding many brushes (plan `docs/14-multi-brush-projects/`),
+a separate file type entirely independent of the pixel project's wire format and its
+migrations. It reuses the pixel studio's toolbar, tool handlers, `CanvasSurface` and
+`TimelineView`, but nothing about its data touches the project. Two words are held
+apart throughout: a **project** is the file (`projectName`, `projectList`, the header's
+"Brush Projects" modal); a **brush** is one entry of `doc.brushes` (`selectedBrushId`,
+`addBrush`, the rail's "Brushes" panel).
 
 - **Store members** on `ApplicationStore`: `app.brushes` (`BrushStore` — owns the
-  document and its list/load/create/rename/delete lifecycle), `app.brushStructure`
-  (frame and layer ops), `app.brushPixels` (cell writes, move, flips), `app.brushUI`
-  (selected frame/layer, the two delta slots, zoom/pan, playback — in-memory, never
-  persisted), `app.brushViews` (a second `CanvasViewsUIStore`: which panes are open, the
-  Layer pane's camera, the keyboard owner) and `app.brushAutoSave`. The structure and
-  pixel stores are behaviour modules over `brushes.document`, the same way the domain
-  sub-stores are over `DomainStore`.
-- **Document shape** (`client/src/types/brush.ts`):
-  `BrushDocument { version: "brush-1"; width; height; frames; appliedGroups }`.
-  Every `BrushLayer` carries a
+  document and the file lifecycle, named at the file level: `projectName`,
+  `projectList`, `hasProject`, `loadProject` / `createProject` / `switchProject` /
+  `renameProject` / `deleteProject`, plus `init`, `refreshList` and `document`; it never
+  looks inside `brushes` and knows nothing of which brush is selected),
+  `app.brushStructure` (`BrushStructureStore` — the brush list: `addBrush(name, w, h)`,
+  `duplicateBrush(id)`, `deleteBrush(id)`, `renameBrush(id, name)`,
+  `moveBrush(id, "up" | "down")`; and the frame / layer / applied-group / `resizeBrush`
+  ops, every one of which acts on the **selected brush**), `app.brushPixels` (cell
+  writes, move, flips — on the selected brush's selected layer), `app.brushUI`
+  (selected brush / frame / layer, the two delta slots, zoom/pan, playback —
+  in-memory, never persisted), `app.brushViews` (a second `CanvasViewsUIStore`: which
+  panes are open, the Layer pane's camera, the keyboard owner) and `app.brushAutoSave`.
+  The structure and pixel stores are behaviour modules over `brushes.document`, the
+  same way the domain sub-stores are over `DomainStore`. `brushApi`
+  (`list / get / save / create / rename / remove`) keeps its names — the API layer
+  names files.
+- **Document shape** (`client/src/types/brush.ts`): two levels.
+  `BrushDocument { version: "brush-2"; brushes: Brush[] }` is the file — never empty,
+  ids unique — and each
+  `Brush { id; name; width; height; frames; appliedGroups }` is exactly the shape a
+  whole brush-1 file had, with its own size, frames, layers and applied groups. Frame
+  and layer ids are unique **within a brush** only: `createBrush` gives every brush a
+  `frame-1` / `layer-1`, and `duplicateBrush` keeps them. Every `BrushLayer` carries a
   `channelType` (`hsl | rgb | normal | heightmap`), an optional
   `colorSource` (`"selected" | "target"`, the key present only when `"target"` — see
   "Colour source" below) and a `pixels: BrushCell[][]` grid
@@ -145,18 +162,71 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
   −255..255, rendered colourised with 127 = zero delta (`brushCellToRgba`). The
   in-memory shape **is** the wire shape (plain `JSON.stringify`) — no compact codec, no
   migration chain. The file carries no name: the filename stem is the identity, as for
-  projects.
+  projects. **Legacy brush-1 files** (no `brushes` key, but a numeric `width` / `height`
+  ≥ 1 and a non-empty `frames` array at the top level) are wrapped by
+  `normalizeBrushDocument` as one brush, defaulting to `id: "brush-1"` and
+  `name: "Brush 1"`, losslessly — it is the same `normalizeBrush(raw, 0)` the brush-2
+  branch runs per entry, so an `id` or `name` the file happens to carry is kept. The
+  normaliser detects the shape by structure and never reads the `version` string
+  (`LEGACY_BRUSH_DOCUMENT_VERSION` is exported for documentation and tests only); a
+  `brushes` key that is present but not an array rejects the file, as does an empty
+  `frames` array. The first autosave writes a wrapped file back as brush-2, so the
+  server's `.prev/` copy is the only brush-1 bytes left. `brushIn(doc, id)` is the
+  **one** selected-brush rule — the brush `id` names, else `brushes[0]`, else `null`,
+  returning the object held by `doc` — shared by `BrushUIStore`, the containers and
+  the pane compositor; nothing re-implements "find by id, else first" inline.
+- **Selected brush:** `brushUI.selectedBrushId` is the one selection the Brush Studio
+  and the pixel studio's Brush tool share (as the selected frame already was). The
+  selection is a path, brush → frame → layer, because frame and layer ids repeat across
+  brushes: `selectBrush(id, doc)` sets the brush id, **clears** the frame and layer ids
+  (the same string may exist in the new brush and mean a different object) and runs
+  the `adoptDocument` clamp, which keeps a brush id that still exists, falls back to
+  `brushes[0]` for a stale one, then re-seats the frame (`frames[0]`) and — only when the
+  current layer id is not in the resolved frame — the top layer, the **array end**, as
+  `LayerStore` also has it; a `null` document, or one that resolves to no brush, clears
+  all three, as does a resolved brush with no frames. `selectedBrushIn(doc)`,
+  `selectedFrameIn`, `selectedLayerIn` and `channelTypeIn` all resolve through the
+  selected brush, never through `brushes[0]`. `stores/ui/**` never imports
+  `stores/domain/**`, so the document is passed **in**; the structure store's
+  `BrushSelectionSink.selectBrush(id)` is id-only, and the adapter in
+  `stores/ApplicationStore.ts` —
+  `selectBrush: (id) => brushUI.selectBrush(id, this.brushes.document)` — is the one
+  place the document is supplied (the read is the post-commit document, because the
+  store commits before it calls the sink). Calling `selectBrush(id)` without the
+  document leaves the frame and layer ids `null` until the next document change and
+  every tool writes nowhere. Every brush-list op is one snapshot commit that writes the
+  selection through the sink after committing, the rule frames already follow:
+  `addBrush` and `duplicateBrush` select the new brush (`"<name> Copy"`, deep-copied
+  grids, inserted after its source);
+  `deleteBrush` refuses the last brush and, when the deleted one was selected (or
+  nothing was), selects the previous survivor, else the new first — deleting an
+  unselected brush leaves the selection alone. `renameBrush` and `moveBrush` touch no
+  selection and `renameBrush` bumps no pixel counter. Brushes display in **array order**
+  (index 0 on top,
+  `moveBrush("up")` moves toward index 0), unlike the layer list, which is reversed.
+  The selection is session-only: on load the first brush of the loaded project is
+  selected.
 - **Where files live:** `server/src/data/brushes/<name>.json`, written atomically with
   `safeWriteFile`; the previous version is copied to
   `server/src/data/brushes/.prev/<name>.json` before each overwrite (one deep, no
   rotation, not part of the project backup snapshots). Routes: `GET /api/brushes`,
   `GET | POST | DELETE /api/brush?name=`, `POST /api/brush/create | rename`
   (`server/src/routes/brush.ts`), called only through
-  `client/src/api/resources/brushApi.ts`. Names go through `isValidProjectName`.
-- **The uniform-layer invariant:** every frame has the same layer ids in the same order.
-  `BrushStructureStore` runs `assertUniformLayers` on every changed document before it
-  is recorded — layers can be swapped, never ordered per frame. A file that violates it
-  fails `normalizeBrushDocument` and does not load.
+  `client/src/api/resources/brushApi.ts`. Names go through `isValidProjectName`. A
+  `create` without `brushData` writes `emptyBrushDocument()` — a valid brush-2 project
+  with one 16×16 brush (`brush-1` / "Brush 1"), one frame and one empty rgb layer, the
+  same shape the client factory builds — so a project created through the raw API is
+  loadable. `server/src/brushFiles.ts` is shape-agnostic — name validation, JSON read /
+  write, list, rename, delete and the `.prev` copy — and reads nothing inside the JSON.
+- **The invariants:** every frame of a brush has the same layer ids in the same order
+  (`assertUniformLayers(brush)`), and a document holds at least one brush with unique
+  ids, each uniform (`assertBrushDocument(doc)`). `BrushStructureStore` runs
+  `assertUniformLayers` on the changed brush inside every `commitBrush` and
+  `assertBrushDocument` on every brush-list commit before it is recorded — layers can
+  be swapped, never ordered per frame, and a broken invariant throws out of the op with
+  the live document untouched. `normalizeBrushDocument` runs `assertBrushDocument`
+  last and returns `null` if it throws: a file that violates either rule does not load,
+  and nothing installs a blank default in its place.
 - **`document` is `observable.ref`, always.** Every mutation replaces the document
   immutably (spine copy, touched rows only) and bumps `domainVersion` and/or
   `pixelVersion`; the canvas and thumbnails redraw from those counters, exactly as the
@@ -188,7 +258,15 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
   `brushViews.openModes`, one `<BrushCanvasContainer renderMode>` per pane; Layer mode
   renders only the selected layer (`brushPaneScene`), keys are handled by the pane that
   is `brushViews.keyboardOwner`, and the pane compositor and view-control builder live in
-  `containers/brush/brushPanes.ts` (`useBrushPaneRender`, `brushPaneControls`).
+  `containers/brush/brushPanes.ts` (`useBrushPaneRender`, `brushPaneControls`). The
+  compositor resolves `brushIn(document, selectedBrushId)` at paint time and stays
+  strict on the frame id within that brush (no frame-0 fallback — a miss paints
+  nothing), and `selectedBrushId` is part of the camera's `resyncKey`, which
+  `BrushCanvasContainer` composes from four parts — `renderMode`, `projectName`,
+  `selectedBrushId` and `selectedFrameId` — so a switch to a brush of another size
+  re-seats the backing store instead of keeping a stale one.
+  `BrushTimelineContainer` and `BrushLayerPanelContainer` read the selected brush the
+  same way: the strip, its play loop and the layer rows follow `selectedBrushId`.
 - **Edge/fill deltas:** `brushUI` holds two slots — `selectedDelta` (edge, the original
   name) and `fillDelta` — with `deltaTarget: "edge" | "fill"`, the computed
   `activeDelta`, `setActiveDelta` / `setActiveDeltaChannel` / `resetActiveDelta`, and
@@ -206,12 +284,38 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
   `timeline-view--min-rows` + CSS var `--timeline-min-rows`); `BrushTimelineContainer`
   passes 5 so the brush rail is five rows tall even with one layer. The pixel studio
   does not pass it.
+- **The rail's brush list:** the left rail's top section is
+  `ui/components/BrushList/` (`BrushList.tsx`, `BrushListRow.tsx`, BEM block
+  `brush-list`), fed by `containers/BrushListContainer.tsx` — the brushes **inside** the
+  open project, replacing `BrushLibrary`, which listed brush files and is deleted; the
+  header's "Brush Projects" button and `BrushSelectModal` still manage files. A
+  "Brushes" header with a "+" opens an inline name / W / H form (defaults 16, range
+  1..256; the name must be non-empty and unique within the list, a local validator, not
+  the file-name rules in `BrushSelectModal/brushName.ts`); each row is a 32 px
+  `ThumbnailCanvas`, the name (double-click → inline rename), a `W×H` badge and hover
+  actions up / down / duplicate / delete (up and down disabled at the ends of the list,
+  delete disabled when the project holds one brush). The
+  container maps every callback onto one store method
+  (`brushUI.selectBrush(id, brushes.document)`, `brushStructure.addBrush` /
+  `renameBrush` / `duplicateBrush` / `deleteBrush` / `moveBrush`) and projects each
+  brush to `{ id, name, width, height, draw }` — no `Brush`, grid or document crosses
+  into `ui/`. Every brush of the open
+  project is in memory, so every row has a thumbnail: the selected brush paints its
+  selected frame, every other brush its frame 0 (a frame id names a frame of the
+  selected brush only), `draw` is `null` for a brush with no frame to resolve and the row
+  then renders without a canvas, and one shared `thumbnailRevision` —
+  `(pixelVersion + domainVersion) * 65536 + selectedFrameIndex`, the library's formula
+  — repaints them all, a frame change counting as a content change. With no project
+  loaded the container renders `null`, as the layer panel does.
 - **Brush tool (pixel studio)** (plan `docs/12-pixel-brush-tool/`): the pixel studio's
   `"brush"` `Tool` member (hotkey `B`, toolbar row after the Eraser, `Paintbrush` icon)
-  stamps the brush document open in the Brush Studio onto the pixel canvas. The pure
+  stamps the **selected brush** of the project open in the Brush Studio onto the pixel
+  canvas — `brushUI.selectedBrushIn(doc)`, the same selection the studio shows, never
+  `brushes[0]`. The pure
   core is `ui/canvas/tools/pixelBrushStamp.ts`. The **footprint** is every painted cell
-  of every visible layer of the brush's current frame (`brushUI.selectedFrameIn(doc)`:
-  the selected frame, else `frames[0]`), as offsets from the origin
+  of every visible layer of the selected brush's current frame
+  (`brushUI.selectedFrameIn(doc)`: the selected frame of the selected brush, else its
+  `frames[0]`), as offsets from the origin
   `(floor(w/2), floor(h/2))` — it is both the hover marker and the set of cells a press
   writes, so the two cannot disagree. **Settling** starts from the selected edge colour
   and applies every visible layer's signed delta bottom → top: `rgb` layers add in RGB
@@ -226,17 +330,36 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
   reflection mirroring apply for free), one undo entry per drag.
   `containers/pixelBrush/usePixelBrush.ts` is the container-tier hook: it calls
   `app.brushes.init()` from an effect while the tool is selected (a fresh pixel-mode
-  load never visits the Brush Studio), memoises the footprint on
-  `[document, selectedFrameId, pixelVersion, domainVersion]` and the stamp on the
-  footprint plus the four base-colour scalars, and reads the grids inside the memos —
-  never observed, and never at pointer rate, because `getToolContext` lists the stamp
-  as a dependency. The two seams are optional so `containers/brush/brushToolContext.ts`
+  load never visits the Brush Studio), memoises the scaled frame on
+  `[document, selectedBrushId, selectedFrameId, pixelVersion, domainVersion]` plus the
+  four `ui.pixelBrush` scalars (the brush is derived from `document` + `selectedBrushId`,
+  which is why the id is a key), the footprint on it, and the stamp on the footprint
+  plus the four base-colour scalars; it reads the grids inside the memos — never
+  observed, and never at pointer rate, because `getToolContext` lists the stamp as a
+  dependency — and returns `projectName` (the file) for the rail. The two seams are
+  optional so `containers/brush/brushToolContext.ts`
   compiles untouched: `ToolContext.pixelBrushStamp` (`toolHandlers.ts`) and
   `FootprintOptions.pixelBrushOffsets` (`toolFootprint.ts`, a fourth footprint class —
   injected cells; `isBrushTool` is unchanged). The rail's "Brush" section
   (`PixelStudioPanel`'s grouped `pixelBrush?: PixelStudioBrushInfo` prop, fed by
-  `PixelStudioPanelContainer`) names the loaded brush, its size, frame and layer count,
-  or offers "Open Brush Studio"; the colour picker below it stays unconditional. In the
+  `PixelStudioPanelContainer`) leads with a **Brush** `Dropdown` — the picker, one option
+  per brush labelled `name (W×H)`, in the section's `pixel-studio-panel__brush-row`
+  wrapper with the value cell `pixel-studio-panel__brush-picker` and the trigger
+  `pixel-studio-panel__brush-picker-trigger` — rendered only when the section is loaded
+  **and** the optional `brushes` (≥ 1 entry) and `onSelectBrush` members are supplied
+  (the container supplies them whenever a document is loaded, independent of the brush
+  count, so a single-brush project shows the row too; a pick goes through
+  `brushUI.selectBrush(id, document)` with the document). The rows after it name the
+  loaded project, the selected brush's size, frame and layer count, or offer "Open Brush
+  Studio"; the hint paragraph at the foot of the section reads "Stamps the selected
+  brush's current frame with the selected colour.", and the colour picker below it stays
+  unconditional. In Other Hand Mode `containers/otherHand/pixelBrushWidgets.ts` prepends
+  one `buttons` widget (key `brush`, label "Brush"; each button's **label** is `B1`,
+  `B2`, … in array order and its `title` the brush's name, the selected one active) only
+  when the project holds two or more brushes; a tap is the same
+  `selectBrush(id, document)` call, and every other widget in the stack takes its native
+  size from the selected brush (the builder returns `[]` with no document or no brush).
+  In the
   Brush Studio the tool is hidden (`BRUSH_HIDDEN_TOOLS`) and inert
   (`BRUSH_INERT_TOOLS`) — a brush cannot stamp itself — and `setStudioMode` still
   resets the tool to `"pixel"`. Nothing new is persisted: `selectedTool` already
@@ -334,9 +457,11 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
   `scalePixelBrushLayers` inside its `scaled` memo, keyed on the four store scalars
   (slider rate, never pointer rate), feeds the unchanged footprint / stamp routines at
   the scaled size, exposes `size` for the rail's readout, and resets the size from an
-  effect when the document's native `width` / `height` change (idempotent, so
-  StrictMode's double run changes nothing). `CanvasContainer` never reads
-  `ui.pixelBrush`.
+  effect keyed on the **selected brush's** native `width` / `height` — never on the
+  document's identity, which every pixel write replaces — so switching to a brush of
+  another size resets the stamp size and switching to one of the same size keeps it
+  (idempotent, so StrictMode's double run changes nothing). `CanvasContainer` never
+  reads `ui.pixelBrush`.
 - **Size controls in the rail and Other Hand Mode:**
   `ui/components/PixelStudioPanel/PixelStudioBrushSection.tsx` (extracted verbatim
   from the panel so it stays under the `src/ui/**` line limit) renders the grouped
@@ -351,10 +476,13 @@ wire format and its migrations. It reuses the pixel studio's toolbar, tool handl
   locked, X and Y unlocked), Size (`Native`) — bound to the same store and spread into
   `planToolSection`'s `case "brush"` (`containers/otherHand/toolWidgets.ts`). It is
   its own file because `toolWidgets.ts` is already at the containers `max-lines`
-  warning, and it reads the brush document at the scalar level only (`width` /
-  `height`), never a frame, layer or grid.
-- **Files:** pure UI in `ui/components/Brush{Library,LayerPanel,DeltaPicker,SelectModal}/`
-  and `ui/layouts/BrushStudioLayout/`; containers are `containers/Brush*Container.tsx`;
+  warning, and it reads the brush document at the scalar level only (the selected
+  brush's `width` / `height`, and each brush's `id` / `name` / size for the Brush
+  stack described under "Brush tool"), never a frame, layer or grid.
+- **Files:** pure UI in `ui/components/Brush{List,LayerPanel,DeltaPicker,SelectModal}/`
+  (`brushName.ts`, the file-name validator, lives under `BrushSelectModal/` — its only
+  importer) and `ui/layouts/BrushStudioLayout/` (prop `brushList` for the rail's top
+  section); containers are `containers/Brush*Container.tsx`;
   the canvas container's store-free helpers live in `containers/brush/`
   (`brushToolContext` maps each `ToolPixelWrite` sentinel colour to the edge or fill
   delta, `brushFill`, `brushSelection`, `brushPanes`, and the
